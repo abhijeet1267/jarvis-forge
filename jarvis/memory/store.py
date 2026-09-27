@@ -262,10 +262,15 @@ class MemoryStore:
         *after* ranking would answer "what did I do yesterday" with a confident
         nothing whenever yesterday's entry ranked 6th today.
         """
-        sql = "SELECT * FROM memories WHERE substr(created_at, 1, 10) >= ?"
+        # created_at is stored in UTC; "yesterday" is a word in the user's own
+        # day. Comparing the raw UTC date would ask about the wrong day for
+        # anyone east of Greenwich before ~08:00 or west of it after ~16:00 --
+        # measured, not theorised: this test suite crossed midnight mid-phase and
+        # the window silently shifted by a day. Convert before comparing.
+        sql = "SELECT * FROM memories WHERE date(created_at, 'localtime') >= ?"
         params: List[Any] = [since]
         if until:
-            sql += " AND substr(created_at, 1, 10) <= ?"
+            sql += " AND date(created_at, 'localtime') <= ?"
             params.append(until)
         sql += " ORDER BY created_at DESC LIMIT ?"
         params.append(limit)

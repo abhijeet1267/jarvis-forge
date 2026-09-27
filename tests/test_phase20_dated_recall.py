@@ -178,3 +178,26 @@ async def test_a_read_of_the_store_is_still_a_successful_read(core, two_days):
                                  since=YESTERDAY, until=YESTERDAY)
 
     assert result.verification.value == "success"
+
+
+def test_the_window_is_the_users_day_not_the_utc_day(core):
+    """Regression: created_at is UTC, "yesterday" is the user's calendar day.
+
+    Caught by the clock, not by reading the code -- the suite crossed midnight
+    while Phase 20 was being written and the window silently moved by a day.
+    """
+    from datetime import datetime, timedelta, timezone
+
+    utc_now = datetime.now(timezone.utc)
+    local_today = utc_now.astimezone().date()
+
+    row = core.memory.remember("phase20 timezone boundary fact", scope=MemoryScope.LONG_TERM)
+    try:
+        # A row created this instant must fall in the *local* day's window, even
+        # when UTC still says it is yesterday or already tomorrow.
+        found = core.memory.in_window(local_today.isoformat(), local_today.isoformat())
+        assert any(m.id == row.id for m in found), (
+            f"created at {utc_now.isoformat()} but the {local_today} window missed it: "
+            "the comparison is being made in UTC, not the user's day")
+    finally:
+        core.db.execute("DELETE FROM memories WHERE id = ?", (row.id,))
