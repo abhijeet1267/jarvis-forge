@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from ..core.models import RiskLevel, ToolSpec
+from ..core.models import RiskLevel, ToolSpec, Verification
 from ..robotics.gateway import ARM_ACTIONS, AMR_ACTIONS, EXPERIMENTS, Robot, get_robot_gateway
 from .base import ToolContext, fail, ok
 
@@ -204,6 +204,9 @@ async def command_robot_motion(
         "command_robot_motion",
         message,
         device=ctx.device_id,
+        # The bridge is a simulator, so no robot moved: unverified with
+        # simulated=True, not a verified world change.
+        verification=(Verification.UNKNOWN if outcome.simulated else None),
         robot_id=target.robot_id,
         robot_name=target.name,
         action=action,
@@ -262,6 +265,8 @@ async def run_experiment(ctx: ToolContext, experiment: str = "") -> Any:
         "run_experiment",
         message,
         device=ctx.device_id,
+        # See command_robot_motion.
+        verification=(Verification.UNKNOWN if result["simulated"] else None),
         experiment=experiment,
         offline=False,
         simulated=result["simulated"],

@@ -17,6 +17,7 @@ from __future__ import annotations
 import os
 import re
 from dataclasses import dataclass, field
+from datetime import date, timedelta
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
@@ -170,17 +171,20 @@ class RulePlanner:
         raw = _WS.sub(" ", _WAKE.sub("", text.strip())).strip()
         lowered = raw.lower()
 
-        composed = self._composed(raw, text)
+        composed, dropped = self._composed(raw, text)
         if composed is not None:
             return composed
 
         intent = self._first_intent(lowered, raw)
-        if intent:
-            return self._to_plan(text, intent)
+        plan = self._to_plan(text, intent) if intent else self._unrecognised(text)
+        plan.unhandled = dropped
+        return plan
 
+    def _unrecognised(self, text: str) -> Plan:
         return Plan(
             goal=text,
             intent="unknown",
+            reply_kind="not_understood",
             direct_reply=(
                 "I understood the words but not the goal yet. Try things like "
                 '"open VS Code", "find my report", "what is my battery", '
@@ -201,34 +205,49 @@ class RulePlanner:
                 return intent
         return None
 
-    def _composed(self, raw: str, original: str) -> Optional[Plan]:
+    def _composed(self, raw: str, original: str) -> Tuple[Optional[Plan], List[str]]:
         """Turn one sentence that states a sequence into an ordered multi-step plan.
 
-        Every clause has to match an existing tool-backed route on its own; this
-        composes capabilities, it never invents one. If any clause fails, the
-        whole sentence falls back to single-route parsing, which is the
-        conservative answer -- the cost of not decomposing is that JARVIS asks
-        for more detail, the cost of decomposing wrongly is that it performs an
-        action nobody asked for.
+        Returns ``(plan, dropped)``. Every clause has to match an existing
+        tool-backed route for a plan to be built; if any clause fails, the whole
+        sentence falls back to single-route parsing, which is the conservative
+        answer -- the cost of not decomposing is that JARVIS asks for more detail,
+        the cost of decomposing wrongly is that it performs an action nobody asked
+        for.
+
+        The clauses that did not become steps are named back, with the reason the
+        route itself gave. Until Phase 19 they were computed and discarded, so
+        "what is the time and then create a file called ../x.txt containing: nope"
+        answered with the time and left the refusal unmentioned.
         """
         clauses = [clause.strip() for clause in _SEQUENCE.split(raw) if clause.strip()]
         if len(clauses) < 2:
-            return None
+            return None, []
 
         actions: List[PlannedAction] = []
+        dropped: List[str] = []
         for index, clause in enumerate(clauses):
             intent = self._first_intent(clause.lower(), clause)
-            if intent is None or not intent.tool or not self.tools.has(intent.tool):
-                return None
-            actions.append(
-                PlannedAction(
-                    step_id=index + 1,
-                    tool=intent.tool,
-                    params=intent.params,
-                    reason=f"step {index + 1} of the stated sequence ({intent.name})",
+            if intent is not None and intent.tool and self.tools.has(intent.tool):
+                actions.append(
+                    PlannedAction(
+                        step_id=len(actions) + 1,
+                        tool=intent.tool,
+                        params=intent.params,
+                        reason=f"step {len(actions) + 1} of the stated sequence ({intent.name})",
+                    )
                 )
+                continue
+            # A route that refused already explains itself; a clause nothing
+            # matched is handed back in its own words rather than guessed at.
+            dropped.append(
+                intent.note if intent is not None and intent.note
+                else f'I don\'t know how to "{clause}".'
             )
-        return Plan(goal=original, intent="workflow", actions=actions, planner="rules")
+
+        if dropped:
+            return None, dropped
+        return Plan(goal=original, intent="workflow", actions=actions, planner="rules"), []
 
     # -- helpers -------------------------------------------------------------
     def _to_plan(self, original: str, intent: Intent) -> Plan:
@@ -236,15 +255,18 @@ class RulePlanner:
 
         if intent.note and not intent.tool:
             plan.direct_reply = intent.note
+            plan.reply_kind = "declined"
             return plan
 
         if not intent.tool:
             plan.needs_clarification = True
+            plan.reply_kind = "declined"
             plan.clarification_question = intent.note or "Could you give me a bit more detail?"
             return plan
 
         if not self.tools.has(intent.tool):
             plan.direct_reply = f"I do not have a capability called {intent.tool!r} yet."
+            plan.reply_kind = "capability_missing"
             return plan
 
         plan.actions = [
@@ -670,10 +692,26 @@ class RulePlanner:
             r"\b(?:what did i work on|what have i (?:worked|done)|what did i do|recall|do you remember)\b\s*(.*)",
             raw,
         )
-        query = (query or "").strip() or "recent work"
-        if "yesterday" in text:
-            query = "yesterday work"
-        return Intent("recall", tool="search_memory", params={"query": query})
+        query = (query or "").strip()
+
+        # A date word is a range to read, not a phrase to search for. Turning
+        # "yesterday" into the query string "yesterday work" made an undated,
+        # best-ranked lookup look like an answer about the day that was asked about.
+        since = until = ""
+        if re.search(r"\byesterday\b", query, re.I):
+            since = until = (date.today() - timedelta(days=1)).isoformat()
+        elif re.search(r"\btoday\b", query, re.I):
+            since = until = date.today().isoformat()
+
+        query = re.sub(r"\b(yesterday|today)\b", "", query, flags=re.I).strip()
+        if not query and not since:
+            query = "recent work"
+
+        params: Dict[str, Any] = {"query": query}
+        if since:
+            params["since"] = since
+            params["until"] = until
+        return Intent("recall", tool="search_memory", params=params)
 
     def _explain_failure(self, text: str, raw: str) -> Optional[Intent]:
         if not re.search(r"\bwhy did\b.*?\b(fail|break|overheat)\b", text):

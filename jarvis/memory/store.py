@@ -250,6 +250,27 @@ class MemoryStore:
         params.append(limit)
         return [self._row_to_item(r) for r in self.db.query(sql, tuple(params))]
 
+    def in_window(
+        self,
+        since: str,
+        until: str,
+        limit: int = 200,
+    ) -> List[MemoryItem]:
+        """Memories recorded between two ISO dates, inclusive.
+
+        A separate exact range query rather than a filtered top-k, because filtering
+        *after* ranking would answer "what did I do yesterday" with a confident
+        nothing whenever yesterday's entry ranked 6th today.
+        """
+        sql = "SELECT * FROM memories WHERE substr(created_at, 1, 10) >= ?"
+        params: List[Any] = [since]
+        if until:
+            sql += " AND substr(created_at, 1, 10) <= ?"
+            params.append(until)
+        sql += " ORDER BY created_at DESC LIMIT ?"
+        params.append(limit)
+        return [self._row_to_item(r) for r in self.db.query(sql, tuple(params))]
+
     def search(self, query: str, limit: int = 5) -> List[MemoryItem]:
         """Rank memories against a query using a BM25-style scorer.
 

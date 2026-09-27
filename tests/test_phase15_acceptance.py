@@ -274,7 +274,10 @@ async def test_unknown_route_still_reads_as_unknown_not_something_executed(core,
     payload = _payload(response)
 
     state = state_of(payload)
-    assert state in ("UNKNOWN", "NOTHING EXECUTED"), state
+    # Phase 19 gave the planner a word for this case, so the page no longer has to
+    # fall back to "unknown". The invariant this test exists for is unchanged: a
+    # command nothing recognised can never render as verified work.
+    assert state in ("UNKNOWN", "NOTHING EXECUTED", "NOT RECOGNISED"), state
     assert state != "VERIFIED"
 
 

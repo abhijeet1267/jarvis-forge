@@ -7,6 +7,7 @@ path as everything else.
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from ..core.models import MemoryScope, PrivacyLevel, RiskLevel, ToolSpec
@@ -57,8 +58,90 @@ async def remember_fact(
     )
 
 
-async def search_memory(ctx: ToolContext, query: str = "") -> Any:
-    """Recall stored facts relevant to a query."""
+#: An activity echo is JARVIS writing down what it just did. It is retrievable on
+#: purpose -- but it is not something the user said, and presenting it as a
+#: remembered fact was how "what did I work on yesterday" came back with a
+#: same-session log line (Phase 15 finding 15-E).
+ECHO_SOURCE = "orchestrator"
+ECHO_PREFIX = "User asked:"
+
+_STOPWORDS = {
+    "what", "did", "i", "do", "you", "remember", "work", "worked", "on", "the",
+    "a", "an", "my", "recent", "recently", "have", "was", "is", "about", "tell",
+    "me", "of", "and", "to", "in", "that", "this",
+}
+
+
+def _is_echo(item: Any) -> bool:
+    return getattr(item, "source", "") == ECHO_SOURCE or item.content.startswith(ECHO_PREFIX)
+
+
+def _topic_words(query: str) -> list:
+    return [w for w in re.findall(r"[a-z0-9]+", (query or "").lower()) if w not in _STOPWORDS]
+
+
+def _entry(item: Any) -> dict:
+    return {
+        "id": item.id,
+        "content": item.content,
+        "scope": item.scope.value,
+        "type": item.memory_type.value,
+        "source": item.source,
+        "project_id": item.project_id,
+        "confidence": item.confidence,
+        # When it was recorded, not just that it was. A date-blind answer about
+        # "yesterday" was the whole defect.
+        "created_at": item.created_at.isoformat(),
+        "is_echo": _is_echo(item),
+    }
+
+
+async def search_memory(ctx: ToolContext, query: str = "", since: str = "",
+                        until: str = "") -> Any:
+    """Recall memories, optionally inside a recording-date window.
+
+    Two retrieval paths on purpose. With a window, the store is asked for that range
+    exactly -- filtering after a top-k ranking would answer "what did I do yesterday"
+    with a confident nothing whenever yesterday's entry ranked sixth today. Without
+    one, hybrid retrieval ranks as before.
+    """
+    window = {"since": since or "", "until": until or since or ""}
+
+    if since:
+        items = ctx.memory.in_window(since, until or since)
+        words = _topic_words(query)
+        if words:
+            items = [m for m in items if any(w in m.content.lower() for w in words)]
+        results = [_entry(m) for m in items]
+        day = since if since == (until or since) else f"{since} to {until}"
+
+        if not results:
+            return ok(
+                "search_memory",
+                f"Nothing was recorded in memory on {day}.",
+                device=ctx.device_id,
+                query=query,
+                window=window,
+                results=[],
+                top_is_echo=False,
+            )
+
+        top = results[0]
+        clause = (
+            ", which is my own activity log rather than something you told me"
+            if top["is_echo"] else ""
+        )
+        return ok(
+            "search_memory",
+            f"On {day} I recorded {len(results)} thing(s). Most recent"
+            f"{clause}: {top['content']}",
+            device=ctx.device_id,
+            query=query,
+            window=window,
+            results=results,
+            top_is_echo=top["is_echo"],
+        )
+
     if not query:
         return fail("search_memory", "What should I look for?", device=ctx.device_id)
 
@@ -77,31 +160,30 @@ async def search_memory(ctx: ToolContext, query: str = "") -> Any:
             device=ctx.device_id,
             results=[],
             retrieval=retrieval,
+            top_is_echo=False,
         )
 
-    results = [
-        {
-            "id": h.item.id,
-            "content": h.item.content,
-            "scope": h.item.scope.value,
-            "type": h.item.memory_type.value,
-            "project_id": h.item.project_id,
-            "confidence": h.item.confidence,
-            "found_by": [
-                name
-                for name, rank in (("keyword", h.keyword_rank), ("vector", h.vector_rank))
-                if rank is not None
-            ],
-        }
-        for h in ranked
-    ]
-    top = results[0]["content"]
+    results = []
+    for h in ranked:
+        entry = _entry(h.item)
+        entry["found_by"] = [
+            name for name, rank in (("keyword", h.keyword_rank), ("vector", h.vector_rank))
+            if rank is not None
+        ]
+        results.append(entry)
+    top = results[0]
+    clause = (
+        " (this is my own activity log, not something you told me)"
+        if top["is_echo"] else ""
+    )
     return ok(
         "search_memory",
-        f"Here is what I remember: {top}",
+        f"Here is what I remember{clause}: {top['content']}",
         device=ctx.device_id,
         query=query,
         results=results,
+        retrieval=retrieval,
+        top_is_echo=top["is_echo"],
     )
 
 
@@ -217,10 +299,14 @@ SPECS = [
     (
         ToolSpec(
             name="search_memory",
-            description="Recall stored facts relevant to a query.",
+            description="Recall stored facts, optionally within a recording-date window.",
             risk=RiskLevel.READ,
-            parameters={"query": "string"},
-            required_parameters=["query"],
+            parameters={"query": "string", "since": "ISO date", "until": "ISO date"},
+            # Query is not required any more: a dated question ("what did I work on
+            # yesterday") is a request to read a range, and demanding a search phrase
+            # for it is what produced a fake one. The tool still refuses when given
+            # neither a query nor a window.
+            required_parameters=[],
             agent="memory",
             tags=["memory", "read"],
         ),

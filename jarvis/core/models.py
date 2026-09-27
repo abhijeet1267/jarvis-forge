@@ -294,6 +294,16 @@ class Plan(BaseModel):
     needs_clarification: bool = False
     clarification_question: Optional[str] = None
     direct_reply: Optional[str] = None
+    #: Why the plan produced no action, in the planner's own words. It knows which
+    #: of these it hit and the response used to flatten them together, which is how
+    #: "I did not understand", "I have no such capability", "I will not do that" and
+    #: "may I have more detail" all reached the ledger as the same `no_action`.
+    #: ``""`` means the planner did not say, and the renderer must guess nothing.
+    reply_kind: str = ""  # not_understood | capability_missing | declined | ""
+    #: Parts of the sentence this plan does not cover, each with the planner's own
+    #: reason. A request whose second half was refused used to be answered with only
+    #: the first half, silently.
+    unhandled: List[str] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=utcnow)
     planner: str = "rules"  # rules | llm
 

@@ -133,6 +133,18 @@ class JarvisCore:
             return "success"
         if verification is Verification.FAILED:
             return "failure"
+        if verification is Verification.UNKNOWN:
+            # A simulated actuation is its own fact. "unverified" would mean "we
+            # do not know whether the world changed"; here we know -- nothing in
+            # the real world changed, and the handler said so. Since Phase 13 the
+            # dashboard has been the only place telling the truth about this while
+            # the hash chain recorded success.
+            if isinstance(getattr(result, "output", None), dict) \
+                    and result.output.get("simulated") is True:
+                return "simulated"
+            return "unverified"
+        # Anything unrecognised stays unverified rather than defaulting to success,
+        # which is how this function behaved before the UNKNOWN branch was added.
         return "unverified"
 
     @staticmethod
@@ -151,6 +163,17 @@ class JarvisCore:
         if verification is Verification.FAILED:
             return ActionStatus.FAILED
         return ActionStatus.UNVERIFIED
+
+    @staticmethod
+    def _note_unhandled(response: CommandResponse, plan: Plan) -> None:
+        """Say which part of the sentence this plan did not cover.
+
+        The planner computes a reason for every clause it could not turn into a
+        step; until Phase 19 that text was discarded, so half a request could be
+        refused while the answer reported only the half that ran.
+        """
+        for clause in getattr(plan, "unhandled", None) or []:
+            response.reply = f"{response.reply}\n\nAnd I did not do that part: {clause}"
 
     def _settle_step(
         self,
@@ -187,6 +210,7 @@ class JarvisCore:
         risk: str,
         confirmation: bool,
         request_id: str = "",
+        unhandled: Optional[List[str]] = None,
     ) -> None:
         # ``result`` is a status token so AuditLog.failures() can filter on it;
         # the human-readable message goes into ``detail``.
@@ -203,6 +227,12 @@ class JarvisCore:
         else:
             status, message = self._audit_token(result), result.summary
 
+        detail: Dict[str, Any] = {"ok": bool(result and result.ok), "message": message}
+        if unhandled:
+            # Which parts of the same sentence this action did not cover. Recorded
+            # rather than only spoken, so a later reader of the chain can see the
+            # request was answered in part.
+            detail["unhandled"] = list(unhandled)
         self.audit.record(
             intent=request.text,
             tool=action.tool,
@@ -218,7 +248,7 @@ class JarvisCore:
             # the request_id column for every executed action and made the ledger
             # unjoinable to the reply it described.
             request_id=request_id,
-            detail={"ok": bool(result and result.ok), "message": message},
+            detail=detail,
         )
 
     # ------------------------------------------------------------------ main
@@ -267,6 +297,7 @@ class JarvisCore:
             # is left unset rather than claiming EXECUTE. It was EXECUTE for as
             # long as this branch existed, which made the answer contradict its own
             # audit record for every refusal, clarification and unrecognised goal.
+            self._note_unhandled(response, plan)
             self.audit.record(
                 intent=request.text,
                 result="no_action",
@@ -274,7 +305,8 @@ class JarvisCore:
                 device=request.device_id,
                 session_id=request.session_id,
                 request_id=response.request_id,
-                detail={"stage": "planner", "reply": response.reply[:200]},
+                detail={"stage": "planner", "reply": response.reply[:200],
+                        "unhandled": list(plan.unhandled)},
             )
             self._log_message(request.session_id, "assistant", response.reply, plan.intent)
             response.duration_ms = int((time.perf_counter() - started) * 1000)
@@ -285,6 +317,7 @@ class JarvisCore:
                 "I need a bit more detail before I act."
             )
             response.needs_confirmation = True
+            self._note_unhandled(response, plan)
             self.audit.record(
                 intent=request.text,
                 result="clarification",
@@ -292,7 +325,8 @@ class JarvisCore:
                 device=request.device_id,
                 session_id=request.session_id,
                 request_id=response.request_id,
-                detail={"stage": "planner", "question": response.reply[:200]},
+                detail={"stage": "planner", "question": response.reply[:200],
+                        "unhandled": list(plan.unhandled)},
             )
             self._log_message(request.session_id, "assistant", response.reply, plan.intent)
             response.duration_ms = int((time.perf_counter() - started) * 1000)
@@ -314,12 +348,14 @@ class JarvisCore:
                 response.blocked_reason = verdict.reason
                 response.reply = f"I cannot do that: {verdict.reason.rstrip('.')}."
                 self._audit_action(action, request, None, "blocked", False,
-                                     request_id=response.request_id)
+                                     request_id=response.request_id,
+                                     unhandled=plan.unhandled)
                 if job:
                     self.tasks.update_step(
                         job.job_id, action.tool, ActionStatus.BLOCKED, verdict.reason, seq=index
                     )
                     self.tasks.refresh_status(job.job_id)
+                self._note_unhandled(response, plan)
                 self._log_message(request.session_id, "assistant", response.reply, plan.intent)
                 response.duration_ms = int((time.perf_counter() - started) * 1000)
                 return response
@@ -357,8 +393,10 @@ class JarvisCore:
                     device=action.device,
                     session_id=request.session_id,
                     request_id=response.request_id,
-                    detail={"confirmation_id": verdict.confirmation_id},
+                    detail={"confirmation_id": verdict.confirmation_id,
+                            "unhandled": list(plan.unhandled)},
                 )
+                self._note_unhandled(response, plan)
                 self._log_message(request.session_id, "assistant", response.reply, plan.intent)
                 response.duration_ms = int((time.perf_counter() - started) * 1000)
                 return response
@@ -375,6 +413,7 @@ class JarvisCore:
                         seq=index,
                     )
                     self.tasks.refresh_status(job.job_id)
+                self._note_unhandled(response, plan)
                 self._log_message(request.session_id, "assistant", response.reply, plan.intent)
                 response.duration_ms = int((time.perf_counter() - started) * 1000)
                 return response
@@ -412,7 +451,8 @@ class JarvisCore:
             action.status = self._action_status(result)
             response.actions.append(result)
             self._audit_action(action, request, result, risk_label, False,
-                                 request_id=response.request_id)
+                                 request_id=response.request_id,
+                                 unhandled=plan.unhandled)
             if job:
                 self.tasks.update_step(
                     job.job_id,
@@ -434,6 +474,7 @@ class JarvisCore:
         # --- Stage: response -------------------------------------------------
         response.reply = self._compose_reply(request.text, response)
         response.decision = response.decision or PolicyDecision.EXECUTE
+        self._note_unhandled(response, plan)
         self._log_message(request.session_id, "assistant", response.reply, plan.intent)
         response.duration_ms = int((time.perf_counter() - started) * 1000)
         return response

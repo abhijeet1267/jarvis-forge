@@ -217,12 +217,11 @@ async def test_unreachable_calendar_renders_unavailable_not_failed(core, monkeyp
 
 
 async def test_simulated_actuation_is_not_shown_as_verified(core, monkeypatch, state_of):
-    """The UI must not launder a known backend overstatement.
+    """The UI shows SIMULATED from ``output.simulated``, whatever the record says.
 
-    A simulated home command currently records verification=SUCCESS -- that gap
-    is carried forward from Phase 12 and is deliberately NOT fixed here. What is
-    proven is that the renderer keys on ``output.simulated`` and so shows the
-    truth the record does not.
+    Simplified as this test's own message directed: the backend overstatement it
+    documented was fixed in Phase 18, so the renderer no longer has to compensate
+    for a ``verification=success`` that meant "the simulator accepted it".
     """
     from jarvis.home import reset_home_gateway
 
@@ -235,9 +234,8 @@ async def test_simulated_actuation_is_not_shown_as_verified(core, monkeypatch, s
         reset_home_gateway(None)
 
     assert result.output["simulated"] is True
-    assert result.verification.value == "success", (
-        "the backend overstatement this test guards against has been fixed; "
-        "this test can now be simplified rather than deleted")
+    assert result.verification.value != "success", (
+        "Phase 18 fixed the ledger; if this regresses, the UI is hiding it again")
 
     payload = {"actions": [json.loads(result.model_dump_json())]}
     assert state_of(payload) == "SIMULATED"

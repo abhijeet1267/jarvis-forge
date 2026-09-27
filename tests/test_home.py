@@ -229,14 +229,15 @@ async def test_control_simulate_reports_simulated() -> None:
     # Read the ActionResult field, not result.output["verified"]: the flag moved
     # out of the output dict when `ok()` stopped hardcoding it (Phase 9 P1-9 --
     # this assertion had been aborting on KeyError and therefore testing nothing).
-    assert result.verified is True
+    assert result.verified is False
     assert result.output["simulated"] is True
     assert "simulated" in result.message.lower()
-    # OPEN (Phase 10 §12, not yet fixed): a simulated actuation records
-    # result.verification == Verification.SUCCESS here. "simulated" appears in
-    # the message, but the record still reads as an established effect. The
-    # truthful target is UNVERIFIED/SIMULATED, and that assertion belongs with
-    # the gateway change, not smuggled in here.
+    # Phase 10 §12 left this OPEN; Phase 18 closed it. A simulated actuation used
+    # to record Verification.SUCCESS -- "simulated" in the words, an established
+    # effect in the record -- and now records UNKNOWN with `simulated` as its audit
+    # token, so the ledger says what the reply says.
+    assert result.verification is Verification.UNKNOWN
+    assert JarvisCore._audit_token(result) == "simulated"
 
     dimmed = await control_home_device(ctx, device="living ceiling", action="set", value=40)
     assert dimmed.ok is True

@@ -242,7 +242,10 @@ const STATE_TONE = {
   IDLE: "muted",
   AWAITING: "warn",
   "NEEDS DETAIL": "warn",
+  "NOT RECOGNISED": "muted",
+  "NOT AVAILABLE": "warn",
   "NOTHING EXECUTED": "muted",
+  "VERIFIED IN PART": "warn",
   UNKNOWN: "bad",
   FAILED: "bad",
   BLOCKED: "bad",
@@ -255,14 +258,24 @@ function pipelineState(data) {
   if (data.needs_confirmation === true && data.confirmation_id) return "AWAITING CONFIRMATION";
 
   const actions = Array.isArray(data.actions) ? data.actions : [];
+  // Read once: the plan carries what the response left undone, which matters both
+  // when nothing ran and when part of the request did.
+  const plan = data.plan;
   if (!actions.length) {
     if (data.decision === "BLOCK" || data.blocked_reason) return "BLOCKED";
-    const plan = data.plan;
     // JARVIS answered and deliberately ran nothing. That is a known outcome, not
     // an unknowable one: the Phase 15 acceptance sweep found five of eighteen
     // commands -- every honest refusal and clarification -- labelled UNKNOWN,
     // which told the user the system was unsure when it had actually said "no".
+    // The kind is the planner's own word (`plan.reply_kind`): "I did not
+    // understand", "I have no such capability" and "I will not do that" are three
+    // different answers to three different questions, and until Phase 19 the page
+    // could only say "nothing ran". A caller-supplied kind can change a label and
+    // nothing else -- it cannot authorise, verify, or hide an action.
     if (plan && plan.needs_clarification === true) return "NEEDS DETAIL";
+    if (plan && plan.reply_kind === "not_understood") return "NOT RECOGNISED";
+    if (plan && plan.reply_kind === "capability_missing") return "NOT AVAILABLE";
+    if (plan && plan.reply_kind === "declined") return "NOTHING EXECUTED";
     if (plan && typeof plan.direct_reply === "string" && plan.direct_reply) return "NOTHING EXECUTED";
     if (plan && Array.isArray(plan.actions) && plan.actions.length) return "PLANNED";
     return "UNKNOWN";
@@ -279,14 +292,23 @@ function pipelineState(data) {
   if (failed && (providerStates.indexOf("unavailable") !== -1
                  || providerStates.indexOf("network_error") !== -1)) return "UNAVAILABLE";
 
-  // Nothing physical happened, so it must not read as a verified world change
-  // even though the record currently says verification=success. That gap is a
-  // known backend defect carried forward; hiding it here would make it worse.
-  if (allSuccess && actions.some(a => a.output && a.output.simulated === true)) return "SIMULATED";
-
+  // A real failure outranks everything below it: SIMULATED must not become a new
+  // way to hide one.
   if (failed) return "FAILED";
+
+  // Nothing physical happened. Until Phase 18 this relied on verification=success
+  // and so only appeared while the backend was overstating the result; now that
+  // the ledger says what it means, the label comes from `simulated` alone.
+  if (actions.some(a => a.output && a.output.simulated === true)) return "SIMULATED";
+
   if (unknown) return "UNKNOWN";
-  if (allSuccess) return "VERIFIED";
+  if (allSuccess) {
+    // Every step that ran was observed -- but the planner says part of the request
+    // was never turned into a step at all. Full verification would be a claim about
+    // a job that is not finished, which is how this page read before Phase 19.
+    return (plan && Array.isArray(plan.unhandled) && plan.unhandled.length)
+      ? "VERIFIED IN PART" : "VERIFIED";
+  }
   return "UNKNOWN";
 }
 
@@ -574,6 +596,9 @@ function auditTone(result) {
     expired: "warn",
     awaiting_confirmation: "warn",
     clarification: "warn",
+    // The simulator accepted it; no real device moved. Neither a success nor a
+    // failure, so it needs its own tone rather than defaulting to amber-with-the-errors.
+    simulated: "warn",
     // Nothing was going to run, and that was the answer. Not an error.
     no_action: "muted",
   };

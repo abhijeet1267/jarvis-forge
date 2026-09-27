@@ -258,6 +258,10 @@ async def control_home_device(
         "control_home_device",
         message,
         device=ctx.device_id,
+        # A simulator accepted the command; nothing in the house changed. This used
+        # to record verification=SUCCESS -- and therefore "success" in the audit
+        # chain -- underneath a reply saying "no real device was reached".
+        verification=(Verification.UNKNOWN if outcome.simulated else None),
         device_id=target.device_id,
         device_name=target.name,
         action=action,
@@ -320,6 +324,8 @@ async def run_home_routine(ctx: ToolContext, routine: str = "") -> Any:
         "run_home_routine",
         message,
         device=ctx.device_id,
+        # See control_home_device: a simulated routine changed no real device.
+        verification=(Verification.UNKNOWN if result["simulated"] else None),
         routine=routine,
         offline=False,
         simulated=result["simulated"],
