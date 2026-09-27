@@ -1,0 +1,84 @@
+{
+ "surface": "GET /health, no hardware attached, no accounts configured",
+ "tools": 127,
+ "agents": [
+  "laptop",
+  "laptop_center",
+  "memory",
+  "phone",
+  "email",
+  "calendar",
+  "scheduler",
+  "research",
+  "coding",
+  "design",
+  "vision",
+  "home",
+  "robotics",
+  "car",
+  "watch"
+ ],
+ "llm_enabled": false,
+ "peripherals": {
+  "car": {
+   "configured": false,
+   "via": "not configured",
+   "adapter": "",
+   "checked": true,
+   "connected": false,
+   "offline": true,
+   "adapter_error": "no car adapter or vehicle API is configured",
+   "probed": false,
+   "supported_metrics": null
+  },
+  "home": {
+   "online": false,
+   "mode": "offline",
+   "devices": 17,
+   "simulated": false,
+   "bridge_error": ""
+  },
+  "robotics": {
+   "online": false,
+   "mode": "offline",
+   "simulated": false,
+   "robots": 2,
+   "faults": [],
+   "bridge_error": ""
+  },
+  "watch": {
+   "paired": false,
+   "auth_state": "unpaired",
+   "mode": "queue",
+   "online": false,
+   "battery": null,
+   "counts": {
+    "queued": 0,
+    "delivered": 0,
+    "displayed": 0,
+    "replied": 0,
+    "failed": 0,
+    "total": 0
+   },
+   "awaiting_answer": []
+  }
+ },
+ "integrations": {
+  "email": "local_maildir",
+  "calendar": "local_calendar"
+ },
+ "memory_retrieval": "hybrid",
+ "paired_devices": 0,
+ "security": {
+  "auth_enabled": true,
+  "token_path": "/var/folders/y2/8qgnpl313ws7ktxtnt11mnsw0000gn/T/jarvis-bench-oawuxf9d/api_token",
+  "token_configured": true,
+  "allowed_origins": [
+   "http://127.0.0.1:8765"
+  ],
+  "host_header_enforced": true,
+  "rate_limit_per_minute": 600,
+  "rate_limit_burst": 120,
+  "confirm_timeout_seconds": 300
+ }
+}

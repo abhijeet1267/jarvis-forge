@@ -1,0 +1,63 @@
+name: ci
+
+# macOS, not Ubuntu: JARVIS Forge drives `say`, `pmset`, AppleScript and the macOS
+# Vision framework, and its tests assert on those code paths. A Linux runner would
+# be measuring a different product.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  suite:
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Node availability (the dashboard's own JS is executed, not imitated)
+        run: node --version
+
+      - name: Test suite
+        env:
+          JARVIS_LOG_LEVEL: WARNING
+        run: python -m pytest -q
+
+      # The README's numbers are generated, not typed. This proves the generators
+      # still run against the code they describe; the latency figures are allowed to
+      # differ per machine, so the artifact contents are not diffed here.
+      - name: Regenerate benchmarks and figures
+        run: |
+          python benchmarks/acceptance_run.py
+          python assets/build_charts.py
+          python assets/build_diagrams.py
+          python - <<'PY'
+          import glob, xml.dom.minidom
+          for path in sorted(glob.glob("assets/*.svg")):
+              xml.dom.minidom.parse(path)
+          print("all figures parse as valid XML")
+          PY
+
+      - name: Upload measured benchmark data
+        if: matrix.python-version == '3.11'
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmarks-py311
+          path: benchmarks/*.json
+          if-no-files-found: error

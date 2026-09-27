@@ -1,0 +1,88 @@
+{
+ "phases": [
+  {
+   "phase": "9 audit",
+   "collected": 1002,
+   "passed": 875,
+   "failed": 126,
+   "note": "baseline as found"
+  },
+  {
+   "phase": "10 truth/authority",
+   "collected": 1002,
+   "passed": 998,
+   "failed": 3,
+   "note": "P0 verification authority fixed"
+  },
+  {
+   "phase": "11 real world",
+   "collected": 1132,
+   "passed": 1128,
+   "failed": 0,
+   "note": "first fully green run"
+  },
+  {
+   "phase": "12 command path",
+   "collected": 1147,
+   "passed": 1143,
+   "failed": 0,
+   "note": "typed sentence proven"
+  },
+  {
+   "phase": "13 dashboard truth",
+   "collected": 1160,
+   "passed": 1156,
+   "failed": 0,
+   "note": "state rendered from server fields"
+  },
+  {
+   "phase": "14 workflows",
+   "collected": 1185,
+   "passed": 1181,
+   "failed": 0,
+   "note": "multi-step plan reachable"
+  },
+  {
+   "phase": "15 acceptance",
+   "collected": 1207,
+   "passed": 1203,
+   "failed": 0,
+   "note": "18 commands run live; 6 false successes found"
+  },
+  {
+   "phase": "16 accountability",
+   "collected": 1222,
+   "passed": 1218,
+   "failed": 0,
+   "note": "route-level refusals audited"
+  },
+  {
+   "phase": "17 coherence",
+   "collected": 1251,
+   "passed": 1247,
+   "failed": 0,
+   "note": "response agrees with its ledger row"
+  },
+  {
+   "phase": "18 simulation",
+   "collected": 1263,
+   "passed": 1259,
+   "failed": 0,
+   "note": "simulated actuation no longer audited success"
+  },
+  {
+   "phase": "19 refusals",
+   "collected": 1280,
+   "passed": 1276,
+   "failed": 0,
+   "note": "dropped clauses named; VERIFIED IN PART"
+  },
+  {
+   "phase": "20 dated recall",
+   "collected": 1290,
+   "passed": 1286,
+   "failed": 0,
+   "note": "recalling by day, echoes labelled"
+  }
+ ]
+}
