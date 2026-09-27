@@ -1,0 +1,818 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<!-- Injected by the server at serve time. A single-use bootstrap code, never the
+     API token: see authenticate() below, which spends it on POST /auth/session. -->
+<meta name="jarvis-bootstrap" content="__JARVIS_BOOTSTRAP__" />
+<title>JARVIS Forge — Control Dashboard</title>
+<!-- Offline by design: no CDN, no fonts, no icon request to fail. -->
+<link rel="icon" href="data:," />
+<style>
+  :root {
+    --bg: #f5f7fa;
+    --panel: #ffffff;
+    --ink: #1b2230;
+    --muted: #6b7688;
+    --line: #e2e7ef;
+    --accent: #2f6df6;
+    --ok: #16a34a;
+    --warn: #d97706;
+    --bad: #dc2626;
+    --radius: 10px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  header {
+    display: flex; align-items: center; gap: 14px;
+    padding: 16px 22px; background: var(--panel); border-bottom: 1px solid var(--line);
+    position: sticky; top: 0; z-index: 5;
+  }
+  header h1 { font-size: 17px; margin: 0; letter-spacing: .3px; }
+  .pill {
+    font-size: 12px; padding: 3px 9px; border-radius: 999px;
+    background: #eef3ff; color: var(--accent); font-weight: 600;
+  }
+  .wrap { padding: 18px 22px 40px; max-width: 1240px; margin: 0 auto; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
+  .card {
+    background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 14px 16px;
+  }
+  .card h2 {
+    font-size: 12px; text-transform: uppercase; letter-spacing: .8px;
+    color: var(--muted); margin: 0 0 10px;
+  }
+  .row { display: flex; justify-content: space-between; gap: 10px; padding: 5px 0; border-bottom: 1px dashed var(--line); }
+  .row:last-child { border-bottom: 0; }
+  .muted { color: var(--muted); }
+  .ok { color: var(--ok); font-weight: 600; }
+  .off { color: var(--muted); }
+  .bad { color: var(--bad); font-weight: 600; }
+  .warn { color: var(--warn); font-weight: 600; }
+  .cmdbar { display: flex; gap: 8px; margin-bottom: 16px; }
+  .cmdbar input {
+    flex: 1; padding: 11px 13px; border: 1px solid var(--line); border-radius: var(--radius);
+    font-size: 14px; background: var(--panel); color: var(--ink);
+  }
+  .cmdbar button {
+    padding: 11px 18px; border: 0; border-radius: var(--radius);
+    background: var(--accent); color: #fff; font-weight: 600; cursor: pointer;
+  }
+  .cmdbar button:hover { filter: brightness(.95); }
+  /* Pipeline state chip. Reuses the existing ok/warn/bad tone classes rather
+     than inventing a palette, so it reads as part of this page. */
+  .state {
+    display: flex; align-items: center; gap: 8px; margin: 0 0 8px;
+    font-size: 12px; letter-spacing: .04em; font-weight: 600;
+  }
+  .state .chip {
+    padding: 3px 10px; border-radius: 999px; background: #0f172a;
+    border: 1px solid currentColor; text-transform: uppercase;
+  }
+  .state.ok .chip { color: var(--ok); }
+  .state.warn .chip { color: #f0b429; }
+  .state.bad .chip { color: #ff6b6b; }
+  .state.muted .chip { color: #8b98ab; font-weight: 500; }
+  /* One line per step of a multi-step goal, read from GET /tasks/{job_id}. */
+  .steps { list-style: none; margin: 0 0 10px; padding: 0; font-size: 12px; }
+  .steps li { display: flex; gap: 8px; align-items: baseline; padding: 2px 0; }
+  .steps li .chip {
+    padding: 2px 8px; border-radius: 999px; border: 1px solid currentColor;
+    text-transform: uppercase; font-size: 10px; font-weight: 600; letter-spacing: .04em;
+    flex: 0 0 auto; min-width: 96px; text-align: center;
+  }
+  .steps li.ok .chip { color: var(--ok); }
+  .steps li.warn .chip { color: #f0b429; }
+  .steps li.bad .chip { color: #ff6b6b; }
+  .steps li.muted .chip { color: #8b98ab; font-weight: 500; }
+  .steps li .name { color: #e6edf7; font-weight: 600; flex: 0 0 auto; }
+  .steps li .detail { color: #8b98ab; }
+  pre.reply {
+    background: #0f172a; color: #e6edf7; padding: 12px 14px; border-radius: var(--radius);
+    white-space: pre-wrap; word-break: break-word; font-size: 13px; margin: 0 0 16px;
+    min-height: 42px;
+  }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 6px 4px; border-bottom: 1px solid var(--line); }
+  th { color: var(--muted); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: .5px; }
+  .risk-0 { color: var(--muted); }
+  .risk-1 { color: var(--ok); }
+  .risk-2 { color: var(--warn); }
+  .risk-3, .risk-4 { color: var(--bad); }
+  .tag { font-size: 11px; padding: 1px 7px; border-radius: 999px; background: #eef1f6; color: var(--muted); }
+  .approve { background: var(--ok); color: #fff; border: 0; border-radius: 6px; padding: 4px 10px; cursor: pointer; font-size: 12px; }
+  .deny { background: #f1f3f7; color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: 4px 10px; cursor: pointer; font-size: 12px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>JARVIS Forge</h1>
+  <span class="pill" id="version">core</span>
+  <span class="pill" id="llm">model: rules</span>
+  <span style="flex:1"></span>
+  <span class="muted" id="clock"></span>
+</header>
+
+<div class="wrap">
+  <div class="cmdbar">
+    <input id="cmd" placeholder='Try: "what is my battery"  ·  "find my report"  ·  "help"' autocomplete="off" />
+    <button id="send">Send</button>
+  </div>
+  <!-- Rendered from the backend's own fields. See pipelineState() for exactly
+       which ones, and why an HTTP 200 or action.ok is never one of them. -->
+  <div class="state muted" id="state"><span class="chip" id="stateChip">IDLE</span><span class="muted" id="stateNote"></span></div>
+  <!-- A goal that became several steps. Each line is the server's own step
+       status; nothing here is inferred from the request having been sent. -->
+  <ol class="steps" id="steps" hidden></ol>
+  <pre class="reply" id="reply">Ready. Type a command above, or say "help" to see what I can do.</pre>
+
+  <div class="grid">
+    <div class="card">
+      <h2>Devices</h2>
+      <div id="devices"><span class="muted">loading…</span></div>
+    </div>
+
+    <div class="card">
+      <h2>Peripherals &amp; Gateways</h2>
+      <div id="peripherals"><span class="muted">loading…</span></div>
+    </div>
+
+    <div class="card">
+      <h2>Pending Confirmations</h2>
+      <div id="confirmations"><span class="muted">none</span></div>
+    </div>
+
+    <div class="card">
+      <h2>Recent Actions</h2>
+      <div id="audit"><span class="muted">loading…</span></div>
+    </div>
+
+    <div class="card">
+      <h2>Memory</h2>
+      <div id="memory"><span class="muted">loading…</span></div>
+    </div>
+
+    <div class="card">
+      <h2>Voice</h2>
+      <div id="voice"><span class="muted">loading…</span></div>
+    </div>
+
+    <div class="card">
+      <h2>Health &amp; Recovery</h2>
+      <div id="health-metrics"><span class="muted">loading…</span></div>
+    </div>
+
+    <div class="card">
+      <h2>Privacy</h2>
+      <div id="privacy"><span class="muted">loading…</span></div>
+    </div>
+
+    <div class="card" style="grid-column: 1 / -1;">
+      <h2>Tool Registry</h2>
+      <div id="tools"><span class="muted">loading…</span></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = "";
+
+// The server injects a single-use bootstrap code, not the API token. This page
+// spends that code once on /auth/session and keeps the returned session token in
+// memory only -- never localStorage -- so the credential dies with the tab, and a
+// page reload is what renews it.
+let TOKEN = "";
+const BOOTSTRAP = (document.querySelector('meta[name="jarvis-bootstrap"]') || {}).content || "";
+
+async function authenticate() {
+  if (!BOOTSTRAP) return;  // auth is off; every route answers without a credential
+  const res = await fetch(API + "/auth/session", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ bootstrap: BOOTSTRAP }),
+  });
+  if (!res.ok) throw new Error(res.status + " -- reload the dashboard");
+  const data = await res.json();
+  TOKEN = data.session_token || "";
+  if (!TOKEN) throw new Error("empty session -- reload the dashboard");
+}
+
+function authHeaders(extra) {
+  const headers = Object.assign({}, extra || {});
+  if (TOKEN) headers["X-JARVIS-Token"] = TOKEN;
+  return headers;
+}
+
+async function get(path) {
+  const res = await fetch(API + path, { headers: authHeaders() });
+  if (res.status === 401) throw new Error("unauthorised: session missing, expired or revoked. Reload the dashboard.");
+  if (!res.ok) throw new Error(path + " -> " + res.status);
+  return res.json();
+}
+
+function escapeHtml(value) {
+  return String(value ?? "").replace(/[&<>"']/g, c => (
+    { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]
+  ));
+}
+
+// Pipeline state, rendered from fields the server already sends. This function
+// decides nothing and authorises nothing -- it only says what the backend said.
+//
+// The rule that matters: VERIFIED comes from actions[].verification === "success"
+// and from nothing else. Not an HTTP 200, not action.ok, not the reply wording
+// containing "success". Phases 9-12 measured that `ok` means "the handler
+// answered", which an offline gateway no-op satisfies as happily as a real
+// actuation; a UI that upgraded a 200 to VERIFIED would rebuild that defect at
+// the top of the stack and make it visible to a human for the first time.
+//
+// When the evidence does not distinguish a state, the answer is UNKNOWN rather
+// than a guess.
+const STATE_TONE = {
+  VERIFIED: "ok",
+  SIMULATED: "warn",
+  UNAVAILABLE: "warn",
+  PLANNED: "muted",
+  EXECUTING: "muted",
+  IDLE: "muted",
+  AWAITING: "warn",
+  "NEEDS DETAIL": "warn",
+  "NOTHING EXECUTED": "muted",
+  UNKNOWN: "bad",
+  FAILED: "bad",
+  BLOCKED: "bad",
+};
+
+function pipelineState(data) {
+  if (!data || typeof data !== "object") return "UNKNOWN";
+
+  // Asked, not yet approved: nothing has run, whatever the status code said.
+  if (data.needs_confirmation === true && data.confirmation_id) return "AWAITING CONFIRMATION";
+
+  const actions = Array.isArray(data.actions) ? data.actions : [];
+  if (!actions.length) {
+    if (data.decision === "BLOCK" || data.blocked_reason) return "BLOCKED";
+    const plan = data.plan;
+    // JARVIS answered and deliberately ran nothing. That is a known outcome, not
+    // an unknowable one: the Phase 15 acceptance sweep found five of eighteen
+    // commands -- every honest refusal and clarification -- labelled UNKNOWN,
+    // which told the user the system was unsure when it had actually said "no".
+    if (plan && plan.needs_clarification === true) return "NEEDS DETAIL";
+    if (plan && typeof plan.direct_reply === "string" && plan.direct_reply) return "NOTHING EXECUTED";
+    if (plan && Array.isArray(plan.actions) && plan.actions.length) return "PLANNED";
+    return "UNKNOWN";
+  }
+
+  const verifications = actions.map(a => a && a.verification);
+  const failed = verifications.indexOf("failed") !== -1;
+  const unknown = verifications.indexOf("unknown") !== -1;
+  const allSuccess = verifications.length > 0 && verifications.every(v => v === "success");
+
+  // A provider that could not be reached is a different fact from one that
+  // answered and refused, and neither is a machine that broke.
+  const providerStates = actions.map(a => (a && a.output && a.output.provider_status) || "");
+  if (failed && (providerStates.indexOf("unavailable") !== -1
+                 || providerStates.indexOf("network_error") !== -1)) return "UNAVAILABLE";
+
+  // Nothing physical happened, so it must not read as a verified world change
+  // even though the record currently says verification=success. That gap is a
+  // known backend defect carried forward; hiding it here would make it worse.
+  if (allSuccess && actions.some(a => a.output && a.output.simulated === true)) return "SIMULATED";
+
+  if (failed) return "FAILED";
+  if (unknown) return "UNKNOWN";
+  if (allSuccess) return "VERIFIED";
+  return "UNKNOWN";
+}
+
+function renderState(state, note) {
+  const box = document.getElementById("state");
+  const chip = document.getElementById("stateChip");
+  if (!box || !chip) return;
+  box.className = "state " + stateTone(state);
+  chip.textContent = state;
+  document.getElementById("stateNote").textContent = note || "";
+}
+
+// A goal that became several steps. Each status is the backend's own per-step
+// verdict, written from verification rather than from a handler answering, and
+// read back from GET /tasks/{job_id} -- this page supplies nothing.
+//
+// `pending` is the important one: after a sequence stops at an approval, the
+// steps behind it are not queued and not coming. They never ran.
+const STEP_STATE = {
+  succeeded: "VERIFIED",
+  unverified: "UNKNOWN",
+  failed: "FAILED",
+  blocked: "BLOCKED",
+  awaiting_confirmation: "AWAITING CONFIRMATION",
+  running: "EXECUTING",
+  pending: "NOT RUN",
+  skipped: "NOT RUN",
+};
+
+// The aggregate. `done` is only reachable when every step verified; `incomplete`
+// is the honest word for a sequence that stopped part-way and will not resume by
+// itself, because one approval buys one action here.
+const JOB_STATE = {
+  running: "WORKFLOW RUNNING",
+  done: "WORKFLOW COMPLETE",
+  incomplete: "WORKFLOW PARTLY DONE",
+  awaiting_confirmation: "WORKFLOW AWAITING CONFIRMATION",
+  unverified: "WORKFLOW UNVERIFIED",
+  failed: "WORKFLOW FAILED",
+  paused: "WORKFLOW PAUSED",
+  cancelled: "WORKFLOW CANCELLED",
+};
+
+function stateTone(state) {
+  if (String(state).indexOf("AWAITING") === 0) return "warn";
+  if (String(state).indexOf("WORKFLOW") === 0) {
+    if (state.indexOf("COMPLETE") !== -1) return "ok";
+    if (state.indexOf("FAILED") !== -1) return "bad";
+    return "warn";
+  }
+  return STATE_TONE[state] || "muted";
+}
+
+async function renderWorkflow(jobId) {
+  const box = document.getElementById("steps");
+  if (!box) return;
+  if (!jobId) {
+    box.hidden = true;
+    box.innerHTML = "";
+    return;
+  }
+  let job;
+  try {
+    job = await get("/tasks/" + encodeURIComponent(jobId));
+  } catch (e) {
+    box.hidden = false;
+    box.innerHTML = '<li class="bad"><span class="chip">UNKNOWN</span>'
+      + '<span class="detail">steps could not be read from the backend</span></li>';
+    return;
+  }
+  const rows = [{
+    state: JOB_STATE[job.status] || ("UNKNOWN (" + job.status + ")"),
+    name: "goal",
+    detail: job.goal || "",
+  }].concat((job.steps || []).map(step => ({
+    state: STEP_STATE[step.status] || "UNKNOWN",
+    name: step.name,
+    detail: step.detail || "",
+  })));
+  box.innerHTML = rows.map(row =>
+    '<li class="' + stateTone(row.state) + '">'
+    + '<span class="chip">' + escapeHtml(row.state) + '</span>'
+    + '<span class="name">' + escapeHtml(row.name) + '</span>'
+    + '<span class="detail">' + escapeHtml(row.detail) + '</span></li>'
+  ).join("");
+  box.hidden = false;
+}
+
+function applyHealth(h) {
+  document.getElementById("llm").textContent =
+    "model: " + (h.llm_enabled ? "cloud" : "rules") + " · " + h.tools + " tools";
+}
+
+// "OFFLINE" is not one fact, it is several: a device that was never paired, one
+// waiting for approval, a revoked one, an adapter that was never configured, and
+// a gateway that is simulated. The backends already know which; flattening them
+// into one red/green dot would throw that away.
+//
+// Pairing words only apply to devices that pair. home_gateway and car_main are
+// gateways and adapters, so telling the user to "pair" them is simply wrong --
+// their real state comes from the peripheral report below.
+const AUTH_WORD = {
+  paired: "paired", pending: "awaiting approval",
+  unpaired: "not paired", revoked: "revoked",
+};
+const PERIPHERAL_OF = { car_main: "car", watch_main: "watch", home_gateway: "home" };
+let _peripherals = {};
+
+function peripheralWord(info) {
+  if (!info) return null;
+  if (info.error) return { text: "state unavailable", cls: "bad" };
+  // The watch is the one mapped device that pairs, so its pairing state leads.
+  if (info.auth_state && info.auth_state !== "paired") {
+    return {
+      text: AUTH_WORD[info.auth_state] || info.auth_state,
+      cls: info.auth_state === "revoked" ? "bad" : "off",
+    };
+  }
+  if (info.mode === "simulate" || info.simulated) return { text: "simulated", cls: "warn" };
+  if (info.online || info.connected) return { text: "online", cls: "ok" };
+  if (info.mode === "queue") return { text: "outbox only", cls: "warn" };
+  if (info.configured === false) return { text: "not configured", cls: "off" };
+  if (info.checked === false) return { text: "not read yet", cls: "off" };
+  // "not answering" is an accusation, so it needs evidence that something was
+  // tried. Without a recorded failure the honest answer is simply "unknown".
+  if (info.bridge_error || info.adapter_error) return { text: "not answering", cls: "bad" };
+  if (info.mode === "offline") return { text: "not configured", cls: "off" };
+  return { text: "unknown", cls: "off" };
+}
+
+async function loadDevices() {
+  const devices = await get("/devices");
+  document.getElementById("devices").innerHTML = devices.map(d => {
+    const word = PERIPHERAL_OF[d.device_id] ? peripheralWord(_peripherals[PERIPHERAL_OF[d.device_id]]) : null;
+    const auth = AUTH_WORD[d.auth_state] || d.auth_state || "unknown";
+    const cls = word ? word.cls
+      : d.online ? "ok"
+      : d.auth_state === "revoked" ? "bad"
+      : d.auth_state === "pending" ? "warn" : "off";
+    const state = word ? word.text
+      : d.online ? "online"
+      : PERIPHERAL_OF[d.device_id] ? auth : "offline";
+    return `
+    <div class="row">
+      <span>${escapeHtml(d.device_id)} <span class="tag">${escapeHtml(d.type)}</span></span>
+      <span class="${cls}">${escapeHtml(state.toUpperCase())}</span>
+    </div>`;
+  }).join("");
+}
+
+function renderPeripherals() {
+  const p = _peripherals;
+  const row = (label, value, cls, note) => `
+    <div class="row">
+      <span>${escapeHtml(label)}${note ? `<br><span class="muted" style="font-size:12px">${escapeHtml(note)}</span>` : ""}</span>
+      <span class="${cls}">${escapeHtml(value)}</span>
+    </div>`;
+
+  // Each builder returns one row, or "" when that agent has nothing to say.
+  // A peripheral whose state could not be read is reported as unknown: falling
+  // through to "not configured" would invent a reason we never observed, which
+  // is the one thing this card exists to avoid.
+  const failed = (label, info) => info && info.error
+    ? row(label, "state unavailable", "bad", info.error) : "";
+
+  const carRow = (car) => {
+    if (!car.configured) {
+      return row("Car", "adapter not connected", "off",
+                 "read-only telemetry is wired; no OBD-II adapter or vehicle API is configured");
+    }
+    if (!car.checked) {
+      return row("Car", "configured · not read yet", "off",
+                 `${car.adapter || car.via} — the first question about the car will reach it`);
+    }
+    if (car.connected) {
+      return row("Car", car.via === "simulate" ? "connected · simulated" : "connected",
+                 car.via === "simulate" ? "warn" : "ok", car.adapter || car.via);
+    }
+    return row("Car", "not answering", "bad", car.adapter_error || car.adapter || car.via);
+  };
+
+  const watchRow = (watch) => {
+    if (watch.auth_state !== "paired") {
+      const cls = watch.auth_state === "revoked" ? "bad" : watch.auth_state === "pending" ? "warn" : "off";
+      return row("Watch", AUTH_WORD[watch.auth_state] || watch.auth_state, cls,
+                 "pair it before prompts can be delivered");
+    }
+    const battery = watch.battery === null || watch.battery === undefined
+      ? "" : ` · battery ${watch.battery}%`;
+    if (watch.mode === "bridge") {
+      return row("Watch", "paired · pushed to bridge" + battery, "ok",
+                 watch.online ? "companion has called in" : "no delivery confirmed by the bridge yet");
+    }
+    if (watch.mode === "simulate") {
+      return row("Watch", "paired · simulated companion" + battery, "warn",
+                 "demonstration device, not a real watch");
+    }
+    const queued = watch.counts && watch.counts.queued
+      ? ` · ${watch.counts.queued} waiting in the outbox` : "";
+    return row("Watch", "paired · outbox only" + battery + queued, "warn",
+               "no bridge configured, so prompts wait here until the companion collects them");
+  };
+
+  const homeRow = (home) => home.online
+    ? row("Home", home.simulated ? "simulated gateway" : "gateway online",
+          home.simulated ? "warn" : "ok", `${home.devices || 0} device(s) known`)
+    : row("Home", "gateway offline", "off",
+          "nothing is switched; readings are last known state");
+
+  const robotRow = (robots) => {
+    const faults = (robots.faults || []).length ? ` · ${robots.faults.length} safety fault(s)` : "";
+    return robots.online
+      ? row("Robots", robots.simulated ? "simulated bridge" : "bridge online",
+            robots.simulated ? "warn" : "ok", `${robots.robots || 0} robot(s)${faults}`)
+      : row("Robots", "bridge offline", "off", `no motion command is ever sent${faults}`);
+  };
+
+  let html = [
+    p.car && (failed("Car", p.car) || carRow(p.car)),
+    p.watch && (failed("Watch", p.watch) || watchRow(p.watch)),
+    p.home && (failed("Home", p.home) || homeRow(p.home)),
+    p.robotics && (failed("Robots", p.robotics) || robotRow(p.robotics)),
+  ].filter(Boolean).join("");
+
+  if (!html) html = '<span class="muted">no hardware-facing agents reported</span>';
+  document.getElementById("peripherals").innerHTML = html;
+}
+
+// One /health read per cycle feeds three panels: the header pill, the peripheral
+// rows, and the devices card (which needs the peripheral state to avoid calling
+// an unconfigured adapter "not paired").
+async function loadPeripherals() {
+  const h = await get("/health");
+  _peripherals = h.peripherals || {};
+  applyHealth(h);
+  renderPeripherals();
+  await loadDevices();
+}
+
+async function loadConfirmations() {
+  const items = await get("/confirmations");
+  const box = document.getElementById("confirmations");
+  if (!items.length) { box.innerHTML = '<span class="muted">none</span>'; return; }
+  box.innerHTML = items.map(c => `
+    <div class="row">
+      <span>${escapeHtml(c.tool)}<br><span class="muted" style="font-size:12px">${escapeHtml(c.preview)}</span></span>
+      <span style="white-space:nowrap">
+        <button class="approve" data-id="${escapeHtml(c.confirmation_id)}" data-approve="1">Approve</button>
+        <button class="deny" data-id="${escapeHtml(c.confirmation_id)}" data-approve="0">Deny</button>
+      </span>
+    </div>`).join("");
+  box.querySelectorAll("button").forEach(btn => {
+    btn.onclick = () => resolveConfirmation(btn.dataset.id, btn.dataset.approve === "1");
+  });
+}
+
+async function resolveConfirmation(id, approve) {
+  const res = await fetch(API + `/confirm/${encodeURIComponent(id)}?approve=${approve}`, {
+    method: "POST",
+    headers: authHeaders(),
+  });
+  const data = await res.json();
+  document.getElementById("reply").textContent = data.reply;
+  // Same rule as /command. Denying or letting a confirmation expire returns no
+  // actions and decision=BLOCK, which renders BLOCKED -- never VERIFIED.
+  renderState(res.ok ? pipelineState(data) : "UNKNOWN",
+              res.ok ? ("confirm " + (approve ? "approved" : "denied")) : ("HTTP " + res.status));
+  renderWorkflow(data.job_id);
+  refresh();
+}
+
+// Ledger result tokens, mapped to the tones the page already uses. The card used
+// to ask "is it success?" and colour everything else amber, so a decision that
+// deliberately did nothing looked identical to an action that failed -- and
+// "no_action" next to "failure" in the same list is exactly the ambiguity the
+// audit chain exists to remove.
+function auditTone(result) {
+  const tones = {
+    success: "ok",
+    recovered: "warn",
+    failure: "bad",
+    unverified: "bad",
+    blocked: "bad",
+    denied: "bad",
+    expired: "warn",
+    awaiting_confirmation: "warn",
+    clarification: "warn",
+    // Nothing was going to run, and that was the answer. Not an error.
+    no_action: "muted",
+  };
+  return tones[result] || "warn";
+}
+
+async function loadAudit() {
+  const rows = await get("/audit?limit=12");
+  document.getElementById("audit").innerHTML = rows.length ? rows.map(r => `
+    <div class="row">
+      <span>${escapeHtml(r.tool || r.intent)}<br><span class="muted" style="font-size:12px">${escapeHtml((r.created_at || "").slice(11, 19))}</span></span>
+      <span class="${auditTone(r.result)}">${escapeHtml(r.result)}</span>
+    </div>`).join("") : '<span class="muted">no actions yet</span>';
+}
+
+async function loadMemory() {
+  const data = await get("/memory?limit=8");
+  const stats = data.stats || {};
+  const head = `<div class="row"><span class="muted">total</span><span>${stats.total || 0}</span></div>`;
+  document.getElementById("memory").innerHTML = head + (data.items || []).map(m => `
+    <div class="row">
+      <span>${escapeHtml(m.content).slice(0, 80)}</span>
+      <span class="tag">${escapeHtml(m.scope)}</span>
+    </div>`).join("");
+}
+
+async function loadVoice() {
+  const v = await get("/voice/status");
+  const tts = v.tts || {};
+  const stt = v.stt || {};
+  const audio = v.audio || {};
+
+  const ttsBackend = Object.entries(tts.available || {}).find(([, ok]) => ok)?.[0] || "none";
+  const sttBackend = Object.entries(stt.available || {}).find(([, ok]) => ok)?.[0] || "none";
+
+  const line = (label, value, ok) =>
+    `<div class="row"><span>${label}</span><span class="${ok ? "ok" : "off"}">${value}</span></div>`;
+
+  // Microphone needs three words, not two: "installed" and "allowed to listen"
+  // are different facts, and "cannot measure" must not read as "broken".
+  const micRow = (audio) => {
+    const state = audio.capture_state || "unknown";
+    const mic = audio.microphone || {};
+    const words = {
+      ready: "ready",
+      measuring: "measuring…",
+      blocked: "not permitted",
+      no_backend: "no capture backend",
+      unknown: "consent unreadable",
+    };
+    const word = words[state] || state;
+    const cls = state === "ready" ? "ok" : state === "unknown" || state === "measuring" ? "tag" : "off";
+    const mics = (mic.devices || []).map(d => d.name).filter(Boolean);
+    const hint = [
+      audio.capture_available ? "" : "capture unavailable",
+      mic.permission ? "macOS says: " + mic.permission : "",
+      mic.host ? "asked of: " + mic.host : "",
+      mics.length ? mics.length + " input device(s): " + mics.join(", ") : "no input devices seen",
+      mic.detail || "",
+    ].filter(Boolean).join(" — ");
+    return `<div class="row"><span>Microphone</span><span class="${cls}" title="${escapeHtml(hint)}">${escapeHtml(word)}</span></div>`;
+  };
+
+  document.getElementById("voice").innerHTML =
+    line("Wake word", (v.wake?.wake_words || []).join(" / "), true) +
+    line("TTS", ttsBackend, ttsBackend !== "none") +
+    line("STT", sttBackend, sttBackend !== "none") +
+    micRow(audio) +
+    line("Voice", v.enabled ? "enabled" : "disabled", v.enabled) +
+    `<div class="row"><span class="muted">Try it</span>
+       <span><button class="approve" id="speakBtn">Speak</button></span></div>`;
+  const btn = document.getElementById("speakBtn");
+  if (btn) btn.onclick = speakTest;
+}
+
+async function speakTest() {
+  const text = prompt("Text to speak:", "Jarvis Forge is online.");
+  if (!text) return;
+  document.getElementById("reply").textContent = "…synthesising speech";
+  try {
+    const res = await fetch(API + "/voice/speak", {
+      method: "POST",
+      headers: authHeaders({ "Content-Type": "application/json" }),
+      body: JSON.stringify({ text }),
+    });
+    const data = await res.json();
+    document.getElementById("reply").textContent = data.ok
+      ? `Spoken via ${data.backend}.\nAudio: ${data.audio_path || "(streamed directly)"}`
+      : `Speech failed: ${data.error}`;
+  } catch (e) {
+    document.getElementById("reply").textContent = "Error: " + e.message;
+  }
+}
+
+async function loadMetrics() {
+  const m = await get("/metrics");
+  const f = m.failures || {};
+  const a = m.audit || {};
+  const rate = Math.round((f.recovery_rate || 0) * 100);
+
+  const line = (label, value, cls) =>
+    `<div class="row"><span>${label}</span><span class="${cls || ""}">${value}</span></div>`;
+
+  let html = "";
+  html += line("Failures recorded", f.total_failures ?? 0);
+  html += line("Recovered automatically", `${f.total_recovered ?? 0} (${rate}%)`,
+               rate > 0 ? "ok" : "off");
+  html += line("Audit chain", a.chain_intact ? "intact" : "BROKEN",
+               a.chain_intact ? "ok" : "bad");
+  html += line("Actions sampled", a.sampled ?? 0);
+
+  const topTools = Object.entries(a.top_tools || {}).slice(0, 3);
+  for (const [tool, count] of topTools) {
+    html += line(`· ${tool}`, count, "muted");
+  }
+
+  document.getElementById("health-metrics").innerHTML = html;
+}
+
+async function loadPrivacy() {
+  const p = await get("/privacy");
+  const on = p.privacy_mode;
+
+  document.getElementById("privacy").innerHTML = `
+    <div class="row"><span>Redaction</span><span class="ok">always on</span></div>
+    <div class="row"><span>Privacy mode</span>
+      <span class="${on ? "ok" : "off"}">${on ? "ON" : "off"}</span></div>
+    <div class="row"><span class="muted">Exports are redacted</span>
+      <span class="muted">yes</span></div>
+    <div class="row">
+      <span><button class="approve" id="privBtn">${on ? "Disable" : "Enable"}</button></span>
+      <span><button class="deny" id="exportBtn">Export data</button></span>
+    </div>`;
+
+  const btn = document.getElementById("privBtn");
+  if (btn) btn.onclick = async () => {
+    await fetch(API + "/privacy/mode?enabled=" + (!on), {
+      method: "POST", headers: authHeaders(),
+    });
+    refresh();
+  };
+
+  const exp = document.getElementById("exportBtn");
+  if (exp) exp.onclick = async () => {
+    const data = await get("/privacy/export");
+    const totals = data.totals || {};
+    const summary = Object.entries(totals)
+      .filter(([, n]) => n > 0)
+      .map(([t, n]) => `${t}: ${n}`)
+      .join("\n") || "(no data)";
+    document.getElementById("reply").textContent =
+      `Data export (redacted)\n\n${summary}`;
+  };
+}
+
+async function loadTools() {
+  const tools = await get("/tools");
+  document.getElementById("tools").innerHTML = `
+    <table>
+      <thead><tr><th>Tool</th><th>Agent</th><th>Risk</th><th>Confirm</th><th>Description</th></tr></thead>
+      <tbody>
+        ${tools.map(t => `
+          <tr>
+            <td><strong>${escapeHtml(t.name)}</strong></td>
+            <td class="muted">${escapeHtml(t.agent)}</td>
+            <td class="risk-${t.risk}">${t.risk} · ${escapeHtml(t.risk_label)}</td>
+            <td>${t.requires_confirmation ? "yes" : "no"}</td>
+            <td class="muted">${escapeHtml(t.description)}</td>
+          </tr>`).join("")}
+      </tbody>
+    </table>`;
+}
+
+async function send() {
+  const input = document.getElementById("cmd");
+  const text = input.value.trim();
+  if (!text) return;
+  document.getElementById("reply").textContent = "…thinking";
+  // Our own in-flight state, not a claim about the world: the request has left
+  // this page and no answer has come back yet.
+  renderState("EXECUTING", "");
+  renderWorkflow("");
+  try {
+    const res = await fetch(API + "/command", {
+      method: "POST",
+      headers: authHeaders({ "Content-Type": "application/json" }),
+      body: JSON.stringify({ text, source: "dashboard" }),
+    });
+    if (res.status === 401) throw new Error("session missing or expired. Reload the dashboard.");
+    if (!res.ok) throw new Error("/command -> " + res.status);
+    const data = await res.json();
+    let out = data.reply;
+    if (data.confirmation_id) out += `\n\n[pending confirmation ${data.confirmation_id}]`;
+    document.getElementById("reply").textContent = out;
+    renderState(pipelineState(data), (data.actions && data.actions.length
+      ? (data.actions[0].tool || "") : (data.intent || "")));
+    renderWorkflow(data.job_id);
+    input.value = "";
+  } catch (e) {
+    // A transport failure tells us nothing about whether the action happened,
+    // so this is UNKNOWN, never FAILED: the request may well have been carried
+    // out server-side before the connection dropped.
+    document.getElementById("reply").textContent = "Error: " + e.message;
+    renderState("UNKNOWN", "no response from JARVIS");
+    renderWorkflow("");
+  }
+  refresh();
+}
+
+function tick() {
+  document.getElementById("clock").textContent = new Date().toLocaleString();
+}
+
+function refresh() {
+  // The devices card reads the peripheral state, so it goes second; if health
+  // cannot be reached at all, render devices from their own data anyway.
+  loadPeripherals().catch(() => loadDevices().catch(() => {}));
+  loadConfirmations().catch(() => {});
+  loadAudit().catch(() => {});
+  loadMemory().catch(() => {});
+  loadVoice().catch(() => {});
+  loadMetrics().catch(() => {});
+  loadPrivacy().catch(() => {});
+  loadTools().catch(() => {});
+}
+
+document.getElementById("send").onclick = send;
+document.getElementById("cmd").addEventListener("keydown", e => { if (e.key === "Enter") send(); });
+setInterval(tick, 1000);
+tick();
+
+// Nothing may be fetched before the session exists, or every card would show a
+// 401 for a page that is actually fine.
+authenticate().then(() => {
+  refresh();
+  setInterval(refresh, 8000);
+}).catch(e => {
+  document.getElementById("reply").textContent = "Not authorised: " + e.message;
+});
+</script>
+</body>
+</html>

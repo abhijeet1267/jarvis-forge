@@ -1,0 +1,356 @@
+# PHASE 9 (run as Phase 13) — Documentation Consistency / Drift Audit
+
+**Mode:** read-only. No production file was modified. This file is the only artifact written.
+**Date:** 2026-09-25 (local, ~20:00–20:45)
+**Repo audited:** `/Users/abhijeetmiskin/AppData/jarv/jarvis-forge` (NOT a git repository — `git rev-parse` → `fatal: not a git repository`)
+**Interpreter used for all measurement:** `./.venv/bin/python` → Python 3.11.16
+**Live probe instance:** throwaway `JARVIS_HOME=/tmp/docaudit_home`, `JARVIS_PORT=8975`,
+`JARVIS_API_TOKEN=docaudit`, started and stopped inside this session. `~/.jarvis-forge`
+was never written to (verified afterwards: `api_token` mtime unchanged, `Sep 19 13:25`).
+
+Documents cross-checked: `STATUS.md` (585 ln), `README.md` (1,289 ln), `PROJECT_DETAILS.md`
+(343 ln), `BASELINE_REPORT.md` (396 ln), `audit/PHASE1_IMPLEMENTATION_REPORT.md` (213 ln),
+`docs/PHONE_AGENT_PLAN.md` (254 ln), `.env.example` (170 ln), `dashboard/index.html`
+(565 ln) + the API surface it calls (`jarvis/api/app.py`, 2,123 ln), `jarvis/config.py`.
+
+---
+
+## Legend
+
+* **TRUE** — claim matches the code/runtime as it stands today.
+* **STALE** — claim was once measured and true; the code has since moved.
+* **FALSE** — claim does not match reality now (independent of environment).
+* **ENVIRONMENT** — claim depends on machine state (peripherals, permissions, the user's real home) and cannot be reproduced from the checkout.
+* **UNVERIFIED** — not exercised in this pass; reason stated.
+
+**Severity:** P0 blocking (product does not behave as documented) · P1 high
+(security/safety/authority, or "fixed" asserted when it is not) · P2 medium (headline
+metric/version/inventory wrong) · P3 low (stale detail, incomplete inventory, naming) ·
+P4 informational (cosmetic, or a verified-true number worth pinning).
+
+---
+
+## 0. The headline (P0, drives most other rows)
+
+`jarvis/tools/base.py:16` imports only `ActionResult` from `..core.models`, while
+`ok()` references `Verification` at runtime on **base.py:103** and **base.py:117**. Every
+tool handler returns through `ok()`/`unverified()`, so **every tool in the registry raises
+`NameError: name 'Verification' is not defined`**. Measured, not inferred:
+
+```
+$ ./.venv/bin/python -m pytest -q
+126 failed, 875 passed, 1 skipped, 1 warning in 22.32s        (collected: 1,002)
+
+$ curl -s -X POST -H "X-JARVIS-Token: docaudit" -H 'Content-Type: application/json' \
+       -d '{"text":"what time is it"}' http://127.0.0.1:8975/command
+{"reply":"That did not work: get_time raised: name 'Verification' is not defined", ...}
+```
+
+Same for `what is my battery` (`battery_status`), `system status` (`system_status`),
+`remember that …` (`remember_fact`). Failures span 14 test files:
+watch 15, car 13, email_calendar 12, coding 11, home 10, robotics 9, pipeline 9,
+laptop_center 9, design 8, memory_advanced 7, vision 6, phone 6, security 4, research 4.
+The three residual failures after fixing that one import are stale assertions on a moved
+field: `tests/test_home.py:228`, `tests/test_home.py:241`, `tests/test_robotics.py:221`
+read `result.output["verified"]`, but `verified` is now an `ActionResult` attribute
+(`jarvis/core/models.py:234`) reconciled against `verification` (`models.py:242-262`).
+
+**Consequence:** every "working", "honest offline", "never fakes a success" and every
+quoted acceptance response in STATUS §1/§4/§5, PROJECT_DETAILS §3/§5 and README
+"What works right now" is currently unproducible. Those rows are classified FALSE below
+under one shared root cause (S-02, S-03, R-08, P-01) rather than item-by-item.
+
+---
+
+## 1. Summary table — all findings, sorted by severity
+
+| ID | Document | Location (file:line) | Claim | Observed reality | Class | Sev |
+|---|---|---|---|---|---|---|
+| S-02 | STATUS.md | §1 `STATUS.md:18`, `:87` | "976 collected → **975 passing, 1 skipped**" | 1,002 collected, **126 failed, 875 passed, 1 skipped** | FALSE | **P0** |
+| S-03 | STATUS.md | §1 `:28-40`, §4 `:136-155`, §5 passim | Email/Calendar/Scheduler/Memory/Research/Coding/Design/Vision "working"; hardware agents "honest offline"; 18 quoted acceptance responses | All 18 flow through a tool; every tool call raises `NameError` (live `/command`) | FALSE | **P0** |
+| R-08 | README.md | `README.md:185-200` | "What works right now" — 12 conversational actions | Same root cause: none of them currently returns a result | FALSE | **P0** |
+| P-01 | PROJECT_DETAILS.md | `PROJECT_DETAILS.md:6-7`, `:76-93` | "Every number and quoted response … produced by running the system on this machine today" | §3's 14 quoted responses cannot be produced by this checkout | FALSE | **P0** |
+| P-02 | PROJECT_DETAILS.md | `:298` | "the suite is **green with zero failures**, so there is no broken code waiting" | 126 failures, one missing name at `jarvis/tools/base.py:16` | FALSE | **P0** |
+| A-01 | audit/PHASE1_IMPLEMENTATION_REPORT.md | `:45-46`, `:168` | "Full suite after the change: **1001 passed, 1 skipped**" | Collection matches (1,002) but 126 fail; the report's "verified" no longer holds | FALSE | **P0** |
+| S-04 | STATUS.md | `:385` | "**Token auth** on every endpoint" | 8 routes are unauthenticated, incl. `GET /auth/token`, which returned the live token to an anonymous `curl` | FALSE | **P1** |
+| R-05 | README.md | `:1244-1245` | "All endpoints except `/`, `/dashboard` and `/auth/token` require the token" | Also public: `/openapi.json`, `/docs`, `/docs/oauth2-redirect`, `/redoc`, `POST /devices/pair/request`; contradicts README's own `:236`, `:314` | FALSE | **P1** |
+| P-03 | PROJECT_DETAILS.md | `:51`, `:245` | bundle "signature valid", "diff -q identical", 544K | `launcher.py` *is* identical, but `codesign --verify` → **"a sealed resource is missing or invalid"** (stray `Resources/__pycache__/launcher.cpython-313.pyc`); bundle is 588K | FALSE | **P1** |
+| S-05 | STATUS.md | `:25` | "Desktop app … **signature valid**; self-test 7/9" | Signature invalid now; and `Contents/Resources/project_path.txt` still names the abandoned `…/aisys/jarvis-forge`, so the bundle cannot locate the project | FALSE | **P1** |
+| S-14 | STATUS.md | `:496`, `:353` | pipeline includes a **Verification** stage | Model exists (`models.py:210-222`) but is not wired: `orchestrator.py:398-400` still writes `result="success" if result.ok`, `risk="confirmed"`; `ActionResult.audit_result` (`models.py:265-272`, docstring: "keeps a hardware no-op out of the log as a success") has **zero consumers** | FALSE (half-built) | **P1** |
+| B-02 | BASELINE_REPORT.md | `:119`, `:226-232` | RED: "Verification engine **absent** … no `UNKNOWN` state"; Phase-1 scope = build it | A `Verification` tri-state now exists; the live defect moved to "not wired to the audit log" + the `ok()` import | STALE | **P1** |
+| B-03 | BASELINE_REPORT.md | `:135-140` | "`tools/base.py:81-90` `ok()` hardcodes `verified=True`" | Rewritten (`base.py:81-112`): derives `Verification` from the caller; now crashes on a missing import | STALE | **P1** |
+| A-02 | audit/PHASE1…md | `:3-5`, `:50-58`, `:156-158` | "Phases 1C and 1D have **not been started**"; "No SUCCESS/FAILED/UNKNOWN tri-state exists today" | 1C's model work has landed; 1D genuinely has not (`app.py:1463` `authorized: bool = False` → `:1600`) | STALE | **P1** |
+| B-04 | BASELINE_REPORT.md | `:167-168`, `:206` | CR1 "success is fabricated at the structured layer" | Still true in the record: no-op paths in `tools/robotics.py:167-189`, `tools/home.py` call `ok()` with no observation → `Verification.SUCCESS` | TRUE | **P1** |
+| S-06 | STATUS.md | `:3`, `:4`, `:48` | "**Version:** v1.8 · Generated: 24 September 2026"; Location `…/aisys/jarvis-forge/` | Repo is at `…/jarv/jarvis-forge`; content includes 25-Sep passes (`:25`, `:151`, `:554`); declared version is `0.1.0` | STALE | **P2** |
+| R-01 | README.md | `:1` | "# JARVIS Forge (**v1.5**)" | README itself documents v1.6/v1.7/v1.8 (`:212-214`); STATUS says v1.8; package says 0.1.0 (`jarvis/__init__.py:18`, `pyproject.toml:3`, `app.version`) | STALE | **P2** |
+| S-07 | STATUS.md | `:49` | `$PY=/Users/abhijeetmiskin/.workbuddy-ai/binaries/python/envs/default/bin/python` | That interpreter is 3.13; the audited venv is 3.11.16. PROJECT_DETAILS `:312`/BASELINE `:278` say `PY=./.venv/bin/python`. Two contradicting "how to run it" recipes; the 3.13 one is what wrote the `.pyc` that broke the bundle signature | STALE | **P2** |
+| S-08 | STATUS.md | `:62-68` | offline-shim note; "The full suite passes that way: **868 passed, 1 skipped**" | Third total in one document (975 `:18`, 954 `:411`, 868 `:68`); `.venv` ships real `pydantic-settings 2.15.0` + `pytest-asyncio` — no shims needed | STALE | **P2** |
+| S-09 | STATUS.md | `:411`, `:523` | "954 tests — 953 passing"; `tests/ # 954 tests` | 1,002 collected; §6 table sums to 976 | FALSE | **P2** |
+| R-06 | README.md | `:1212`, `:1253` | "tests/ … **763 tests**" and "954 collected → 953 passed" | 1,002 collected; real doc set is 26 test files / 9,395 test LOC | FALSE | **P2** |
+| P-04 | PROJECT_DETAILS.md | `:45-49` | collected 976 / passing 975 / **failing 0** / "~25 s" | 1,002 / 875 / **126** / 22.32 s | FALSE | **P2** |
+| B-05 | BASELINE_REPORT.md | `:23-25` | "976 … 975/0/1 … 16.5 s" and "the true numbers are 976/975" (vs instruction's 968/967) | Both superseded; today's truth is 1,002/875/126/1 | STALE | **P2** |
+| D-01 | dashboard/index.html | `:469`, `:472-473` | Privacy card hardcodes **"Redaction — always on"** and "Exports are redacted — yes" | `/privacy` *returns* `redaction_enabled` and `export_redacted_by_default`; the JS fetches the payload and ignores both (`config.redact_audit` can be false, `jarvis/config.py:70`). Exactly the state-collapsing STATUS `:399-404` and README `:610-631` claim was designed out | FALSE | **P2** |
+| D-02 | dashboard/index.html | `:377-378`, `:411` | STT pill = first `available` backend, rendered green | On a clean home `/voice/status` reports `stt.available.macos_speech = true`, so the page advertises native macOS STT while STATUS `:27`, `:469` document that Apple refuses it and the system falls back to `transcript` (`notes[]` fills only after a TCC abort is recorded) | FALSE (label) | **P2** |
+| S-10 | STATUS.md | `:126-127`, `:167`; PROJECT_DETAILS `:342` | dashboard shows "devices, tools, **tasks**, memory, audit, …" | `dashboard/index.html` has 9 cards — Devices, Peripherals & Gateways, Pending Confirmations, Recent Actions, Memory, Voice, Health & Recovery, Privacy, Tool Registry. **No tasks/jobs panel exists**; no fetch of `/tasks`, `/schedules` or `/briefing` anywhere in the page | FALSE | **P2** |
+| R-03 | README.md | `:79-87` | self-test sample: "`24 tools, agents ['laptop','memory']`", 8 rows | Registry is 126 tools / 15 agents (live `/health`); `selftest()` emits **9** checks (`app/launcher.py:610-707`). The "24 tools / 2 agents" figure is the v0.5 baseline from `docs/PHONE_AGENT_PLAN.md:4` | STALE | **P2** |
+| R-04 | README.md | `:84-86` | sample rows "speech to text `macos_speech, transcript`", "microphone **ready** (3 input device(s))" | Measured here: `capture_available:false`, `capture_state:"blocked"`, `permission:"denied"`, 3 inputs present — README's own `:216` and STATUS §8 say the same | STALE (idealised sample) | **P2** |
+| E-01 | .env.example / config | `jarvis/config.py:22-169` | (implicit) every live setting is documented | **7 live `Settings` fields appear in no doc and not in `.env.example`:** `JARVIS_DESIGN_FIGMA_TOKEN`, `JARVIS_DESIGN_FIGMA_ENABLED`, `JARVIS_DESIGN_MERMAID_PATH`, `JARVIS_DESIGN_MERMAID_ENABLED`, `JARVIS_LLM_EMBED_MODEL`, `JARVIS_SCHEDULER_ENABLED`, `JARVIS_VISION_MODEL` (`JARVIS_BRIEFING_SECTIONS` is missing from `.env.example` but is documented in README `:435`) | FALSE (gap) | **P2** |
+| N-01 | docs/PHONE_AGENT_PLAN.md | `:3` | "**Status:** architecture review complete · awaiting approval before any code changes" | Shipped as v0.6; 9 of 10 planned files exist, 10 phone tools registered, 38 tests. The doc still reads as a pending proposal | STALE | **P2** |
+| S-11 | STATUS.md | `:358-368` | "**126 tools** across 15 agents" tier tables | Tables enumerate only **120** names; 6 tools appear in no tier row and nowhere in STATUS.md: `commit_workspace` (DESTRUCTIVE, confirmation-required), `memory_overview`, `inspect_memory`, `export_memories`, `set_memory_category`, `sweep_expired_memories`. No tier value is wrong among the 120 listed | STALE (incomplete) | **P3** |
+| S-12 | STATUS.md | `:418`, `:423`, `:424` | per-file counts: pipeline 28, paths 15, policy 13 | Real collection: pipeline **30**, paths **24**, policy **28** (the +26 from Phase 1B). All 23 other rows match exactly | STALE | **P3** |
+| P-05 | PROJECT_DETAILS.md | `:62-67` | same three per-area counts (28 / 15 / 13) | 30 / 24 / 28 | STALE | **P3** |
+| R-07 | README.md | `:1219-1242` | "## API" reference table | Covers 27 of 100 real paths; **73 undocumented**; **22 paths appear in no doc at all**: `/calendar/events`, `/calendar/next`, `/contacts`, `/projects`, `/email/search`, `/email/{uid}`, `/email-drafts`, `/laptop/snapshot`, `/laptop/processes`, `/laptop/projects`, `/laptop/agent-prompt`, `/memory/reindex`, `/research/gaps`, `/vision/compare`, `/vision/find`, `/vision/screen`, `/voice/reset`, `/watch/status`, `/design/documentation`, `/design/presentation`, `/devices/pair/pending`, `/devices/{id}/endpoint` | STALE (incomplete) | **P3** |
+| R-09 | README.md | `:1198-1210` | layout: `transport/ └── native/ # macOS Speech Swift helper` | No `jarvis/transport/native`; helpers live in `jarvis/voice/native/` (`macos_speech.swift`, `mic_state.swift`) — as README `:170` itself says | FALSE | **P3** |
+| R-10 | README.md | `:5-11` | "plus build-order steps **1–9**" | Its own next steps list runs to step 10/v1.8 (`:1272-1281`); STATUS `:559-572` says the order is complete through v1.8 | STALE | **P3** |
+| R-11 | README.md | `:1227`, `:1237`, `:1239` | "`GET POST` /privacy"; "`GET POST` … `/devices/pair/{id}/approve deny pending`"; "`GET POST` /transfers, /transfers/{id}/cancel" | `/privacy` is **GET only** (`app.py:665`; POST is `/privacy/mode`); pending list is `GET /devices/pair/pending` (no `{id}`); `/transfers` is GET only, cancel POST only | STALE | **P3** |
+| P-06 | PROJECT_DETAILS.md | `:4`, `:19` (BASELINE) | "project at `/Users/abhijeetmiskin/AppData/aisys/jarvis-forge/`" | Dead path. 300 of 340 tracked `.pyc` files still embed it | STALE | **P3** |
+| P-07 | PROJECT_DETAILS.md | `:176` | "/metrics → `by_tool: take_screenshot: 2`" | Fresh instance: `by_tool {}`, `total_failures 0`; presented as "evidence from today" | ENVIRONMENT | **P3** |
+| N-02 | docs/PHONE_AGENT_PLAN.md | `:132` | "Tool surface (**9 new tools**, agent="phone")" | The table under it lists **10**, and `phone` really owns 10 tools | FALSE | **P3** |
+| N-03 | docs/PHONE_AGENT_PLAN.md | `:109-113`, `:177` | `DeviceSpec.public_key`; new file `jarvis/transport/transfer.py` | Field was renamed and re-scoped: `fingerprint` + `key_ref` ("Path to the device's secret … Never the secret", `models.py:160-170`; live `/devices` payload has no `public_key`). `jarvis/transport/transfer.py` does not exist (chunking lives in `server.py`/`protocol.py`) | STALE | **P3** |
+| D-03 | dashboard/index.html | `:86` | header pill literally reads "core" | Never bound to any endpoint; the shipped version string is `0.1.0` while docs claim v1.8 — no UI surface shows a version at all | STALE | **P3** |
+| D-04 | dashboard/index.html | `:193-213`, `:250-300`; README `:622-623` | "The devices card uses the same vocabulary" | Two vocabularies for one state: devices card → `online` / `not configured` / `outbox only`; peripherals card → `gateway online` / `adapter not connected` / `paired · outbox only` / `gateway offline` / `bridge offline` | FALSE | **P3** |
+| D-06 | jarvis/config.py | `:58-60` (comment) vs `dashboard/index.html:562` | "the dashboard polls several endpoints every 2.5 s (~150 requests/minute)" justifying `rate_limit_per_minute=600` | The shipped page refreshes every **8 s** → ~60/min. Rationale in the settings docstring no longer describes the client | STALE | **P3** |
+| B-06 | BASELINE_REPORT.md | `:153-158`, `:186-192` | code citations (`tools/files.py:473`, `policy.py:276`, `:303-305`, `agents/base.py:54`) | `agents/base.py:54` ✓, `policy.py:276` ✓ (near miss), `app.py` citations ✓; `tools/files.py:473` is now `SPECS = [` — citation drift | STALE | **P3** |
+| S-13 | STATUS.md | `:19` | "Server | **running** on `127.0.0.1:8765`" | No listener (`lsof -iTCP:8765 -sTCP:LISTEN` → empty) at audit time | ENVIRONMENT | **P3** |
+| S-15 | STATUS.md | `:23` | "Audit chain **intact** (161 records verified)" | Not reproducible from the checkout: fresh home gives `chain_intact:true` with `sampled:0, chain_checked:0`. The 161 figure belongs to the user's private `~/.jarvis-forge`, deliberately not read | ENVIRONMENT | **P3** |
+| S-16 | STATUS.md `:203` / README `:1075-1078` | memory types | "**12 memory types**" | `MemoryType` has **13** members; `GENERAL` (`models.py:103`) is documented nowhere | STALE | **P3** |
+| S-17 | STATUS.md | `:31`, `:496`; PROJECT_DETAILS `:20`, `:111` | "Memory retrieval **hybrid** — keyword + vector, fused with RRF" | `/health` on a clean home reports `memory_retrieval.mode: "keyword_only"`, `embeddings.semantic: false`; hybrid appears only once the vector index is non-empty (`memory/hybrid.py:176`). Headline over-states the default state | STALE | **P4** |
+| A-03 | audit/PHASE1…md | `:67-143` | "CR9 — path security (**CLOSED**)" with live transcript | Not re-attacked in this pass (it would require writing files); corroborating signal: `test_paths.py` 15→24 and `test_policy.py` 13→28 collected exactly as §B describes | UNVERIFIED | **P3** |
+| A-04 | audit/PHASE1…md | `:41`, `:170-174` | "tests/test_planner.py — one test's expectation updated" | `test_planner.py` collection unchanged at 27; consistent with an edit, not an addition | TRUE | **P4** |
+| E-02 | .env.example | `:19`+`:63`, `:17`+`:163` | — | 60 assignments but only **58 unique** names: `JARVIS_CONFIRM_TIMEOUT` and `JARVIS_CONFIRM_CHANNEL` are each defined twice in the same file (the Watch-section copy at `:163` silently wins) | STALE | **P4** |
+| E-03 | .env.example vs code | `:120-170` | "dead environment variables" hunt | **Zero dead names.** All 58 unique `.env.example` variables resolve either to a `Settings` field (47) or to a literal `os.environ` read (11: `JARVIS_CAR_{OBD,TIMEOUT,API_URL,API_TOKEN,API_PATH,SIMULATE}`, `JARVIS_WATCH_{BRIDGE,BRIDGE_TOKEN,TIMEOUT,SIMULATE}`, `JARVIS_OCR_TIMEOUT`, plus the home/robot ones which are documented in STATUS `:215`, `:228`) | TRUE | **P4** |
+| E-04 | app/launcher.py | (reads `JARVIS_HEADLESS`, `JARVIS_PROJECT_DIR`, `JARVIS_PYTHON`, `JARVIS_SELFTEST`) | — | 4 env names read by shipped code and documented in no `.env`/doc set except `JARVIS_SELFTEST` (STATUS `:122`, README `:75`) | STALE (gap) | **P4** |
+| G-01 | all four top docs | `STATUS.md:84`, `:10-11`; `PROJECT_DETAILS.md:6-9`; `BASELINE_REPORT.md:274-301` | "Every number … can be reproduced", "produced by running the system on this machine today" | Reproduction is impossible as written: no VCS exists to pin a revision (BASELINE `:19`, `:210` CR5), the quoted `$PY` differs between docs (S-07), and every `cd` path in §"verify it yourself" blocks points at the abandoned `…/aisys/…` directory | FALSE | **P2** |
+| G-02 | this audit | — | git/version-control claims | No doc falsely claims the project is under git; the false part is the reproducibility promise built on top of it (G-01) and the "re-captured 25 Sep" self-audit claims that cannot be diffed | TRUE (framing) | **P4** |
+
+---
+
+## 2. Findings by document
+
+### 2.1 STATUS.md — the primary claims doc
+
+**Claims that held up under measurement (record these as the doc's solid core):**
+
+| Line | Claim | Verification | Class |
+|---|---|---|---|
+| `:20` | Tools registered **126** | `len(b().names())` → 126; 0 duplicates; `/health.tools` → 126 | TRUE |
+| `:21` | API endpoints **100 paths** | 100 unique paths, 106 route objects, GET 58 / POST 48 / HEAD 4 | TRUE |
+| `:22` | **15 agents** (named) | exactly the 15 owners of the 126 specs; `/health.agents` identical list & order | TRUE |
+| `:41` | "126 modules · ~29700 lines · 26 test files" | 126 `.py` in `jarvis/`, 29,975 LOC; 26 `test_*.py` + `conftest.py` | TRUE |
+| `:24` | API token present, mode `0600` | `-rw------- ~/.jarvis-forge/api_token` | TRUE |
+| `:448-459` | security posture: 401 on `/audit` `/metrics`, 400 on foreign `Host`, no `Access-Control-Allow-Origin` for `evil.example.com`, 401 on unauthenticated `POST /watch/reply` | all four reproduced against a throwaway instance | TRUE |
+| `:472`, README `:756` | OCR bounded to 20 s, clamped 1–120, 45 s cooldown | `vision/ocr.py:91` `_COOLDOWN_SECONDS = 45.0`, `:95` reads `JARVIS_OCR_TIMEOUT` | TRUE |
+| `:138-153` | quoted refusal wording ("No device was switched.", "No motion command was sent.", "Your today is clear.", "queued on the laptop, not delivered", "blanket delete request", "Your watch is not paired yet", "I could not read those car values", "Location history for today is not available") | each string still present verbatim in `jarvis/tools/{home,robotics,calendar,watch,car,system}.py`, `jarvis/watch/gateway.py:248`, `jarvis/security/risk.py:40`, `jarvis/core/planner.py` | TRUE (text) / FALSE (producible today) |
+| `:362-366` | tier assignments of the 120 listed tools | 0 mismatches against `ToolSpec.risk`; `emergency_stop` is the only risk≥3 tool without confirmation, exactly as `:366` says | TRUE |
+| `:382`, `:384` | phrasing guard, 128-bit approval IDs | `risk.py:40-41` guard patterns; `models.py:34` `secrets.token_hex(16)` | TRUE |
+| `:265`, `:306`, `:459` | "asserted by a test" for car read-only, vision no-action-tools, watch resolver | `test_car.py:662`, `test_vision.py:192`, `test_watch.py:512` | TRUE |
+
+**Where it breaks:**
+
+* **S-02 (P0).** `:18` "976 collected → 975 passing, 1 skipped" and `:87` "expect `975 passed, 1 skipped`". Measured `126 failed, 875 passed, 1 skipped in 22.32s` over 1,002 collected. Root cause `jarvis/tools/base.py:16` (missing `Verification` in the `..core.models` import), used at `:103` and `:117`.
+* **S-03 (P0).** §1 rows `:28-40` ("Email **working**", "Calendar **working**", "Scheduler **working**", "Memory retrieval **hybrid**", "Research **working**", "Coding Agent **working**", "Design Agent **working**", "Vision Agent real OCR", Home/Robotics/Car/Watch "honest offline") and the whole §4 acceptance table `:136-155` describe outcomes reachable only through a tool. Live `/command` returns `That did not work: get_time raised: name 'Verification' is not defined`. The "honest offline" rows fail in the *opposite* direction to the one the doc worries about: it is not a fake success, it is a hard crash that reports as one generic failure.
+* **S-04 (P1).** `:385` "**Token auth** on every endpoint (auto-generated, `0600`)". Enumerating route dependencies gives 8 without `require_auth`: `GET /openapi.json`, `/docs`, `/docs/oauth2-redirect`, `/redoc`, `/`, `/auth/token`, `/dashboard`, `POST /devices/pair/request`. `curl http://127.0.0.1:8975/auth/token` → `{"auth_enabled":true,"token":"docaudit"}`; `curl /dashboard | grep -c docaudit` → 1. (BASELINE `:170-177` already recorded this; §5 of STATUS was never updated.)
+* **S-05 / P-03 (P1).** `:25` "Desktop app rebuilt 25 Sep (544K), **signature valid**; self-test **7/9**". `codesign --verify --verbose "dist/Jarvis Forge.app"` → `dist/Jarvis Forge.app: a sealed resource is missing or invalid / file added: …/Contents/Resources/__pycache__/launcher.cpython-313.pyc`; `du -sk` → 588K. Worse, `Contents/Resources/project_path.txt` still contains `/Users/abhijeetmiskin/AppData/aisys/jarvis-forge`, so `selftest()`'s first check ("project directory") can only fail and the double-click story in §5 `:168` is unbuildable from the current tree. The `diff -q` half of PROJECT_DETAILS `:245` *is* still true (bundle `launcher.py` is byte-identical to `app/launcher.py`). Not run: the bundle binary itself — executing it starts a server and would write the real `~/.jarvis-forge`, which this audit is forbidden to touch; "self-test 7/9" therefore stays ENVIRONMENT/UNVERIFIED, though `selftest()` does emit 9 checks.
+* **S-14 (P1).** The pipeline line `:496` (and §5 `:353`) puts **Verification** between Execution and Memory. `jarvis/core/models.py:210-222` defines `Verification(SUCCESS/FAILED/UNKNOWN)` and `:265-272` an `audit_result` property whose docstring asserts *"the audit line is produced from the same field the user-facing reply is, so prose and record cannot diverge"*. `grep -rn audit_result --include='*.py' .` → only the definition plus one test name. `orchestrator.py:398-400` still writes `risk="confirmed", result="success" if result.ok else "failure"`. The stage is modelled, not wired.
+* **S-06..S-12 (P2/P3).** Header/version/location block stale (`:3`, `:4`, `:48`); two different `PY` recipes (`:49` vs `:62-68` shim story); three different test totals inside one document (`:18` 975, `:68` 868, `:411` 954/953, plus `:523` "954 tests"); §6 rows for pipeline/paths/policy off by +2/+9/+15; §5 tier tables missing 6 tool names (one of them DESTRUCTIVE + confirmation-gated).
+
+### 2.2 README.md
+
+* **R-01/R-10 (P2/P3).** `:1` "(v1.5)" and `:7` "build-order steps 1–9" are the doc's own front door and both are two-and-a-half agents behind its body, which documents v1.6 robotics, v1.7 car and v1.8 watch (`:212-214`, `:538`, `:634`).
+* **R-03/R-04 (P2).** The `:78-87` "Diagnosing an install" block is the single most misleading sample in the repo: `"[ok] server 24 tools, agents ['laptop', 'memory']"` — a v0.5-era registry (the number survives verbatim in `docs/PHONE_AGENT_PLAN.md:4`) — 8 rows against a 9-check self-test, and a `microphone ready (3 input device(s))` line while README `:216` and STATUS §8 document that capture is `blocked`. The real values are 126 tools / 15 agents / `blocked, denied`.
+* **R-05/R-11 (P1/P3).** `:1244` under-states the public surface by 5 routes and contradicts `:236`+`:314` ("the one unauthenticated path"). Table rows `:1227`, `:1237`, `:1239` mis-advertise methods and one path shape.
+* **R-06/R-07 (P2/P3).** `:1212` "tests/ … 763 tests" against `:1253` "954 collected → 953 passed"; and the API section documents 27 of 100 paths (73 missing; 22 of them named nowhere in README+STATUS+PROJECT_DETAILS, list in the table above).
+* **R-08 (P0).** `:185-200` "What works right now" — 12 listed conversational actions, all currently failing on `ok()`.
+* **R-09 (P3).** `:1209` puts the Swift helper under `jarvis/transport/native/`; it is `jarvis/voice/native/` (README `:170` agrees with the filesystem, the layout block does not).
+* Verified TRUE: `:151` "184 voices" (`say -v '?' | wc -l` → 184); `:1055` "`numpy`, `scipy`, `sklearn`, `torch` all absent` → all four unimportable; `:1060` 256-dim hashing embedder (`/health.embeddings.dim: 256`); `:259-267` allowlist split (`allowed_commands` default contains none of `python3/node/npm/pip/git`); `:536`/`:714` "no separate home / car REST routes" (true: no `/home*` or `/car*` path exists); `:434` 9 briefing sections; `:1075-1078` lists 12 memory types (code has 13 — S-16).
+
+### 2.3 PROJECT_DETAILS.md
+
+The most self-assured and the most wrong document. `:6-7` *"Every number and quoted response in this document was produced by running the system on this machine today — not copied from the plan or from an earlier report"*, and `:298` *"Nothing else: the suite is green with zero failures, so there is no broken code waiting."* Both are false in this checkout, and the second one is the sentence that would stop a reader from looking for the broken code.
+
+Still accurate (worth preserving when the doc is corrected): `:33` "126 tools · 15 agents · 100 API paths · 36 intent handlers · 24 tools require confirmation" — all five verified (36 = methods of `RulePlanner` with signature `(self, text, raw)`; 24 = specs with `requires_confirmation`; risk distribution 68/33/11/11/3 matches `:27-31` exactly); `:105-152` §4 per-agent tool ownership lists match the registry 17/13/13/11/10/10/8/8/6/6/5/5/5/5/4 = 126 with correct risk letters and `*` markers; `:171` "`/vision/capabilities` today: `present: true`, `responsive: true`" (live: `ocr_state {present:true, responsive:true, timeout_seconds:20.0}`); `:191-194` peripherals posture (`car {configured:false, via:"not configured", probed:false}`, `home {mode:offline, devices:17}`, `robotics {mode:offline, robots:2, faults:[]}`, `watch {auth_state:unpaired, mode:queue, all counts 0}`) matches `/health.peripherals` field-for-field.
+
+Wrong: `:45-49` scores (976/975/**0**/~25 s), `:50` "~29,700 lines" (29,975 — within rounding, but combined with `:51` "544K … signature valid" it is not), `:62-67` three per-area counts, `:245` the "fixed 25 Sep" bundle row, `:176` `/metrics by_tool take_screenshot: 2` (fresh instance reports none — environment), `:313` "expect `975 passed, 1 skipped`", `:4` the dead path.
+
+### 2.4 BASELINE_REPORT.md
+
+A Phase-0 point-in-time audit that has been overtaken twice: once by Phase 1B (test count 976→1,002) and once by the Phase 1C model work plus its import regression. Its most valuable findings are **still true** and are the ones nobody has closed: `:135-140` (fabricated `verified`, now re-scoped), `:144-151` (a hardware no-op audited as `result=success` — re-confirmed structurally: `tools/robotics.py:167-189` and `tools/home.py` still call `ok()` without an observation for the undelivered branch, and `orchestrator.py:400` derives the audit token from `result.ok`), `:153-161` + `:206-207` (direct-handler routes and `CommitBody.authorized` at `app.py:1463` → `:1600`, unchanged), `:162-165` (same), `:167-168` (audit `risk` free text — 20+ literal values found: `blocked`, `recovered`, `expired`, `denied`, `confirmed`, `high`, `medium`, `external`, `low`), `:170-177` (8 public routes — reproduced live, exactly), `:210` CR5 (no version control — reproduced).
+
+Stale: `:23-25` scores, `:119` "Verification engine absent … no `UNKNOWN` state", `:226-232` Phase-1 scope "build the verification stage" (it exists as a model), `:135` the literal `ok()` description, `:153-158`'s `tools/files.py:473` citation, `:18` repository root path.
+
+### 2.5 audit/PHASE1_IMPLEMENTATION_REPORT.md
+
+Unusually honest for its age — it says `PHASE 1 BLOCKED` (`:207`) and refuses to let §C/§D/§F/§G read as done. But the three claims that a reader trusts most are now wrong:
+
+* **A-01 (P0)** `:45-46`/`:168` "Full suite after the change: **1001 passed, 1 skipped** (+26 tests)". Collection count confirms +26 (976 → 1,002), but 126 of them fail today. With no git, there is no revision to attribute the `base.py` edit to — the doc's own §J CR11 ("no rollback exists for these edits") is exactly the failure mode it predicted.
+* **A-02 (P1)** `:3-5` "Phase 1B is complete and verified. Phases 1C and 1D have **not been started**", `:156-158` "No SUCCESS / FAILED / UNKNOWN tri-state exists today". The tri-state now exists (`models.py:210-222`), `unverified()` exists (`base.py:115-117`), and `tools/home.py:231,245` / `tools/robotics.py:176,191` pass `verified=False` — so 1C started and landed partially, while its docstring-level promise to the audit log (B-04) did not. 1D is genuinely untouched.
+* **A-03 (P3)** `:67-143` CR9 "CLOSED": not re-attacked here (it would require writing files); corroborated indirectly by the +9/+15 new path/policy tests and by the presence of `iter_string_values`-style value scanning in `security/paths.py`.
+* `:52-56` "ok() **still** hardcodes `verified=True`" — superseded wording; the current defect is the missing import in the same file.
+
+### 2.6 docs/PHONE_AGENT_PLAN.md
+
+* **N-01 (P2)** `:3` "Status: architecture review complete · awaiting approval before any code changes" — v0.6 shipped; §6's file list is 9/10 present (only `jarvis/transport/transfer.py` was never created), the three planned tables exist (`db/database.py:139,151,168` `device_pairings`, `transfers`, `transfer_events`), and `tests/test_phone.py` (38) + `tests/test_transfer.py` (17) run today. Read as a current document it tells the user the phone agent does not exist.
+* **N-02 (P3)** `:132` "9 new tools" over a 10-row table; the phone agent owns exactly 10.
+* **N-03 (P3)** `:109` `public_key` → shipped as `key_ref` (a path, never the secret) plus `fingerprint`; `:39` "orchestrator.py:239" is now `:246`/`:385`.
+* TRUE: `:33` "openssl 3.6.4 is installed" (`openssl version` → `OpenSSL 3.6.4 25 Aug 2026`); `:33`/`:92` "`cryptography` and `nacl` MISSING" (both unimportable); `:97` key material `0600`; `/health.devices.pairing` → `{secret_bytes:32, auth_scheme:"HMAC-SHA256 pre-shared key", max_pending_requests:5}` matching `:322` and README `:330-336`.
+
+### 2.7 Dashboard labels (`dashboard/index.html` + `jarvis/api/app.py`)
+
+* **D-01 (P2)** — `:469` renders `<span class="ok">always on</span>` for Redaction and `:472-473` "Exports are redacted → yes" as static HTML, while the very `get("/privacy")` call above it (`:465`) already returns `redaction_enabled` and `export_redacted_by_default` (both observed live). `JARVIS_REDACT_AUDIT=false` would leave the panel saying "always on". This is the precise anti-pattern the docs claim was engineered away (`STATUS.md:399-404`, `README.md:610-631`, `PROJECT_DETAILS.md:249`).
+* **D-02 (P2)** — `:377-378` picks the first `available` STT backend and colours it green (`:411`). `/voice/status` on a clean home answers `macos_speech: true` because the `.tcc_blocked` marker only appears after a first aborted attempt (`voice/stt.py:125-131`), so the dashboard advertises the backend that STATUS `:469` says is unavailable to this build.
+* **D-03 (P3)** — `#version` is a literal "core"; `app.version` is `0.1.0`.
+* **D-04 (P3)** — README `:622` "The devices card uses the same vocabulary" is not true: `peripheralWord()` (`:193-213`) yields `online` / `not configured` / `outbox only` / `simulated` / `unknown` / `state unavailable`, while `renderPeripherals()` (`:250-300`) yields `adapter not connected` / `configured · not read yet` / `gateway offline` / `bridge offline` / `paired · outbox only` / `connected · simulated`.
+* **D-05** — Honest and live-derived (no hardcoded counts): `applyHealth()` (`:173-176`) prints `h.tools`, which is 126; the Tool Registry table (`:500-516`) renders agent/risk/confirm straight from `/tools`. The car row refuses to claim a connection without `configured && checked && connected`. TRUE.
+* **D-06 (P3)** — `jarvis/config.py:58-60` justifies `rate_limit_per_minute=600` with "the dashboard polls several endpoints every 2.5s (~150 requests/minute)"; `dashboard/index.html:562` is `setInterval(refresh, 8000)` — ~60/min. Comment/doc rationale no longer describes the shipped client.
+* **D-07 (P3)** — `:356` colours any audit row whose `result` is `success` green, so the un-closed B-04 (no-op audited as success) surfaces to the user as a green "success" for a hardware action that was never sent. Under today's P0 the same panel shows every action as a red `failure`.
+* **S-10 (P2)** — STATUS `:126`, README `:167`, PROJECT_DETAILS `:342` all list a **tasks** panel; the page contains no tasks/schedules/briefing card and no fetch of `/tasks`, `/schedules` or `/briefing`.
+
+### 2.8 Environment variables and config (`.env.example` + `jarvis/config.py`)
+
+Method: built the set of `JARVIS_*` names appearing in `.env.example` + the 6 markdown docs (73 unique), the set backed by a `Settings` field via `env_prefix="JARVIS_"` (55), and the set appearing as a literal in `jarvis/**.py`, `app/launcher.py`, `run.py`, `build_app.py`, `install_app.sh` (31); then diffed.
+
+* **E-03 — no dead env vars.** Every `.env.example` name resolves. The 11 that are *not* `Settings` fields (`JARVIS_CAR_{OBD,TIMEOUT,API_URL,API_TOKEN,API_PATH,SIMULATE}`, `JARVIS_WATCH_{BRIDGE,BRIDGE_TOKEN,TIMEOUT,SIMULATE}`, `JARVIS_OCR_TIMEOUT`) are read directly from `os.environ` in `jarvis/car/*`, `jarvis/watch/gateway.py`, `jarvis/vision/ocr.py:95`. The `JARVIS_HOME_SIMULATE/MQTT_*` and `JARVIS_ROBOT_*` names cited in STATUS `:215`/`:228` likewise resolve.
+* **E-01 — 7 live settings undocumented** (see table). Four of them are the design-integration switches README `:846-849` describes conceptually ("External design tools must be configured and enabled before use") without ever naming `JARVIS_DESIGN_FIGMA_TOKEN` etc.; `JARVIS_SCHEDULER_ENABLED` gates a background loop that STATUS `:197` advertises; `JARVIS_VISION_MODEL` and `JARVIS_LLM_EMBED_MODEL` are the exact switches README `:772`/`:1062` tell the user to "configure a model endpoint" for.
+* **E-02 — duplicate definitions:** 60 assignment lines, 58 unique names (`JARVIS_CONFIRM_TIMEOUT` at `:19` and `:63`; `JARVIS_CONFIRM_CHANNEL` at `:17` and `:163`). In a sourced `.env` the later line wins, so the Watch-section `=cli` silently overrides the Policy-section value.
+* **E-04 — 4 code-read names undocumented:** `JARVIS_HEADLESS`, `JARVIS_PROJECT_DIR`, `JARVIS_PYTHON` (`app/launcher.py`), only `JARVIS_SELFTEST` is documented (`STATUS.md:122`, `README.md:75`).
+
+---
+
+## 3. Quantitative drift scorecard
+
+| Metric | Best-documented value(s) | Measured | Docs agreeing |
+|---|---|---|---|
+| Tests collected | 976 / 954 / 763 / 1001 | **1,002** | 0 of 4 |
+| Tests passing | 975 / 953 / 868 / 1001 | **875** | 0 of 4 |
+| Tests failing | 0 (`BASELINE:24`, `PD:47`, `PD:298`) | **126** | 0 |
+| Skipped | 1 | 1 | ✓ |
+| Suite wall clock | 12.9 s / 16.5 s / ~25 s | **22.32 s** | 0 of 3 |
+| Tools | 126 | 126 | ✓ (all docs) |
+| Tool names actually listed in STATUS's "126 tools" table | 126 | **120** | ✗ |
+| Agents | 15 | 15 | ✓ |
+| API paths | 100 | 100 | ✓ |
+| Paths in README's API reference | — | 27 of 100 | ✗ (73 undocumented) |
+| Paths named nowhere in the 3 main docs | 0 implied | **22** | ✗ |
+| Public (token-free) endpoints | 3 claimed (README `:1244`) | **8** | ✗ |
+| Risk tiers 68/33/11/11/3 | same | 68/33/11/11/3 | ✓ |
+| Tools requiring confirmation | 24 | 24 | ✓ |
+| Intent handlers | 36 | 36 | ✓ |
+| `jarvis/` modules / LOC | 126 / ~29,700 / 29,837 | 126 / **29,975** | ≈ ✓ |
+| Test files / test LOC | 26 | 26 (+conftest) / 9,395 | ✓ |
+| Memory types | 12 | **13** | ✗ |
+| Phone tools | 9 (`PLAN:132`) | 10 | ✗ |
+| Self-test checks | 9 (STATUS `:122`) | 9 in code; README sample shows 8 | ≈ ✓ |
+| Bundle size / signature | 544K / valid | **588K / invalid** | ✗ |
+| `.pyc` embedding the abandoned path | — | **300 of 340** | n/a |
+| Live listener on 127.0.0.1:8765 | "running" | none | ✗ |
+
+---
+
+## 4. Recommended correction order (documentation only)
+
+1. Fix or annotate nothing in code here, but the doc set's top line must say: **`pytest -q` = 126 failed / 875 passed / 1 skipped; root cause `jarvis/tools/base.py:16` (missing `Verification`); three further tests assert a moved field (`test_home.py:228,241`, `test_robotics.py:221`).** That single edit retires P-02, S-02, A-01, B-05, P-04, R-06, S-08.
+2. Rewrite the auth claims (S-04, R-05) to the enumerated 8 public routes, and mark CR3 open in STATUS §5 — the prose "Token auth on every endpoint" is the kind of claim a security reader acts on.
+3. Replace the README `:79-87` self-test sample with a current capture (126 tools / 15 agents / 9 checks / microphone `blocked by macOS permission`), and re-word R-04 so the sample cannot be read as the normal case.
+4. Desktop-app rows (S-05, P-03, P-05): signature is invalid and `Resources/project_path.txt` points at a directory that no longer exists — STATUS §1, §5 `:168` and PROJECT_DETAILS §2/§8 must stop claiming "signature valid".
+5. Verification stage (S-14, B-02, A-02): describe it as *modelled but not wired* — `ActionResult.audit_result` unused, `orchestrator.py:398-400` still derives the audit token from `result.ok` and writes `risk="confirmed"` — which also keeps BASELINE CR1/CR2 honest.
+6. Inventory gaps: add the 6 missing tool names to STATUS's tier table, the 73 missing API paths (22 critical, never documented) to README's API section, the 7 undocumented live env vars to `.env.example`, and delete the two duplicate lines there.
+7. Dashboard: bind the Privacy card to `redaction_enabled`/`export_redacted_by_default`, disambiguate the STT pill (`available` ≠ `permitted`), and either build the "tasks" panel the docs promise or drop the word from three docs.
+8. Global: replace every `…/AppData/aisys/jarvis-forge` path, standardise on `PY=./.venv/bin/python`, and set one version string across README title, STATUS header and `pyproject.toml`/`jarvis/__init__.py`.
+
+---
+
+## 5. Appendix A — exact commands used
+
+Counts and structure (all from `/Users/abhijeetmiskin/AppData/jarv/jarvis-forge`, `JARVIS_HOME` always a throwaway directory; nothing ever pointed at `~/.jarvis-forge`):
+
+```bash
+# --- test suite reality -----------------------------------------------------
+./.venv/bin/python -m pytest -q                                   # 126 failed, 875 passed, 1 skipped in 22.32s
+./.venv/bin/python -m pytest -q --tb=no -rf > /tmp/pytest_full.txt
+./.venv/bin/python -m pytest -q --collect-only | grep "::" | sed 's/::.*//' | sort | uniq -c | sort -rn
+grep -c "^FAILED" /tmp/pytest_full.txt
+
+# --- registry: tools, agents, risk, confirmation ----------------------------
+PYTHONPATH=. JARVIS_HOME=$(mktemp -d) ./.venv/bin/python -c "
+from jarvis.tools import _all_specs
+print(len(_all_specs())); print(sorted(s[0].name for s in _all_specs()))"
+PYTHONPATH=. JARVIS_HOME=$(mktemp -d) ./.venv/bin/python -c "
+from jarvis.tools import build_default_registry as b; r=b()
+import collections; print(len(r.all()),'tools'); print(collections.Counter(s.risk.name for s in r.all()))"
+# (STATUS.md:94 and PROJECT_DETAILS.md:318 verbatim forms also run clean -> 126)
+
+# --- routes -----------------------------------------------------------------
+PYTHONPATH=. JARVIS_HOME=$(mktemp -d) ./.venv/bin/python - <<'PY'
+from jarvis.api.app import app; import collections
+paths={r.path for r in app.routes if getattr(r,'methods',None)}
+mc=collections.Counter(m for r in app.routes if getattr(r,'methods',None) for m in r.methods)
+print(len(paths),'paths',len([r for r in app.routes if getattr(r,'methods',None)]),'route objects',dict(mc))
+PY
+# public surface: walk r.dependant for require_auth
+PYTHONPATH=. JARVIS_HOME=$(mktemp -d) ./.venv/bin/python - <<'PY'
+from jarvis.api.app import app, require_auth
+def has(d):
+    return any(x.call is require_auth or has(x.dependencies) for x in d)
+print([ (sorted(r.methods-{'HEAD','OPTIONS'}), r.path) for r in app.routes
+        if getattr(r,'methods',None) and not has(r.dependant.dependencies) ])
+PY
+
+# --- config / env vars ------------------------------------------------------
+PYTHONPATH=. JARVIS_HOME=$(mktemp -d) ./.venv/bin/python -c "
+from jarvis.config import Settings; f=list(Settings.model_fields); print(len(f))"
+grep -rhoE 'JARVIS_[A-Za-z0-9_]+' jarvis app run.py build_app.py install_app.sh \
+     --include='*.py' --include='*.sh' | sort -u            # literal reads in code
+grep -rhoE 'JARVIS_[A-Za-z0-9_]+' README.md STATUS.md PROJECT_DETAILS.md BASELINE_REPORT.md \
+     docs/PHONE_AGENT_PLAN.md audit/PHASE1_IMPLEMENTATION_REPORT.md .env.example | sort -u
+./.venv/bin/python -c "from jarvis.core.models import MemoryType; print(len(MemoryType.__members__))"
+./.venv/bin/python -c "
+import re,pathlib; src=pathlib.Path('jarvis/core/planner.py').read_text(); t=ast.parse(src) if False else None"
+./.venv/bin/python -c "
+import ast,pathlib; t=ast.parse(pathlib.Path('jarvis/core/planner.py').read_text())
+c=[n for n in t.body if isinstance(n,ast.ClassDef) and n.name=='RulePlanner'][0]
+print(sum(1 for f in c.body if isinstance(f,(ast.FunctionDef,ast.AsyncFunctionDef)) and [a.arg for a in f.args.args]==['self','text','raw']))"  # 36
+
+# --- sizes / filesystem -----------------------------------------------------
+find jarvis -name '*.py' -not -path '*__pycache__*' | wc -l           # 126
+find jarvis -name '*.py' -not -path '*__pycache__*' -print0 | xargs -0 cat | wc -l   # 29,975
+find tests -name '*.py' -not -path '*__pycache__*' | wc -l             # 27 (26 + conftest.py)
+find . -name '*.pyc' -not -path './.venv/*' | wc -l                    # 340
+find . -name '*.pyc' -not -path './.venv/*' -print0 | xargs -0 grep -l "aisys/jarvis-forge" | wc -l  # 300
+git rev-parse --is-inside-work-tree                                    # fatal: not a git repository
+du -sk "dist/Jarvis Forge.app"; codesign --verify --verbose "dist/Jarvis Forge.app"
+cat "dist/Jarvis Forge.app/Contents/Resources/project_path.txt"
+diff -q app/launcher.py "dist/Jarvis Forge.app/Contents/Resources/launcher.py"        # identical
+lsof -nP -iTCP:8765 -sTCP:LISTEN                                       # empty
+say -v '?' | wc -l                                                     # 184
+openssl version                                                        # OpenSSL 3.6.4
+stat -f "%Sp %N" ~/.jarvis-forge/api_token                             # -rw-------  (metadata only; contents never read)
+
+# --- live server (throwaway home, stopped afterwards) -----------------------
+rm -rf /tmp/docaudit_home && mkdir -p /tmp/docaudit_home
+PYTHONPATH=. JARVIS_HOME=/tmp/docaudit_home JARVIS_PORT=8975 JARVIS_API_TOKEN=docaudit \
+  ./.venv/bin/python run.py > /tmp/docaudit_server.log 2>&1 &
+T=docaudit
+for p in /health /metrics /privacy /integrations /vision/capabilities /voice/status /tools /devices /audit?limit=3 /memory?limit=8; do
+  curl -s -H "X-JARVIS-Token: $T" "http://127.0.0.1:8975$p"; done
+curl -s -X POST -H "X-JARVIS-Token: $T" -H 'Content-Type: application/json' \
+     -d '{"text":"what time is it"}'        http://127.0.0.1:8975/command   # NameError
+curl -s -X POST -H "X-JARVIS-Token: $T" -H 'Content-Type: application/json' \
+     -d '{"text":"remember that the frame is aluminium"}' http://127.0.0.1:8975/command
+# security posture reproduction
+curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:8975/audit                       # 401
+curl -s -o /dev/null -w "%{http_code}\n" -H "Host: evil.example.com" -H "X-JARVIS-Token: $T" http://127.0.0.1:8975/audit   # 400
+curl -s -D - -o /dev/null -X OPTIONS -H "Origin: https://evil.example.com" \
+     -H "Access-Control-Request-Method: POST" http://127.0.0.1:8975/command | grep -i access-control  # no ACAO
+curl -s http://127.0.0.1:8975/auth/token                             # {"auth_enabled":true,"token":"docaudit"}
+curl -s http://127.0.0.1:8975/dashboard | grep -c docaudit           # 1
+curl -s -o /dev/null -w "%{http_code}\n" -X POST -H 'Content-Type: application/json' -d '{}' http://127.0.0.1:8975/watch/reply   # 401
+pkill -f "run.py"; lsof -nP -iTCP:8975 -sTCP:LISTEN                  # closed
+```
+
+## 6. Appendix B — deliberately not verified
+
+* The desktop bundle's self-test (`JARVIS_SELFTEST=1 "dist/…/JarvisForge"`) was **not** executed: it spawns a server against the interpreter recorded in `python_path.txt` and would write to `~/.jarvis-forge`. "self-test 7/9" is therefore ENVIRONMENT, though the *count* of 9 checks is confirmed in `app/launcher.py:610-707` and the bundle's broken signature + dead `project_path.txt` are confirmed statically.
+* CR9 (protected-path guard) re-attack: would require creating files under a protected path. Corroborated only by test-collection deltas.
+* The 161-record audit chain figure (STATUS `:23`) lives in the user's private home, which this audit must not read.
+* arXiv-backed claims (STATUS `:32`, `:340`; README `:966-981`) — no network calls were made from this audit; `research/sources` is reported by `/health` as `["arxiv","local"]`.
+* Whether the missing `Verification` import is the *only* code-level regression: not attempted (out of scope for a read-only audit). The supplied shadow-copy measurement says fixing it leaves 3 failures / 997 passing / 2 skipped, and those 3 are independently confirmed here as assertions on the moved `verified` field.
