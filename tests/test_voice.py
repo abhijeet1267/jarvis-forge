@@ -11,6 +11,7 @@ import platform
 from pathlib import Path
 
 import pytest
+from envcaps import HAS_BATTERY
 
 from jarvis.voice import (
     TextWakeWordDetector,
@@ -632,6 +633,7 @@ def test_session_requires_wake_word(session: VoiceSession) -> None:
     assert "wake word" in turn.reject_reason
 
 
+@pytest.mark.skipif(not HAS_BATTERY, reason="the spoken command used here reads the battery")
 def test_session_runs_command_after_wake_word(session: VoiceSession) -> None:
     turn = asyncio.run(session.process_text("Jarvis, what is my battery", speak=False))
     assert not turn.rejected
@@ -711,6 +713,7 @@ def test_reset_clears_conversation(session: VoiceSession) -> None:
     assert not session.awaiting_followup
 
 
+@pytest.mark.skipif(not HAS_BATTERY, reason="the pipeline command used here reads the battery")
 def test_process_audio_uses_stt_then_pipeline(core) -> None:
     stt = TranscriptSTT(text="Jarvis, what is my battery")
     session = VoiceSession(core, tts=NullTTS(), stt=stt)

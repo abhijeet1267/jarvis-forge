@@ -31,7 +31,14 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Node availability (the dashboard's own JS is executed, not imitated)
+      # The voice tests' premise is "a capture backend is installed and macOS
+      # consent varies". A bare runner has no ffmpeg, so the honest state there is
+      # no_backend -- which is a different scenario, not a passing one. Install the
+      # premise rather than skipping the check.
+      - name: Install the capture backend the voice tests presuppose
+        run: brew install ffmpeg
+
+      - name: Node availability (the dashboard's own JS is executed, not iminated)
         run: node --version
 
       - name: Test suite
