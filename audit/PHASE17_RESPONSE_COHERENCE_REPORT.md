@@ -212,3 +212,11 @@ unreviewable as a diff.
 
 Cleanup: server stopped; scratch homes `/tmp/p15home*`, `/tmp/p16home*`,
 `/tmp/p17home` left for inspection; `~/.jarvis-forge` untouched.
+
+### Addendum — git state changed after this report was written
+
+The §10 statement above was true when measured. On 2026-09-27 the user authorised a
+commit, ending the eight-phase no-history condition: `c1664ed`, 208 files, 59,389
+insertions, branch `main`, working tree clean, **not pushed**. The audit trail for
+Phases 9-17 is now a reviewable diff; `git show c1664ed` is the single commit, since
+all of it was previously untracked.
