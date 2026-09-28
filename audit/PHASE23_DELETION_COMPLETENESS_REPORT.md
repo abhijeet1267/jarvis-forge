@@ -172,8 +172,10 @@ Committed with this phase: `jarvis/api/app.py`, `jarvis/core/orchestrator.py`,
 `jarvis/memory/embeddings.py`, `jarvis/memory/store.py`, `jarvis/tools/robotics.py`,
 `tests/test_phase23_deletion_completeness.py`, `tests/test_phase10_memory_deletion.py`,
 `benchmarks/*` (including the phase-23 history point), `assets/*.svg`, `README.md`, this
-report. Pushed to `origin/main` as a fast-forward; nothing force-pushed. The CI verdict for
-this commit is reported when the run exists, not before.
+report. Pushed to `origin/main` as a fast-forward; nothing force-pushed. **CI verified
+after the fact, not predicted:** run `36406299851` on `a01b4c6` finished
+`success` with both matrix legs green -- `suite (3.11) = success`, `suite (3.12) = success`
+-- checked with `gh run view --json jobs` once it completed.
 
 **LIVE BROWSER DRIVE: NOT PERFORMED.** §2-§5 are HTTP against a launched `run.py serve`
 (scratch `JARVIS_HOME`, sandboxed `HOME`) plus pytest. The dashboard page was not opened,
