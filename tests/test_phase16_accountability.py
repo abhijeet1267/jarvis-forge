@@ -48,24 +48,26 @@ async def test_route_level_refusal_is_audited(core):
 # ---------------------------------------------------------------------------
 
 
-def test_rule_planner_never_reaches_the_clarification_branch(core):
-    """Measurement, not assumption.
+def test_the_clarification_branch_is_reachable_from_real_sentences(core):
+    """Phase 16 could only prove this branch by constructing the plan.
 
-    Every route that produces no tool also produces a note, and ``_to_plan`` turns
-    a note into ``direct_reply``. So for the shipped planner the second
-    no-execution return is only reachable from another planner (the LLM one the
-    rules planner falls back to). Auditing it is still required -- it is a terminal
-    branch -- but no sentence here can prove it, which is why the test below
-    constructs the plan instead.
+    Its own docstring said why: every note-producing route was collapsed into
+    ``direct_reply`` + ``declined``, so no typed sentence reached
+    ``needs_clarification`` and the branch had to be simulated. Phase 24 closed 19-B
+    by giving the planner a word for "I need one more thing from you", so real
+    sentences now drive the branch that used to be engine-only. The refusal half of
+    the branch still must not be swept in -- that is the second assertion.
     """
-    sentences = [
-        "Jarvis, compress this", "Jarvis, delete", "Jarvis, copy", "Jarvis, move this",
-        "Jarvis, transfer", "Jarvis, design this system", "Jarvis, what is my car",
-        "Jarvis, remember", "Jarvis, schedule", "Jarvis, find",
-    ]
-    for sentence in sentences:
+    asking = ["Jarvis, compress this", "Jarvis, remember x", "Jarvis, turn on the light"]
+    for sentence in asking:
         plan = core.planner.parse(sentence)
-        assert not plan.needs_clarification, f"{sentence!r} now reaches it: {plan.intent}"
+        assert plan.needs_clarification and plan.reply_kind == "clarification", (
+            f"{sentence!r} asks for something and is labelled {plan.reply_kind!r}")
+
+    for sentence in ["Jarvis, design this system", "Jarvis, what is my car"]:
+        plan = core.planner.parse(sentence)
+        assert plan.reply_kind != "clarification", (
+            f"{sentence!r} was not understood, which is not the same as asking")
 
 
 async def test_clarification_branch_is_audited(core):

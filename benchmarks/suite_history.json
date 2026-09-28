@@ -104,6 +104,13 @@
    "passed": 1330,
    "failed": 0,
    "note": "three parked xfails fixed at their source"
+  },
+  {
+   "phase": "24 refusal vs detail",
+   "collected": 1343,
+   "passed": 1342,
+   "failed": 0,
+   "note": "a question stopped being labelled a refusal"
   }
  ]
 }

@@ -203,7 +203,9 @@ async def test_schedule_two_hours_tomorrow_reports_no_invented_success(core, sta
     payload = _payload(response)
 
     assert not payload["actions"], "something was reported as executed"
-    assert state_of(payload) == "NOTHING EXECUTED"
+    # Phase 24: it asks what the reminder should say, so the honest state is a
+    # question rather than a refusal. "No invented success" is what this test is for.
+    assert state_of(payload) == "NEEDS DETAIL"
     assert state_of(payload) != "VERIFIED"
     # And nothing was filed. Counted as a delta, not an absolute: ``core`` is
     # session-scoped and other modules schedule real jobs.
@@ -239,10 +241,17 @@ def test_a_bare_time_is_not_filed_as_a_nameless_reminder(core):
 @pytest.mark.parametrize("sentence, expected", [
     # A refusal the system chose, stated plainly: a known outcome, not an
     # unknowable one. Five of the eighteen acceptance commands landed here.
+    #
+    # "Jarvis, send it." is deliberately absent: whether it refuses, asks, or runs
+    # depends on whether a draft is waiting, which is world state this session-scoped
+    # core shares with every other module. Phase 24 pins it deterministically by
+    # removing the draft instead of hoping the ordering agrees.
+    #
+    # The schedule row moved to NEEDS DETAIL in Phase 24: the sentence asks what the
+    # reminder should say, and 19-B is closed, so it is no longer labelled as a refusal.
     ("Jarvis, transfer this file to my phone.", "NOTHING EXECUTED"),
     ("Jarvis, what is my phone battery?", "NOTHING EXECUTED"),
-    ("Jarvis, send it.", "NOTHING EXECUTED"),
-    ("Jarvis, schedule two hours for project work tomorrow.", "NOTHING EXECUTED"),
+    ("Jarvis, schedule two hours for project work tomorrow.", "NEEDS DETAIL"),
 ])
 async def test_refusals_and_clarifications_have_their_own_state(core, sentence, expected, state_of):
     response = await core.handle(CommandRequest(text=sentence, source="test"))
@@ -251,12 +260,13 @@ async def test_refusals_and_clarifications_have_their_own_state(core, sentence, 
 
 
 async def test_a_question_is_not_guessed_at_from_reply_wording(core, state_of):
-    """The backend puts a refusal and a clarifying question in the same field.
+    """The renderer reads a field; it never reads the punctuation.
 
-    "When should I do that?" arrives as ``plan.direct_reply``, exactly like "I
-    will not guess which file". The renderer could tell them apart by reading the
-    question mark, and must not: the conservative shared state is the truth, and
-    separating them needs a field the backend does not have yet.
+    This test was written in Phase 19 to record a limitation -- "separating them needs
+    a field the backend does not have yet". Phase 24 added that field
+    (``plan.reply_kind = "clarification"`` plus ``needs_clarification``), so the
+    property being pinned is now the stronger one: the distinction comes from the
+    backend's own word, and a question mark in a *statement* still cannot promote it.
     """
     response = await core.handle(
         CommandRequest(text="Jarvis, schedule two hours for project work tomorrow.", source="test"))
@@ -264,9 +274,16 @@ async def test_a_question_is_not_guessed_at_from_reply_wording(core, state_of):
     plan = payload["plan"]
 
     assert "?" in plan["direct_reply"], payload["reply"][:120]
-    assert plan["needs_clarification"] is False
-    assert state_of(payload) == "NOTHING EXECUTED"
-    assert state_of(payload) != "NEEDS DETAIL"
+    assert plan["needs_clarification"] is True
+    assert plan["reply_kind"] == "clarification"
+    assert state_of(payload) == "NEEDS DETAIL"
+
+    # ...and the other direction: an unavailable capability states, it does not ask.
+    statement = _payload(await core.handle(
+        CommandRequest(text="Jarvis, what is my phone battery?", source="test")))
+    assert statement["plan"]["needs_clarification"] is False, (
+        "a statement of what is missing was promoted to a question the user can answer")
+    assert state_of(statement) == "NOTHING EXECUTED"
 
 
 async def test_unknown_route_still_reads_as_unknown_not_something_executed(core, state_of):

@@ -8,7 +8,7 @@
   {
    "command": "Jarvis, find my latest project report.",
    "http_status": 200,
-   "ms": 534,
+   "ms": 1217,
    "intent": "search_files",
    "tools": [
     "search_files"
@@ -23,7 +23,7 @@
   {
    "command": "Jarvis, show me my laptop battery.",
    "http_status": 200,
-   "ms": 25,
+   "ms": 32,
    "intent": "laptop_battery",
    "tools": [
     "battery_status"
@@ -49,7 +49,7 @@
   {
    "command": "Jarvis, what is my phone battery?",
    "http_status": 200,
-   "ms": 3,
+   "ms": 4,
    "intent": "phone_battery",
    "tools": [],
    "verification": [],
@@ -60,7 +60,7 @@
   {
    "command": "Jarvis, plan my day.",
    "http_status": 200,
-   "ms": 5,
+   "ms": 6,
    "intent": "daily_schedule",
    "tools": [
     "daily_schedule"
@@ -75,18 +75,18 @@
   {
    "command": "Jarvis, schedule two hours for project work tomorrow.",
    "http_status": 200,
-   "ms": 5,
+   "ms": 6,
    "intent": "schedule_task",
    "tools": [],
    "verification": [],
    "audit_result": "no_action",
-   "dashboard_state": "NOTHING EXECUTED",
+   "dashboard_state": "NEEDS DETAIL",
    "reply": "When should I do that? For example: 'every morning' or 'at 8 PM'."
   },
   {
    "command": "Jarvis, draft an email to my teammate.",
    "http_status": 200,
-   "ms": 5,
+   "ms": 6,
    "intent": "draft_email",
    "tools": [
     "draft_email"
@@ -106,13 +106,13 @@
    "tools": [],
    "verification": [],
    "audit_result": "no_action",
-   "dashboard_state": "NOTHING EXECUTED",
+   "dashboard_state": "NEEDS DETAIL",
    "reply": "There is no draft waiting to send. Draft one first, for example: \"draft an email to someone@example.com\"."
   },
   {
    "command": "Jarvis, remember that this is my AMR project.",
    "http_status": 200,
-   "ms": 5,
+   "ms": 6,
    "intent": "remember",
    "tools": [
     "remember_fact"
@@ -127,7 +127,7 @@
   {
    "command": "Jarvis, what did I work on yesterday?",
    "http_status": 200,
-   "ms": 4,
+   "ms": 6,
    "intent": "recall",
    "tools": [
     "search_memory"
@@ -142,7 +142,7 @@
   {
    "command": "Jarvis, design this system.",
    "http_status": 200,
-   "ms": 4,
+   "ms": 38,
    "intent": "unknown",
    "tools": [],
    "verification": [],
@@ -153,7 +153,7 @@
   {
    "command": "Jarvis, research this idea.",
    "http_status": 200,
-   "ms": 1752,
+   "ms": 1591,
    "intent": "search_papers",
    "tools": [
     "search_papers"
@@ -168,7 +168,7 @@
   {
    "command": "Jarvis, check my car fuel.",
    "http_status": 200,
-   "ms": 7,
+   "ms": 16,
    "intent": "car_telemetry",
    "tools": [
     "get_car_telemetry"
@@ -183,7 +183,7 @@
   {
    "command": "Jarvis, check my car charge.",
    "http_status": 200,
-   "ms": 8,
+   "ms": 6,
    "intent": "car_telemetry",
    "tools": [
     "get_car_telemetry"
@@ -198,7 +198,7 @@
   {
    "command": "Jarvis, give me today's location summary.",
    "http_status": 200,
-   "ms": 4,
+   "ms": 7,
    "intent": "location_summary",
    "tools": [
     "get_location_summary"
@@ -213,7 +213,7 @@
   {
    "command": "Jarvis, turn on study mode.",
    "http_status": 200,
-   "ms": 5,
+   "ms": 7,
    "intent": "home_routine",
    "tools": [
     "run_home_routine"
@@ -228,7 +228,7 @@
   {
    "command": "Jarvis, stop all physical actions.",
    "http_status": 200,
-   "ms": 4,
+   "ms": 5,
    "intent": "emergency_stop",
    "tools": [
     "emergency_stop"

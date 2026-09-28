@@ -299,7 +299,7 @@ class Plan(BaseModel):
     #: "I did not understand", "I have no such capability", "I will not do that" and
     #: "may I have more detail" all reached the ledger as the same `no_action`.
     #: ``""`` means the planner did not say, and the renderer must guess nothing.
-    reply_kind: str = ""  # not_understood | capability_missing | declined | ""
+    reply_kind: str = ""  # not_understood | capability_missing | declined | clarification | refusal
     #: Parts of the sentence this plan does not cover, each with the planner's own
     #: reason. A request whose second half was refused used to be answered with only
     #: the first half, silently.

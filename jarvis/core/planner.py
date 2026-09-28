@@ -94,6 +94,11 @@ class Intent:
     confidence: float = 0.8
     note: Optional[str] = None
     tool: Optional[str] = None
+    #: Is this note a question the user can answer to proceed? ``None`` means "read
+    #: it from the wording", which is safe here because the wording being read is the
+    #: route's own sentence, not the user's punctuation. Set it to ``False`` where a
+    #: note states something unavailable instead of asking for something missing.
+    clarification: Optional[bool] = None
 
 
 # Reasons a capability cannot answer *right now*, named for what is actually
@@ -116,6 +121,29 @@ _DEVICE_WORDS = r"(phone|mobile|android|iphone|pixel|handset)"
 _WATCH_WORDS = r"\b(watch|wrist|smartwatch)\b"
 
 RuleFn = Callable[[str, str], Optional[Intent]]
+
+
+_INTERROGATIVE_STARTS = (
+    "what ", "which ", "who ", "whom ", "whose ", "where ", "when ", "how ",
+    "why ", "would you ", "should i ", "can you ", "could you ", "do you want",
+)
+
+
+def _asks_for_something(note: str) -> bool:
+    """Whether a route's own note is a question rather than a statement.
+
+    Phase 19 left this split undone because classifying *the user's* sentence looked like
+    guesswork. This is not that: the string is the note the route wrote for itself, so its
+    shape is a property of the code, not an inference about a person. A route whose note is
+    a statement -- "I cannot read that device's battery: no phone is paired" -- says so by
+    setting ``Intent(clarification=False)`` rather than relying on this.
+    """
+    text = (note or "").strip()
+    if not text:
+        return False
+    if text.endswith("?"):
+        return True
+    return text.lower().startswith(_INTERROGATIVE_STARTS)
 
 
 class RulePlanner:
@@ -254,13 +282,20 @@ class RulePlanner:
         plan = Plan(goal=original, intent=intent.name, planner="rules")
 
         if intent.note and not intent.tool:
+            ask = intent.clarification if intent.clarification is not None \
+                else _asks_for_something(intent.note)
             plan.direct_reply = intent.note
-            plan.reply_kind = "declined"
+            if ask:
+                plan.reply_kind = "clarification"
+                plan.needs_clarification = True
+                plan.clarification_question = intent.note
+            else:
+                plan.reply_kind = "declined"
             return plan
 
         if not intent.tool:
             plan.needs_clarification = True
-            plan.reply_kind = "declined"
+            plan.reply_kind = "clarification"
             plan.clarification_question = intent.note or "Could you give me a bit more detail?"
             return plan
 
@@ -1459,6 +1494,9 @@ class RulePlanner:
                         "There is no draft waiting to send. Draft one first, for "
                         'example: "draft an email to someone@example.com".'
                     ),
+                    # An instruction, not a question -- but the missing thing is a draft,
+                    # and the user can supply it, so it is a clarification either way.
+                    clarification=True,
                 )
             return Intent("send_email", tool="send_email", params={"draft_id": pending["draft_id"]})
 
@@ -1478,6 +1516,7 @@ class RulePlanner:
                         f"Send what to {who}, and by which medium? Draft it and I will "
                         f'ask before sending: "send an email to {who} saying ...".'
                     ),
+                    clarification=True,
                 )
 
         # "write a reply to x@y.com" names no medium, but a drafting verb plus

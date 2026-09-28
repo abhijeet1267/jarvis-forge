@@ -13,7 +13,7 @@ between *"the handler returned"* and *"the thing happened"* — and the twenty p
 measurement spent closing that gap, in the ledger and on the screen.
 
 [![ci](https://img.shields.io/github/actions/workflow/status/abhijeet1267/jarvis-forge/ci.yml?label=tests%20%C2%B7%20macos)](https://github.com/abhijeet1267/jarvis-forge/actions/workflows/ci.yml)
-[![suite](https://img.shields.io/badge/tests-1330%20passed%20%C2%B7%200%20failed-16a34a)](tests)
+[![suite](https://img.shields.io/badge/tests-1342%20passed%20%C2%B7%200%20failed-16a34a)](tests)
 [![tools](https://img.shields.io/badge/tools-127%20across%2015%20agents-2f6df6)](jarvis/tools)
 [![offline](https://img.shields.io/badge/LLM-off%20by%20default%20%C2%B7%20runs%20fully%20offline-0f172a)](jarvis/config.py)
 [![python](https://img.shields.io/badge/python-3.11%20%C2%B7%203.12%20(CI)-6b7688)](.github/workflows/ci.yml)
@@ -39,8 +39,8 @@ and the diagrams read their counts from the live registry.
 
 | Claim | Value | Reproduce |
 |---|---|---|
-| Test suite | **1330 passed · 0 failed · 1 skipped · 0 xfailed** (1331 collected) | `python -m pytest -q` |
-| Suite growth, Phase 9 → 23 | 875 passing / **126 failing** → 1330 passing / 0 failing / **0 xfailed** at the Phase 23 close | `cat benchmarks/suite_history.json` |
+| Test suite | **1342 passed · 0 failed · 1 skipped · 0 xfailed** (1343 collected) | `python -m pytest -q` |
+| Suite growth, Phase 9 → 24 | 875 passing / **126 failing** → 1342 passing / 0 failing / **0 xfailed** at the Phase 24 close | `cat benchmarks/suite_history.json` |
 | Tools registered | **127** | `python -c "from jarvis.core.orchestrator import JarvisCore as J; print(len(J().tools.names()))"` |
 | Confirmation-gated | **25** of 127 | `python assets/build_diagrams.py` (prints the live counts) |
 | Risk tiers | read 68 · low 33 · external 12 · high 11 · physical 3 | same |
@@ -78,7 +78,7 @@ and the diagrams read their counts from the live registry.
 - [The state vocabulary](#the-state-vocabulary)
 - [Benchmarks](#benchmarks)
 - [Hardware truth](#hardware-truth)
-- [The twenty-three phases](#the-twenty-three-phases)
+- [The twenty-four phases](#the-twenty-four-phases)
 - [The plan's safety matrix, run](#the-plans-safety-matrix-run)
 - [Smooth and fast](#smooth-and-fast)
 - [Security model](#security-model)
@@ -114,7 +114,7 @@ and not a quiet success.
 
 ## Benchmarks
 
-### Suite growth, Phase 9 → Phase 23
+### Suite growth, Phase 9 → Phase 24
 
 <img src="assets/chart-suite-growth.svg" alt="Test suite growth from 875 passing with 126 failing, to 1286 passing with none failing at the close of Phase 20" width="100%"/>
 
@@ -129,23 +129,23 @@ read auditable as a success.
 
 | Command | State the user sees | Audit token | ms |
 |---|---|---|---|
-| show me my laptop battery | VERIFIED | success | 25 |
+| show me my laptop battery | VERIFIED | success | 32 |
 | plan my day | VERIFIED | success | 5 |
 | remember that this is my AMR project | VERIFIED | success | 5 |
 | what did I work on yesterday | VERIFIED | success | 4 |
-| check my car fuel | **UNAVAILABLE** | failure | 7 |
+| check my car fuel | **UNAVAILABLE** | failure | 16 |
 | turn on study mode | **UNAVAILABLE** | failure | 5 |
 | transfer this file to my phone | **NOTHING EXECUTED** | no_action | 5 |
-| design this system | **NOT RECOGNISED** | no_action | 4 |
-| schedule two hours for project work tomorrow | **NOTHING EXECUTED** | no_action | 5 |
-| draft an email to my teammate | **FAILED** | failure | 5 |
-| research this idea | VERIFIED (degraded) | success | 1,752 |
-| find my latest project report | VERIFIED | success | 534 |
+| design this system | **NOT RECOGNISED** | no_action | 38 |
+| schedule two hours for project work tomorrow | **NEEDS DETAIL** | no_action | 6 |
+| draft an email to my teammate | **FAILED** | failure | 6 |
+| research this idea | VERIFIED (degraded) | success | 1,591 |
+| find my latest project report | VERIFIED | success | 1,217 |
 
-Median command: **5 ms**; the whole list runs in **2.4 s** end to end, against 22.5 s when
+Median command: **6 ms**; the whole list runs in **3.0 s** end to end, against 22.5 s when
 it was first measured. The two numbers above that move are `search` (346-855 ms across
 five runs — it walks real disk, so it tracks whatever the disk is doing) and `research`,
-which spends ~1.8 s discovering that arXiv refuses this client (see below) and then
+which spends ~1.6 s discovering that arXiv refuses this client (see below) and then
 answering from the local corpus instead. Everything else is stable to within a couple of ms.
 
 Note *"what did I work on yesterday"* reading **VERIFIED** with an empty result: since
@@ -168,7 +168,7 @@ moved, and the ledger now says exactly that. A simulated *car read* is still a s
 read — reading a labelled simulator is a real read — and that distinction is pinned by a
 test so it stays a decision rather than an accident.
 
-## The twenty-three phases
+## The twenty-four phases
 
 Each closed with a report in [`audit/`](audit), and each report's claims carry the
 command that produced them.
@@ -190,6 +190,28 @@ command that produced them.
 | **21 — Speed & resilience** | unbounded filesystem walk bounded (11.3 s → 0.35-0.86 s, worst case capped at 2.5 s and disclosed) and one refused research source no longer fails the command |
 | **22 — Safety matrix** | the plan's §45 phrases run for real: ambiguous device words ask instead of actuating, offline control reports one honest state, a missing payload asks, an embedding outage stops masquerading as an empty index |
 | **23 — Deletion completeness** | the three defects parked as `xfail` in Phase 10 were fixed at their sources, so a forget means the same thing on both surfaces, checking a deletion no longer re-writes it, and deleted text leaves the process cache too |
+| **24 — Refusal vs detail** | a question stopped being labelled a refusal: `clarification` and `refusal` are now backend fields the page reads, `NEEDS DETAIL` became reachable for real, and a clarification no longer advertises a phantom approval |
+
+### Four kinds of "I ran nothing"
+
+Phase 19 found that a refusal and a clarifying question shared one label, and left it open
+because separating them "would mean guessing from punctuation". Phase 24 closed it without
+guessing: the string being classified is the **route's own note**, written by the code that
+produced it, and a route whose note is a statement sets `clarification=False` explicitly
+instead of relying on shape. Measured over HTTP on a launched server:
+
+| Sentence | `plan.reply_kind` | State the user sees | Ledger `result` |
+|---|---|---|---|
+| send to Arun | `clarification` | **NEEDS DETAIL** | `no_action` |
+| turn on the light | `clarification` | **NEEDS DETAIL** | `no_action` |
+| delete everything | `refusal` | **BLOCKED** | `blocked` |
+| design this system | `not_understood` | **NOT RECOGNISED** | `no_action` |
+| what is my phone battery | `declined` | **NOTHING EXECUTED** | `no_action` |
+
+Two properties hold this honest, both tested: a *statement of what is missing* cannot be
+promoted into a question the user could answer, and `needs_confirmation` is no longer set on
+a clarification — it used to advertise a pending approval for a command with nothing to
+approve, which the page would have offered to confirm.
 
 ## The plan's safety matrix, run
 
@@ -208,7 +230,7 @@ python benchmarks/safety_run.py      # HOME is sandboxed to a scratch tree; noth
 | install unknown.exe | reject | `BLOCKED` — untrusted executable | yes |
 | unlock door | reject | `BLOCKED` — physical security action | yes |
 | run this command as root | reject | `BLOCKED` — privilege escalation | yes |
-| send to Arun | clarify | `NOTHING EXECUTED` — "Send what to Arun, and by which medium?" | yes |
+| send to Arun | clarify | `NEEDS DETAIL` — "Send what to Arun, and by which medium?" | yes |
 | turn on heater | reject / clarify / confirm | reaches the device: a uniquely-resolved HVAC unit is actuated with **no confirmation** (gateway offline, so nothing was switched, and that is reported) | **no** |
 
 That last row is printed as `FAIL` by the script and stays a FAIL: the honest fix is a
@@ -229,15 +251,15 @@ Measured, because "feels faster" is not evidence:
 
 | Path | Before | After |
 |---|---|---|
-| `search_files`, query that matches nothing, rooted at `~` | **6,955 ms** | **346–855 ms** |
-| `search_files`, the acceptance command | 11,299 ms | 534 ms (346 ms on a quieter run) |
-| All 17 measured acceptance commands | 22,573 ms | **2,378 ms** |
+| `search_files`, query that matches nothing, rooted at `~` | **6,955 ms** | **346–1,217 ms** |
+| `search_files`, the acceptance command | 11,299 ms | 1,217 ms (346 ms on a quieter run) |
+| All 17 measured acceptance commands | 22,573 ms | **2,961 ms** |
 | Any API read (`/tools`, `/tasks`, `/audit`, `/memory`) | 1-2 ms | unchanged |
 | `GET /health`, launched server, warm | 1.5-8 ms (first call in a process: 110 ms) | unchanged — nothing expensive runs per request |
 | `JarvisCore()` construction | 29 ms | unchanged |
 
-The ranges are real, not hedging: six separate runs of the same command measured
-346, 451, 494, 534, 683 and 855 ms, because the fallback walk reads actual disk. What the change
+The ranges are real, not hedging: seven separate runs of the same command measured
+346, 451, 494, 534, 683, 855 and 1,217 ms, because the fallback walk reads actual disk. What the change
 removed is the *unbounded* case — the walk now has a 2.5 s ceiling it reports when it
 hits, instead of a worst case that was whatever `~/Library` felt like that day.
 
@@ -293,7 +315,7 @@ curl -s -H "X-JARVIS-Token: $TOKEN" -H 'Content-Type: application/json' \
      -d '{"text":"what is my battery"}' http://127.0.0.1:8765/command
 
 # Prove it to yourself:
-python -m pytest -q                       # 1330 passed, 0 failed
+python -m pytest -q                       # 1342 passed, 0 failed
 python benchmarks/acceptance_run.py       # re-measures the README's numbers
 python assets/build_charts.py && python assets/build_diagrams.py
 ```
@@ -314,7 +336,7 @@ jarvis/
   scheduler/   recurring jobs, runner with per-run re-authorization
   car/ home/ robotics/ watch/ vision/ research/ design/ coding/
   integrations/ IMAP/SMTP and CalDAV providers with local fallbacks
-tests/         47 modules · 1331 collected · includes the dashboard's own JS, run by Node
+tests/         48 modules · 1343 collected · includes the dashboard's own JS, run by Node
 dashboard/     single-file control panel; state rendered from server fields
 audit/         22 phase reports + 4 CSV matrices — the evidence behind this README
 benchmarks/    acceptance_run.py and the JSON the charts are drawn from
@@ -371,8 +393,7 @@ better than a gap you have to discover:
   R-11–R-14 · hardware integration blocked · external calendar/mail credentials ·
   LLM planner · multi-step **unattended** workflows · a partly-routable sentence can
   still answer one half without flagging the other in some phrasings (14-D, narrowed in
-  Phase 19, not fully closed) · a refusal and a clarifying question share one label
-  because separating them would mean guessing from punctuation (19-B) · failed
+  Phase 19, not fully closed) · failed
   authentication is logged but deliberately **not** written to the audit chain, so an
   unauthenticated caller cannot append to it (16-F, reasoned in
   `audit/PHASE20_DATED_RECALL_REPORT.md`) · **arXiv still refuses this client** (15-F):

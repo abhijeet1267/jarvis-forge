@@ -262,7 +262,10 @@ class JarvisCore:
         guard = self.classifier.classify_command(request.text)
         if guard and guard.decision is PolicyDecision.BLOCK:
             # Attach an empty plan so callers always get a consistent shape.
-            response.plan = Plan(goal=request.text, intent="blocked", planner="guard")
+            # The kind matters: this is a refusal, and an unlabelled one reads on the
+            # dashboard like everything else that did nothing (19-B).
+            response.plan = Plan(goal=request.text, intent="blocked", planner="guard",
+                                 reply_kind="refusal")
             response.reply = (
                 f"I will not do that automatically: {guard.reason}. "
                 "If this is genuinely intended, do it deliberately and with explicit "
@@ -278,7 +281,7 @@ class JarvisCore:
                 device=request.device_id,
                 session_id=request.session_id,
                 request_id=response.request_id,
-                detail={"reason": guard.reason},
+                detail={"reason": guard.reason, "reply_kind": "refusal"},
             )
             self._log_message(request.session_id, "assistant", response.reply, "blocked")
             response.duration_ms = int((time.perf_counter() - started) * 1000)
@@ -306,6 +309,9 @@ class JarvisCore:
                 session_id=request.session_id,
                 request_id=response.request_id,
                 detail={"stage": "planner", "reply": response.reply[:200],
+                        # Which kind of non-action this was, so a refusal and a question
+                        # stay distinguishable in the chain and not only on screen.
+                        "reply_kind": plan.reply_kind,
                         "unhandled": list(plan.unhandled)},
             )
             self._log_message(request.session_id, "assistant", response.reply, plan.intent)
@@ -316,7 +322,12 @@ class JarvisCore:
             response.reply = plan.clarification_question or (
                 "I need a bit more detail before I act."
             )
-            response.needs_confirmation = True
+            # needs_confirmation used to be set here, which advertised a question as a
+            # pending approval: the dashboard would offer to confirm something with
+            # nothing to execute, and the token would sit until it expired. A missing
+            # parameter is not a decision waiting for consent. The branch was
+            # unreachable from the rules planner until Phase 24 gave it a kind, so
+            # nothing had ever shown that.
             self._note_unhandled(response, plan)
             self.audit.record(
                 intent=request.text,
@@ -326,6 +337,7 @@ class JarvisCore:
                 session_id=request.session_id,
                 request_id=response.request_id,
                 detail={"stage": "planner", "question": response.reply[:200],
+                        "reply_kind": plan.reply_kind or "clarification",
                         "unhandled": list(plan.unhandled)},
             )
             self._log_message(request.session_id, "assistant", response.reply, plan.intent)

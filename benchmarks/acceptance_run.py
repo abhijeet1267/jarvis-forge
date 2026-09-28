@@ -184,6 +184,7 @@ def suite_history() -> dict:
         ("21 speed", 1304, 1300, 0, "bounded search, graceful source fallback"),
         ("22 safety matrix", 1321, 1317, 0, "ambiguous actuation refused; outages disclosed"),
         ("23 deletion completeness", 1331, 1330, 0, "three parked xfails fixed at their source"),
+        ("24 refusal vs detail", 1343, 1342, 0, "a question stopped being labelled a refusal"),
     ]
     return {"phases": [{"phase": p, "collected": c, "passed": q, "failed": f, "note": n}
                        for p, c, q, f, n in points]}

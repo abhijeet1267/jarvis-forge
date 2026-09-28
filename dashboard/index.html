@@ -268,11 +268,14 @@ function pipelineState(data) {
     // commands -- every honest refusal and clarification -- labelled UNKNOWN,
     // which told the user the system was unsure when it had actually said "no".
     // The kind is the planner's own word (`plan.reply_kind`): "I did not
-    // understand", "I have no such capability" and "I will not do that" are three
-    // different answers to three different questions, and until Phase 19 the page
-    // could only say "nothing ran". A caller-supplied kind can change a label and
-    // nothing else -- it cannot authorise, verify, or hide an action.
+    // understand", "I have no such capability", "I will not do that" and "I need one
+    // more thing from you" are four different answers to four different questions, and
+    // until Phase 19 the page could only say "nothing ran". Phase 24 split the last two:
+    // a refusal ends the turn, a clarification is the user's next move, and showing them
+    // identically hides which. A caller-supplied kind can change a label and nothing
+    // else -- it cannot authorise, verify, or hide an action.
     if (plan && plan.needs_clarification === true) return "NEEDS DETAIL";
+    if (plan && plan.reply_kind === "clarification") return "NEEDS DETAIL";
     if (plan && plan.reply_kind === "not_understood") return "NOT RECOGNISED";
     if (plan && plan.reply_kind === "capability_missing") return "NOT AVAILABLE";
     if (plan && plan.reply_kind === "declined") return "NOTHING EXECUTED";
