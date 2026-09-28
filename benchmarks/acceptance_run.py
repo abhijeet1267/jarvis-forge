@@ -107,7 +107,7 @@ def measure_acceptance() -> dict:
             approval = client.post(
                 f"/confirm/{payload['confirmation_id']}?approve=true", json={})
             payload = approval.json()
-            elapsed += round((time.perf_counter() - started) * 1000)
+            elapsed = round((time.perf_counter() - started) * 1000)
         added = core.db.query(
             "SELECT result FROM action_logs WHERE rowid > ? ORDER BY rowid", (before,))
         if not added:
@@ -147,6 +147,12 @@ def measure_hardware() -> dict:
     if "peripherals" not in health:
         raise SystemExit("/health returned no peripherals -- refusing to publish "
                          f"an empty table as a result: {str(health)[:120]}")
+    security = dict(health.get("security", {}))
+    if "token_path" in security:
+        # The scratch home's random temp path is this machine's, not a fact about the
+        # product; keeping it out of the committed artifact stops every run from
+        # rewriting the file. The token itself was never in here -- only its path.
+        security["token_path"] = "<JARVIS_HOME>/api_token"
     return {
         "surface": "GET /health, no hardware attached, no accounts configured",
         "tools": health.get("tools"),
@@ -156,7 +162,7 @@ def measure_hardware() -> dict:
         "integrations": health.get("integrations", {}),
         "memory_retrieval": (health.get("memory_retrieval") or {}).get("mode"),
         "paired_devices": (health.get("devices") or {}).get("paired_devices"),
-        "security": health.get("security", {}),
+        "security": security,
     }
 
 
@@ -175,6 +181,7 @@ def suite_history() -> dict:
         ("18 simulation", 1263, 1259, 0, "simulated actuation no longer audited success"),
         ("19 refusals", 1280, 1276, 0, "dropped clauses named; VERIFIED IN PART"),
         ("20 dated recall", 1290, 1286, 0, "recalling by day, echoes labelled"),
+        ("21 speed", 1303, 1299, 0, "bounded search, graceful source fallback"),
     ]
     return {"phases": [{"phase": p, "collected": c, "passed": q, "failed": f, "note": n}
                        for p, c, q, f, n in points]}

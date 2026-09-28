@@ -71,7 +71,7 @@
  "paired_devices": 0,
  "security": {
   "auth_enabled": true,
-  "token_path": "/var/folders/y2/8qgnpl313ws7ktxtnt11mnsw0000gn/T/jarvis-bench-oawuxf9d/api_token",
+  "token_path": "<JARVIS_HOME>/api_token",
   "token_configured": true,
   "allowed_origins": [
    "http://127.0.0.1:8765"

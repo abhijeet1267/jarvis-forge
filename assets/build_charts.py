@@ -84,8 +84,10 @@ def suite_growth() -> None:
     plot_h = height - top - bottom
     max_collected = max(row["collected"] for row in data)
     step = plot_w / (len(data) - 1)
+    first_phase = data[0]["phase"].split()[0]
+    last_phase = data[-1]["phase"].split()[0]
 
-    svg = [_header(width, height, "TEST SUITE THROUGH PHASES 9-20",
+    svg = [_header(width, height, f"TEST SUITE THROUGH PHASES {first_phase}-{last_phase}",
                    "collected vs passing, one point per phase close · failures drawn as the red band")]
 
     # Axis
@@ -135,7 +137,7 @@ def suite_growth() -> None:
         ("net added", OK, f'+{last["passed"] - first["passed"]}'),
     ]
     svg.append(f'<text x="{legend_x}" y="{top + 8}" font-family="{MONO}" font-size="11" '
-               f'letter-spacing="1.6" fill="{MUTED}">AT PHASE 20 CLOSE</text>')
+               f'letter-spacing="1.6" fill="{MUTED}">AT PHASE {last_phase} CLOSE</text>')
     for offset, (label, colour, value) in enumerate(rows):
         y = top + 40 + offset * 46
         svg.append(f'<line x1="{legend_x}" y1="{y - 12}" x2="{legend_x + 16}" y2="{y - 12}" '

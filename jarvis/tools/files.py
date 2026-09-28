@@ -29,6 +29,18 @@ log = get_logger("tools.files")
 from ..security.paths import PROTECTED_ROOTS, PROTECTED_SUBPATHS, protection_reason
 
 MAX_SEARCH_RESULTS = 50
+
+#: A search that matches nothing must cost about as much as one that matches
+#: something. Before this, the walk only stopped early on a find, so an unmatched
+#: query descended into ~/Library -- macOS' largest tree -- and took 6.9 s against
+#: a home directory, where a matching query took 0.36 s.
+PRUNED_DIRS = {
+    "Library", "Applications", "node_modules", "__pycache__", "dist", "build",
+    "venv", ".venv", ".cache", "Caches", ".npm", ".gradle", ".mypy_cache",
+    ".pytest_cache", ".Trash",
+}
+SEARCH_SCAN_CAP = 60_000
+SEARCH_TIME_BUDGET_S = 2.5
 MAX_READ_BYTES = 200_000
 
 
@@ -113,17 +125,32 @@ async def search_files(
 
     # Fallback: bounded filesystem walk. Collect a wider pool so ranking has
     # something to work with, then trim.
+    scanned = 0
+    skipped: set = set()
+    truncated = False
     if not candidates:
         needle = query.lower()
         pool_limit = max(limit * 6, 60)
+        deadline = time.perf_counter() + SEARCH_TIME_BUDGET_S
         for root, dirs, files in os.walk(base):
-            dirs[:] = [d for d in dirs if not d.startswith(".") and d != "node_modules"]
+            kept = []
+            for name in dirs:
+                if name.startswith(".") or name in PRUNED_DIRS:
+                    skipped.add(name)
+                else:
+                    kept.append(name)
+            dirs[:] = kept
             for name in files:
+                scanned += 1
                 if needle in name.lower():
                     candidates.append(Path(root) / name)
-                    if len(candidates) >= pool_limit:
-                        break
-            if len(candidates) >= pool_limit:
+                if len(candidates) >= pool_limit or scanned >= SEARCH_SCAN_CAP:
+                    break
+            if len(candidates) >= pool_limit or scanned >= SEARCH_SCAN_CAP:
+                truncated = scanned >= SEARCH_SCAN_CAP and len(candidates) < pool_limit
+                break
+            if time.perf_counter() > deadline:
+                truncated = True
                 break
 
     # Spotlight answers from an index the walk's dot-directory pruning never
@@ -133,12 +160,23 @@ async def search_files(
     candidates = [path for path in candidates if not protection_reason(str(path))]
 
     if not candidates:
+        # "nothing matched" and "I stopped looking" are different claims, and only
+        # the first one is safe to make from a bounded walk.
+        sentence = (
+            f"I searched {scanned} entries under {base} and stopped early, so this is "
+            "not exhaustive: no file matching " + repr(query) + " turned up."
+            if truncated
+            else f"I could not find any file matching {query!r} under {base}."
+        )
         return ok(
             "search_files",
-            f"I could not find any file matching {query!r} under {base}.",
+            sentence,
             device=ctx.device_id,
             query=query,
             results=[],
+            scanned=scanned,
+            truncated=truncated,
+            skipped=sorted(skipped),
         )
 
     results = _rank(candidates, query, sort=sort)[:limit]
@@ -156,6 +194,9 @@ async def search_files(
         query=query,
         sort=sort,
         results=results,
+        scanned=scanned,
+        truncated=truncated,
+        skipped=sorted(skipped),
     )
 
 

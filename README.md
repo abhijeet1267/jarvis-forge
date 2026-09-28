@@ -13,7 +13,7 @@ between *"the handler returned"* and *"the thing happened"* — and the twenty p
 measurement spent closing that gap, in the ledger and on the screen.
 
 [![ci](https://img.shields.io/github/actions/workflow/status/abhijeet1267/jarvis-forge/ci.yml?label=tests%20%C2%B7%20macos)](https://github.com/abhijeet1267/jarvis-forge/actions/workflows/ci.yml)
-[![suite](https://img.shields.io/badge/tests-1287%20passed%20%C2%B7%200%20failed-16a34a)](tests)
+[![suite](https://img.shields.io/badge/tests-1299%20passed%20%C2%B7%200%20failed-16a34a)](tests)
 [![tools](https://img.shields.io/badge/tools-127%20across%2015%20agents-2f6df6)](jarvis/tools)
 [![offline](https://img.shields.io/badge/LLM-off%20by%20default%20%C2%B7%20runs%20fully%20offline-0f172a)](jarvis/config.py)
 [![python](https://img.shields.io/badge/python-3.11%20%C2%B7%203.12%20(CI)-6b7688)](.github/workflows/ci.yml)
@@ -27,7 +27,7 @@ measurement spent closing that gap, in the ledger and on the screen.
 | **Ledger** | `action_logs` hash-chained + `audit.jsonl` append-only, `verify_chain()` |
 | **Edge** | token file `0600` · constant-time compare · same-origin · Host allowlist · 600/min |
 | **Surface** | web dashboard · voice (macOS `say`/STT) · watch queue · phone pairing |
-| **Size** | 47,038 lines · 32,103 source · 14,935 tests · 44 test modules |
+| **Size** | ~48k lines · 32k source · 16k tests · 45 test modules |
 
 ---
 
@@ -39,14 +39,15 @@ and the diagrams read their counts from the live registry.
 
 | Claim | Value | Reproduce |
 |---|---|---|
-| Test suite | **1287 passed · 0 failed · 1 skipped · 3 xfailed** (1291 collected) | `python -m pytest -q` |
-| Suite growth, Phase 9 → 20 | 875 passing / **126 failing** → 1286 passing / 0 failing at the Phase 20 close | `cat benchmarks/suite_history.json` |
+| Test suite | **1299 passed · 0 failed · 1 skipped · 3 xfailed** (1303 collected) | `python -m pytest -q` |
+| Suite growth, Phase 9 → 21 | 875 passing / **126 failing** → 1299 passing / 0 failing at the Phase 21 close | `cat benchmarks/suite_history.json` |
 | Tools registered | **127** | `python -c "from jarvis.core.orchestrator import JarvisCore as J; print(len(J().tools.names()))"` |
 | Confirmation-gated | **25** of 127 | `python assets/build_diagrams.py` (prints the live counts) |
 | Risk tiers | read 68 · low 33 · external 12 · high 11 · physical 3 | same |
 | API routes | **104** | `python -c "s=open('jarvis/api/app.py').read(); print(sum(s.count(f'@app.{v}(\"') for v in ('get','post','put','patch','delete')))"` |
 | Acceptance commands measured | 17 of 18, live, over HTTP | `python benchmarks/acceptance_run.py` |
-| Audit chain integrity | `verify_chain() → ok` on a fresh home | `JARVIS_HOME=$(mktemp -d) python -c "from jarvis.core.orchestrator import JarvisCore as J; print(J().audit.verify_chain())"` |
+| Launched-server sweep | 8 read endpoints **200**, unauthenticated **401**, commands answered over the network | `python run.py serve`, then the sweep in `audit/PHASE21_SPEED_RESILIENCE_REPORT.md` §1 |
+| Audit chain integrity | `verify_chain() → ok=True` over **2 recorded actions** (an empty chain verifies trivially, so run two commands first) | `JARVIS_HOME=$(mktemp -d) python -c "import asyncio;from jarvis.core.models import CommandRequest as R;from jarvis.core.orchestrator import JarvisCore as J;c=J();[asyncio.run(c.handle(R(text=t,source='probe'))) for t in ('Jarvis, what time is it.','Jarvis, what is my laptop battery.')];print(c.audit.verify_chain())"` |
 | Regenerated figures parse as SVG | 7/7 | `python assets/build_charts.py && python assets/build_diagrams.py` |
 
 > On the author's own machine `~/.jarvis-forge` still reports `verify_chain()`
@@ -124,21 +125,24 @@ read auditable as a success.
 
 | Command | State the user sees | Audit token | ms |
 |---|---|---|---|
-| show me my laptop battery | VERIFIED | success | 23 |
-| plan my day | VERIFIED | success | 5 |
+| show me my laptop battery | VERIFIED | success | 43 |
+| plan my day | VERIFIED | success | 6 |
 | remember that this is my AMR project | VERIFIED | success | 5 |
-| what did I work on yesterday | VERIFIED | success | 6 |
-| check my car fuel | **UNAVAILABLE** | failure | 5 |
-| turn on study mode | **UNAVAILABLE** | failure | 6 |
-| transfer this file to my phone | **NOTHING EXECUTED** | no_action | 6 |
-| design this system | **NOT RECOGNISED** | no_action | 5 |
-| schedule two hours for project work tomorrow | **NOTHING EXECUTED** | no_action | 4 |
-| draft an email to my teammate | **FAILED** | failure | 6 |
-| research this idea | **FAILED** | failure | 419 |
-| find my latest project report | VERIFIED | success | **11,299** |
+| what did I work on yesterday | VERIFIED | success | 8 |
+| check my car fuel | **UNAVAILABLE** | failure | 6 |
+| turn on study mode | **UNAVAILABLE** | failure | 5 |
+| transfer this file to my phone | **NOTHING EXECUTED** | no_action | 5 |
+| design this system | **NOT RECOGNISED** | no_action | 6 |
+| schedule two hours for project work tomorrow | **NOTHING EXECUTED** | no_action | 6 |
+| draft an email to my teammate | **FAILED** | failure | 7 |
+| research this idea | VERIFIED (degraded) | success | 1,722 |
+| find my latest project report | VERIFIED | success | 683 |
 
-Median command: **5 ms**. The two outliers are real and unresolved: a full-filesystem
-`search_files` (11.3 s) and arXiv rejecting the research request with HTTP 406.
+Median command: **6 ms**; the whole list runs in **2.5 s** end to end, against 22.5 s when
+it was first measured. The two numbers above that move are `search` (346-683 ms across
+runs — it walks real disk, so it tracks whatever the disk is doing) and `research`, which
+spends ~1.7 s discovering that arXiv refuses this client (see below) and then answering
+from the local corpus instead. Everything else is stable to within a couple of ms.
 
 Note *"what did I work on yesterday"* reading **VERIFIED** with an empty result: since
 Phase 20 it answers about the *day asked about* — `Nothing was recorded in memory on
@@ -179,6 +183,41 @@ command that produced them.
 | **18 — Simulation** | simulated actuations no longer audited as `success` |
 | **19 — Refusals** | dropped clauses named in the reply *and* the ledger; `VERIFIED IN PART` |
 | **20 — Dated recall** | "yesterday" became a date range instead of a search phrase; activity echoes labelled as echoes |
+| **21 — Speed & resilience** | unbounded filesystem walk bounded (11.3 s → 0.35-0.68 s, worst case capped at 2.5 s and disclosed) and one refused research source no longer fails the command |
+
+## Smooth and fast
+
+Measured, because "feels faster" is not evidence:
+
+| Path | Before | After |
+|---|---|---|
+| `search_files`, query that matches nothing, rooted at `~` | **6,955 ms** | **346–683 ms** |
+| `search_files`, the acceptance command | 11,299 ms | 683 ms (346 ms on a quieter run) |
+| All 17 measured acceptance commands | 22,573 ms | **2,522 ms** |
+| Any API read (`/tools`, `/tasks`, `/audit`, `/memory`) | 1-2 ms | unchanged |
+| `GET /health`, launched server, warm | 1.5-8 ms (first call in a process: 110 ms) | unchanged — nothing expensive runs per request |
+| `JarvisCore()` construction | 29 ms | unchanged |
+
+The ranges are real, not hedging: three separate runs of the same command measured
+346 ms, 451 ms and 683 ms, because the fallback walk reads actual disk. What the change
+removed is the *unbounded* case — the walk now has a 2.5 s ceiling it reports when it
+hits, instead of a worst case that was whatever `~/Library` felt like that day.
+
+Two changes, both bounded and both honest about it:
+
+* **The walk had no ceiling.** It stopped early only when it *found* things, so an
+  unmatched query walked all of `~/Library` — macOS' largest tree, and nowhere a user
+  means. Now it prunes system/cache directories, caps entries and time, and **says so**
+  when it stopped early: a partial search reports `truncated` and the number of entries
+  it looked at, because "nothing matched" and "I stopped looking" are different claims.
+  Pruned names are returned too, so the boundary is inspectable rather than silent.
+* **One dead source used to kill the command.** `research` failed outright when arXiv
+  refused. It now retries once, falls back to the local corpus, and names the refusal in
+  the answer and in `output.source_errors` — while still never inventing a paper. The
+  refusal itself is unresolved and documented: arXiv answers curl 200 and every Python
+  client 406 from the same machine at the same moment. It is not the User-Agent, not
+  HTTP/1.1 vs HTTP/2, and not the plain-HTTP redirect — three diagnoses I made and
+  discarded before measuring it properly.
 
 ## Security model
 
@@ -214,7 +253,7 @@ curl -s -H "X-JARVIS-Token: $TOKEN" -H 'Content-Type: application/json' \
      -d '{"text":"what is my battery"}' http://127.0.0.1:8765/command
 
 # Prove it to yourself:
-python -m pytest -q                       # 1287 passed, 0 failed
+python -m pytest -q                       # 1299 passed, 0 failed
 python benchmarks/acceptance_run.py       # re-measures the README's numbers
 python assets/build_charts.py && python assets/build_diagrams.py
 ```
@@ -235,7 +274,7 @@ jarvis/
   scheduler/   recurring jobs, runner with per-run re-authorization
   car/ home/ robotics/ watch/ vision/ research/ design/ coding/
   integrations/ IMAP/SMTP and CalDAV providers with local fallbacks
-tests/         44 modules · 1291 collected · includes the dashboard's own JS, run by Node
+tests/         45 modules · 1303 collected · includes the dashboard's own JS, run by Node
 dashboard/     single-file control panel; state rendered from server fields
 audit/         22 phase reports + 4 CSV matrices — the evidence behind this README
 benchmarks/    acceptance_run.py and the JSON the charts are drawn from
@@ -275,7 +314,12 @@ better than a gap you have to discover:
   because separating them would mean guessing from punctuation (19-B) · failed
   authentication is logged but deliberately **not** written to the audit chain, so an
   unauthenticated caller cannot append to it (16-F, reasoned in
-  `audit/PHASE20_DATED_RECALL_REPORT.md`).
+  `audit/PHASE20_DATED_RECALL_REPORT.md`) · **arXiv still refuses this client** (15-F):
+  `curl` gets 200 while urllib and httpx both get 406 from the same machine in the same
+  minute, so `research` spends ~1.6 s on a retry, answers from the local corpus, and names
+  the refusal instead of inventing a paper. Measured, not assumed — see
+  `audit/PHASE21_SPEED_RESILIENCE_REPORT.md` §4 for the three diagnoses that were tested
+  and discarded.
 
 ## License
 

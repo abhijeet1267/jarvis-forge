@@ -68,8 +68,9 @@ def live_counts() -> dict:
 def suite_tail() -> tuple:
     phases = json.loads((ROOT / "benchmarks" / "suite_history.json").read_text())["phases"]
     last = phases[-1]
-    return len(phases) + 8, last["collected"], last["failed"] + next(
-        (p["failed"] for p in phases if p["failed"]), 0)
+    # The phase *number* comes from the entry's own label, not from len(phases) + 8,
+    # which silently broke the moment the history started anywhere but phase 9.
+    return int(last["phase"].split()[0]), last["collected"], last["failed"]
 
 
 def _frame(width: int, height: int, title: str, subtitle: str) -> list:
@@ -105,7 +106,7 @@ def chip(svg: list, x: float, y: float, label: str, colour: str, filled: bool = 
 
 
 def hero(counts: dict) -> None:
-    phases, collected, _ = suite_tail()
+    phases, collected, failing = suite_tail()
     s = _frame(1280, 430, "JARVIS FORGE",
                "a permissioned, local-first agent OS -- and the audit trail that proves what it did")
     s.append('<rect x="1" y="88" width="1278" height="120" fill="url(#fade)"/>')
@@ -139,7 +140,8 @@ def hero(counts: dict) -> None:
         x += width + 12
     s.append(f'<line x1="40" y1="374" x2="1240" y2="374" stroke="{LINE}"/>')
     s.append(f'<text x="40" y="398" font-family="{M}" font-size="11" fill="{MUTED}">'
-             f'{phases} audit-and-repair phases &#183; {collected} tests collected &#183; 0 failing</text>')
+             f'{phases} audit-and-repair phases &#183; {collected} tests collected &#183; '
+             f'{failing} failing</text>')
     s.append(f'<text x="1240" y="398" text-anchor="end" font-family="{M}" font-size="11" '
              f'font-weight="700" letter-spacing="1.4" fill="{ACCENT}">macOS &#183; offline by default '
              f'&#183; no LLM required</text>')

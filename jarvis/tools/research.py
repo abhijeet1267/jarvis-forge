@@ -76,27 +76,48 @@ async def search_papers(
             device=ctx.device_id,
         )
 
-    try:
-        hits = backend.search(query, limit=max(1, min(int(limit), 25)))
-    except Exception as exc:
-        # Report the failure; never substitute invented results.
-        return fail("search_papers", str(exc), device=ctx.device_id)
+    source_errors: List[str] = []
+    # A refused source is a fact about that source, not about the request. Try the
+    # others before failing: "research this" dying because one upstream dislikes
+    # Python's TLS fingerprint is a worse outcome than an answer with a caveat.
+    # Compared by name: get_source() builds a fresh backend each call, so an
+    # identity check would re-add the requested source and query it twice.
+    for candidate in [backend] + [s for s in approved_sources() if s.name != backend.name]:
+        try:
+            hits = candidate.search(query, limit=max(1, min(int(limit), 25)))
+            backend = candidate
+            break
+        except Exception as exc:
+            source_errors.append(f"{candidate.name}: {exc}")
+            hits = []
+    else:
+        return fail(
+            "search_papers",
+            "No approved source could answer: " + " | ".join(source_errors),
+            device=ctx.device_id,
+            source_errors=source_errors,
+        )
 
     if not hits:
         return ok(
             "search_papers",
-            f"I found no results for {query!r} on {source}.",
+            f"I found no results for {query!r} on {backend.name}."
+            + (f" ({'; '.join(source_errors)})" if source_errors else ""),
             device=ctx.device_id,
             results=[],
+            source=backend.name,
+            source_errors=source_errors,
         )
 
     papers = _store().add_many(hits, project_id=project_id or None)
     listing = [f"{p.title[:66]} ({p.year or 'n.d.'})" for p in papers[:5]]
     return ok(
         "search_papers",
-        f"I found {len(papers)} reference(s) on {source}:\n" + "\n".join(listing),
+        f"I found {len(papers)} reference(s) on {backend.name}:\n" + "\n".join(listing)
+        + (f"\n  ({'; '.join(source_errors)})" if source_errors else ""),
         device=ctx.device_id,
-        source=source,
+        source=backend.name,
+        source_errors=source_errors,
         papers=[p.as_dict() for p in papers],
     )
 

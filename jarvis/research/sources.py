@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import re
 import urllib.parse
+import time
 import urllib.request
 import xml.etree.ElementTree as ET
 from abc import ABC, abstractmethod
@@ -32,7 +33,15 @@ from ..logging_setup import get_logger
 log = get_logger("research.sources")
 
 ATOM_NS = "{http://www.w3.org/2005/Atom}"
-ARXIV_ENDPOINT = "http://export.arxiv.org/api/query"
+ARXIV_ENDPOINT = "https://export.arxiv.org/api/query"
+
+#: Measured, not assumed: the plain-HTTP endpoint answers 301, and following that
+#: redirect from urllib is what surfaced as "HTTP Error 406" in the acceptance
+#: sweep -- intermittently, so a single green run proves nothing here. HTTPS
+#: removes the hop; a descriptive agent is what the API asks for anyway.
+#: A retry lives in the caller, not here, because a second 406 must still be
+#: reported as a failure rather than retried into a fiction.
+ARXIV_USER_AGENT = "JARVISForge/1.0 (+local research client; +https://github.com/abhijeet1267/jarvis-forge)"
 REQUEST_TIMEOUT = 20.0
 
 
@@ -166,15 +175,23 @@ class ArxivSource(SourceBackend):
                 "sortOrder": "descending",
             }
         )
-        try:
-            with urllib.request.urlopen(
-                f"{ARXIV_ENDPOINT}?{params}", timeout=REQUEST_TIMEOUT
-            ) as response:
-                xml_text = response.read().decode("utf-8", errors="replace")
-        except Exception as exc:
-            # Report the failure; never substitute invented results.
-            log.info("arxiv unreachable", extra_fields={"error": str(exc)})
-            raise RuntimeError(f"arXiv could not be reached: {exc}") from exc
+        request = urllib.request.Request(
+            f"{ARXIV_ENDPOINT}?{params}", headers={"User-Agent": ARXIV_USER_AGENT}
+        )
+        # Two attempts. arXiv throttles some clients briefly and refuses others
+        # outright; the first case is worth one short wait, and only one, so a hard
+        # refusal costs a second rather than turning into a hang.
+        for attempt in range(2):
+            try:
+                with urllib.request.urlopen(request, timeout=REQUEST_TIMEOUT) as response:
+                    xml_text = response.read().decode("utf-8", errors="replace")
+                break
+            except Exception as exc:
+                if attempt:
+                    # Report the failure; never substitute invented results.
+                    log.info("arxiv unreachable", extra_fields={"error": str(exc)})
+                    raise RuntimeError(f"arXiv could not be reached: {exc}") from exc
+                time.sleep(0.8)
 
         return parse_arxiv(xml_text, limit)
 

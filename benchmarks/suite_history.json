@@ -83,6 +83,13 @@
    "passed": 1286,
    "failed": 0,
    "note": "recalling by day, echoes labelled"
+  },
+  {
+   "phase": "21 speed",
+   "collected": 1303,
+   "passed": 1299,
+   "failed": 0,
+   "note": "bounded search, graceful source fallback"
   }
  ]
 }
