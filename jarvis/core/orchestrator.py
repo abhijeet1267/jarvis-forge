@@ -678,9 +678,16 @@ class JarvisCore:
             return "\n  Watch channel: shown on your watch -- answer CONFIRM or CANCEL there."
         return "\n  Watch channel: handed to your watch, not yet shown."
 
+    #: Tools whose only effect is reading memory back. Echoing them stores a new row
+    #: quoting the row just read, so checking whether a deletion worked writes another
+    #: copy of the fact that was just forgotten -- and the next check writes one more.
+    _MEMORY_READ_TOOLS = {"search_memory", "memory_overview"}
+
     def _remember_outcome(self, request: CommandRequest, response: CommandResponse) -> None:
         """Record a session-scoped memory of what happened."""
         if not response.actions:
+            return
+        if all(a.tool in self._MEMORY_READ_TOOLS for a in response.actions):
             return
         summary = "; ".join(f"{a.tool}: {a.summary}" for a in response.actions)
         self.memory.remember(

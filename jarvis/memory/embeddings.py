@@ -98,6 +98,25 @@ def cosine(a: Sequence[float], b: Sequence[float]) -> float:
     return dot / math.sqrt(norm_a * norm_b)
 
 
+#: Text -> vector, shared by every RemoteEmbedder in the process (see its
+#: __init__). Kept at module level so one call can evict deleted text for real.
+_SHARED_CACHE: Dict[str, List[float]] = {}
+
+
+def forget_text_everywhere(text: str) -> int:
+    """Drop every in-process embedding derived from deleted text.
+
+    Returns how many cache entries went. A user-visible "forgotten" that leaves the
+    sentence resident in a cache is a claim the process cannot support.
+    """
+    if not text:
+        return 0
+    doomed = [key for key in _SHARED_CACHE if key == text or text in key]
+    for key in doomed:
+        del _SHARED_CACHE[key]
+    return len(doomed)
+
+
 class Embedder(ABC):
     """Turns text into a vector."""
 
@@ -111,6 +130,16 @@ class Embedder(ABC):
 
     def embed_many(self, texts: Iterable[str]) -> List[List[float]]:
         return [self.embed(text) for text in texts]
+
+    def forget_text(self, text: str) -> int:
+        """Drop any in-process trace of deleted text. Returns how much went.
+
+        The base contract is "nothing is kept, so there is nothing to drop". A
+        delete that leaves the deleted sentence resident in a cache is not a
+        deletion the user can rely on, which is why eviction is part of the
+        interface rather than something each caller guesses at.
+        """
+        return 0
 
     def describe(self) -> Dict[str, object]:
         return {
@@ -165,10 +194,23 @@ class RemoteEmbedder(Embedder):
 
         self.settings = settings or get_settings()
         self.dim = dim
-        self._cache: Dict[str, List[float]] = {}
+        # One embedding per text per process, shared by every instance: the vector
+        # is a function of the text and the model, so a per-object cache only makes
+        # the same sentence live in several places -- and then a deletion can reach
+        # none of them. Shared, and :func:`forget_text_everywhere` can mean it.
+        self._cache: Dict[str, List[float]] = _SHARED_CACHE
 
     def available(self) -> bool:
         return bool(self.settings.llm_api_key and self.settings.llm_base_url)
+
+    def forget_text(self, text: str) -> int:
+        """Evict cache entries for deleted text.
+
+        The cache is keyed by the raw string, so an embedding outlives the row it
+        came from unless deletion says otherwise. Substring matches go too: a longer
+        prompt that contains the forgotten sentence still reproduces it.
+        """
+        return forget_text_everywhere(text)
 
     def embed(self, text: str) -> List[float]:
         if text in self._cache:

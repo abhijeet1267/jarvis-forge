@@ -1349,23 +1349,42 @@ async def memory_detail(memory_id: str, _: None = Protected) -> Dict[str, Any]:
 
 @app.post("/memory/{memory_id}/forget")
 async def memory_forget(memory_id: str, _: None = Protected) -> Dict[str, Any]:
-    """Delete one memory. Destructive, so it is audited."""
-    from ..memory.store import MemoryStore
+    """Delete one memory, answered by the same code the agent uses.
 
-    store = MemoryStore()
-    if store.get(memory_id) is None:
-        raise HTTPException(status_code=404, detail=f"no memory {memory_id!r}")
+    This route used to call ``store.forget`` itself and return a hardcoded
+    ``{'deleted': True}``, while the ``forget_memory`` tool beside it reports the
+    copies a single deletion did *not* remove. One deletion, two surfaces, two
+    different claims about the world -- so the HTTP path claimed completeness the
+    tool refused to claim. The report is no longer duplicated here; it is delegated.
+    """
+    from ..tools.base import ToolContext
+    from ..tools.memory_controls import forget_memory
 
-    store.forget(memory_id)
+    result = await forget_memory(ToolContext(), memory_id=memory_id)
+    output = result.output or {}
+    complete = bool(output.get("complete"))
+
     get_core().audit.record(
         intent="memory.forget",
         tool="forget_memory",
         target=memory_id,
         risk="high",
         confirmation=True,
-        result="success",
+        # A deletion that demonstrably left the same text in other rows is not a
+        # plain success; the ledger carries the same distinction the reply does.
+        result="success" if (result.ok and complete) else ("unverified" if result.ok else "failure"),
     )
-    return {"memory_id": memory_id, "deleted": True}
+    if not result.ok:
+        raise HTTPException(status_code=404, detail=result.summary or f"no memory {memory_id!r}")
+
+    return {
+        "memory_id": memory_id,
+        "deleted": True,
+        "complete": complete,
+        "report": result.message,
+        "remaining_copies": output.get("remaining_copies", []),
+        "retained": output.get("retained", {}),
+    }
 
 
 @app.post("/memory/clear")

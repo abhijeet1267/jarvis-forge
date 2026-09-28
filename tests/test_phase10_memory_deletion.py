@@ -440,7 +440,13 @@ async def test_unknown_id_is_still_a_plain_failure() -> None:
 
 
 # ---------------------------------------------------------------------------
-# 5. Residuals this phase cannot fix (owned elsewhere)
+# 5. Residuals that were owned elsewhere -- closed in Phase 23
+#
+# These three were written here, marked xfail, and left with the root cause named
+# (the HTTP forget route's own handler, JarvisCore._remember_outcome(), and
+# RemoteEmbedder._cache) because this phase did not own those files. Phase 23 fixed
+# each at its source and removed the markers; they run as ordinary tests now, so a
+# regression reopens a known claim rather than an unknown one.
 # ---------------------------------------------------------------------------
 
 
@@ -458,16 +464,6 @@ def api_client():
     return client
 
 
-@pytest.mark.xfail(
-    reason=(
-        "POST /memory/{id}/forget (jarvis/api/app.py) has its own handler and returns a "
-        "hardcoded {'deleted': True}; it never goes through the forget_memory tool, so the "
-        "honest report added there does not reach the HTTP surface. app.py is outside this "
-        "phase's scope; MemoryStore.quoting() is public precisely so that route can report "
-        "the same facts."
-    ),
-    strict=False,
-)
 @pytest.mark.asyncio
 async def test_http_forget_route_also_has_to_stop_claiming_completeness(
     api_client, core: JarvisCore
@@ -484,15 +480,6 @@ async def test_http_forget_route_also_has_to_stop_claiming_completeness(
 
 
 @pytest.mark.asyncio
-@pytest.mark.xfail(
-    reason=(
-        "Root cause is JarvisCore._remember_outcome() in jarvis/core/orchestrator.py, "
-        "which this phase does not own: every executed command stores a session memory "
-        "quoting the raw request and the tool reply, so the recall used to check a "
-        "deletion writes another copy."
-    ),
-    strict=False,
-)
 async def test_verifying_a_deletion_does_not_create_a_new_echo(core: JarvisCore) -> None:
     stored = await _speak_remember(core, _fact("AMP-"))
     token = stored["token"]
@@ -507,14 +494,6 @@ async def test_verifying_a_deletion_does_not_create_a_new_echo(core: JarvisCore)
     assert stored["fact"] not in _memory_contents()
 
 
-@pytest.mark.xfail(
-    reason=(
-        "RemoteEmbedder._cache (jarvis/memory/embeddings.py:168) is keyed by raw text "
-        "and has no eviction API, so a deleted fact stays resident in the process. "
-        "embeddings.py is outside this phase's scope."
-    ),
-    strict=False,
-)
 def test_no_in_process_embedding_cache_survives_deletion() -> None:
     store = MemoryStore()
     fact = _fact("CACHE-")

@@ -175,10 +175,19 @@ class MemoryStore:
         never anything with that id" -- and a user-facing "forget" could report a
         deletion it had not performed. Note that deleting *this row* is not the
         same as forgetting *the fact*; see :meth:`quoting`.
+
+        The in-process embedding cache is evicted too: the row going is not enough
+        when the sentence itself stays resident in this process.
         """
+        from .embeddings import forget_text_everywhere
+
+        item = self.get(memory_id)
         with self.db.cursor() as cur:
             cur.execute("DELETE FROM memories WHERE id = ?", (memory_id,))
-            return bool(cur.rowcount)
+            removed = bool(cur.rowcount)
+        if removed and item is not None:
+            forget_text_everywhere(item.content)
+        return removed
 
     def quoting(
         self,

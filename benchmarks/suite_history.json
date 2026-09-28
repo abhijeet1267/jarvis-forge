@@ -97,6 +97,13 @@
    "passed": 1317,
    "failed": 0,
    "note": "ambiguous actuation refused; outages disclosed"
+  },
+  {
+   "phase": "23 deletion completeness",
+   "collected": 1331,
+   "passed": 1330,
+   "failed": 0,
+   "note": "three parked xfails fixed at their source"
   }
  ]
 }

@@ -18,6 +18,11 @@ from .base import ToolContext, fail, ok
 _ALL_ACTIONS = tuple(dict.fromkeys((*AMR_ACTIONS, *ARM_ACTIONS)))
 
 
+def _actions_for(robot: Robot) -> tuple:
+    """What this machine can actually do, by kind."""
+    return AMR_ACTIONS if robot.kind == "amr" else ARM_ACTIONS
+
+
 def _candidates(gw: RobotGateway) -> List[str]:
     return [r.name for r in gw.robots]
 
@@ -135,14 +140,22 @@ async def command_robot_motion(
         )
 
     target: Optional[Robot] = gw.resolve(robot) if robot else None
-    if target is None:
-        # Infer from the action when no robot is named.
-        if action in AMR_ACTIONS and action not in ARM_ACTIONS:
-            target = gw.resolve("amr")
-        elif action in ARM_ACTIONS:
-            target = gw.resolve("arm")
-        else:
-            target = gw.resolve("amr") or gw.resolve("arm")
+    if target is None and not robot:
+        # Inferring a robot was how "home the robot" reached ``amr_main`` by list
+        # order: ``home`` and ``stop`` belong to both action sets, so on a fleet of
+        # two the choice was real and the code made it silently. Ask when more than
+        # one machine could take the motion; act when only one can.
+        capable = [r for r in gw.robots if action in _actions_for(r)]
+        if len(capable) > 1:
+            return fail(
+                "command_robot_motion",
+                f"Which robot should I {action} -- "
+                + ", ".join(r.name for r in capable) + "?",
+                device=ctx.device_id,
+                candidates=[r.name for r in capable],
+                ambiguous=True,
+            )
+        target = capable[0] if capable else None
     if target is None:
         return fail(
             "command_robot_motion",
