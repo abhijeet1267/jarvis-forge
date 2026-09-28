@@ -172,9 +172,11 @@ notification tool · no `ProjectGraph` delete API · desktop bundle exits 1 · h
 
 ## 10. Git and browser
 
-Committed as this phase's commit and pushed to `origin/main` as a fast-forward; nothing
-force-pushed. CI is reported after it runs — this file will not claim a verdict before the
-observation exists.
+Committed as `0a548cb` and pushed to `origin/main` as a fast-forward; nothing force-pushed.
+**CI, after the observation existed:** run `36437433210` finished `success` on both matrix
+legs (`suite (3.11)`, `suite (3.12)`), and its benchmark step shows the phase's effect on
+the runner too -- `ok Jarvis, send to Arun. NEEDS DETAIL`, with `FAIL Jarvis, turn on
+heater.` still printed rather than tuned away.
 
 **LIVE BROWSER DRIVE: NOT PERFORMED.** §1-§5 are the ASGI app and a launched uvicorn over
 HTTP, plus pytest. The dashboard JS was executed by Node on real payloads — which proves the
