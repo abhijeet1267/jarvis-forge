@@ -111,6 +111,13 @@
    "passed": 1342,
    "failed": 0,
    "note": "a question stopped being labelled a refusal"
+  },
+  {
+   "phase": "25 desktop truth",
+   "collected": 1360,
+   "passed": 1359,
+   "failed": 0,
+   "note": "the self-test runs on a broken install"
   }
  ]
 }

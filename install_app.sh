@@ -45,5 +45,18 @@ echo
 echo "Installed. Launch it from Launchpad, Spotlight, or:"
 echo "  open \"$DEST/$APP_NAME\""
 echo
-echo "First launch will ask for Microphone and Speech Recognition permission."
-echo "Grant them in System Settings -> Privacy & Security if you want voice input."
+# This used to promise a first-launch prompt for Microphone and Speech Recognition.
+# It never comes: nothing in the tree calls
+# AVCaptureDevice.requestAccess -- jarvis/voice/native/mic_state.swift deliberately
+# queries consent instead of requesting it, because a helper binary that asked would
+# either never answer or abort. Measured on a freshly built bundle, the self-test
+# reports permission "denied" / capture "blocked" with no prompt ever shown, so the
+# accurate instruction is the manual one, plus the command that shows the real state.
+echo "The app does not ask for microphone or speech-recognition access on launch --"
+echo "it reports whatever macOS already granted. If voice input shows blocked:"
+echo "  1. System Settings -> Privacy & Security -> Microphone -> enable $APP_NAME"
+echo "     (and the same for Speech Recognition)"
+echo "  2. quit and relaunch the app"
+echo "  3. check what it can actually see:"
+echo "       JARVIS_SELFTEST=1 \"$DEST/$APP_NAME/Contents/MacOS/JarvisForge\""
+echo "     which prints the live permission state rather than assuming it."

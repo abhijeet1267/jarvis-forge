@@ -46,6 +46,13 @@ jobs:
           JARVIS_LOG_LEVEL: WARNING
         run: python -m pytest -q
 
+      # The README's Downloads section tells people to build the app, so CI builds it.
+      # Into a temp dir: dist/ is gitignored, and the point is that a clean checkout
+      # can produce a signed, launchable bundle -- not that the artifact survives the job.
+      - name: Build the desktop bundle
+        if: matrix.python-version == '3.11'
+        run: python build_app.py --dest "$(mktemp -d)"
+
       # The README's numbers are generated, not typed. This proves the generators
       # still run against the code they describe; the latency figures are allowed to
       # differ per machine, so the artifact contents are not diffed here.

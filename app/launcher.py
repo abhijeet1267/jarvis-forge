@@ -55,9 +55,14 @@ def resolve_project_dir() -> Path:
         if text and Path(text).is_dir():
             return Path(text)
 
-    # 3. Look next to the bundle, and at the bundle root itself (which is what
-    #    BUNDLE_ROOT resolves to when the launcher is run straight from source).
-    for candidate in (BUNDLE_ROOT, BUNDLE_ROOT.parent, BUNDLE_ROOT.parent.parent):
+    # 3. Look at the bundle's own location and the three directories above it.
+    #    BUNDLE_ROOT is "<checkout>/Contents" when the launcher runs from source and
+    #    "<checkout>/dist/Jarvis Forge.app/Contents" in a build -- so the checkout is
+    #    the third ancestor. The old list (root, parent, grandparent) stopped at
+    #    dist/, which meant a build inside its own tree depended entirely on the
+    #    pointer recorded at build time, and relocating the checkout broke an app
+    #    that had never moved.
+    for candidate in (BUNDLE_ROOT, *BUNDLE_ROOT.parents[:3]):
         if (candidate / "run.py").exists() and (candidate / "jarvis").is_dir():
             return candidate.resolve()
 
@@ -247,6 +252,10 @@ class ServerController:
         self.log_path = log_path
         self.process: Optional[subprocess.Popen] = None
         self.attached = False  # True when we adopted an already-running server
+        #: Why the project directory could not be found, when that happened. The
+        #: self-test needs it: a report that only says "no such directory" leaves the
+        #: user with a path they already know is wrong.
+        self.project_dir_error = ""
         self._log_handle = None
         self.tail: list[str] = []
 
@@ -599,18 +608,31 @@ def _notify(title: str, message: str) -> None:
         pass
 
 
-def selftest(controller: ServerController) -> int:
-    """Verify every piece the app needs, and print a report.
+def project_dir_check(controller: "ServerController") -> tuple:
+    """The report's first row, including *why* it failed.
 
-    Run with:  JARVIS_SELFTEST=1 "<app>/Contents/MacOS/JarvisForge"
+    A bundle that cannot find its source has to say more than "no such directory" --
+    the pointer is baked in at build time, so the reader needs the fix, not the path.
     """
-    checks: list[tuple[str, bool, str]] = []
+    error = getattr(controller, "project_dir_error", "")
+    ok = bool(controller.project_dir.is_dir()) and not error
+    return ("project directory", ok, error or str(controller.project_dir))
 
-    # --- environment --------------------------------------------------------
-    checks.append(("project directory", controller.project_dir.is_dir(), str(controller.project_dir)))
-    checks.append(("python interpreter", Path(controller.python).exists(), controller.python))
 
-    # --- Tk / GUI -----------------------------------------------------------
+def server_is_reachable(controller: "ServerController") -> bool:
+    """Whether waiting for the server is a question that can have an answer.
+
+    When the project directory could not be located nothing was ever started, and the
+    report used to poll a dead port for 40 seconds before saying so.
+    """
+    return not getattr(controller, "project_dir_error", "")
+
+
+def gui_checks() -> list:
+    """Construct the widgets the control panel uses.
+
+    A missing Tcl module should surface here rather than at the first click.
+    """
     prepare_tk_environment()
     try:
         import tkinter as tk
@@ -619,8 +641,6 @@ def selftest(controller: ServerController) -> int:
         root = tk.Tk()
         root.withdraw()
 
-        # Build the same widget classes the control panel uses, so a missing
-        # Tcl module surfaces here rather than at first click.
         frame = tk.Frame(root)
         tk.Label(frame, text="probe")
         tk.Button(frame, text="probe")
@@ -629,15 +649,38 @@ def selftest(controller: ServerController) -> int:
         box.pack()
         root.update_idletasks()
         widget_count = len(frame.winfo_children()) + 1
+        patchlevel = root.tk.call("info", "patchlevel")
         root.destroy()
 
-        checks.append(("tkinter / Tk", True, f"Tk {root.tk.call('info', 'patchlevel')}"))
-        checks.append(("control panel widgets", True, f"{widget_count} widgets constructed"))
+        return [("tkinter / Tk", True, f"Tk {patchlevel}"),
+                ("control panel widgets", True, f"{widget_count} widgets constructed")]
     except Exception as exc:
-        checks.append(("tkinter / Tk", False, f"{type(exc).__name__}: {exc}"))
+        return [("tkinter / Tk", False, f"{type(exc).__name__}: {exc}")]
+
+
+def selftest(controller: ServerController) -> int:
+    """Verify every piece the app needs, and print a report.
+
+    Run with:  JARVIS_SELFTEST=1 "<app>/Contents/MacOS/JarvisForge"
+    """
+    checks: list[tuple[str, bool, str]] = []
+    # Checks the report could not run at all. Naming them keeps "3/5" from reading
+    # like a smaller test suite: the denominator shrank because the server never
+    # started, not because four capabilities turned out fine.
+    not_attempted: list[str] = []
+
+    # --- environment --------------------------------------------------------
+    checks.append(project_dir_check(controller))
+    checks.append(("python interpreter", Path(controller.python).exists(), controller.python))
+
+    # --- Tk / GUI -----------------------------------------------------------
+    checks.extend(gui_checks())
 
     # --- server -------------------------------------------------------------
-    if controller.wait_ready(timeout=40):
+    if not server_is_reachable(controller):
+        checks.append(("server", False, "not started: " + controller.project_dir_error))
+        not_attempted += ["text to speech", "speech to text", "microphone"]
+    elif controller.wait_ready(timeout=40):
         try:
             health = api_get(controller.host, controller.port, "/health")
             checks.append(
@@ -662,6 +705,7 @@ def selftest(controller: ServerController) -> int:
             checks.append(("voice subsystem", False, str(exc)))
     else:
         checks.append(("server", False, "did not become ready within 40s"))
+        not_attempted += ["text to speech", "speech to text", "microphone"]
 
     # --- speech recognition (TCC) ------------------------------------------
     # Apple only grants Speech Recognition to a bundled, signed app. This probe
@@ -717,11 +761,38 @@ def selftest(controller: ServerController) -> int:
     print(f"  {len(checks) - len(failures)}/{len(checks)} checks passed")
     if failures:
         print(f"  failing: {', '.join(failures)}")
+    if not_attempted:
+        print(f"  not attempted: {', '.join(not_attempted)}")
 
     return 1 if failures else 0
 
 
 def main() -> int:
+    host = os.environ.get("JARVIS_HOST", "127.0.0.1")
+    port = int(os.environ.get("JARVIS_PORT", "8765"))
+    log_path = Path(os.environ.get("JARVIS_HOME", str(Path.home() / ".jarvis-forge"))) / "app.log"
+
+    if os.environ.get("JARVIS_SELFTEST") == "1":
+        # The self-test is what someone reaches for *because* the app will not start, so
+        # it cannot sit behind the step that fails first. It used to: resolution raised,
+        # an alert was shown, and main() returned 1 without ever running the nine checks
+        # that would have named the cause (Phase 9's P0-D3, masked ever since because a
+        # working install cannot see it).
+        error = ""
+        try:
+            project_dir = resolve_project_dir()
+        except RuntimeError as exc:
+            error, project_dir = str(exc), BUNDLE_ROOT
+        controller = ServerController(project_dir, resolve_python(project_dir),
+                                      host, port, log_path)
+        controller.project_dir_error = error
+        if not error:
+            controller.start()
+        try:
+            return selftest(controller)
+        finally:
+            controller.stop()
+
     try:
         project_dir = resolve_project_dir()
     except RuntimeError as exc:
@@ -729,18 +800,7 @@ def main() -> int:
         return 1
 
     python = resolve_python(project_dir)
-    host = os.environ.get("JARVIS_HOST", "127.0.0.1")
-    port = int(os.environ.get("JARVIS_PORT", "8765"))
-    log_path = Path(os.environ.get("JARVIS_HOME", str(Path.home() / ".jarvis-forge"))) / "app.log"
-
     controller = ServerController(project_dir, python, host, port, log_path)
-
-    if os.environ.get("JARVIS_SELFTEST") == "1":
-        controller.start()
-        try:
-            return selftest(controller)
-        finally:
-            controller.stop()
 
     controller.start()
 

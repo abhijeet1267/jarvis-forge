@@ -13,7 +13,7 @@ between *"the handler returned"* and *"the thing happened"* — and the twenty p
 measurement spent closing that gap, in the ledger and on the screen.
 
 [![ci](https://img.shields.io/github/actions/workflow/status/abhijeet1267/jarvis-forge/ci.yml?label=tests%20%C2%B7%20macos)](https://github.com/abhijeet1267/jarvis-forge/actions/workflows/ci.yml)
-[![suite](https://img.shields.io/badge/tests-1342%20passed%20%C2%B7%200%20failed-16a34a)](tests)
+[![suite](https://img.shields.io/badge/tests-1359%20passed%20%C2%B7%200%20failed-16a34a)](tests)
 [![tools](https://img.shields.io/badge/tools-127%20across%2015%20agents-2f6df6)](jarvis/tools)
 [![offline](https://img.shields.io/badge/LLM-off%20by%20default%20%C2%B7%20runs%20fully%20offline-0f172a)](jarvis/config.py)
 [![python](https://img.shields.io/badge/python-3.11%20%C2%B7%203.12%20(CI)-6b7688)](.github/workflows/ci.yml)
@@ -39,8 +39,8 @@ and the diagrams read their counts from the live registry.
 
 | Claim | Value | Reproduce |
 |---|---|---|
-| Test suite | **1342 passed · 0 failed · 1 skipped · 0 xfailed** (1343 collected) | `python -m pytest -q` |
-| Suite growth, Phase 9 → 24 | 875 passing / **126 failing** → 1342 passing / 0 failing / **0 xfailed** at the Phase 24 close | `cat benchmarks/suite_history.json` |
+| Test suite | **1359 passed · 0 failed · 1 skipped · 0 xfailed** (1360 collected) | `python -m pytest -q` |
+| Suite growth, Phase 9 → 25 | 875 passing / **126 failing** → 1359 passing / 0 failing / **0 xfailed** at the Phase 25 close | `cat benchmarks/suite_history.json` |
 | Tools registered | **127** | `python -c "from jarvis.core.orchestrator import JarvisCore as J; print(len(J().tools.names()))"` |
 | Confirmation-gated | **25** of 127 | `python assets/build_diagrams.py` (prints the live counts) |
 | Risk tiers | read 68 · low 33 · external 12 · high 11 · physical 3 | same |
@@ -48,6 +48,7 @@ and the diagrams read their counts from the live registry.
 | Acceptance commands measured | 17 of 18, live, over HTTP | `python benchmarks/acceptance_run.py` |
 | Plan's safety matrix (§45) | **5 of 6** hold; the sixth is a documented gap | `python benchmarks/safety_run.py` |
 | Launched-server sweep | 8 read endpoints **200**, unauthenticated **401**, commands answered over the network | `python run.py serve`, then the sweep in `audit/PHASE21_SPEED_RESILIENCE_REPORT.md` §1 |
+| Packaged desktop app | builds, ad-hoc signs, **launches**, and its server answers `/health`; self-test reports **7/9** (the two failures are macOS permissions, not code) | `python build_app.py && JARVIS_SELFTEST=1 "dist/Jarvis Forge.app/Contents/MacOS/JarvisForge"` |
 | Audit chain integrity | `verify_chain() → ok=True` over **2 recorded actions** (an empty chain verifies trivially, so run two commands first) | `JARVIS_HOME=$(mktemp -d) python -c "import asyncio;from jarvis.core.models import CommandRequest as R;from jarvis.core.orchestrator import JarvisCore as J;c=J();[asyncio.run(c.handle(R(text=t,source='probe'))) for t in ('Jarvis, what time is it.','Jarvis, what is my laptop battery.')];print(c.audit.verify_chain())"` |
 | Regenerated figures parse as SVG | 7/7 | `python assets/build_charts.py && python assets/build_diagrams.py` |
 | CI on the pushed commit | `suite (3.11)` and `suite (3.12)` both **success** | `gh run list --workflow ci.yml --limit 1` |
@@ -67,7 +68,7 @@ and the diagrams read their counts from the live registry.
 | Phone | **NO DEVICE PAIRED** | refuses the question instead of reporting a battery level |
 | Email / calendar accounts | **LOCAL STORES ONLY** | `local_maildir` / `local_calendar`; no credentials configured |
 | Voice capture | **ENVIRONMENT-BLOCKED** | macOS denied the microphone to an unbundled process |
-| Packaged desktop app | **BROKEN — exits 1** | Phase 9/10 finding, still open; see [Downloads](#downloads) |
+
 | Live browser-driven UI test | **NOT PERFORMED** | browser interaction is blocked by the agent runtime's policy; the page's JS is instead executed from the shipped file by Node |
 
 ---
@@ -78,7 +79,7 @@ and the diagrams read their counts from the live registry.
 - [The state vocabulary](#the-state-vocabulary)
 - [Benchmarks](#benchmarks)
 - [Hardware truth](#hardware-truth)
-- [The twenty-four phases](#the-twenty-four-phases)
+- [The twenty-five phases](#the-twenty-five-phases)
 - [The plan's safety matrix, run](#the-plans-safety-matrix-run)
 - [Smooth and fast](#smooth-and-fast)
 - [Security model](#security-model)
@@ -114,7 +115,7 @@ and not a quiet success.
 
 ## Benchmarks
 
-### Suite growth, Phase 9 → Phase 24
+### Suite growth, Phase 9 → Phase 25
 
 <img src="assets/chart-suite-growth.svg" alt="Test suite growth from 875 passing with 126 failing, to 1286 passing with none failing at the close of Phase 20" width="100%"/>
 
@@ -168,7 +169,7 @@ moved, and the ledger now says exactly that. A simulated *car read* is still a s
 read — reading a labelled simulator is a real read — and that distinction is pinned by a
 test so it stays a decision rather than an accident.
 
-## The twenty-four phases
+## The twenty-five phases
 
 Each closed with a report in [`audit/`](audit), and each report's claims carry the
 command that produced them.
@@ -191,6 +192,7 @@ command that produced them.
 | **22 — Safety matrix** | the plan's §45 phrases run for real: ambiguous device words ask instead of actuating, offline control reports one honest state, a missing payload asks, an embedding outage stops masquerading as an empty index |
 | **23 — Deletion completeness** | the three defects parked as `xfail` in Phase 10 were fixed at their sources, so a forget means the same thing on both surfaces, checking a deletion no longer re-writes it, and deleted text leaves the process cache too |
 | **24 — Refusal vs detail** | a question stopped being labelled a refusal: `clarification` and `refusal` are now backend fields the page reads, `NEEDS DETAIL` became reachable for real, and a clarification no longer advertises a phantom approval |
+| **25 — Desktop truth** | the bundle that "exits 1" was a stale claim: it builds, launches and serves; the self-test now runs *on a broken install* (P0-D3), and the installer stopped promising a permission prompt the app never shows |
 
 ### Four kinds of "I ran nothing"
 
@@ -315,7 +317,7 @@ curl -s -H "X-JARVIS-Token: $TOKEN" -H 'Content-Type: application/json' \
      -d '{"text":"what is my battery"}' http://127.0.0.1:8765/command
 
 # Prove it to yourself:
-python -m pytest -q                       # 1342 passed, 0 failed
+python -m pytest -q                       # 1359 passed, 0 failed
 python benchmarks/acceptance_run.py       # re-measures the README's numbers
 python assets/build_charts.py && python assets/build_diagrams.py
 ```
@@ -336,9 +338,9 @@ jarvis/
   scheduler/   recurring jobs, runner with per-run re-authorization
   car/ home/ robotics/ watch/ vision/ research/ design/ coding/
   integrations/ IMAP/SMTP and CalDAV providers with local fallbacks
-tests/         48 modules · 1343 collected · includes the dashboard's own JS, run by Node
+tests/         49 modules · 1360 collected · includes the dashboard's own JS, run by Node
 dashboard/     single-file control panel; state rendered from server fields
-audit/         22 phase reports + 4 CSV matrices — the evidence behind this README
+audit/         27 phase reports + 4 CSV matrices — the evidence behind this README
 benchmarks/    acceptance_run.py and the JSON the charts are drawn from
 assets/        generated figures + the two generators that draw them
 app/           PyInstaller spec and bundle sources (see Downloads — currently broken)
@@ -346,14 +348,19 @@ app/           PyInstaller spec and bundle sources (see Downloads — currently 
 
 ## Downloads
 
-**Source only.** There is no packaged application to download, and publishing one would
-be a lie: the desktop bundle exits 1 on launch, which is an open Phase 9/10 finding
-rather than a packaging step I can wave away.
+**Source only** — and the reason changed in Phase 25. The bundle is no longer broken
+(it builds, ad-hoc signs, launches, and its server answers), so "it doesn't work" is no
+longer the argument. What still stops a published binary is different and holds: an
+ad-hoc signature is enough for *this* Mac, not for a build handed to strangers — that
+needs an Apple Developer identity, notarization, and a TCC-stable bundle id, which is a
+distribution decision rather than a packaging step I can quietly take.
 
 - [Download the source (`.zip`)](https://github.com/abhijeet1267/jarvis-forge/archive/refs/heads/main.zip)
 - [Download the source (`.tar.gz`)](https://github.com/abhijeet1267/jarvis-forge/archive/refs/heads/main.tar.gz)
-- Build it yourself with `python build_app.py` — and expect it to fail until that
-  blocker is closed. `install_app.sh` installs nothing until then.
+- Build it yourself: `python build_app.py` (into `./dist`), or `./install_app.sh` to move
+  it into `/Applications` — it keeps any previous install as `Jarvis Forge.app.previous`
+  rather than deleting it. Then `JARVIS_SELFTEST=1` on the built binary prints what the
+  app can actually reach, including the microphone and speech-recognition state.
 
 ## Known open items
 
@@ -387,7 +394,11 @@ better than a gap you have to discover:
   appliances confirmed) or requiring confirmation whenever the user named a *category*
   rather than a device — that is a permission-policy decision, so it is left open rather
   than decided inside a benchmark. `python benchmarks/safety_run.py` prints it as FAIL.
-- Desktop bundle exits 1 · no `read_file` route · no notification tool ·
+- **Microphone and speech recognition are not granted on this machine** (`7/9` in the
+  app's own self-test). The app reports the state and never asks for it: the Swift
+  helper calls `authorizationStatus` only, because a CLI helper that requested access
+  would either never answer or abort — so granting is a manual, per-machine step, not
+  something this repository can fix in code · no `read_file` route · no notification tool ·
   no `ProjectGraph` delete API ·
   risk tier is mutable at runtime (RT-3) · recovery retries too broadly (R-2) ·
   R-11–R-14 · hardware integration blocked · external calendar/mail credentials ·

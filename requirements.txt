@@ -9,3 +9,7 @@ python-multipart>=0.0.9
 # Test / dev
 pytest>=8.2
 pytest-asyncio>=0.23
+
+# Desktop bundle build (app/make_icon.py renders the .icns with it; build_app.py
+# raises without it, so `python build_app.py` on a fresh clone used to fail)
+pillow>=10.0
