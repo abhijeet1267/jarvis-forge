@@ -49,6 +49,7 @@ and the diagrams read their counts from the live registry.
 | Launched-server sweep | 8 read endpoints **200**, unauthenticated **401**, commands answered over the network | `python run.py serve`, then the sweep in `audit/PHASE21_SPEED_RESILIENCE_REPORT.md` §1 |
 | Audit chain integrity | `verify_chain() → ok=True` over **2 recorded actions** (an empty chain verifies trivially, so run two commands first) | `JARVIS_HOME=$(mktemp -d) python -c "import asyncio;from jarvis.core.models import CommandRequest as R;from jarvis.core.orchestrator import JarvisCore as J;c=J();[asyncio.run(c.handle(R(text=t,source='probe'))) for t in ('Jarvis, what time is it.','Jarvis, what is my laptop battery.')];print(c.audit.verify_chain())"` |
 | Regenerated figures parse as SVG | 7/7 | `python assets/build_charts.py && python assets/build_diagrams.py` |
+| CI on the pushed commit | `suite (3.11)` and `suite (3.12)` both **success** | `gh run list --workflow ci.yml --limit 1` |
 
 > On the author's own machine `~/.jarvis-forge` still reports `verify_chain()`
 > `ok=False` with **5 breaks** — residue from the pre-verification records and the
@@ -304,6 +305,12 @@ better than a gap you have to discover:
   premise holds instead of being skipped. Investigating that failure also found a real
   bug -- `created_at` is stored in UTC while "yesterday" is the user's local day, so
   dated recall resolved the wrong day for non-UTC users. Fixed, with a regression test.
+- **A green test can still be a laptop-shaped test**: the Phase 21 suite passed locally and
+  failed on the runner, because `search_files` asks Spotlight first and GitHub's macOS
+  image indexes a temp file the instant it is written, while a laptop does not. So an
+  assertion about the *walk* was being answered by the *index*. Fixed by pinning the code
+  path under test and adding the matching precedence test -- reasoning in
+  `audit/PHASE21_SPEED_RESILIENCE_REPORT.md` §8.
 - Desktop bundle exits 1 · no `read_file` route · no notification tool ·
   `POST /memory/{id}/forget` still over-claims · no `ProjectGraph` delete API ·
   risk tier is mutable at runtime (RT-3) · recovery retries too broadly (R-2) ·

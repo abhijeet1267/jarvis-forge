@@ -306,8 +306,12 @@ Both pushed to `origin/main` as fast-forwards on the author's own private reposi
 nothing force-pushed, no history rewritten. The first push attempt was rejected by a
 transient GitHub error (`remote: fatal error in commit_refs`) and succeeded on retry — the
 only re-run of a command in this phase, and it changed nothing but the transport.
-**CI after the first commit: failed (1 test). CI after the second: reported by
-`gh run list` when it finishes; this file will not claim green before it is.**
+
+**CI, verified rather than assumed:** run `36386425759` (the first commit) **failed** —
+`suite (3.12)` red on the test described above, which is the whole reason §8 exists. Run
+`36387528875` (the fix) **succeeded**, both matrix legs: `suite (3.11) :: success`,
+`suite (3.12) :: success`, 1m53s. Checked with `gh run view 36387528875 --json jobs` after
+it completed, not predicted while it was queued.
 
 **LIVE BROWSER DRIVE: NOT PERFORMED.** The proof in §1 is HTTP against a launched uvicorn
 server plus the spoken pipeline through `VoiceSession`, and §1-§4's sweep is HTTP against
