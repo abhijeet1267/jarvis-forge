@@ -86,8 +86,8 @@
   },
   {
    "phase": "21 speed",
-   "collected": 1303,
-   "passed": 1299,
+   "collected": 1304,
+   "passed": 1300,
    "failed": 0,
    "note": "bounded search, graceful source fallback"
   }

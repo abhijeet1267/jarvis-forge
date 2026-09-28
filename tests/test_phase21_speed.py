@@ -6,9 +6,12 @@ Two measured problems this covers:
   directory, against 0.36 s when it did match. The walk only stopped early on a
   find, and it descended into ``~/Library`` -- macOS' largest tree, and not where a
   user's documents live.
-* ``research`` failed every time with ``HTTP Error 406``: arXiv rejects urllib's
-  default ``Python-urllib/3.x`` User-Agent. The failure was reported honestly (no
-  invented results), but the capability was dead.
+* ``research`` died whenever arXiv answered ``HTTP Error 406``. The cause is a
+  client fingerprint at their edge, not the request: measured on one machine in one
+  minute, ``curl`` gets 200 while urllib and httpx both get 406, with a browser UA, a
+  self-identifying UA, HTTPS and HTTP/2 each tried and discarding itself. The failure
+  was reported honestly (no invented results) but the capability was dead, and one
+  refused source should not be able to kill a command that has other approved sources.
 
 The bound is only half the fix. A search that stops early must say so -- a
 "nothing found" that really means "I stopped looking" is the kind of confident
@@ -103,7 +106,19 @@ async def test_a_real_match_still_wins_before_the_cap(core, big_tree, monkeypatc
     assert any("important-report" in r["name"] for r in result.output["results"])
 
 
-async def test_pruned_directories_are_not_walked(core, tmp_path):
+def _no_index(monkeypatch):
+    """Take Spotlight out of the path so the *walk* is what is under test.
+
+    Whether the index has already seen a file written two milliseconds ago is the
+    runner's business: on a GitHub macOS runner it answers for paths under
+    /private/var/folders, on a laptop it does not. That made this assertion pass
+    locally and fail in CI while the code did the same thing both times.
+    """
+    monkeypatch.setattr(files_module.shutil, "which", lambda name: None)
+
+
+async def test_pruned_directories_are_not_walked(core, tmp_path, monkeypatch):
+    _no_index(monkeypatch)
     hidden = tmp_path / "Library" / "deep"
     hidden.mkdir(parents=True)
     (hidden / "wanted-file.txt").write_text("x")
@@ -114,8 +129,34 @@ async def test_pruned_directories_are_not_walked(core, tmp_path):
     assert "Library" in result.output["skipped"]
 
 
+async def test_an_indexed_match_in_a_pruned_directory_still_answers(core, tmp_path,
+                                                                   monkeypatch):
+    """Pruning bounds the walk, not the search.
+
+    The index reply is canned rather than real, because this is a claim about
+    precedence, not about whether macOS chose to index a temp file.
+    """
+    hidden = tmp_path / "Library" / "deep"
+    hidden.mkdir(parents=True)
+    target = hidden / "wanted-file.txt"
+    target.write_text("x")
+
+    monkeypatch.setattr(files_module.shutil, "which", lambda name: "/usr/bin/mdfind")
+
+    async def fake_run(argv, *args, **kwargs):
+        return 0, str(target), ""
+
+    monkeypatch.setattr(files_module, "run_command", fake_run)
+
+    result = await files_module.search_files(_ctx(core), query="wanted-file",
+                                             directory=str(tmp_path))
+
+    assert [r["path"] for r in result.output["results"]] == [str(target)]
+    assert result.output["scanned"] == 0, "the walk ran although the index answered"
+
+
 # ---------------------------------------------------------------------------
-# arXiv: the 406 was a missing User-Agent, not an outage
+# arXiv: a client refusal that is not a User-Agent problem
 # ---------------------------------------------------------------------------
 
 

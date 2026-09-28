@@ -181,7 +181,7 @@ def suite_history() -> dict:
         ("18 simulation", 1263, 1259, 0, "simulated actuation no longer audited success"),
         ("19 refusals", 1280, 1276, 0, "dropped clauses named; VERIFIED IN PART"),
         ("20 dated recall", 1290, 1286, 0, "recalling by day, echoes labelled"),
-        ("21 speed", 1303, 1299, 0, "bounded search, graceful source fallback"),
+        ("21 speed", 1304, 1300, 0, "bounded search, graceful source fallback"),
     ]
     return {"phases": [{"phase": p, "collected": c, "passed": q, "failed": f, "note": n}
                        for p, c, q, f, n in points]}

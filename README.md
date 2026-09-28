@@ -13,7 +13,7 @@ between *"the handler returned"* and *"the thing happened"* — and the twenty p
 measurement spent closing that gap, in the ledger and on the screen.
 
 [![ci](https://img.shields.io/github/actions/workflow/status/abhijeet1267/jarvis-forge/ci.yml?label=tests%20%C2%B7%20macos)](https://github.com/abhijeet1267/jarvis-forge/actions/workflows/ci.yml)
-[![suite](https://img.shields.io/badge/tests-1299%20passed%20%C2%B7%200%20failed-16a34a)](tests)
+[![suite](https://img.shields.io/badge/tests-1300%20passed%20%C2%B7%200%20failed-16a34a)](tests)
 [![tools](https://img.shields.io/badge/tools-127%20across%2015%20agents-2f6df6)](jarvis/tools)
 [![offline](https://img.shields.io/badge/LLM-off%20by%20default%20%C2%B7%20runs%20fully%20offline-0f172a)](jarvis/config.py)
 [![python](https://img.shields.io/badge/python-3.11%20%C2%B7%203.12%20(CI)-6b7688)](.github/workflows/ci.yml)
@@ -39,8 +39,8 @@ and the diagrams read their counts from the live registry.
 
 | Claim | Value | Reproduce |
 |---|---|---|
-| Test suite | **1299 passed · 0 failed · 1 skipped · 3 xfailed** (1303 collected) | `python -m pytest -q` |
-| Suite growth, Phase 9 → 21 | 875 passing / **126 failing** → 1299 passing / 0 failing at the Phase 21 close | `cat benchmarks/suite_history.json` |
+| Test suite | **1300 passed · 0 failed · 1 skipped · 3 xfailed** (1304 collected) | `python -m pytest -q` |
+| Suite growth, Phase 9 → 21 | 875 passing / **126 failing** → 1300 passing / 0 failing at the Phase 21 close | `cat benchmarks/suite_history.json` |
 | Tools registered | **127** | `python -c "from jarvis.core.orchestrator import JarvisCore as J; print(len(J().tools.names()))"` |
 | Confirmation-gated | **25** of 127 | `python assets/build_diagrams.py` (prints the live counts) |
 | Risk tiers | read 68 · low 33 · external 12 · high 11 · physical 3 | same |
@@ -253,7 +253,7 @@ curl -s -H "X-JARVIS-Token: $TOKEN" -H 'Content-Type: application/json' \
      -d '{"text":"what is my battery"}' http://127.0.0.1:8765/command
 
 # Prove it to yourself:
-python -m pytest -q                       # 1299 passed, 0 failed
+python -m pytest -q                       # 1300 passed, 0 failed
 python benchmarks/acceptance_run.py       # re-measures the README's numbers
 python assets/build_charts.py && python assets/build_diagrams.py
 ```
@@ -274,7 +274,7 @@ jarvis/
   scheduler/   recurring jobs, runner with per-run re-authorization
   car/ home/ robotics/ watch/ vision/ research/ design/ coding/
   integrations/ IMAP/SMTP and CalDAV providers with local fallbacks
-tests/         45 modules · 1303 collected · includes the dashboard's own JS, run by Node
+tests/         45 modules · 1304 collected · includes the dashboard's own JS, run by Node
 dashboard/     single-file control panel; state rendered from server fields
 audit/         22 phase reports + 4 CSV matrices — the evidence behind this README
 benchmarks/    acceptance_run.py and the JSON the charts are drawn from

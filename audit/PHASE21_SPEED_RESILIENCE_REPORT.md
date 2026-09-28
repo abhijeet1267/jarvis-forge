@@ -13,7 +13,7 @@ is everything actually working, what is slow, and what fails that should not.
 Full suite, `JARVIS_HOME` in a scratch directory, twice, same result:
 
 ```
-1299 passed, 1 skipped, 3 xfailed in 31.39s
+1300 passed, 1 skipped, 3 xfailed in 27.20s
 ```
 
 18 acceptance commands posted through the real ASGI app (`benchmarks/acceptance_run.py`):
@@ -187,13 +187,14 @@ still wrong, and it lived in the file the README tells readers to run.
 
 ## 6. Regressions
 
-Written red first, then green. `tests/test_phase21_speed.py` — **12 tests**:
+Written red first, then green. `tests/test_phase21_speed.py` — **13 tests**:
 
 | Test | Pins |
 |---|---|
 | `test_a_search_has_a_scan_cap_at_all` | the bound exists; no unbounded walk returns |
 | `test_pruned_directories_are_the_ones_nobody_means` | `Library`/`node_modules`/caches are the pruned set |
-| `test_pruned_directories_are_not_walked` | pruning is real: a file inside a pruned dir is not reached |
+| `test_pruned_directories_are_not_walked` | pruning is real: the walk does not descend a pruned name *(index taken out of the path — see §8)* |
+| `test_an_indexed_match_in_a_pruned_directory_still_answers` | pruning bounds the walk, not the search; the index answers first and the walk is skipped entirely |
 | `test_an_unmatched_search_stops_within_its_budget` | worst case (a miss) is bounded, not best case |
 | `test_a_stopped_early_search_says_so` | `truncated` and the entry count reach the reply and the audit detail |
 | `test_a_complete_search_does_not_claim_truncation` | the bound does not cry wolf |
@@ -204,7 +205,7 @@ Written red first, then green. `tests/test_phase21_speed.py` — **12 tests**:
 | `test_no_invented_papers_when_every_source_fails` | total failure stays a failure, with per-source errors |
 | `test_a_refused_source_is_queried_once_per_command` | the `is not` / compare-by-name regression |
 
-Suite: 1290 → **1303 collected, 1299 passed, 0 failed**. The `1 skipped` is
+Suite: 1290 → **1304 collected, 1300 passed, 0 failed**. The `1 skipped` is
 `tests/test_research.py:423`, which skips itself when arXiv is unreachable — i.e. the
 406 of §4, reported as a skip rather than passed off as green. The `3 xfailed` are the
 three Phase 10 memory-deletion limits documented at their own source (`_remember_outcome`
@@ -216,7 +217,7 @@ unchanged since they were written. Run twice, identical.
 - `README.md`: acceptance table and the **Smooth and fast** section rewritten against the
   freshly committed `benchmarks/*.json`; the arXiv entry in *known open items* now states
   the measured curl/urllib/httpx split instead of the earlier guess.
-- `benchmarks/acceptance_run.py`: `("21 speed", 1303, 1299, 0, …)` added to the phase
+- `benchmarks/acceptance_run.py`: `("21 speed", 1304, 1300, 0, …)` added to the phase
   series, and `suite_history.json` regenerated (the JSON had been written before that
   entry existed, so the growth chart was one phase behind the code).
 - `assets/build_charts.py` plotted every point from `benchmarks/suite_history.json` but
@@ -232,11 +233,59 @@ unchanged since they were written. Run twice, identical.
   the file; only the path was.
 - New: this report.
 
-## 8. Carried forward
+## 8. CI caught what this laptop let through
+
+The first pushed commit (`4085a5b`) **failed CI on Python 3.12** with one test:
+
+```
+FAILED tests/test_phase21_speed.py::test_pruned_directories_are_not_walked
+  assert [{'name': 'wanted-file.txt', 'path': '.../T/pytest-of-runner/.../Library/deep/wanted-file.txt', ...}] == []
+1 failed, 1274 passed, 25 skipped, 3 xfailed
+```
+
+Local: green. CI: red. The code is identical on both. The difference is **which search
+path answered**:
+
+* `search_files` asks Spotlight first (`mdfind -onlyin <base> …`), and falls back to the
+  bounded walk only when the index returns nothing.
+* Pruning applies to the *walk*. The index is not pruned — deliberately, §3 says so.
+* On the author's laptop, Spotlight has not indexed a file created two milliseconds ago
+  in a temp directory, so the walk ran, pruning held, the test saw `[]`.
+* On GitHub's macOS runner the same query *does* return the file, so the index answered
+  from inside `Library/`, and an assertion written as "pruned directories are never
+  searched" was contradicted by the other half of the same tool.
+
+So the test encoded a machine property, not a product property, and passed for the wrong
+reason. Fixed by naming the invariant the test actually owns:
+
+* `test_pruned_directories_are_not_walked` now takes the index out of the path
+  (`_no_index`, which stubs `shutil.which`) and asserts the **walk** does not descend a
+  pruned name. Deterministic on any machine.
+* `test_an_indexed_match_in_a_pruned_directory_still_answers` is new and asserts the
+  other side of the same design with a canned index reply: the index wins, the result
+  comes back, and `scanned == 0` proves the walk never ran. Nothing is left to whatever
+  macOS felt like indexing.
+
+Neither change weakens the product rule, and no permission or bound was touched to make
+CI green — the bound, the pruning and the disclosure all still fail a test if removed. The
+25 skips on the runner against 1 here are capability gates doing their job (no battery,
+no local hardware, no paired accounts), which is the pattern established when the Phase 20
+runner failure was diagnosed rather than papered over.
+
+Two claims in this report and in the test file's own header were also wrong in the same
+direction — written from a plausible mechanism instead of from measurement — and are
+corrected here rather than quietly: §6's table row for
+`test_pruned_directories_are_not_walked` said "a file inside a pruned dir is not reached"
+(it is, via the index, and that is by design), and the module docstring asserted the 406
+was urllib's default `Python-urllib/3.x` User-Agent, which §4 measured and disproved.
+Both now state the precedence and the fingerprint finding.
+
+## 9. Carried forward
 
 Made true here: worst-case search latency; a refused upstream source no longer failing a
 command; a published benchmark harness that double-counted confirmed commands; a chart
-whose title disagreed with its data; `benchmarks/suite_history.json` lagging the code.
+whose title disagreed with its data; `benchmarks/suite_history.json` lagging the code; and
+one test whose green colour was a property of the laptop that ran it (§8).
 
 Still open, unchanged in kind: **15-F** arXiv's client refusal (now degraded gracefully,
 still not working — 1,722 ms and no arXiv results per call) · **19-B** refusal vs
@@ -245,14 +294,20 @@ notification tool, `POST /memory/{id}/forget` overclaims · **15-H** which calen
 was read · desktop bundle exits 1 · hardware **BLOCKED** (nothing to pair) · LLM planner ·
 multi-step unattended workflows · 16-F's security-event surface, a user decision.
 
-## 9. Git and browser
+## 10. Git and browser
 
-Committed with this phase: `jarvis/tools/files.py`, `jarvis/tools/research.py`,
-`jarvis/research/sources.py`, `tests/test_phase21_speed.py`, `benchmarks/acceptance_run.py`,
-`benchmarks/*.json`, `assets/build_charts.py`, `assets/*.svg`, `README.md`, this report.
-Pushed to `origin/main` (a fast-forward on the author's own private repository; nothing
-force-pushed, no history rewritten). CI result is reported where it ran — this file does
-not pre-claim a green check that had not finished when it was written.
+Two commits carry this phase. The first (`4085a5b`) shipped the bounded walk, the source
+fallback and the re-measured documents — and failed CI on Python 3.12 for the reason in §8.
+The second rewrites that one test so it asserts the walk instead of the machine, adds the
+precedence test, corrects the two claims written from mechanism rather than measurement,
+and re-syncs every published count (1304 collected / 1300 passed).
+
+Both pushed to `origin/main` as fast-forwards on the author's own private repository;
+nothing force-pushed, no history rewritten. The first push attempt was rejected by a
+transient GitHub error (`remote: fatal error in commit_refs`) and succeeded on retry — the
+only re-run of a command in this phase, and it changed nothing but the transport.
+**CI after the first commit: failed (1 test). CI after the second: reported by
+`gh run list` when it finishes; this file will not claim green before it is.**
 
 **LIVE BROWSER DRIVE: NOT PERFORMED.** The proof in §1 is HTTP against a launched uvicorn
 server plus the spoken pipeline through `VoiceSession`, and §1-§4's sweep is HTTP against
