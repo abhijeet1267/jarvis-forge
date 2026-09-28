@@ -399,6 +399,31 @@ class HomeGateway:
 
     # -- lookup ------------------------------------------------------------
 
+    def ambiguous_matches(self, query: str) -> List[ZoneDevice]:
+        """Devices that tie for a request the user did not disambiguate.
+
+        ``resolve`` has to answer *something* for its read-side callers, and its
+        first-wins tie-break is how "turn on the light" picked the kitchen light
+        out of four candidates when no room was named. Anything about to change a
+        device's state has to ask this first: an actuation the user cannot point at
+        in the answer is not a successful action, it is a guess that got executed.
+        """
+        q = _normalise(query)
+        if not q:
+            return []
+        # A name or id the user actually said is never ambiguous.
+        if q in self._by_id or any(q == device.name.lower() for device in self.devices):
+            return []
+
+        best, tied = 0, []
+        for device in self.devices:
+            score = self._score(device, q)
+            if score > best:
+                best, tied = score, [device]
+            elif score == best and score:
+                tied.append(device)
+        return tied if len(tied) > 1 else []
+
     def resolve(self, query: str) -> Optional[ZoneDevice]:
         q = _normalise(query)
         if not q:

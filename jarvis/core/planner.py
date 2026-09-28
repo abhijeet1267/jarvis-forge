@@ -604,8 +604,13 @@ class RulePlanner:
         remember", so the broader recall pattern would otherwise claim it.
         """
         # --- overview ------------------------------------------------------
+        # "what do you remember about the deploy runbook" names a topic and wants
+        # its content; answering it with item counts is a non-answer. The overview
+        # keeps the bare phrasings, which really do ask for the state of memory.
+        has_topic = re.search(
+            r"\bwhat do you (?:remember|know)\b\s+(?:about|on|regarding|of)\s+\S", text)
         if re.search(r"\b(what do you (remember|know)|memory (overview|status|summary)|"
-                     r"what's in your memory|whats in your memory)\b", text):
+                     r"what's in your memory|whats in your memory)\b", text) and not has_topic:
             return Intent("memory_overview", tool="memory_overview", params={})
 
         # --- export --------------------------------------------------------
@@ -693,6 +698,9 @@ class RulePlanner:
             raw,
         )
         query = (query or "").strip()
+        # "what do you remember about X" hands the extractor "about X"; the
+        # preposition is not part of what the user is looking for.
+        query = re.sub(r"^(?:about|on|regarding|of|over|if|whether)\s+", "", query, flags=re.I).strip()
 
         # A date word is a range to read, not a phrase to search for. Turning
         # "yesterday" into the query string "yesterday work" made an undated,
@@ -1455,6 +1463,23 @@ class RulePlanner:
             return Intent("send_email", tool="send_email", params={"draft_id": pending["draft_id"]})
 
         has_email_noun = re.search(r"\b(e-?mails?|mail|inbox|unread)\b", text)
+        # "send to Arun" names a verb and a recipient and nothing else. That is a
+        # missing payload, which the plan's safety list calls Clarify -- not an
+        # unrecognised sentence, and never a guess at what to send.
+        bare_to = self._match(r"\b(?:send|forward|dispatch)\s+to\s+([A-Za-z][A-Za-z' .-]{1,40}?)\s*[.!]?$", raw)
+        if bare_to and not has_email_noun:
+            who = re.sub(r"^(?:my|our|the)\s+", "", bare_to, flags=re.I).strip()
+            if who.split()[0].lower() not in {
+                "phone", "laptop", "watch", "tablet", "it", "this", "that", "him", "her", "them",
+            }:
+                return Intent(
+                    "send_email",
+                    note=(
+                        f"Send what to {who}, and by which medium? Draft it and I will "
+                        f'ask before sending: "send an email to {who} saying ...".'
+                    ),
+                )
+
         # "write a reply to x@y.com" names no medium, but a drafting verb plus
         # "reply" is a mail request in practice.
         has_reply_intent = "reply" in text and re.search(r"\b(draft|compose|write)\b", text)
@@ -1479,6 +1504,29 @@ class RulePlanner:
                     tool="draft_email",
                     params={"to": target, "subject": "", "body": ""},
                 )
+
+        # "send an email to Priya saying the build is green" carries a recipient and
+        # a body, so it is a drafting request: the sending verb alone never reaches
+        # send_email, which still needs an explicit address (below) and a
+        # confirmation. Phrased with a person instead of an address, the honest next
+        # step is the draft, and the contact lookup says plainly what it could not resolve.
+        send_phrased = re.search(
+            r"\b(?:send|fire off|forward)\b[^.]*?\bto\s+(?!\S+@)([A-Za-z][A-Za-z' .-]{1,40}?)\s+"
+            r"\b(?:saying|that say|with the subject)\b\s+(.+)$",
+            raw,
+            re.I,
+        )
+        if send_phrased:
+            who = re.sub(r"^(?:my|our|the)\s+", "", send_phrased.group(1), flags=re.I).strip()
+            return Intent(
+                "draft_email",
+                tool="draft_email",
+                params={
+                    "to": self._arg(who),
+                    "subject": "",
+                    "body": self._arg(send_phrased.group(2)),
+                },
+            )
 
         # --- send ---------------------------------------------------------
         # Requires an explicit sending verb. Merely naming an address does not
@@ -1712,6 +1760,22 @@ class RulePlanner:
             if "temperature" in dev or dev in ("ac", "aircon", "heater"):
                 dev = "ac"
             level = int(m.group("lvl")) if m.group("lvl") else None
+            from ..home.gateway import get_home_gateway
+
+            tied = get_home_gateway().ambiguous_matches(dev)
+            if tied:
+                # The user named a category, not a device. Choosing one and
+                # actuating it was the old behaviour: "turn on the light" reached
+                # the kitchen light out of four, and the answer never said it had
+                # chosen. A question costs one turn; a wrong actuation costs trust.
+                return Intent(
+                    "home_control",
+                    note=(
+                        f"Which {dev} did you mean -- "
+                        + ", ".join(d.name for d in tied)
+                        + "? Name the room and I will switch it."
+                    ),
+                )
             return Intent(
                 "home_control",
                 tool="control_home_device",

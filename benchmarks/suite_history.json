@@ -90,6 +90,13 @@
    "passed": 1300,
    "failed": 0,
    "note": "bounded search, graceful source fallback"
+  },
+  {
+   "phase": "22 safety matrix",
+   "collected": 1321,
+   "passed": 1317,
+   "failed": 0,
+   "note": "ambiguous actuation refused; outages disclosed"
   }
  ]
 }

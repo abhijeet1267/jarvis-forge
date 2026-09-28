@@ -152,11 +152,20 @@ async def search_memory(ctx: ToolContext, query: str = "", since: str = "",
     outcome = hybrid_search(query, limit=5, store=ctx.memory)
     ranked = outcome["results"]
     retrieval = outcome["retrieval"]
+    # The retrieval block promised to say which retrievers contributed; the reason
+    # one of them did not was being discarded two layers down. A recalled fact and a
+    # recall that lost its semantic half deserve different sentences.
+    degraded = ""
+    if retrieval.get("error"):
+        degraded = (
+            f" (semantic search was unavailable, so this is keyword-only: "
+            f"{retrieval['error']})"
+        )
 
     if not ranked:
         return ok(
             "search_memory",
-            f"I have nothing stored about {query!r} yet.",
+            f"I have nothing stored about {query!r} yet.{degraded}",
             device=ctx.device_id,
             results=[],
             retrieval=retrieval,
@@ -178,7 +187,7 @@ async def search_memory(ctx: ToolContext, query: str = "", since: str = "",
     )
     return ok(
         "search_memory",
-        f"Here is what I remember{clause}: {top['content']}",
+        f"Here is what I remember{clause}: {top['content']}{degraded}",
         device=ctx.device_id,
         query=query,
         results=results,

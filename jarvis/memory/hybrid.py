@@ -175,5 +175,8 @@ def describe_retrieval(store: Optional[MemoryStore] = None, index: Optional[Vect
     return {
         "mode": "hybrid" if stats["indexed"] else "keyword_only",
         "index": stats,
+        # An index can be empty because nothing was ever embedded, or because the
+        # embedder is failing. Only the second is a problem the user can act on.
+        "last_error": stats.get("last_error", ""),
         "fusion": "reciprocal rank fusion",
     }

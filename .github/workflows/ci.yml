@@ -52,6 +52,7 @@ jobs:
       - name: Regenerate benchmarks and figures
         run: |
           python benchmarks/acceptance_run.py
+          python benchmarks/safety_run.py
           python assets/build_charts.py
           python assets/build_diagrams.py
           python - <<'PY'

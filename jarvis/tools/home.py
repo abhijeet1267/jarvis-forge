@@ -177,6 +177,17 @@ async def control_home_device(
     gw = get_home_gateway()
     if not device:
         return fail("control_home_device", "Which device should I control?", device=ctx.device_id)
+    tied = gw.ambiguous_matches(device)
+    if tied:
+        return fail(
+            "control_home_device",
+            f"Which {device} did you mean -- "
+            + ", ".join(d.name for d in tied)
+            + "? I will not switch one of them on a guess.",
+            device=ctx.device_id,
+            candidates=[d.name for d in tied],
+            ambiguous=True,
+        )
     target = gw.resolve(device)
     if target is None:
         return fail(
@@ -220,13 +231,23 @@ async def control_home_device(
     outcome = gw.control(target, **kwargs)
 
     if outcome.offline:
+        # "I could not on Kitchen light" was the sentence this branch produced: an
+        # action token used where a verb belongs. And it reached the ledger as
+        # `unverified` while the offline routine on the same gateway reported
+        # `failure` -- one observed condition, two recorded ones.
+        attempted = {
+            "on": f"switch on {target.name}",
+            "off": f"switch off {target.name}",
+        }.get(action) or f"{action} {target.name}" + (f" to {value}" if value is not None else "")
         return ok(
             "control_home_device",
-            f"Your home gateway is offline, so I could not {action} {target.name}. No device was switched.",
+            f"Your home gateway is offline, so I could not {attempted}. No device was switched.",
             device=ctx.device_id,
+            verification=Verification.FAILED,
             device_id=target.device_id,
             device_name=target.name,
             action=action,
+            provider_status="unavailable",
             delivered=False,
             verified=False,
             offline=True,

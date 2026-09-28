@@ -24,6 +24,27 @@ log = get_logger("memory.vector")
 #: Only re-embed when the text actually changed, tracked by this column.
 _STALE_MARKER = ""
 
+#: The most recent embedding failure this process observed. Deliberately
+#: process-wide rather than per-instance: an empty vector index and a broken
+#: embedder look identical in ``stats()`` otherwise, and /health would be
+#: reporting a configuration ("an endpoint is set") instead of an observation
+#: ("the endpoint answered / did not answer").
+_LAST_ERROR = ""
+
+
+def record_embedding_error(exc: BaseException) -> None:
+    global _LAST_ERROR
+    _LAST_ERROR = f"{type(exc).__name__}: {exc}"
+
+
+def clear_embedding_error() -> None:
+    global _LAST_ERROR
+    _LAST_ERROR = ""
+
+
+def last_embedding_error() -> str:
+    return _LAST_ERROR
+
 
 @dataclass
 class VectorHit:
@@ -47,6 +68,7 @@ class VectorIndex:
         try:
             vector = self.embedder.embed(content)
         except Exception as exc:
+            record_embedding_error(exc)
             log.info("embedding failed", extra_fields={"memory_id": memory_id, "error": str(exc)})
             return False
 
@@ -99,8 +121,13 @@ class VectorIndex:
         try:
             query_vector = self.embedder.embed(query)
         except Exception as exc:
-            log.info("query embedding failed", extra_fields={"error": str(exc)})
-            return []
+            # Recorded, then raised: the caller that owns the "never let the vector
+            # layer break search" rule is hybrid_search, and it already reports the
+            # reason in its retrieval block. Swallowing it *here* turned "the model is
+            # down" into "nothing matched semantically" -- two different claims about
+            # the world, one indistinguishable result.
+            record_embedding_error(exc)
+            raise
 
         hits: List[VectorHit] = []
         for memory_id, vector in self._load():
@@ -125,6 +152,7 @@ class VectorIndex:
             "pending": max(0, total_n - indexed_n),
             "coverage": round(indexed_n / total_n, 3) if total_n else 1.0,
             "embedder": self.embedder.describe(),
+            "last_error": _LAST_ERROR,
         }
 
     def rebuild(self) -> int:
