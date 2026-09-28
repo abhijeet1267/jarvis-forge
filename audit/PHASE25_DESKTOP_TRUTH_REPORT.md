@@ -211,7 +211,12 @@ Committed with this phase: `app/launcher.py`, `install_app.sh`, `requirements.tx
 `.github/workflows/ci.yml`,
 `tests/test_phase25_desktop_truth.py`, `benchmarks/*` (including the phase-25 history
 point), `assets/*.svg`, `README.md`, this report. Pushed to `origin/main` as a
-fast-forward; nothing force-pushed. CI is recorded after it runs, not before.
+fast-forward; nothing force-pushed. **CI, once the run existed:** `36467330920` on
+`774fb46` finished `success` on both matrix legs, and the new step is not decorative --
+its log shows the runner really building: `· rendering icon` → `codesign verify: ok` →
+`Built: /var/folders/.../Jarvis Forge.app`, with the step conclusion `success`. So the
+sentence in *Downloads* that tells a reader to run `python build_app.py` is now verified
+on every push, on a clean checkout, rather than asserted from one machine.
 
 **LIVE BROWSER DRIVE: NOT PERFORMED.** The desktop evidence in §1-§2 is a real built
 bundle launched as a subprocess and reached over HTTP, plus the bundle's own self-test
