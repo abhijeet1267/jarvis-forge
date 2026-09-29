@@ -389,6 +389,26 @@ new property, so the next reader does not "fix" the guard back.
 
 ## 10. Git
 
-Committed and pushed to `main` on `abhijeet1267/jarvis-forge`; CI (macOS, 3.11 + 3.12,
-including the desktop-bundle build step) reported after the push, with its verdict copied
-into this report only once it exists -- the rule this program has kept since Phase 21.
+Committed and pushed to `main` on `abhijeet1267/jarvis-forge`:
+
+```
+77fbfa7  Retry on what may safely run twice, not on how the error sounded
+         19 files changed, 1629 insertions(+), 173 deletions(-)
+```
+
+CI on that commit -- run `36543621386`, 2m3s, verdict copied from the runner after it
+finished rather than predicted:
+
+```
+$ gh run view 36543621386 --json conclusion,jobs
+conclusion: success
+  suite (3.11)  success
+  suite (3.12)  success
+```
+
+Two steps report `skipped` on 3.12 by design (`Build the desktop bundle`,
+`Upload measured benchmark data` run on 3.11 only, added in Phase 25). The runner had no
+complaints about this phase's changes: no test moved because of a laptop/runner difference
+this time -- the three tests that had to change are the ones listed in §7, and they changed
+because they encoded the behaviour being replaced, not because of the environment.
+
