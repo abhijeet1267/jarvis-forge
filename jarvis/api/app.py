@@ -750,38 +750,47 @@ async def command_stream(
 async def task_lifecycle(job_id: str, action: str, _: None = Protected) -> Dict[str, Any]:
     """Pause, resume, retry or cancel a job.
 
-    None of these verbs execute anything, and the response now carries that:
-    ``executed`` is the number of actions this call ran, and ``note`` is the
-    manager's own sentence about what changed. Before Phase 26 a retry answered
-    with a job set to ``running`` whose failure text had been deleted, and
-    nothing had run.
+    ``retry`` is the one verb that runs anything: it re-issues the job's failed
+    steps through the permission gate (Phase 27), so ``executed`` says how many
+    actions this call actually put in front of an agent and a gated step answers
+    with a fresh ``confirmation_id`` instead of running. The other three only move
+    state, and ``executed`` is 0 for them -- the lesson from Phase 26, where a
+    retry reported a job ``running`` that nothing had dispatched.
     """
+    core = get_core()
     handlers = {
-        "pause": get_core().tasks.pause,
-        "resume": get_core().tasks.resume,
-        "retry": get_core().tasks.retry,
-        "cancel": get_core().tasks.cancel,
+        "pause": core.tasks.pause,
+        "resume": core.tasks.resume,
+        "cancel": core.tasks.cancel,
     }
-    handler = handlers.get(action)
-    if handler is None:
-        raise HTTPException(
-            status_code=400,
-            detail=f"unknown action {action!r}; expected one of {sorted(handlers)}",
-        )
-    report = handler(job_id)
+    if action == "retry":
+        outcome = await core.retry_job(job_id)
+        report = outcome.report
+        confirmation = outcome.response.confirmation_id if outcome.response else ""
+    else:
+        handler = handlers.get(action)
+        if handler is None:
+            raise HTTPException(
+                status_code=400,
+                detail=f"unknown action {action!r}; expected one of "
+                       f"{sorted([*handlers, 'retry'])}",
+            )
+        report = handler(job_id)
+        confirmation = ""
     if not report.accepted:
         reason = report.reason or "the job cannot be " + action + "ed"
         raise HTTPException(
             status_code=404 if report.reason == "no such job" else 409, detail=reason
         )
 
-    job = get_core().tasks.get(job_id)
+    job = core.tasks.get(job_id)
     return {
         "ok": True,
         "action": action,
         "executed": report.executed,
         "steps_touched": report.steps_touched,
         "note": report.message,
+        "confirmation_id": confirmation,
         "job": job,
     }
 

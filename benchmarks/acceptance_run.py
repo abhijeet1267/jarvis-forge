@@ -187,6 +187,7 @@ def suite_history() -> dict:
         ("24 refusal vs detail", 1343, 1342, 0, "a question stopped being labelled a refusal"),
         ("25 desktop truth", 1360, 1359, 0, "the self-test runs on a broken install"),
         ("26 recovery trust", 1417, 1417, 0, "retry keyed on re-running, frozen risk tiers"),
+        ("27 job re-run", 1433, 1433, 0, "a failed step re-runs through the gate"),
     ]
     return {"phases": [{"phase": p, "collected": c, "passed": q, "failed": f, "note": n}
                        for p, c, q, f, n in points]}

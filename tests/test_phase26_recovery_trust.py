@@ -325,13 +325,29 @@ def test_a_lifecycle_verb_says_what_the_caller_has_to_do_next(core):
         report.message)
 
 
-def test_the_retry_endpoint_reports_zero_executions(client, core):
-    job_id = _job(core)
-    body = client.post(f"/tasks/{job_id}/retry").json()
-    assert body["ok"] is True
+def test_a_retry_that_cannot_run_reports_zero_and_no_fake_state(client, core):
+    """Phase 26's claim, kept true after Phase 27 gave the verb a dispatcher.
+
+    A retry *can* run things now, so this test pins the half that must never
+    come back: when the re-issued step needs an approval nobody has given, the
+    answer is ``executed: 0`` and the job's real state -- never a ``running``
+    job invented by the verb itself.
+    """
+    victim = "/tmp/phase26-gated-retry.txt"
+    job = core.tasks.create(
+        "delete the file", ["delete_file"],
+        planned=[PlannedAction(step_id=1, tool="delete_file",
+                               params={"path": victim}, device="laptop_main")])
+    seq = core.tasks.get(job.job_id)["steps"][0]["seq"]
+    core.tasks.update_step(job.job_id, "delete_file", ActionStatus.FAILED,
+                           "device did not answer", seq=seq)
+    core.tasks.refresh_status(job.job_id)
+
+    body = client.post(f"/tasks/{job.job_id}/retry").json()
     assert body["executed"] == 0, body
     assert body["job"]["status"] != "running", body["job"]["status"]
-    assert "nothing" in body["note"].lower(), body
+    assert body["confirmation_id"], "a gated re-run must offer a fresh approval"
+    assert "approval" in body["note"].lower(), body["note"]
 
 
 def test_an_unknown_job_is_still_a_404(client):

@@ -198,25 +198,33 @@ async def test_remember_then_recall(core: JarvisCore, make_request) -> None:
 
 
 async def test_audit_records_every_action(core: JarvisCore, make_request) -> None:
-    before = len(core.audit.recent(limit=200))
-    await core.handle(make_request("what is my battery"))
-    after = core.audit.recent(limit=200)
+    # Scoped to this command's own session. It used to compare two
+    # ``recent(limit=200)`` window lengths, which stopped meaning anything once
+    # the shared session database held more than 200 rows -- a later phase's
+    # tests could make it pass or fail without this one doing anything different.
+    session = "p-pipeline-every-action"
+    await core.handle(make_request("what is my battery", session_id=session))
 
-    assert len(after) > before
-    assert any(row["tool"] == "battery_status" for row in after)
+    rows = [r for r in core.audit.recent(limit=500) if r.get("session_id") == session]
+    assert rows, "the command produced no ledger row at all"
+    assert any(row["tool"] == "battery_status" for row in rows)
 
 
 @pytest.mark.skipif(not HAS_BATTERY, reason="needs a real battery reading to audit")
 async def test_audit_result_is_a_status_token_not_a_message(core: JarvisCore, make_request) -> None:
     """The result column must stay filterable, so successes never appear as failures."""
-    await core.handle(make_request("what is my battery"))
+    session = "p-pipeline-status-token"
+    await core.handle(make_request("what is my battery", session_id=session))
 
-    rows = core.audit.recent(limit=50)
+    rows = [r for r in core.audit.recent(limit=500) if r.get("session_id") == session]
     battery_rows = [r for r in rows if r["tool"] == "battery_status"]
     assert battery_rows
     assert battery_rows[0]["result"] == "success"
 
-    failure_tools = {r["tool"] for r in core.audit.failures(limit=50)}
+    failure_tools = {
+        r["tool"] for r in core.audit.failures(limit=500)
+        if r.get("session_id") == session
+    }
     assert "battery_status" not in failure_tools
 
 

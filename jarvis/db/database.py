@@ -81,7 +81,9 @@ CREATE TABLE IF NOT EXISTS task_steps (
     status       TEXT NOT NULL DEFAULT 'pending',
     detail       TEXT DEFAULT '',
     seq          INTEGER DEFAULT 0,
-    confirmation_id TEXT DEFAULT ''
+    confirmation_id TEXT DEFAULT '',
+    params       TEXT DEFAULT '{}',
+    device       TEXT DEFAULT ''
 );
 
 CREATE TABLE IF NOT EXISTS tools (
@@ -417,8 +419,15 @@ class Database:
             # Phase 14: a workflow step that stopped waiting for an approval has
             # to be findable from the approval, which arrives in a later,
             # unrelated request. Without this link the job stayed `running`.
+            # Phase 27: a step also has to survive being *re-run*. The row kept
+            # the tool's name and none of what it was asked to do, so nothing
+            # could re-issue it; `name` already holds the tool, so only the
+            # missing two are added. Pre-Phase-27 rows keep the defaults and are
+            # refused by the gate rather than guessed at.
             "task_steps": {
                 "confirmation_id": "TEXT DEFAULT ''",
+                "params": "TEXT DEFAULT '{}'",
+                "device": "TEXT DEFAULT ''",
             },
             # v0.9 memory lifecycle. Existing rows default to a general,
             # medium-importance, non-expiring memory -- unchanged behaviour.

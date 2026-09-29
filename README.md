@@ -9,11 +9,11 @@ world afterwards**, and written to a tamper-evident audit chain. It runs with no
 key, no network and no vendor — an LLM is optional and off by default.
 
 What this repository is mostly about is not features. It is about the difference
-between *"the handler returned"* and *"the thing happened"* — and the twenty-six phases of
+between *"the handler returned"* and *"the thing happened"* — and the twenty-seven phases of
 measurement spent closing that gap, in the ledger and on the screen.
 
 [![ci](https://img.shields.io/github/actions/workflow/status/abhijeet1267/jarvis-forge/ci.yml?label=tests%20%C2%B7%20macos)](https://github.com/abhijeet1267/jarvis-forge/actions/workflows/ci.yml)
-[![suite](https://img.shields.io/badge/tests-1417%20passed%20%C2%B7%200%20failed-16a34a)](tests)
+[![suite](https://img.shields.io/badge/tests-1433%20passed%20%C2%B7%200%20failed-16a34a)](tests)
 [![tools](https://img.shields.io/badge/tools-127%20across%2015%20agents-2f6df6)](jarvis/tools)
 [![offline](https://img.shields.io/badge/LLM-off%20by%20default%20%C2%B7%20runs%20fully%20offline-0f172a)](jarvis/config.py)
 [![python](https://img.shields.io/badge/python-3.11%20%C2%B7%203.12%20(CI)-6b7688)](.github/workflows/ci.yml)
@@ -39,8 +39,8 @@ and the diagrams read their counts from the live registry.
 
 | Claim | Value | Reproduce |
 |---|---|---|
-| Test suite | **1417 passed · 0 failed · 0 skipped · 0 xfailed** (1417 collected) | `python -m pytest -q` |
-| Suite growth, Phase 9 → 26 | 875 passing / **126 failing** → 1417 passing / 0 failing / **0 xfailed** at the Phase 26 close | `cat benchmarks/suite_history.json` |
+| Test suite | **1433 passed · 0 failed · 0 skipped · 0 xfailed** (1433 collected) | `python -m pytest -q` |
+| Suite growth, Phase 9 → 27 | 875 passing / **126 failing** → 1433 passing / 0 failing / **0 xfailed** at the Phase 27 close | `cat benchmarks/suite_history.json` |
 | Tools registered | **127** | `python -c "from jarvis.core.orchestrator import JarvisCore as J; print(len(J().tools.names()))"` |
 | Confirmation-gated | **25** of 127 | `python assets/build_diagrams.py` (prints the live counts) |
 | Risk tiers | read 68 · low 33 · external 12 · high 11 · physical 3 | same |
@@ -80,7 +80,7 @@ and the diagrams read their counts from the live registry.
 - [Benchmarks](#benchmarks)
 - [Hardware truth](#hardware-truth)
 - [What the system says when something fails](#what-the-system-says-when-something-fails)
-- [The twenty-six phases](#the-twenty-six-phases)
+- [The twenty-seven phases](#the-twenty-seven-phases)
 - [The plan's safety matrix, run](#the-plans-safety-matrix-run)
 - [Smooth and fast](#smooth-and-fast)
 - [Security model](#security-model)
@@ -116,9 +116,9 @@ and not a quiet success.
 
 ## Benchmarks
 
-### Suite growth, Phase 9 → Phase 26
+### Suite growth, Phase 9 → Phase 27
 
-<img src="assets/chart-suite-growth.svg" alt="Test suite growth from 875 passing with 126 failing, to 1417 passing with none failing at the close of Phase 26" width="100%"/>
+<img src="assets/chart-suite-growth.svg" alt="Test suite growth from 875 passing with 126 failing, to 1433 passing with none failing at the close of Phase 27" width="100%"/>
 
 Phase 9 inherited **126 failing tests**. The cause was a single import line in
 `jarvis/tools/base.py` that left `Verification` undefined, so every tool result raised
@@ -131,25 +131,25 @@ read auditable as a success.
 
 | Command | State the user sees | Audit token | ms |
 |---|---|---|---|
-| show me my laptop battery | VERIFIED | success | 23 |
-| plan my day | VERIFIED | success | 8 |
+| show me my laptop battery | VERIFIED | success | 18 |
+| plan my day | VERIFIED | success | 5 |
 | remember that this is my AMR project | VERIFIED | success | 5 |
-| what did I work on yesterday | VERIFIED | success | 5 |
+| what did I work on yesterday | VERIFIED | success | 4 |
 | check my car fuel | **UNAVAILABLE** | failure | 5 |
-| turn on study mode | **UNAVAILABLE** | failure | 8 |
-| transfer this file to my phone | **NOTHING EXECUTED** | no_action | 7 |
+| turn on study mode | **UNAVAILABLE** | failure | 4 |
+| transfer this file to my phone | **NOTHING EXECUTED** | no_action | 5 |
 | design this system | **NOT RECOGNISED** | no_action | 4 |
-| schedule two hours for project work tomorrow | **NEEDS DETAIL** | no_action | 6 |
-| draft an email to my teammate | **FAILED** | failure | 8 |
-| research this idea | VERIFIED (degraded) | success | 1,561 |
-| find my latest project report | VERIFIED | success | 153 |
+| schedule two hours for project work tomorrow | **NEEDS DETAIL** | no_action | 4 |
+| draft an email to my teammate | **FAILED** | failure | 5 |
+| research this idea | VERIFIED (degraded) | success | 1,903 |
+| find my latest project report | VERIFIED | success | 80 |
 
-Median command: **6 ms**; the 17 measured commands sum to **1,817 ms** here, where the
+Median command: **4 ms**; the 17 measured commands sum to **2,060 ms** here, where the
 previous published run summed to 2,961 ms. That gap is the sandbox, not the code: this run
 had `$HOME` pointed at a scratch tree, so `find my latest project report` measured an empty
-walk (153 ms) instead of the real home directory it walks on a laptop (346-1,217 ms across
+walk (80 ms) instead of the real home directory it walks on a laptop (346-1,217 ms across
 five runs -- it tracks whatever the disk is doing). The search root is inside each row's
-recorded reply, so either run can be told apart after the fact. `research` spends ~1.6 s
+recorded reply, so either run can be told apart after the fact. `research` spends ~1.9 s
 discovering that arXiv refuses this client (see below) and then answering from the local
 corpus instead. Everything else is stable to within a couple of ms.
 
@@ -173,7 +173,7 @@ moved, and the ledger now says exactly that. A simulated *car read* is still a s
 read — reading a labelled simulator is a real read — and that distinction is pinned by a
 test so it stays a decision rather than an accident.
 
-## The twenty-six phases
+## The twenty-seven phases
 
 Each closed with a report in [`audit/`](audit), and each report's claims carry the
 command that produced them.
@@ -198,6 +198,7 @@ command that produced them.
 | **24 — Refusal vs detail** | a question stopped being labelled a refusal: `clarification` and `refusal` are now backend fields the page reads, `NEEDS DETAIL` became reachable for real, and a clarification no longer advertises a phantom approval |
 | **25 — Desktop truth** | the bundle that "exits 1" was a stale claim: it builds, launches and serves; the self-test now runs *on a broken install* (P0-D3), and the installer stopped promising a permission prompt the app never shows |
 | **26 — Recovery trust** | re-running is granted by declaration, not by error text (45 tools → 0); `ToolSpec` is frozen, so the risk tier the gate reads cannot be rewritten under it; a retried job says "nothing ran" instead of `running`; and a failure that cannot be recorded is counted instead of vanishing |
+| **27 — A retry that retries** | plan §31's `retry` was a record with no dispatch behind it. A step now stores its own parameters, and `POST /tasks/{id}/retry` re-issues the failed steps through the permission gate -- a gated step mints a fresh approval, a step whose parameters were never stored is refused rather than guessed at |
 
 ### Four kinds of "I ran nothing"
 
@@ -230,7 +231,7 @@ one-line summaries:
 |---|---|---|
 | **R-2** — what grants an automatic retry | the guard asked "is it destructive?" and stopped at risk 3, so **45** tools below it were re-executed on a regex over the error text: `move_file`, `copy_file`, `write_file`, `create_event`, `schedule_task`, `send_to_device`, `control_home_device`, `remember_fact`, `compress_path`, `vibrate_watch`… The string that triggers it most reliably, `command timed out after 30.0s`, is the case where the effect is *unknown* | **0**. A retry needs the read tier or a name in `IDEMPOTENT_TOOLS`; error text only ever *stops* retrying early |
 | **RT-3** — who owns a risk tier | `ToolSpec` was mutable and `evaluate()` re-reads the registry's same object: setting `delete_file.risk = READ` moved the gate from `CONFIRM (level 3 (destructive) action requires confirmation)` to `EXECUTE (low-risk action)`, made the same action automatically retryable, and rewrote the planner's own catalogue line to `risk=read confirm=False` | frozen, with tuples where a gate reads membership, so `tags.remove("safety")` is refused too. The verdict is unchanged after the attempt |
-| **R-11** — a lifecycle verb's promises | `POST /tasks/{id}/retry` returned a job set to `running`, its failed steps reset to `pending`, their `detail` **erased**, and 0 executions; because the briefing counts `running` jobs, a human was told **"1 job(s) in progress."** | the step keeps `failed` and its error text, the job keeps its real state, every verb answers with `executed: 0` and a sentence about what happened, and the briefing says **"1 job(s) failed."** |
+| **R-11** — a lifecycle verb's promises | `POST /tasks/{id}/retry` returned a job set to `running`, its failed steps reset to `pending`, their `detail` **erased**, and 0 executions; because the briefing counts `running` jobs, a human was told **"1 job(s) in progress."** | the step keeps `failed` and its error text, the job keeps its real state, every verb answers with a `LifecycleReport` and an `executed` count that means what it says, and the briefing says **"1 job(s) failed."** Phase 27 then gave the verb something true to count: `retry` now re-issues the failed steps, so `executed` is how many actually ran |
 | **R-13** — a failure ledger that lies by silence | `record_failure` swallowed every exception at `log.info` (measured: 1 failure, 0 rows, normal reply) while `failure_stats()` / `recent_failures()` raised straight through `/metrics`, `/failures` and the briefing | lost writes are counted and surfaced (`unwritten`, `ledger_error`); `/metrics` degrades with the reason, `/failures` answers 503, and the briefing prints `failure ledger unavailable: …` rather than "No failures recorded." |
 
 Two halves of the same audit were assessed rather than assumed fixed. **R-12** (the
@@ -291,7 +292,7 @@ Measured, because "feels faster" is not evidence:
 |---|---|---|
 | `search_files`, query that matches nothing, rooted at `~` | **6,955 ms** | **346–1,217 ms** |
 | `search_files`, the acceptance command | 11,299 ms | 1,217 ms (346 ms on a quieter run) |
-| All 17 measured acceptance commands | 22,573 ms | **1,817 ms** (sandboxed `$HOME`) / 2,961 ms (a real home to walk) |
+| All 17 measured acceptance commands | 22,573 ms | **2,060 ms** (sandboxed `$HOME`) / 2,961 ms (a real home to walk) |
 | Any API read (`/tools`, `/tasks`, `/audit`, `/memory`) | 1-2 ms | unchanged |
 | `GET /health`, launched server, warm | 1.5-8 ms (first call in a process: 110 ms) | unchanged — nothing expensive runs per request |
 | `JarvisCore()` construction | 29 ms | unchanged |
@@ -353,7 +354,7 @@ curl -s -H "X-JARVIS-Token: $TOKEN" -H 'Content-Type: application/json' \
      -d '{"text":"what is my battery"}' http://127.0.0.1:8765/command
 
 # Prove it to yourself:
-python -m pytest -q                       # 1417 passed, 0 failed
+python -m pytest -q                       # 1433 passed, 0 failed
 python benchmarks/acceptance_run.py       # re-measures the README's numbers
 python assets/build_charts.py && python assets/build_diagrams.py
 ```
@@ -374,9 +375,9 @@ jarvis/
   scheduler/   recurring jobs, runner with per-run re-authorization
   car/ home/ robotics/ watch/ vision/ research/ design/ coding/
   integrations/ IMAP/SMTP and CalDAV providers with local fallbacks
-tests/         50 modules · 1417 collected · includes the dashboard's own JS, run by Node
+tests/         51 modules · 1433 collected · includes the dashboard's own JS, run by Node
 dashboard/     single-file control panel; state rendered from server fields
-audit/         28 phase reports + 4 CSV matrices — the evidence behind this README
+audit/         29 phase reports + 4 CSV matrices — the evidence behind this README
 benchmarks/    acceptance_run.py and the JSON the charts are drawn from
 assets/        generated figures + the two generators that draw them
 app/           PyInstaller spec and bundle sources (see Downloads — currently broken)
@@ -444,17 +445,28 @@ better than a gap you have to discover:
   unauthenticated caller cannot append to it (16-F, reasoned in
   `audit/PHASE20_DATED_RECALL_REPORT.md`) · **arXiv still refuses this client** (15-F):
   `curl` gets 200 while urllib and httpx both get 406 from the same machine in the same
-  minute, so `research` spends ~1.6 s on a retry, answers from the local corpus, and names
+  minute, so `research` spends ~1.9 s on a retry, answers from the local corpus, and names
   the refusal instead of inventing a paper. Measured, not assumed — see
   `audit/PHASE21_SPEED_RESILIENCE_REPORT.md` §4 for the three diagnoses that were tested
   and discarded.
-- **There is no job re-dispatcher, and `POST /tasks/{id}/retry` now says so** (26-A). The
-  verb records the request, keeps the failure text, returns `executed: 0`, and points the
-  user at re-issuing the command. A real retry needs two things this build does not have:
-  `task_steps` persists a step's *name* but not its parameters (measured against the schema
-  in `jarvis/db/database.py:77-85`), and re-entry would have to go through
-  `policy.evaluate` again rather than straight to a handler — Phase 9 flagged exactly that.
-  Building it is a feature with its own safety review, not a truth fix.
+- **A retry now re-runs the failed steps** (26-A, closed by Phase 27). `task_steps` stores
+  each step's own `params` and `device`, and `JarvisCore.retry_job()` rebuilds the failed
+  ones into a plan that goes back through `PermissionEngine` — measured live: a workflow
+  whose screenshot step failed answered `POST /tasks/{id}/retry` with `executed: 1` and the
+  genuine second attempt, while a gated step answered `executed: 0` plus a **fresh**
+  `confirmation_id`. Three edges it deliberately does not cross:
+  **27-A** `resume()` still only lifts a pause -- a sequence halted by a *denied* step leaves
+  later steps `pending`, and nothing dispatches those; the machinery exists
+  (`_execute_plan(job_id=…, seqs=…)`), it is a small step and a separate decision about what
+  "continue" should mean after a refusal. **27-B** a job written before Phase 27 has no
+  stored parameters, so its retry is refused by the gate with `missing required parameter
+  'path'` rather than being guessed at -- re-issuing the sentence is the way to run those.
+  **27-C** the dashboard has no retry affordance; the endpoint is there and the page does not
+  offer it. **27-D** five `@pytest.mark.slow` OCR tests fail when the machine is already busy
+  (measured: 5 failed / 1428 passed in a 46.9 s run, then the same file clean twice in ~4 s)
+  -- the macOS Vision helper answers with no lines under load, and those tests need the
+  capability/timeout treatment Phase 21 gave the battery and ffmpeg ones. Reasoned in
+  `audit/PHASE27_JOB_RETRY_REPORT.md` §5.
 - **A fallback still lends its summary to the memory sentence** (26-B, R-14's remaining
   half). The ledger row for the planned step now carries `answered_by: list_directory`, and
   the outcome carries `answered_for: search_files`, so the chain can be traced; what it does

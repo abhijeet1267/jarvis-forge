@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import time
+from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
 from ..agents.base import Agent, build_agents, find_agent
@@ -43,9 +44,38 @@ from .models import (
 )
 from .planner import RulePlanner
 from .recovery import RecoveryEngine, RecoveryOutcome
-from .tasks import TaskManager
+from .tasks import LifecycleReport, TaskManager
 
 log = get_logger("core.orchestrator")
+
+
+@dataclass
+class JobRetry:
+    """What a user-requested re-run of a job did.
+
+    ``executed`` counts the actions this call put in front of an agent, so the
+    endpoint that reports it cannot drift from what ran. When a step is gated,
+    ``executed`` is 0 and ``response`` carries the fresh confirmation to approve.
+    """
+
+    job_id: str
+    report: LifecycleReport
+    response: Optional[CommandResponse] = None
+
+    @property
+    def executed(self) -> int:
+        return len(self.response.actions) if self.response is not None else 0
+
+    def as_dict(self) -> Dict[str, Any]:
+        return {
+            "job_id": self.job_id,
+            "accepted": self.report.accepted,
+            "status": self.report.status,
+            "executed": self.executed,
+            "reason": self.report.reason,
+            "message": self.report.message,
+            "confirmation_id": self.response.confirmation_id if self.response else "",
+        }
 
 
 class JarvisCore:
@@ -351,10 +381,33 @@ class JarvisCore:
             return response
 
         # --- Stage 2+: permission -> execute -> verify ----------------------
+        return await self._execute_plan(request, plan, response, started)
+
+    async def _execute_plan(
+        self,
+        request: CommandRequest,
+        plan: Plan,
+        response: CommandResponse,
+        started: float,
+        job_id: Optional[str] = None,
+        seqs: Optional[List[int]] = None,
+    ) -> CommandResponse:
+        """Run a plan through gate -> execute -> verify -> ledger -> job step.
+
+        ``handle()`` and ``retry_job()`` share this on purpose: a re-run is not a
+        privileged path. It gets the same permission verdict, mints its own
+        confirmation for anything gated, and writes to the same chain. ``seqs``
+        maps each action to the step it belongs to -- for a retry those are the
+        failed steps' original positions, so the step that already succeeded is
+        never written over by the one now taking its place.
+        """
         ctx = self._context(request)
-        job = self.tasks.create(request.text, [a.tool for a in plan.actions]) if len(plan.actions) > 1 else None
-        if job:
-            response.job_id = job.job_id
+        if job_id is None and len(plan.actions) > 1:
+            job_id = self.tasks.create(request.text, [a.tool for a in plan.actions],
+                                       planned=list(plan.actions)).job_id
+        if job_id:
+            response.job_id = job_id
+        step_seqs = list(seqs) if seqs is not None else list(range(len(plan.actions)))
 
         for index, action in enumerate(plan.actions):
             verdict = self.policy.evaluate(action, session_id=request.session_id)
@@ -368,11 +421,11 @@ class JarvisCore:
                 self._audit_action(action, request, None, "blocked", False,
                                      request_id=response.request_id,
                                      unhandled=plan.unhandled)
-                if job:
+                if job_id:
                     self.tasks.update_step(
-                        job.job_id, action.tool, ActionStatus.BLOCKED, verdict.reason, seq=index
+                        job_id, action.tool, ActionStatus.BLOCKED, verdict.reason, seq=step_seqs[index]
                     )
-                    self.tasks.refresh_status(job.job_id)
+                    self.tasks.refresh_status(job_id)
                 self._note_unhandled(response, plan)
                 self._log_message(request.session_id, "assistant", response.reply, plan.intent)
                 response.duration_ms = int((time.perf_counter() - started) * 1000)
@@ -385,22 +438,22 @@ class JarvisCore:
                 response.confirmation_id = verdict.confirmation_id
                 response.reply = self._confirmation_prompt(action, verdict.preview or "")
                 response.reply += self._watch_confirmation_note(verdict.confirmation_id, action)
-                if job:
+                if job_id:
                     # The step is waiting, and the steps behind it are not going
                     # to run until it is answered. Left unrecorded, the job sat at
                     # `running` for as long as the approval went unanswered --
                     # which, after it expired, was forever.
                     self.tasks.update_step(
-                        job.job_id,
+                        job_id,
                         action.tool,
                         ActionStatus.AWAITING_CONFIRMATION,
                         "waiting for your approval",
-                        seq=index,
+                        seq=step_seqs[index],
                     )
                     self.tasks.attach_confirmation(
-                        job.job_id, index, verdict.confirmation_id
+                        job_id, step_seqs[index], verdict.confirmation_id
                     )
-                    self.tasks.refresh_status(job.job_id)
+                    self.tasks.refresh_status(job_id)
                 self.audit.record(
                     intent=request.text,
                     tool=action.tool,
@@ -425,12 +478,12 @@ class JarvisCore:
             if agent is None:
                 action.status = ActionStatus.FAILED
                 response.reply = f"No agent can handle {action.tool!r}."
-                if job:
+                if job_id:
                     self.tasks.update_step(
-                        job.job_id, action.tool, ActionStatus.FAILED, "no agent owns this tool",
-                        seq=index,
+                        job_id, action.tool, ActionStatus.FAILED, "no agent owns this tool",
+                        seq=step_seqs[index],
                     )
-                    self.tasks.refresh_status(job.job_id)
+                    self.tasks.refresh_status(job_id)
                 self._note_unhandled(response, plan)
                 self._log_message(request.session_id, "assistant", response.reply, plan.intent)
                 response.duration_ms = int((time.perf_counter() - started) * 1000)
@@ -475,20 +528,20 @@ class JarvisCore:
                                  request_id=response.request_id,
                                  unhandled=plan.unhandled,
                                  answered_by=answered_by)
-            if job:
+            if job_id:
                 self.tasks.update_step(
-                    job.job_id,
+                    job_id,
                     action.tool,
                     self._action_status(result),
                     result.summary,
-                    seq=index,
+                    seq=step_seqs[index],
                 )
 
-        if job:
+        if job_id:
             # A step that never ran stays `pending`, and `pending` aggregates to
             # `incomplete` -- so a sequence that halted for an approval can never
             # be reported as finished work.
-            self.tasks.refresh_status(job.job_id)
+            self.tasks.refresh_status(job_id)
 
         # --- Stage: memory update -------------------------------------------
         self._remember_outcome(request, response)
@@ -500,6 +553,91 @@ class JarvisCore:
         self._log_message(request.session_id, "assistant", response.reply, plan.intent)
         response.duration_ms = int((time.perf_counter() - started) * 1000)
         return response
+
+    # -------------------------------------------------------------- re-run
+    async def retry_job(self, job_id: str) -> JobRetry:
+        """Re-issue a job's failed steps, through the same gates as the first run.
+
+        Plan §31 lists ``retry`` as a task-manager capability, and Phase 26
+        measured that this build had no re-dispatcher at all: a step row kept its
+        tool's name and none of its parameters, so nothing could be re-issued
+        honestly. The three rules this method exists to keep:
+
+        * only the steps that actually failed are re-run -- a step whose effect
+          was verified is never replayed;
+        * each re-run action goes back through ``PermissionEngine``, so anything
+          gated mints a **fresh** confirmation rather than spending the old one;
+        * a step whose recorded parameters are missing (a job written before the
+          ``params`` column existed) or whose tool is gone is refused. Filling in
+          a plausible parameter for ``delete_file`` would be the old bug wearing
+          a better face.
+        """
+        report = self.tasks.retry(job_id)
+        if not report.accepted:
+            # Unknown or cancelled: the recorder already knows why, and nothing
+            # may be dispatched for a job the user cancelled.
+            return JobRetry(job_id, report)
+        # Read the steps after the recorder annotated them, so the trail this
+        # method writes back carries the "re-attempt requested" mark with it.
+        job = self.tasks.get(job_id)
+        failed = [s for s in job["steps"] if s["status"] == ActionStatus.FAILED.value]
+        if not failed:
+            return JobRetry(job_id, report)
+
+        gone = [s["name"] for s in failed if not self.tools.has(s["name"])]
+        if gone:
+            return JobRetry(job_id, LifecycleReport(
+                job_id, "retry", False, status=report.status,
+                reason=f"{', '.join(sorted(set(gone)))} is no longer a registered tool",
+                message="Nothing ran: those steps name a tool this build no longer has, "
+                        "so there is nothing to re-issue."))
+
+        actions: List[PlannedAction] = []
+        seqs: List[int] = []
+        prior: Dict[int, str] = {}
+        for step in failed:
+            actions.append(PlannedAction(
+                step_id=step["seq"] + 1,
+                tool=step["name"],
+                params=json.loads(step["params"] or "{}"),
+                device=step["device"] or "laptop_main",
+                reason="re-attempt of a failed step",
+            ))
+            seqs.append(step["seq"])
+            prior[step["seq"]] = step["detail"]
+
+        request = CommandRequest(
+            text=job["goal"], source="retry", device_id=actions[0].device,
+            session_id=f"retry:{job_id}")
+        plan = Plan(goal=job["goal"], intent="retry", actions=actions, planner="retry")
+        response = CommandResponse(session_id=request.session_id)
+        response.intent = plan.intent
+        response.plan = plan
+        response.model_used = plan.planner
+        started = time.perf_counter()
+        await self._execute_plan(request, plan, response, started,
+                                 job_id=job_id, seqs=seqs)
+        # The attempt wrote its own summary over the step; put the failure that
+        # prompted it back in front of the new one, so the record shows both.
+        for seq in seqs:
+            self.tasks.restore_attempt_trail(job_id, seq, prior[seq])
+        # The status the caller hears is the one the steps now support, not the
+        # one they had when the ask was recorded -- reading it from the
+        # aggregation rather than carrying ``report.status`` forward is what
+        # keeps a successful re-run from being reported as still failed.
+        report.status = self.tasks.refresh_status(job_id)
+        # The recorder's sentence describes the ask, not the outcome; once steps
+        # have actually run the caller needs to hear that instead.
+        ran = len(response.actions)
+        awaiting = response.confirmation_id if response.needs_confirmation else ""
+        report.executed = ran
+        report.message = (
+            f"{ran} step(s) re-ran." if ran and not awaiting else
+            (f"{ran} step(s) re-ran; 1 is waiting for a fresh approval."
+             if ran else
+             "Nothing ran: the re-attempt needs your approval before it executes.")
+        )
+        return JobRetry(job_id, report, response)
 
     # --------------------------------------------------------- confirmation
     async def resolve_confirmation(

@@ -10,8 +10,9 @@ manager that a caller can see, so each one answers with a
 and blanked their ``detail``, then executed nothing -- measured as 0 executions
 and a job permanently ``running``, which the briefing then published as
 "1 job(s) in progress." A step whose real state is ``failed`` stays ``failed``
-here, because nothing in this build re-dispatches a finished job: ``task_steps``
-does not even persist the parameters a re-run would need.
+here, because this manager records state and does not execute: the re-run that
+Phase 27 added lives in :meth:`jarvis.core.orchestrator.JarvisCore.retry_job`,
+which calls back into the permission gate for every step it re-issues.
 """
 
 from __future__ import annotations
@@ -67,7 +68,16 @@ class TaskManager:
     def __init__(self) -> None:
         self.db = get_db()
 
-    def create(self, goal: str, steps: Optional[List[str]] = None) -> Job:
+    def create(self, goal: str, steps: Optional[List[str]] = None,
+               planned: Optional[List[Any]] = None) -> Job:
+        """Open a job and its step rows.
+
+        ``planned`` is the matching list of :class:`PlannedAction`. It is stored
+        alongside each step because a step that only remembers its tool name
+        cannot be re-issued: Phase 27's re-run reads ``params`` and ``device``
+        back out of the row rather than guessing them, and a row written before
+        those columns existed is refused by the gate instead of invented.
+        """
         job = Job(goal=goal)
         job.steps = [JobStep(name=name) for name in (steps or [])]
         self.db.execute(
@@ -85,12 +95,15 @@ class TaskManager:
             ),
         )
         for index, step in enumerate(job.steps):
+            action = planned[index] if planned is not None and index < len(planned) else None
             self.db.execute(
                 """
-                INSERT INTO task_steps (step_id, job_id, name, status, detail, seq)
-                VALUES (?, ?, ?, ?, ?, ?)
+                INSERT INTO task_steps (step_id, job_id, name, status, detail, seq, params, device)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                (new_id("STEP"), job.job_id, step.name, step.status.value, step.detail, index),
+                (new_id("STEP"), job.job_id, step.name, step.status.value, step.detail, index,
+                 json.dumps(getattr(action, "params", {}) or {}, default=str),
+                 getattr(action, "device", "") or ""),
             )
         log.info("job created", extra_fields={"job_id": job.job_id, "goal": goal})
         return job
@@ -280,11 +293,27 @@ class TaskManager:
         return LifecycleReport(
             job_id, "retry", True, status=status, steps_touched=len(failed_steps),
             message=(
-                f"Nothing ran. {len(failed_steps)} failed step(s) are marked as "
-                "needing another attempt, with the reason they failed kept. This "
-                "build has no job re-dispatcher, so ask me the goal again to run "
-                "it; anything gated will ask for approval again."
+                f"Nothing ran in this call. {len(failed_steps)} failed step(s) are "
+                "marked as needing another attempt, with the reason they failed kept."
             ),
+        )
+
+    def restore_attempt_trail(self, job_id: str, seq: int, prior_detail: str) -> None:
+        """Put the failure that prompted a re-run back in front of the new result.
+
+        An attempt writes its own summary over the step, which on a re-run would
+        delete the evidence Phase 26 made a point of keeping -- the reader would
+        see only the second try and not know there was a first.
+        """
+        rows = self.db.query(
+            "SELECT detail FROM task_steps WHERE job_id = ? AND seq = ?", (job_id, seq)
+        )
+        current = rows[0]["detail"] if rows else ""
+        if not rows or current == prior_detail:
+            return
+        self.db.execute(
+            "UPDATE task_steps SET detail = ? WHERE job_id = ? AND seq = ?",
+            (f"{prior_detail} | this attempt: {current}", job_id, seq),
         )
 
     def failed_jobs(self, limit: int = 20) -> List[Dict[str, Any]]:

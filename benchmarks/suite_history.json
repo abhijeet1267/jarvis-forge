@@ -125,6 +125,13 @@
    "passed": 1417,
    "failed": 0,
    "note": "retry keyed on re-running, frozen risk tiers"
+  },
+  {
+   "phase": "27 job re-run",
+   "collected": 1433,
+   "passed": 1433,
+   "failed": 0,
+   "note": "a failed step re-runs through the gate"
   }
  ]
 }
