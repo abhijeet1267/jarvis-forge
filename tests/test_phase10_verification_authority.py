@@ -115,6 +115,14 @@ def test_recovery_does_not_call_a_no_op_a_recovered_success(core):
     """Fail once, then answer honestly that nothing was observed.
 
     That sequence is not a recovery, and must not be reported as one.
+
+    Phase 26 (R-2) changed *how many times* the handler runs here, not what the
+    report is allowed to say. ``control_home_device`` is LOW-risk and not
+    declared idempotent, so a device command whose first attempt timed out is no
+    longer re-sent on the strength of its error text -- one invocation, and the
+    escalation says why. The same claim about an *executed* unverified retry is
+    kept under a tool the new policy does re-run, in
+    ``test_phase26_recovery_trust.py``.
     """
     state = {"n": 0}
 
@@ -137,10 +145,9 @@ def test_recovery_does_not_call_a_no_op_a_recovered_success(core):
     finally:
         core.tools._handlers["control_home_device"] = original
 
-    assert state["n"] == 2, (
-        f"expected one failure and one retry, got {state['n']} invocations "
-        "-- the recovery path never ran, so this test proves nothing"
-    )
+    assert state["n"] == 1, (
+        f"{state['n']} invocations -- a home command that may already have "
+        "landed must not be re-sent automatically (Phase 26 R-2)")
     reply = response.reply.lower()
     assert "recovered automatically" not in reply, response.reply
     assert "succeeded on retry" not in reply, response.reply
@@ -155,9 +162,10 @@ def test_recovery_does_not_call_a_no_op_a_recovered_success(core):
     assert int(row["recovered"]) == 0, row
     assert row["strategy"] != "retry", f"an unverified retry was logged as a recovery: {row}"
 
-    # Known remaining defect (Phase 9 R-12), asserted rather than hidden: the
-    # note claims the action was not retried even though it was retried once.
-    assert row["attempts"] == 1 and "not retried" in str(row["note"]), row
+    # Phase 9's R-12 note-lie, closed by Phase 26: the note and the retry
+    # decision now come from the same function, so "not retried" here is the
+    # truth -- the action genuinely was never re-executed.
+    assert row["attempts"] == 0 and "not retried" in str(row["note"]), row
 
 
 # --------------------------------------------------------------------------

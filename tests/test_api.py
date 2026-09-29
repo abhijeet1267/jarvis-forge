@@ -390,7 +390,17 @@ def test_task_lifecycle_roundtrip(client: TestClient) -> None:
 
     resumed = client.post(f"/tasks/{job.job_id}/resume")
     assert resumed.status_code == 200
-    assert resumed.json()["job"]["status"] == "running"
+    # Phase 26 R-11: this used to assert "running", which was the fabricated
+    # state -- nothing in this build re-dispatches a job row, so a resumed job
+    # reports the state its steps are actually in and says it ran nothing.
+    assert resumed.json()["job"]["status"] == "incomplete", resumed.json()
+    assert resumed.json()["executed"] == 0, resumed.json()
+    assert [s["status"] for s in resumed.json()["job"]["steps"]] == ["pending", "pending"]
+    assert "nothing ran" in resumed.json()["note"].lower(), resumed.json()["note"]
+
+    retried = client.post(f"/tasks/{job.job_id}/retry")
+    assert retried.status_code == 200
+    assert retried.json()["executed"] == 0, retried.json()
 
     cancelled = client.post(f"/tasks/{job.job_id}/cancel")
     assert cancelled.status_code == 200

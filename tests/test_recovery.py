@@ -1,7 +1,11 @@
 """Recovery system tests (section 47).
 
-The central safety property: a *destructive* action is never retried
-automatically, because a retry assumes the first attempt changed nothing.
+The central safety property: an action is re-run only when running it twice is
+known to be safe -- a read, or a tool declared idempotent. "It is not
+destructive" and "the error sounded transient" are both refused as evidence,
+because a timeout is exactly the case where the first attempt's effect is
+unknown. (Phase 26 R-2; the guard used to sit at risk >= 3 and let 45 tools be
+re-executed on their error text.)
 """
 
 from __future__ import annotations
@@ -72,11 +76,21 @@ def test_unknown_tool_is_not_retryable() -> None:
     assert not RecoveryEngine().is_retryable(None, _failure())
 
 
-def test_external_tool_retries_only_on_transient_errors() -> None:
+def test_an_external_tool_is_not_retried_on_its_error_text() -> None:
+    """What this test used to assert was the defect.
+
+    ``run_allowlisted_command`` re-running on "connection refused" meant a
+    command that may already have run could run again, decided by a regex over
+    the failure message. Phase 26 R-2: a tool above read tier earns a retry only
+    by being declared idempotent, and its error text never grants one.
+    """
     engine = RecoveryEngine()
     spec = _Spec("run_allowlisted_command", RiskLevel.EXTERNAL)
-    assert engine.is_retryable(spec, _failure("connection refused"))
+    assert not engine.is_retryable(spec, _failure("connection refused"))
     assert not engine.is_retryable(spec, _failure("invalid argument"))
+    # The reason is now part of the decision, so the note cannot invent one.
+    may, reason = engine.retry_policy(spec, _failure("connection refused"))
+    assert may is False and "twice" in reason, reason
 
 
 # ---------------------------------------------------------------------------

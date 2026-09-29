@@ -42,7 +42,7 @@ from .models import (
     new_id,
 )
 from .planner import RulePlanner
-from .recovery import RecoveryEngine
+from .recovery import RecoveryEngine, RecoveryOutcome
 from .tasks import TaskManager
 
 log = get_logger("core.orchestrator")
@@ -211,6 +211,7 @@ class JarvisCore:
         confirmation: bool,
         request_id: str = "",
         unhandled: Optional[List[str]] = None,
+        answered_by: str = "",
     ) -> None:
         # ``result`` is a status token so AuditLog.failures() can filter on it;
         # the human-readable message goes into ``detail``.
@@ -228,6 +229,11 @@ class JarvisCore:
             status, message = self._audit_token(result), result.summary
 
         detail: Dict[str, Any] = {"ok": bool(result and result.ok), "message": message}
+        if answered_by:
+            # R-14: a successful fallback hands back another tool's result, and
+            # this row is keyed on the *planned* tool. Without the attribution
+            # the ledger said `search_files` had produced a directory listing.
+            detail["answered_by"] = answered_by
         if unhandled:
             # Which parts of the same sentence this action did not cover. Recorded
             # rather than only spoken, so a later reader of the chain can see the
@@ -435,6 +441,7 @@ class JarvisCore:
             # --- Stage: recovery (section 47) ------------------------------
             # A failed action is not the end of the plan. Try to recover, but
             # never silently -- the outcome is always reported.
+            answered_by = ""
             if not result.ok:
                 outcome = await self.recovery.recover(
                     action,
@@ -445,6 +452,8 @@ class JarvisCore:
                 )
                 if outcome.recovered and outcome.result is not None:
                     result = outcome.result
+                    if outcome.result.tool != action.tool:
+                        answered_by = outcome.result.tool
                     response.recovery_notes.append(
                         f"{action.tool}: {outcome.note}"
                     )
@@ -464,7 +473,8 @@ class JarvisCore:
             response.actions.append(result)
             self._audit_action(action, request, result, risk_label, False,
                                  request_id=response.request_id,
-                                 unhandled=plan.unhandled)
+                                 unhandled=plan.unhandled,
+                                 answered_by=answered_by)
             if job:
                 self.tasks.update_step(
                     job.job_id,
@@ -606,6 +616,28 @@ class JarvisCore:
             return response
 
         result = await agent.execute(action, ctx)
+        if not result.ok:
+            # R-12: every gated tool ran outside the failure ledger. The
+            # confirmation path never called ``recover()`` -- and it must not
+            # start doing so silently, because one approval buys one attempt and
+            # an automatic retry of a destructive action is the thing the retry
+            # policy exists to refuse. What it must not do is fail *invisibly*:
+            # measured, ``failures`` went 1 -> 1 for a failed approved delete, so
+            # /metrics, the briefing and `explain_failures` described only the
+            # ungated half of the system.
+            self.recovery.record_failure(
+                action,
+                result,
+                RecoveryOutcome(
+                    strategy="none",
+                    attempts=0,
+                    note=(
+                        f"{result.summary} — not retried: it ran under a "
+                        "confirmation, and one approval authorises one attempt"
+                    ),
+                    answered_for=action.tool,
+                ),
+            )
         response.actions.append(result)
         response.decision = PolicyDecision.EXECUTE
         response.reply = result.summary if result.ok else f"That failed: {result.summary}"

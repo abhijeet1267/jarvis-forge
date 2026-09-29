@@ -118,6 +118,13 @@
    "passed": 1359,
    "failed": 0,
    "note": "the self-test runs on a broken install"
+  },
+  {
+   "phase": "26 recovery trust",
+   "collected": 1417,
+   "passed": 1417,
+   "failed": 0,
+   "note": "retry keyed on re-running, frozen risk tiers"
   }
  ]
 }

@@ -10,9 +10,9 @@ import secrets
 import uuid
 from datetime import datetime, timezone
 from enum import Enum, IntEnum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 def utcnow() -> datetime:
@@ -123,7 +123,19 @@ class PrivacyLevel(str, Enum):
 # Registries: tools, devices, applications
 # ---------------------------------------------------------------------------
 class ToolSpec(BaseModel):
-    """Declarative description of a callable action (section 7 & 8)."""
+    """Declarative description of a callable action (section 7 & 8).
+
+    Frozen, and its gate-read list fields are tuples. ``PermissionEngine`` and
+    the recovery policy read *this object* out of the registry on every call, so
+    a mutable spec was a permission bypass: measured on the previous tree,
+    ``core.tools.get("delete_file").risk = RiskLevel.READ`` moved the gate from
+    ``CONFIRM (level 3 (destructive)...)`` to ``EXECUTE (low-risk action)`` and
+    made the same action automatically retryable. Tuples matter as much as
+    ``frozen`` -- ``tags`` decides whether an emergency stop may be retried, and
+    a frozen field holding a list can still be appended to in place.
+    """
+
+    model_config = ConfigDict(frozen=True)
 
     name: str
     description: str = ""
@@ -131,11 +143,13 @@ class ToolSpec(BaseModel):
     risk: RiskLevel = RiskLevel.READ
     requires_confirmation: bool = False
     reversible: bool = True
-    allowed_devices: List[str] = Field(default_factory=lambda: ["laptop_main"])
+    allowed_devices: Tuple[str, ...] = Field(default_factory=lambda: ("laptop_main",))
     # JSON-schema-ish parameter description used for validation & prompting.
+    # Still a dict (so ``spec.parameters[k] = ...`` remains possible in place):
+    # nothing downstream authorises from it -- see Phase 26's residual note.
     parameters: Dict[str, str] = Field(default_factory=dict)
-    required_parameters: List[str] = Field(default_factory=list)
-    tags: List[str] = Field(default_factory=list)
+    required_parameters: Tuple[str, ...] = ()
+    tags: Tuple[str, ...] = ()
 
     def risk_label(self) -> str:
         return {

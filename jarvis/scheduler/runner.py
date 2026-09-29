@@ -21,7 +21,14 @@ import asyncio
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from ..core.models import PlannedAction, PolicyDecision, RiskLevel, Verification
+from ..core.models import (
+    ActionResult,
+    PlannedAction,
+    PolicyDecision,
+    RiskLevel,
+    Verification,
+)
+from ..core.recovery import RecoveryOutcome
 from ..logging_setup import get_logger
 from .store import ACTIVE, ScheduleStore, ScheduledJob
 
@@ -29,6 +36,27 @@ log = get_logger("scheduler.runner")
 
 #: Actions the scheduler can run without a tool. They are read-only by nature.
 BUILTIN_ACTIONS = {"briefing", "reminder"}
+
+
+def _record_unattended_failure(core, action: PlannedAction, result: ActionResult,
+                               detail: str) -> bool:
+    """Write an unattended failure into the same ledger an interactive one uses.
+
+    ``strategy="none"`` and ``attempts=0`` are the claim: the scheduler does not
+    run the recovery chain, and giving it retries is a different decision from
+    making sure its failures are counted.
+    """
+    return core.recovery.record_failure(
+        action,
+        result,
+        RecoveryOutcome(
+            strategy="none",
+            attempts=0,
+            note=(f"{detail} — not retried: an unattended schedule runs "
+                  "without the recovery chain"),
+            answered_for=action.tool,
+        ),
+    )
 
 #: How often the background loop checks for due jobs.
 TICK_SECONDS = 30
@@ -116,6 +144,10 @@ class SchedulerRunner:
         if agent is None:
             detail = f"no agent owns {job.action!r}"
             self.store.record_run(job, "failed", detail)
+            _record_unattended_failure(
+                core, action,
+                ActionResult(ok=False, tool=job.action, error=detail, verified=False),
+                detail)
             return {"outcome": "failed", "detail": detail}
 
         ctx = ToolContext(session_id=f"sched:{job.schedule_id}")
@@ -134,6 +166,12 @@ class SchedulerRunner:
             return {"outcome": "unverified", "detail": result.summary}
 
         self.store.record_run(job, "failed", result.summary)
+        # R-12's other half, measured: a scheduled action that failed wrote
+        # nothing to `failures` (0 -> 0), so /metrics and `explain_failures`
+        # described only the interactive half of the system. `schedule_runs`
+        # already told the truth about the run; the recovery ledger had to hear
+        # about it too.
+        _record_unattended_failure(core, action, result, result.summary)
         return {"outcome": "failed", "detail": result.summary}
 
     async def _builtin(self, core, job: ScheduledJob) -> str:

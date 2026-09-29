@@ -748,7 +748,14 @@ async def command_stream(
 # ---------------------------------------------------------------------------
 @app.post("/tasks/{job_id}/{action}")
 async def task_lifecycle(job_id: str, action: str, _: None = Protected) -> Dict[str, Any]:
-    """Pause, resume, retry or cancel a job."""
+    """Pause, resume, retry or cancel a job.
+
+    None of these verbs execute anything, and the response now carries that:
+    ``executed`` is the number of actions this call ran, and ``note`` is the
+    manager's own sentence about what changed. Before Phase 26 a retry answered
+    with a job set to ``running`` whose failure text had been deleted, and
+    nothing had run.
+    """
     handlers = {
         "pause": get_core().tasks.pause,
         "resume": get_core().tasks.resume,
@@ -761,11 +768,22 @@ async def task_lifecycle(job_id: str, action: str, _: None = Protected) -> Dict[
             status_code=400,
             detail=f"unknown action {action!r}; expected one of {sorted(handlers)}",
         )
-    if not handler(job_id):
-        raise HTTPException(status_code=404, detail=f"job {job_id!r} cannot be {action}ed")
+    report = handler(job_id)
+    if not report.accepted:
+        reason = report.reason or "the job cannot be " + action + "ed"
+        raise HTTPException(
+            status_code=404 if report.reason == "no such job" else 409, detail=reason
+        )
 
     job = get_core().tasks.get(job_id)
-    return {"ok": True, "action": action, "job": job}
+    return {
+        "ok": True,
+        "action": action,
+        "executed": report.executed,
+        "steps_touched": report.steps_touched,
+        "note": report.message,
+        "job": job,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -775,9 +793,18 @@ async def task_lifecycle(job_id: str, action: str, _: None = Protected) -> Dict[
 async def metrics(_: None = Protected) -> Dict[str, Any]:
     """Operational counters: failures, recovery rate, latency, tool usage."""
     core = get_core()
+    stats = core.recovery.failure_stats()
+    try:
+        recent = core.recovery.recent_failures(limit=10)
+    except Exception as exc:  # pragma: no cover - DB unavailable
+        # The health page has to survive the condition it exists to report: an
+        # unreadable failure ledger used to raise straight through this
+        # endpoint, so the operator lost the page at the moment it mattered.
+        recent = []
+        stats["ledger_error"] = stats.get("ledger_error") or str(exc)
     return {
-        "failures": core.recovery.failure_stats(),
-        "recent_failures": core.recovery.recent_failures(limit=10),
+        "failures": stats,
+        "recent_failures": recent,
         "audit": _audit_summary(core),
         "tasks": {
             "failed": len(core.tasks.failed_jobs()),
@@ -813,7 +840,18 @@ def _audit_summary(core) -> Dict[str, Any]:
 
 @app.get("/failures")
 async def failures(limit: int = 20, _: None = Protected) -> List[Dict[str, Any]]:
-    return get_core().recovery.recent_failures(limit=limit)
+    """The most recent recorded failures.
+
+    An unreadable ledger answers 503 with the reason. A bare 500 gave the
+    dashboard nothing, and the empty list that Phase 26 replaced this with would
+    have looked exactly like a system that had never failed.
+    """
+    try:
+        return get_core().recovery.recent_failures(limit=limit)
+    except Exception as exc:  # pragma: no cover - DB unavailable
+        raise HTTPException(
+            status_code=503, detail=f"the failure ledger cannot be read: {exc}"
+        )
 
 
 # ---------------------------------------------------------------------------

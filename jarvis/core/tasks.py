@@ -2,11 +2,22 @@
 
 Every complex request becomes a job with observable steps. v0.1 persists jobs
 so the dashboard can show what is running, and supports cancel.
+
+The lifecycle verbs (pause / resume / retry / cancel) are the part of this
+manager that a caller can see, so each one answers with a
+:class:`LifecycleReport` that states what actually happened. Until Phase 26
+``retry()`` set the job to ``running``, reset its failed steps to ``pending``
+and blanked their ``detail``, then executed nothing -- measured as 0 executions
+and a job permanently ``running``, which the briefing then published as
+"1 job(s) in progress." A step whose real state is ``failed`` stays ``failed``
+here, because nothing in this build re-dispatches a finished job: ``task_steps``
+does not even persist the parameters a re-run would need.
 """
 
 from __future__ import annotations
 
 import json
+from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
 from ..core.models import ActionStatus, Job, JobStep, new_id, utcnow
@@ -14,6 +25,40 @@ from ..db.database import get_db
 from ..logging_setup import get_logger
 
 log = get_logger("core.tasks")
+
+
+@dataclass
+class LifecycleReport:
+    """What a job verb actually did.
+
+    ``executed`` is the field that keeps the report honest: no lifecycle verb in
+    this module runs a tool, so it is always 0, and every caller that tells a
+    user something happened has to carry that number with it.
+    """
+
+    job_id: str
+    action: str
+    accepted: bool
+    status: str = ""
+    executed: int = 0
+    steps_touched: int = 0
+    reason: str = ""
+    message: str = ""
+
+    def __bool__(self) -> bool:
+        return self.accepted
+
+    def as_dict(self) -> Dict[str, Any]:
+        return {
+            "job_id": self.job_id,
+            "action": self.action,
+            "accepted": self.accepted,
+            "status": self.status,
+            "executed": self.executed,
+            "steps_touched": self.steps_touched,
+            "reason": self.reason,
+            "message": self.message,
+        }
 
 
 class TaskManager:
@@ -132,47 +177,115 @@ class TaskManager:
         rows = self.db.query("SELECT * FROM tasks ORDER BY created_at DESC LIMIT ?", (limit,))
         return [dict(r) for r in rows]
 
-    def cancel(self, job_id: str) -> bool:
+    def cancel(self, job_id: str) -> LifecycleReport:
+        job = self.get(job_id)
+        if job is None:
+            return LifecycleReport(job_id, "cancel", False, reason="no such job",
+                                   message="Nothing was cancelled: there is no such job.")
         self.set_status(job_id, "cancelled")
         log.info("job cancelled", extra_fields={"job_id": job_id})
-        return True
+        return LifecycleReport(
+            job_id, "cancel", True, status="cancelled",
+            message=("The job is marked cancelled. Steps that already ran are not "
+                     "undone, and nothing further will be dispatched for them."),
+        )
 
     # -- lifecycle (section 31: pause / resume / retry) ----------------------
-    def pause(self, job_id: str) -> bool:
+    def pause(self, job_id: str) -> LifecycleReport:
         """Hold a job without discarding its progress."""
         job = self.get(job_id)
-        if job is None or job["status"] in ("done", "cancelled"):
-            return False
+        if job is None:
+            return LifecycleReport(job_id, "pause", False, reason="no such job",
+                                   message="Nothing was paused: there is no such job.")
+        if job["status"] in ("done", "cancelled"):
+            return LifecycleReport(
+                job_id, "pause", False, status=job["status"],
+                reason=f"a {job['status']} job cannot be paused",
+                message=f"Nothing changed: the job is already {job['status']}.",
+            )
         self.set_status(job_id, "paused")
         log.info("job paused", extra_fields={"job_id": job_id})
-        return True
-
-    def resume(self, job_id: str) -> bool:
-        """Continue a paused job."""
-        job = self.get(job_id)
-        if job is None or job["status"] != "paused":
-            return False
-        self.set_status(job_id, "running")
-        log.info("job resumed", extra_fields={"job_id": job_id})
-        return True
-
-    def retry(self, job_id: str) -> bool:
-        """Reset failed steps so a job can run again."""
-        job = self.get(job_id)
-        if job is None or job["status"] == "cancelled":
-            return False
-
-        self.db.execute(
-            """
-            UPDATE task_steps
-            SET status = ?, detail = ''
-            WHERE job_id = ? AND status = ?
-            """,
-            (ActionStatus.PENDING.value, job_id, ActionStatus.FAILED.value),
+        return LifecycleReport(
+            job_id, "pause", True, status="paused",
+            message="The job is marked paused. Its steps keep the state they reached.",
         )
-        self.set_status(job_id, "running")
-        log.info("job retried", extra_fields={"job_id": job_id})
-        return True
+
+    def resume(self, job_id: str) -> LifecycleReport:
+        """Bring a paused job back to the state its steps are actually in.
+
+        Not ``running``: measured, nothing re-dispatches a job row, so claiming
+        ``running`` put a job that would never move into the briefing's "in
+        progress" count.
+        """
+        job = self.get(job_id)
+        if job is None:
+            return LifecycleReport(job_id, "resume", False, reason="no such job",
+                                   message="Nothing was resumed: there is no such job.")
+        if job["status"] != "paused":
+            return LifecycleReport(
+                job_id, "resume", False, status=job["status"],
+                reason="the job is not paused",
+                message=f"Nothing changed: the job is {job['status']}, not paused.",
+            )
+        status = self.refresh_status(job_id)
+        log.info("job resumed", extra_fields={"job_id": job_id, "status": status})
+        return LifecycleReport(
+            job_id, "resume", True, status=status,
+            message=(
+                "The pause was lifted; nothing ran. The job's real state is "
+                f"{status!r} -- "
+                + ("an approval is still waiting on it."
+                   if status == "awaiting_confirmation"
+                   else "ask me the goal again to have its steps executed.")
+            ),
+        )
+
+    def retry(self, job_id: str) -> LifecycleReport:
+        """Record a request to attempt the failed steps again.
+
+        This runs nothing, and says so. The failed steps keep their status and
+        their ``detail`` -- erasing the failure text was what made a retried job
+        look recovered with its evidence removed -- and the job's status is
+        recomputed from its steps rather than asserted.
+        """
+        job = self.get(job_id)
+        if job is None:
+            return LifecycleReport(job_id, "retry", False, reason="no such job",
+                                   message="Nothing ran: there is no such job.")
+        if job["status"] == "cancelled":
+            return LifecycleReport(
+                job_id, "retry", False, status="cancelled",
+                reason="the job was cancelled",
+                message="Nothing ran: a cancelled job is not re-attempted.",
+            )
+
+        failed_steps = [s for s in job["steps"]
+                        if s["status"] == ActionStatus.FAILED.value]
+        stamp = utcnow().isoformat(timespec="seconds")
+        for step in failed_steps:
+            evidence = step["detail"] or "no reason recorded"
+            self.db.execute(
+                "UPDATE task_steps SET detail = ? WHERE job_id = ? AND seq = ?",
+                (f"{evidence} | re-attempt requested {stamp}", job_id, step["seq"]),
+            )
+        status = self.refresh_status(job_id)
+        log.info("job retry requested", extra_fields={
+            "job_id": job_id, "failed_steps": len(failed_steps), "executed": 0})
+        if not failed_steps:
+            return LifecycleReport(
+                job_id, "retry", True, status=status,
+                message="Nothing ran: no step of this job is recorded as failed, "
+                        "so there is nothing to re-attempt.",
+            )
+        return LifecycleReport(
+            job_id, "retry", True, status=status, steps_touched=len(failed_steps),
+            message=(
+                f"Nothing ran. {len(failed_steps)} failed step(s) are marked as "
+                "needing another attempt, with the reason they failed kept. This "
+                "build has no job re-dispatcher, so ask me the goal again to run "
+                "it; anything gated will ask for approval again."
+            ),
+        )
 
     def failed_jobs(self, limit: int = 20) -> List[Dict[str, Any]]:
         rows = self.db.query(

@@ -107,6 +107,19 @@ async def _section_approvals(core) -> List[str]:
 
 async def _section_failures(core) -> List[str]:
     stats = core.recovery.failure_stats()
+    if stats.get("ledger_error"):
+        # "No failures recorded." is the worst possible sentence for a ledger
+        # that could not be read: it is indistinguishable from a healthy system.
+        lines = [f"failure ledger unavailable: {stats['ledger_error']}"]
+    else:
+        lines = []
+    if stats.get("unwritten"):
+        lines.append(
+            f"{stats['unwritten']} failure record(s) could not be written"
+            + (f" (last: {stats['last_error']})" if stats.get("last_error") else "")
+        )
+    if lines:
+        return lines
     if not stats["total_failures"]:
         return ["No failures recorded."]
 
