@@ -202,5 +202,27 @@ battery and ffmpeg tests got, instead of failing when the machine is busy.
 
 ## 7. Git
 
-Committed and pushed to `main` on `abhijeet1267/jarvis-forge`. CI verdict is appended below
-only once the runner has produced it.
+Committed and pushed to `main` on `abhijeet1267/jarvis-forge`:
+
+```
+63137ef  Give retry something true to report: a failed step now re-runs
+         15 files changed
+```
+
+CI run `36619081137`, verdict copied from the runner after it finished:
+
+```
+conclusion=success
+  suite (3.11): success      # includes the desktop-bundle build step
+  suite (3.12): success
+```
+
+The schema change matters here: both runners start from an empty `JARVIS_HOME`, so a fresh
+database has to be created with the new columns *and* the additive migration path has to be
+harmless when they already exist -- both are exercised on every run now.
+
+And 27-D's diagnosis is supported rather than assumed: `ci.yml` runs plain `python -m
+pytest -q` with no `-m 'not slow'` deselection, so those five `@pytest.mark.slow` OCR tests
+genuinely executed on both macOS images and passed. A busy laptop is the difference, not a
+code path the runner avoids.
+
