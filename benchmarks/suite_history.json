@@ -132,6 +132,13 @@
    "passed": 1433,
    "failed": 0,
    "note": "a failed step re-runs through the gate"
+  },
+  {
+   "phase": "28 reading is not writing",
+   "collected": 1466,
+   "passed": 1466,
+   "failed": 0,
+   "note": "a read request can no longer author a file"
   }
  ]
 }

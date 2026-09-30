@@ -43,6 +43,10 @@ SEARCH_SCAN_CAP = 60_000
 SEARCH_TIME_BUDGET_S = 2.5
 MAX_READ_BYTES = 200_000
 
+#: How much of a read file goes into the reply -- which is also what gets
+#: remembered, so an uncapped read would copy the whole file into memory.
+MAX_READ_EXCERPT = 1200
+
 
 def _resolve(path: str) -> Path:
     return Path(os.path.expanduser(path)).resolve()
@@ -289,9 +293,16 @@ async def read_file(ctx: ToolContext, path: str = "") -> Any:
     except OSError as exc:
         return fail("read_file", f"Could not read file: {exc}", device=ctx.device_id)
 
+    excerpt = content.strip()
+    truncated = False
+    if len(excerpt) > MAX_READ_EXCERPT:
+        excerpt = excerpt[:MAX_READ_EXCERPT].rstrip()
+        truncated = True
+    shown = f":\n{excerpt}" + ("\n… (rest withheld; the file is longer than shown)"
+                              if truncated else "")
     return ok(
         "read_file",
-        f"Read {target.name}.",
+        f"Read {target.name}{shown}",
         device=ctx.device_id,
         path=str(target),
         content=content,

@@ -178,6 +178,7 @@ class RulePlanner:
             self._open_app,
             self._research,
             self._vision,
+            self._read_file,
             self._search_files,
             self._design,
             self._laptop_center_prompt,
@@ -227,7 +228,17 @@ class RulePlanner:
             try:
                 intent = rule(text, raw)
             except Exception as exc:  # pragma: no cover - defensive
-                log.info("planner rule error", extra_fields={"error": str(exc)})
+                # Named, and at warning: a rule that crashes every single call is
+                # indistinguishable from one that simply does not match, and the
+                # answer looks like "I understood the words but not the goal".
+                # Phase 28 found its own bug this way -- a broken append route
+                # surfaced as an unrouted sentence, because the failure was
+                # logged at info under a default-quiet logger.
+                log.warning(
+                    "planner rule raised",
+                    extra_fields={"rule": getattr(rule, "__name__", str(rule)),
+                                  "error": f"{type(exc).__name__}: {exc}"},
+                )
                 continue
             if intent:
                 return intent
@@ -348,6 +359,34 @@ class RulePlanner:
         re.I,
     )
 
+    #: Which verb class *leads* the sentence decides whether an artifact route may
+    #: author anything (Phase 28). Nouns are not consent to write.
+    _AUTHOR_VERBS = r"\b(create|make|design|draw|write|build|generate|produce|prepare|add|draft|author|update|extend|revise|document|documented)\b"
+    _CONSUME_VERBS = r"\b(read|show|open|get|list|display|print|cat|what|which|tell|find|search|say|says|summarise|summarize|explain|describe|check|review|look)\b"
+    _READ_FILE = re.compile(
+        r"(?:\b(?:read|open|show|print|display|cat)\b"
+        r"(?:\s+(?:me|the|my|a|an|file|files|contents?|of|to))*\s+"
+        r"|\bwhat\s+does\s+(?:the\s+|my\s+|this\s+)?(?:file\s+)?)"
+        r"[\"'“]?(?P<path>(?:[\w.~+-]*/[\w.~/+-]+)|[\w~+-]+\.\w{1,6}|readme)[\"'”]?",
+        re.I,
+    )
+
+    def _authoring_request(self, text: str) -> bool:
+        """True when the sentence asks for something to be created.
+
+        The earliest verb wins, so ``document the parser`` (authoring first) and
+        ``what does the document say`` (consumption first) split correctly. With
+        no verb at all the route does not author -- "readme" appearing in a
+        sentence is not a request to write one.
+        """
+        author = re.search(self._AUTHOR_VERBS, text)
+        consume = re.search(self._CONSUME_VERBS, text)
+        if author is None:
+            return False
+        if consume is None:
+            return True
+        return author.start() <= consume.start()
+
     def _anchored(self, name: str) -> tuple[Optional[str], Optional[str]]:
         """Resolve a user-typed filename inside the file workspace.
 
@@ -397,6 +436,38 @@ class RulePlanner:
             params={"path": path, "content": content + "\n", "mode": "overwrite"},
             confidence=0.9,
         )
+
+    def _read_file(self, text: str, raw: str) -> Optional[Intent]:
+        """Read a text file (Phase 28).
+
+        ``read_file`` has been registered since v0.1 and had no route until now:
+        one of 29 capabilities no typed sentence could reach, while the noun-only
+        design route happily *wrote* a file for the same sentence.
+
+        A bare name -- or a relative path, with or without slashes -- is anchored
+        inside the file workspace, so "read notes.txt" cannot quietly mean "read
+        whatever sits next to the process". An absolute path, or one starting at
+        the home directory, is taken as typed and handed to the engine's
+        filesystem guard, which is the single authority on what may be read.
+        Reads are not workspace-only the way creation is: refusing ``/etc/hosts``
+        here with a write-shaped message would be its own untruth.
+        """
+        found = self._READ_FILE.search(raw)
+        if not found:
+            return None
+        name = (found.group("path") or "").strip().strip("\"'”“")
+        if not name:
+            return None
+        if name.lower() == "readme":
+            name = "README.md"
+
+        typed = Path(os.path.expanduser(name))
+        if typed.is_absolute():
+            path = str(typed.resolve())
+        else:
+            workspace = Path(os.path.expanduser(get_settings().file_workspace)).resolve()
+            path = str((workspace / name).resolve())
+        return Intent("read_file", tool="read_file", params={"path": path}, confidence=0.9)
 
     def _append_file(self, text: str, raw: str) -> Optional[Intent]:
         found = self._APPEND_TO.search(raw)
@@ -1197,6 +1268,16 @@ class RulePlanner:
         # --- list -----------------------------------------------------------
         if assets and re.search(r"\b(list|show|what)\b", text):
             return Intent("list_design_assets", tool="list_design_assets", params={})
+
+        # --- authoring guard (Phase 28) --------------------------------------
+        # Everything below this line *creates an artifact*. Until now the noun
+        # alone decided: the regex matched "readme", "guide", "document", so
+        # "read the readme", "show me the readme" and "open README.md" each wrote
+        # a new file and reported it as done. A sentence now has to be asking to
+        # author, judged by which verb leads it, so "document the parser" still
+        # authors while "what does the document say" does not.
+        if not self._authoring_request(text):
+            return None
 
         # --- deck ----------------------------------------------------------
         if deck:
