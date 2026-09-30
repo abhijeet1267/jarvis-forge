@@ -199,5 +199,22 @@ routings 18 commands already exercise.
 
 ## 8. Git
 
-Committed and pushed to `main` on `abhijeet1267/jarvis-forge`; the CI verdict is appended
-once the runner has produced it, not before.
+Committed and pushed to `main` on `abhijeet1267/jarvis-forge`:
+
+```
+0888cf1  Reading a document must not author one
+         11 files changed
+```
+
+CI run `36693836791`, verdict copied from the runner after it finished:
+
+```
+conclusion=success
+  suite (3.11): success
+  suite (3.12): success
+```
+
+The 33 new tests ran on both macOS images, including the rule-error test that has to attach
+its own logging handler because the project logger does not propagate -- the one place this
+phase could not assert through the obvious fixture, recorded so the next reader does not
+" simplify" it back to `caplog` and watch it pass for the wrong reason.
