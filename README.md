@@ -9,11 +9,11 @@ world afterwards**, and written to a tamper-evident audit chain. It runs with no
 key, no network and no vendor — an LLM is optional and off by default.
 
 What this repository is mostly about is not features. It is about the difference
-between *"the handler returned"* and *"the thing happened"* — and the twenty-eight phases of
+between *"the handler returned"* and *"the thing happened"* — and the twenty-nine phases of
 measurement spent closing that gap, in the ledger and on the screen.
 
 [![ci](https://img.shields.io/github/actions/workflow/status/abhijeet1267/jarvis-forge/ci.yml?label=tests%20%C2%B7%20macos)](https://github.com/abhijeet1267/jarvis-forge/actions/workflows/ci.yml)
-[![suite](https://img.shields.io/badge/tests-1466%20passed%20%C2%B7%200%20failed-16a34a)](tests)
+[![suite](https://img.shields.io/badge/tests-1487%20passed%20%C2%B7%200%20failed-16a34a)](tests)
 [![tools](https://img.shields.io/badge/tools-127%20across%2015%20agents-2f6df6)](jarvis/tools)
 [![offline](https://img.shields.io/badge/LLM-off%20by%20default%20%C2%B7%20runs%20fully%20offline-0f172a)](jarvis/config.py)
 [![python](https://img.shields.io/badge/python-3.11%20%C2%B7%203.12%20(CI)-6b7688)](.github/workflows/ci.yml)
@@ -39,8 +39,8 @@ and the diagrams read their counts from the live registry.
 
 | Claim | Value | Reproduce |
 |---|---|---|
-| Test suite | **1466 passed · 0 failed · 0 skipped · 0 xfailed** (1466 collected) | `python -m pytest -q` |
-| Suite growth, Phase 9 → 28 | 875 passing / **126 failing** → 1466 passing / 0 failing / **0 xfailed** at the Phase 28 close | `cat benchmarks/suite_history.json` |
+| Test suite | **1487 passed · 0 failed · 0 xfailed** (1487 collected; the network-gated arXiv test skips when arXiv is refusing requests, and passed in the run above) | `python -m pytest -q` |
+| Suite growth, Phase 9 → 29 | 875 passing / **126 failing** → 1487 passing / 0 failing / **0 xfailed** at the Phase 29 close | `cat benchmarks/suite_history.json` |
 | Tools registered | **127** | `python -c "from jarvis.core.orchestrator import JarvisCore as J; print(len(J().tools.names()))"` |
 | Confirmation-gated | **25** of 127 | `python assets/build_diagrams.py` (prints the live counts) |
 | Risk tiers | read 68 · low 33 · external 12 · high 11 · physical 3 | same |
@@ -80,7 +80,7 @@ and the diagrams read their counts from the live registry.
 - [Benchmarks](#benchmarks)
 - [Hardware truth](#hardware-truth)
 - [What the system says when something fails](#what-the-system-says-when-something-fails)
-- [The twenty-eight phases](#the-twenty-eight-phases)
+- [The twenty-nine phases](#the-twenty-nine-phases)
 - [The plan's safety matrix, run](#the-plans-safety-matrix-run)
 - [Smooth and fast](#smooth-and-fast)
 - [Security model](#security-model)
@@ -116,9 +116,9 @@ and not a quiet success.
 
 ## Benchmarks
 
-### Suite growth, Phase 9 → Phase 28
+### Suite growth, Phase 9 → Phase 29
 
-<img src="assets/chart-suite-growth.svg" alt="Test suite growth from 875 passing with 126 failing, to 1466 passing with none failing at the close of Phase 28" width="100%"/>
+<img src="assets/chart-suite-growth.svg" alt="Test suite growth from 875 passing with 126 failing, to 1487 passing with none failing at the close of Phase 29" width="100%"/>
 
 Phase 9 inherited **126 failing tests**. The cause was a single import line in
 `jarvis/tools/base.py` that left `Verification` undefined, so every tool result raised
@@ -131,27 +131,27 @@ read auditable as a success.
 
 | Command | State the user sees | Audit token | ms |
 |---|---|---|---|
-| show me my laptop battery | VERIFIED | success | 17 |
+| show me my laptop battery | VERIFIED | success | 14 |
 | plan my day | VERIFIED | success | 5 |
 | remember that this is my AMR project | VERIFIED | success | 5 |
-| what did I work on yesterday | VERIFIED | success | 5 |
-| check my car fuel | **UNAVAILABLE** | failure | 6 |
-| turn on study mode | **UNAVAILABLE** | failure | 4 |
+| what did I work on yesterday | VERIFIED | success | 4 |
+| check my car fuel | **UNAVAILABLE** | failure | 7 |
+| turn on study mode | **UNAVAILABLE** | failure | 5 |
 | transfer this file to my phone | **NOTHING EXECUTED** | no_action | 4 |
 | design this system | **NOT RECOGNISED** | no_action | 4 |
 | schedule two hours for project work tomorrow | **NEEDS DETAIL** | no_action | 3 |
 | draft an email to my teammate | **FAILED** | failure | 5 |
-| research this idea | VERIFIED (degraded) | success | 1,243 |
-| find my latest project report | VERIFIED | success | 74 |
+| research this idea | VERIFIED (degraded) | success | 41,247 |
+| find my latest project report | VERIFIED | success | 65 |
 
-Median command: **5 ms**; the 17 measured commands sum to **1,395 ms** here, where the
-previous published run summed to 2,961 ms. That gap is the sandbox, not the code: this run
-had `$HOME` pointed at a scratch tree, so `find my latest project report` measured an empty
-walk (74 ms) instead of the real home directory it walks on a laptop (346-1,217 ms across
-five runs -- it tracks whatever the disk is doing). The search root is inside each row's
-recorded reply, so either run can be told apart after the fact. `research` spends ~1.2 s
-discovering that arXiv refuses this client (see below) and then answering from the local
-corpus instead. Everything else is stable to within a couple of ms.
+Median command: **5 ms**. The 17 measured commands sum to **41,389 ms** in this run,
+but that single number is two different facts: the 16 commands that touch no network total
+**142 ms** (median 5 ms), and `research this idea` alone is **41,247 ms** -- it waits on arXiv, which answered this week with a read timeout after 41 seconds rather than the 406 that usually comes back in ~1.2 s. The command still
+ended VERIFIED-degraded, naming the refusal instead of inventing a paper, which is 15-F; what
+this run adds is **29-B**, the measurement that no bounded read timeout exists on that path.
+`find my latest project report` is 65 ms here because `$HOME` was sandboxed to a scratch tree, so the walk had nothing
+to descend -- the search root is inside the row's recorded reply, so a sandbox run and a
+real-home run (346-1,217 ms across five runs) stay tellable apart afterwards.
 
 Note *"what did I work on yesterday"* reading **VERIFIED** with an empty result: since
 Phase 20 it answers about the *day asked about* — `Nothing was recorded in memory on
@@ -173,7 +173,7 @@ moved, and the ledger now says exactly that. A simulated *car read* is still a s
 read — reading a labelled simulator is a real read — and that distinction is pinned by a
 test so it stays a decision rather than an accident.
 
-## The twenty-eight phases
+## The twenty-nine phases
 
 Each closed with a report in [`audit/`](audit), and each report's claims carry the
 command that produced them.
@@ -200,6 +200,7 @@ command that produced them.
 | **26 — Recovery trust** | re-running is granted by declaration, not by error text (45 tools → 0); `ToolSpec` is frozen, so the risk tier the gate reads cannot be rewritten under it; a retried job says "nothing ran" instead of `running`; and a failure that cannot be recorded is counted instead of vanishing |
 | **27 — A retry that retries** | plan §31's `retry` was a record with no dispatch behind it. A step now stores its own parameters, and `POST /tasks/{id}/retry` re-issues the failed steps through the permission gate -- a gated step mints a fresh approval, a step whose parameters were never stored is refused rather than guessed at |
 | **28 — Reading is not writing** | "read the readme" *created a document*; an artifact route now needs an authoring verb, and `read_file` -- registered since v0.1 and unreachable from any sentence -- finally answers one |
+| **29 — A route fills its own action** | flowcharts and architecture diagrams had been dead since they were written: the route sent a title to a tool that also needs `steps` / `components`, so the gate answered the user with *"missing required parameter 'steps'"* -- even when the sentence named them. What a sentence states is now used; what it omits is asked for |
 
 ### Four kinds of "I ran nothing"
 
@@ -328,7 +329,7 @@ Measured, because "feels faster" is not evidence:
 |---|---|---|
 | `search_files`, query that matches nothing, rooted at `~` | **6,955 ms** | **346–1,217 ms** |
 | `search_files`, the acceptance command | 11,299 ms | 1,217 ms (346 ms on a quieter run) |
-| All 17 measured acceptance commands | 22,573 ms | **1,395 ms** (sandboxed `$HOME`) / 2,961 ms (a real home to walk) |
+| All 17 measured acceptance commands | 22,573 ms | **41,389 ms** as measured, **142 ms** of it once `research` is separated out (see the note above) |
 | Any API read (`/tools`, `/tasks`, `/audit`, `/memory`) | 1-2 ms | unchanged |
 | `GET /health`, launched server, warm | 1.5-8 ms (first call in a process: 110 ms) | unchanged — nothing expensive runs per request |
 | `JarvisCore()` construction | 29 ms | unchanged |
@@ -390,7 +391,7 @@ curl -s -H "X-JARVIS-Token: $TOKEN" -H 'Content-Type: application/json' \
      -d '{"text":"what is my battery"}' http://127.0.0.1:8765/command
 
 # Prove it to yourself:
-python -m pytest -q                       # 1466 passed, 0 failed
+python -m pytest -q                       # 1487 passed, 0 failed (one research test skips if arXiv is refusing)
 python benchmarks/acceptance_run.py       # re-measures the README's numbers
 python assets/build_charts.py && python assets/build_diagrams.py
 ```
@@ -411,9 +412,9 @@ jarvis/
   scheduler/   recurring jobs, runner with per-run re-authorization
   car/ home/ robotics/ watch/ vision/ research/ design/ coding/
   integrations/ IMAP/SMTP and CalDAV providers with local fallbacks
-tests/         52 modules · 1466 collected · includes the dashboard's own JS, run by Node
+tests/         53 modules · 1487 collected · includes the dashboard's own JS, run by Node
 dashboard/     single-file control panel; state rendered from server fields
-audit/         30 phase reports + 4 CSV matrices — the evidence behind this README
+audit/         31 phase reports + 4 CSV matrices — the evidence behind this README
 benchmarks/    acceptance_run.py and the JSON the charts are drawn from
 assets/        generated figures + the two generators that draw them
 app/           PyInstaller spec and bundle sources (see Downloads — currently broken)
@@ -518,9 +519,33 @@ better than a gap you have to discover:
   `propose_code_change`, `apply_code_change`, the three `extract_paper_*` among them).
   The sentence router answers "I understood the words but not the goal", which is true
   of the *router* and reads to a user as "I can't" — the gap is reachability, not
-  honesty, but it is a gap. **28-B**: `make a diagram of the build` blocks with
-  *"missing required parameter 'components'"* — an internal schema field name shown to
-  a human instead of a question they could answer.
+  honesty, but it is a gap. **28-B** was `make a diagram of the build` answering with
+  *"missing required parameter 'components'"* — closed by Phase 29, below.
+- **A route may not claim an action it cannot fill** (Phase 29). The flowchart and
+  architecture-diagram routes had been dead since they were written: they sent a title
+  alone to tools that also require `steps` / `components`, so the permission gate
+  answered the user with a schema field name — even for a sentence that named them:
+
+  ```
+  >>> "draw a flowchart of onboarding: request, review, approve"
+      decision=BLOCK  reply="I cannot do that: missing required parameter 'steps'."
+  ```
+
+  What a sentence states is now taken from it (a colon list, "with a, b", "of a, b"),
+  the diagram's `id:label` grammar and its `>` arrows are derived rather than dropped,
+  and `send_watch_notification` asks "What should the notification say?" instead of
+  blocking on an empty title. Where the route cannot read the list cleanly it asks — the
+  extractor is all-or-nothing, because trimming "request, review, approve with review as
+  a decision" down to two steps would be a partial answer with nothing saying so.
+  **29-A** remains: a route can now never emit an action missing a *required* parameter
+  (asserted by sweeping the planner's own `Intent(tool=…, params={…})` literals against the
+  registry), but *optional* ones are still not extracted — a presentation's slide content
+  comes from a fixed outline, not from the sentence. **29-B**: measured this run,
+  `research this idea` spent **41,247 ms** waiting on arXiv before its read timed out —
+  the answer stayed honest, but nothing bounds that wait, which is the network equivalent
+  of everything this phase is about. **29-C**: the same sweep covers only `params={…}`
+  literals; a route that builds its dict in a variable is checked by behaviour tests, not
+  by the static one.
 - **A fallback still lends its summary to the memory sentence** (26-B, R-14's remaining
   half). The ledger row for the planned step now carries `answered_by: list_directory`, and
   the outcome carries `answered_for: search_files`, so the chain can be traced; what it does

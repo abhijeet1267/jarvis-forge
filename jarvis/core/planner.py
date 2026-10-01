@@ -611,10 +611,15 @@ class RulePlanner:
 
         if re.search(r"\b(notify|notification|notifications|show|display|send)\b", text):
             title = self._watch_text_arg(raw)
+            if not title:
+                # The tool requires a title, so emitting the action with none
+                # handed the user "missing required parameter 'title'" -- the
+                # gate's vocabulary as a conversational answer. Ask instead.
+                return Intent("watch_notify", note="What should the notification say?")
             return Intent(
                 "watch_notify",
                 tool="send_watch_notification",
-                params={"title": title} if title else {},
+                params={"title": title},
                 confidence=0.85,
             )
 
@@ -651,6 +656,90 @@ class RulePlanner:
         if tail:
             return tail.group(1).strip(" .!?")
         return ""
+
+    #: Where an inline list of parts begins: "with a, b", "steps: a, b",
+    #: "of a, b and c", or after a colon.
+    _PARTS_MARKER = (r"\b(?:with|having|containing|using|composed\s+of|made\s+(?:up\s+)?of"
+                     r"|steps?|stages?|components?|parts)\b\s*(?:are|is|as follows)?[:\s]+")
+    _PARTS_SPLIT = r"\s*(?:,|;|\band\b|\bthen\b|\bplus\b|&)\s*"
+
+    @classmethod
+    def _listed_parts(cls, raw: str) -> str:
+        """The two-or-more-item list a sentence names, or "" when it names none.
+
+        A diagram needs components and a flowchart needs steps, and until Phase 29
+        both routes asked for neither -- they sent a title alone and the permission
+        gate answered the user with ``missing required parameter 'steps'``, even when
+        the sentence itself listed the steps. What a sentence states is taken from it;
+        what it does not, the route asks for rather than guessing.
+        """
+        tails: list[str] = []
+        if ":" in raw:
+            tails.append(raw.split(":", 1)[1])
+        found = re.search(cls._PARTS_MARKER + r"(.+)$", raw, re.I)
+        if found:
+            tails.append(found.group(1))
+        of_clause = re.search(r"\b(?:of|for)\s+(.+)$", raw, re.I)
+        if of_clause:
+            tails.append(of_clause.group(1))
+        for tail in tails:
+            items = [t.strip(" .!?\"'”“") for t in re.split(cls._PARTS_SPLIT, tail)]
+            items = [t for t in items if t]
+            if not items or any(len(t) < 2 or len(t.split()) > 4 for t in items):
+                # All or nothing. Taking the two items that happened to look
+                # tidy and dropping "approve with review as a decision" would
+                # draw a two-step chart from a three-step request -- a partial
+                # answer with nothing saying so, which is the defect this
+                # program has been closing since Phase 19. Asking costs the
+                # user one turn; that one costs them a wrong artifact.
+                continue
+            if len(items) >= 2:
+                return ", ".join(items)
+        return ""
+
+    @classmethod
+    def _parts_stem(cls, raw: str) -> str:
+        """``raw`` with an inline parts list removed, so a title stays a title."""
+        stem = re.split(cls._PARTS_MARKER, raw, maxsplit=1, flags=re.I)[0]
+        return stem.split(":", 1)[0].strip().rstrip(",; ")
+
+    @staticmethod
+    def _diagram_args(parts: str) -> tuple:
+        """Split a sentence's parts into the builder's ``components`` and ``links``.
+
+        ``parse_components`` wants ``id:label`` pairs, and a sentence that says
+        "api > worker, worker > db" names both boxes *and* the arrow between
+        them. Feeding such a list in as components alone would have drawn two
+        boxes and silently dropped every connection the user described -- the
+        partial answer with nothing saying so.
+        """
+        components: list[str] = []
+        links: list[str] = []
+        seen: list[str] = []
+
+        def slug(name: str) -> str:
+            return re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_") or f"part{len(seen) + 1}"
+
+        def register(name: str) -> str:
+            name = name.strip()
+            if name.lower() not in [s.lower() for s in seen]:
+                seen.append(name)
+                components.append(f"{slug(name)}:{name}")
+            return slug(name)
+
+        for item in (p.strip() for p in parts.split(",")):
+            if not item:
+                continue
+            if ">" in item:
+                left, _, right = item.partition(">")
+                if left.strip() and right.strip():
+                    links.append(f"{register(left)}>{register(right)}")
+                    continue
+            if ":" in item:
+                components.append(item)
+                continue
+            register(item)
+        return ", ".join(components), ", ".join(links)
 
     def _location(self, text: str, raw: str) -> Optional[Intent]:
         if re.search(r"\b(location summary|where (have|did) i|places i|travel (summary|history))\b", text):
@@ -1241,17 +1330,22 @@ class RulePlanner:
         if not (diagram or flow or ui or docs or deck or assets):
             return None
 
-        def _title() -> str:
+        def _title(source: Optional[str] = None) -> str:
             """The request's subject, used as the artifact title.
 
             Simpler and more robust than keyword-specific capture: drop the
             leading imperative verb and any article, and keep the rest.
             "draw a diagram of the JARVIS pipeline" -> "diagram of the JARVIS
             pipeline"; "design a dashboard mockup" -> "dashboard mockup".
+
+            ``source`` is the sentence with any inline parts list removed, so a
+            flowchart titled from "… for releases with draft, build, publish" is
+            "flowchart for releases" and not its own steps.
             """
             subject = re.sub(
                 r"^\s*(?:please\s+)?(?:create|make|design|draw|write|build|generate|"
-                r"mock up|produce|prepare)\s+", "", raw, count=1, flags=re.I
+                r"mock up|produce|prepare)\s+", "", raw if source is None else source,
+                count=1, flags=re.I,
             )
             subject = re.sub(r"^(?:a|an|the)\s+", "", subject.strip(), flags=re.I)
             return subject.strip().rstrip(".")
@@ -1279,6 +1373,10 @@ class RulePlanner:
         if not self._authoring_request(text):
             return None
 
+        # The sentence with any inline parts list cut off, so an artifact title
+        # is the subject and not the whole request.
+        stemmed = self._parts_stem(raw)
+
         # --- deck ----------------------------------------------------------
         if deck:
             title = _title()
@@ -1297,10 +1395,18 @@ class RulePlanner:
 
         # --- flow ----------------------------------------------------------
         if flow:
-            title = _title()
+            title = _title(stemmed)
             if not title:
                 return Intent("create_flowchart", note="What should I call the flowchart?")
-            return Intent("create_flowchart", tool="create_flowchart", params={"title": title})
+            steps = self._listed_parts(raw)
+            if not steps:
+                return Intent("create_flowchart", note=(
+                    "Which steps does the flowchart show, in order? "
+                    "Like: request, review, approve."))
+            return Intent(
+                "create_flowchart", tool="create_flowchart",
+                params={"title": title, "steps": steps},
+            )
 
         # --- ui ------------------------------------------------------------
         if ui:
@@ -1310,15 +1416,23 @@ class RulePlanner:
             return Intent("create_ui_concept", tool="create_ui_concept", params={"title": title})
 
         # --- architecture diagram -----------------------------------------
-        title = _title()
+        title = _title(stemmed)
         if not title:
             return Intent(
                 "create_architecture_diagram", note="What should I call the diagram?"
             )
+        components, links = self._diagram_args(parts) if (parts := self._listed_parts(raw)) else ("", "")
+        if not components:
+            return Intent("create_architecture_diagram", note=(
+                "Which components should the diagram show? "
+                "Like: api, worker, database."))
+        params = {"title": title, "components": components}
+        if links:
+            params["links"] = links
         return Intent(
             "create_architecture_diagram",
             tool="create_architecture_diagram",
-            params={"title": title},
+            params=params,
         )
 
     def _coding(self, text: str, raw: str) -> Optional[Intent]:

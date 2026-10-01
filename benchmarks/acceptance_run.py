@@ -189,6 +189,7 @@ def suite_history() -> dict:
         ("26 recovery trust", 1417, 1417, 0, "retry keyed on re-running, frozen risk tiers"),
         ("27 job re-run", 1433, 1433, 0, "a failed step re-runs through the gate"),
         ("28 reading is not writing", 1466, 1466, 0, "a read request can no longer author a file"),
+        ("29 routes fill themselves", 1487, 1487, 0, "a route asks instead of quoting a schema field"),
     ]
     return {"phases": [{"phase": p, "collected": c, "passed": q, "failed": f, "note": n}
                        for p, c, q, f, n in points]}

@@ -8,7 +8,7 @@
   {
    "command": "Jarvis, find my latest project report.",
    "http_status": 200,
-   "ms": 74,
+   "ms": 77,
    "intent": "search_files",
    "tools": [
     "search_files"
@@ -18,12 +18,12 @@
    ],
    "audit_result": "success",
    "dashboard_state": "VERIFIED",
-   "reply": "I could not find any file matching 'project report.' under /private/var/folders/y2/8qgnpl313ws7ktxtnt11mnsw0000gn/T/tmp.PZUav5BSN4."
+   "reply": "I could not find any file matching 'project report.' under /private/var/folders/y2/8qgnpl313ws7ktxtnt11mnsw0000gn/T/tmp.XRYwCxjId6."
   },
   {
    "command": "Jarvis, show me my laptop battery.",
    "http_status": 200,
-   "ms": 17,
+   "ms": 16,
    "intent": "laptop_battery",
    "tools": [
     "battery_status"
@@ -101,7 +101,7 @@
   {
    "command": "Jarvis, send it.",
    "http_status": 200,
-   "ms": 4,
+   "ms": 3,
    "intent": "send_email",
    "tools": [],
    "verification": [],
@@ -127,7 +127,7 @@
   {
    "command": "Jarvis, what did I work on yesterday?",
    "http_status": 200,
-   "ms": 5,
+   "ms": 4,
    "intent": "recall",
    "tools": [
     "search_memory"
@@ -137,7 +137,7 @@
    ],
    "audit_result": "success",
    "dashboard_state": "VERIFIED",
-   "reply": "Nothing was recorded in memory on 2026-09-29."
+   "reply": "Nothing was recorded in memory on 2026-09-30."
   },
   {
    "command": "Jarvis, design this system.",
@@ -153,7 +153,7 @@
   {
    "command": "Jarvis, research this idea.",
    "http_status": 200,
-   "ms": 1243,
+   "ms": 21552,
    "intent": "search_papers",
    "tools": [
     "search_papers"
@@ -163,12 +163,12 @@
    ],
    "audit_result": "success",
    "dashboard_state": "VERIFIED",
-   "reply": "I found 5 reference(s) on arxiv: The IDEA detector concept for FCC-ee (2025) Intrinsic Dimension Estimating Autoencoder (IDEA) Using CancelOut (2025) Idea-Gated"
+   "reply": "I found no results for 'this idea.' on local. (arxiv: arXiv could not be reached: The read operation timed out)"
   },
   {
    "command": "Jarvis, check my car fuel.",
    "http_status": 200,
-   "ms": 6,
+   "ms": 5,
    "intent": "car_telemetry",
    "tools": [
     "get_car_telemetry"
@@ -198,7 +198,7 @@
   {
    "command": "Jarvis, give me today's location summary.",
    "http_status": 200,
-   "ms": 5,
+   "ms": 4,
    "intent": "location_summary",
    "tools": [
     "get_location_summary"

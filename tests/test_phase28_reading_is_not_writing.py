@@ -122,17 +122,20 @@ def test_a_read_that_cannot_find_the_file_says_so_and_still_writes_nothing(core,
     assert sorted(p.name for p in workspace.iterdir()) == ["README.md", "notes.txt"]
 
 
-def test_a_diagram_request_names_its_internal_parameter_parked_as_28B(core, workspace):
-    """Parked, not fixed: "make a diagram of the build" answers with a schema
-    field name rather than a question a human could answer.
+def test_a_diagram_request_no_longer_answers_with_its_parameter_name(core, workspace):
+    """28-B was parked here and closed by Phase 29.
 
-    Asserted so the behaviour is visible in the suite instead of surprising
-    someone later; the fix is a planner change about how missing required
-    parameters are asked for, which is a separate decision.
+    The sentence that used to end as *"I cannot do that: missing required
+    parameter 'components'"* now either draws the diagram (when the sentence
+    names the parts) or asks for them. Both halves are asserted in
+    ``test_phase29_routes_fill_their_own_action.py``; this one keeps the original
+    repro from quietly regressing into a schema message.
     """
     response = _run(core, "make a diagram of the build pipeline")
-    assert "components" in response.reply, response.reply
-    assert response.decision is PolicyDecision.BLOCK, response.reply
+    assert "missing required parameter" not in response.reply, response.reply
+    assert not response.actions, [a.tool for a in response.actions]
+    assert response.plan.reply_kind == "clarification", response.reply
+    assert "?" in response.reply, response.reply
 
 
 # ---------------------------------------------------------------------------
