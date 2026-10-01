@@ -168,6 +168,10 @@ file is what keeps 28-B from coming back.
 * **29-B** no bounded read timeout on the arXiv path (measured 41.2 s).
 * **29-C** the structural sweep covers `params={…}` literals only; a route assembling its
   dict in a variable is covered by behaviour tests, not static ones.
+* **29-D** the bundle-freshness guard is skipped by every CI run: `dist/` is gitignored and
+  the workflow builds the bundle after the test step. Found while accounting for the
+  runner's skip count in §8, which is the kind of bookkeeping that only looks like
+  bookkeeping. Reasoning in §8.
 * Everything already open: 28-A (28 unreachable tools), 27-A…D, 26-B, the `ToolSpec.parameters`
   residual, 22-G, 23-E, mic/speech TCC, 15-F, 14-D, 16-F, hardware **BLOCKED**, LLM planner,
   unattended workflows.
@@ -176,5 +180,66 @@ file is what keeps 28-B from coming back.
 
 ## 8. Git
 
-Committed and pushed to `main` on `abhijeet1267/jarvis-forge`. The CI verdict is appended
-once the runner has produced it, not before.
+Committed and pushed to `main` on `abhijeet1267/jarvis-forge`:
+
+```
+6956984  A planner route must fill the action it emits
+         11 files changed, 634 insertions(+), 61 deletions(-)
+```
+
+### The runner's verdict, measured after the push
+
+Run `36814671141`, both jobs green:
+
+| job | result | pytest line | wall |
+| --- | --- | --- | --- |
+| `suite (3.11)` | success | `1481 passed, 6 skipped, 1 warning in 69.36s` | 04:20:48 → 04:22:23Z |
+| `suite (3.12)` | success | `1481 passed, 6 skipped, 1 warning in 84.89s` | 04:20:49 → 04:22:55Z |
+
+`1481 + 6 = 1487`, which is the same number of tests this laptop collected
+(`1487 passed, 0 skipped in 25.64s`), so nothing went missing between the two
+machines -- the runner simply could not run six of them.
+
+Five of the six are accounted for by name and mechanism: every test marked
+`skipif(not HAS_BATTERY)` is exactly five -- `tests/test_pipeline.py:19`, `:213`,
+`:300` and `tests/test_voice.py:636`, `:716` -- and a GitHub macOS runner is a VM
+whose `pmset -g batt` prints no `InternalBattery`, while this laptop's does. That
+is a fact about the machine, not about the planner change.
+
+The sixth is named, and getting to it needed a measurement rather than a guess, because
+CI runs `python -m pytest -q`, which reports skip counts without reasons. `pytest -m slow
+--collect-only` says the whole suite carries 4 slow-marked tests today
+(`tests/test_research.py:418` arXiv, `tests/test_vision.py:99/114/126` OCR), so the OCR
+group did execute on the runner, and `node` must be installed there or the dashboard files
+that gate on it would have skipped by the dozen instead of leaving one unaccounted skip.
+The remaining mechanism is `tests/test_voice.py:451`, which skips unless
+`dist/Jarvis Forge.app/Contents/Resources/launcher.py` exists -- and `dist/` is gitignored
+(measured: `git ls-files dist` is empty, `.gitignore:10`), so a fresh runner checkout can
+never have it, while this laptop does. 5 battery + 1 bundle = the 6 the runner reported.
+
+Because the six are now fully accounted for, the skip set provably contains no OCR test --
+which settles the loose end 27-D left: CI's green does include the helper-dependent Vision
+group (the three `slow`-marked ones plus `test_read_image_text_tool` and
+`test_find_image_text_tool`), so the flakiness 27-D recorded is a laptop-under-load
+observation that the runner does not reproduce, not a case of the runner never looking.
+While counting them, 27-D's wording also proved imprecise: it says "five `@pytest.mark.slow`
+OCR tests", and five tests do depend on the helper, but only three carry the marker, so
+`-m 'not slow'` would still execute two of the group it describes as protected. The finding
+itself is unchanged; the README entry is corrected to match, and this phase's local run
+executed all five and passed.
+
+That arithmetic carries a defect with it, recorded as **29-D**: the test whose whole purpose
+is to catch the built bundle shipping a stale `launcher.py` is skipped by every CI run,
+because `.github/workflows/ci.yml` builds the bundle at line 52 -- *after* `Test suite` at
+line 44. The guard therefore only ever fires on a developer machine that built yesterday's
+bundle, which is exactly the "kept an older copy for a day" failure the test's own docstring
+says it exists to prevent. Moving the bundle step before the suite, or re-running that one
+test after the build, would make it mean what it claims. Not done in this phase: it changes
+CI's shape and ordering, which is the user's call, and the phase's standard is that a
+pipeline change is not a side effect of a planner fix.
+
+The `Build the desktop bundle` and `Upload measured benchmark data` steps are gated
+to `matrix.python-version == '3.11'` in `.github/workflows/ci.yml:53,73`, so they ran
+(and passed) on 3.11 and showed as skipped on 3.12; that is the gate working as written,
+not a regression. The benchmark step regenerated `benchmarks/suite_history.json` and the
+three SVGs on the runner from this tree.

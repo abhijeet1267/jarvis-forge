@@ -499,11 +499,15 @@ better than a gap you have to discover:
   stored parameters, so its retry is refused by the gate with `missing required parameter
   'path'` rather than being guessed at -- re-issuing the sentence is the way to run those.
   **27-C** the dashboard has no retry affordance; the endpoint is there and the page does not
-  offer it. **27-D** five `@pytest.mark.slow` OCR tests fail when the machine is already busy
+  offer it. **27-D** five OCR tests (three of them `@pytest.mark.slow`) fail when the
+  machine is already busy
   (measured: 5 failed / 1428 passed in a 46.9 s run, then the same file clean twice in ~4 s)
   -- the macOS Vision helper answers with no lines under load, and those tests need the
-  capability/timeout treatment Phase 21 gave the battery and ffmpeg ones. Reasoned in
-  `audit/PHASE27_JOB_RETRY_REPORT.md` §5.
+  capability/timeout treatment Phase 21 gave the battery and ffmpeg ones. Phase 29's skip
+  accounting closed the question of whether CI even runs them: the runner's 6 skips are 5
+  battery-gated plus 1 bundle-gated, so none of the five is skipped there and they do run.
+  Reasoned in
+  `audit/PHASE27_JOB_RETRY_REPORT.md` §5, and `audit/PHASE29_ROUTES_FILL_THEMSELVES_REPORT.md` §8.
 - **Reading is no longer allowed to write** (Phase 28). Asking for a document's
   contents used to *author* one, because the design route matched the noun
   (`readme|guide|document`) and never looked at the verb: measured, "read the
@@ -545,7 +549,12 @@ better than a gap you have to discover:
   the answer stayed honest, but nothing bounds that wait, which is the network equivalent
   of everything this phase is about. **29-C**: the same sweep covers only `params={…}`
   literals; a route that builds its dict in a variable is checked by behaviour tests, not
-  by the static one.
+  by the static one. **29-D**: the CI check that guards against the built bundle shipping a
+  stale `launcher.py` is skipped by every CI run -- `dist/` is gitignored, and the workflow
+  builds the bundle *after* the test step, so the guard can only ever fire on a machine that
+  happened to build one earlier. Measured while accounting for the runner's 6 skips
+  (`audit/PHASE29_ROUTES_FILL_THEMSELVES_REPORT.md` §8); fixing it means reordering CI, which
+  is a separate decision.
 - **A fallback still lends its summary to the memory sentence** (26-B, R-14's remaining
   half). The ledger row for the planned step now carries `answered_by: list_directory`, and
   the outcome carries `answered_for: search_files`, so the chain can be traced; what it does

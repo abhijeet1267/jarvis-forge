@@ -226,3 +226,15 @@ pytest -q` with no `-m 'not slow'` deselection, so those five `@pytest.mark.slow
 genuinely executed on both macOS images and passed. A busy laptop is the difference, not a
 code path the runner avoids.
 
+
+### Corrected additively by Phase 29 (2026-10-01)
+
+The sentence above says "those five `@pytest.mark.slow` OCR tests". Five tests do depend on
+the Vision helper, but only three carry the marker -- `test_read_image_text_tool`
+(`tests/test_vision.py:259`) and `test_find_image_text_tool` (`:274`) have no `slow` mark, so
+a `-m 'not slow'` run would still execute two of the group this report calls protected. The
+conclusion is unaffected and now has stronger backing: Phase 29 accounted for the runner's
+whole skip set (`pytest -m slow --collect-only` reports 4 slow-marked tests suite-wide, and
+the 6 skips are 5 `skipif(not HAS_BATTERY)` plus the `dist/`-gated bundle check), so no OCR
+test was in it -- the five did run on both images. See
+`audit/PHASE29_ROUTES_FILL_THEMSELVES_REPORT.md` §8.
