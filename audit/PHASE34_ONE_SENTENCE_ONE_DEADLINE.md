@@ -159,5 +159,38 @@ collected), up from 1642.
 
 ## 8. Git
 
-Committed and pushed to `main` on `abhijeet1267/jarvis-forge`. The CI verdict is appended
-once the runner has produced it, not before.
+Committed and pushed to `main` on `abhijeet1267/jarvis-forge`:
+
+```
+e5c80a6  A network read gets a total deadline, and a sentence gets one budget
+         14 files changed, 782 insertions(+), 36 deletions(-)
+```
+
+### The runner's verdict, measured after the push
+
+Run `36910545352`, both jobs green:
+
+| job | result | pytest line | wall |
+| --- | --- | --- | --- |
+| `suite (3.11)` | success | `1646 passed, 7 skipped, 1 warning in 107.32s` | 18:56:18 → 18:58:49Z |
+| `suite (3.12)` | success | `1646 passed, 7 skipped, 1 warning in 97.22s` | 18:56:14 → 18:58:28Z |
+
+`1646 + 7 = 1653`, so nothing was lost between the machines — but the skip count moved from
+the six accounted for in Phase 29 (five battery-gated, one `dist/`-gated) to **seven**, and
+the extra one is **not named here**: `pytest -q` reports counts without reasons. What is
+measured is the candidate set and one signal pointing inside it. The six from Phase 29 still
+account for themselves, so the seventh must come from a runtime skip, whose mechanisms are
+the arXiv reachability skip (`tests/test_research.py:423`), the Vision helper sites in
+`tests/test_vision.py`, `ps` availability, and `node` — the last two are ruled out because the
+dashboard tests that gate on `node` would then have skipped by the dozen, and the run grew by
+16–23 s of wall time against the previous one (81.4 s / 84.3 s), which is what an arXiv
+attempt that has to be waited out costs. That makes the arXiv skip the likely seventh and
+keeps it an inference, not a fact.
+
+The distinction matters for this phase specifically, because the arXiv path is the one it
+changed: a skip on the runner means the *real-network* leg was not exercised there, so the
+evidence that the deadline leaves the working path intact is the local run (0 skipped, arXiv
+answering, `research this idea` at 714 ms in `benchmarks/acceptance_latency.json`) and the
+fast-path test against a server that declares the length it actually sends — not CI.
+
+The §45 matrix re-ran on the runner and still holds 6 of 6, heater row included.
