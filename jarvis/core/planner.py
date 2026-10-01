@@ -192,6 +192,7 @@ class RulePlanner:
             self._robotics,
             self._laptop_center,
             self._run_command,
+            self._capability_fallback,
         ]
 
     # -- public --------------------------------------------------------------
@@ -499,6 +500,12 @@ class RulePlanner:
 
     def _help(self, text: str, raw: str) -> Optional[Intent]:
         if re.search(r"\b(help|what can you do|capabilities|commands)\b", text):
+            # "capabilities" and "commands" are also words inside tool names, so this
+            # rule fired on "get the device capabilities of phone_main" and answered a
+            # capability request with the 127-name listing. Asking what JARVIS can do
+            # names nothing; naming a capability is not asking for the catalogue.
+            if self._capability_matches(text):
+                return None
             names = ", ".join(self.tools.names())
             return Intent(
                 "help",
@@ -562,6 +569,11 @@ class RulePlanner:
                 params={"metric": _CAR_METRIC_WORDS[metric_word]},
                 confidence=0.9 if car_named else 0.8,
             )
+        # The catch-all reads every vehicle word as "status". "list car metrics" is a
+        # different request -- a registered capability of its own -- and an advertising
+        # default yields to a sentence that names a capability.
+        if self._capability_matches(text):
+            return None
         return Intent("car_status", tool="get_car_status", params={"metric": "all"}, confidence=0.85)
 
     def _watch(self, text: str, raw: str) -> Optional[Intent]:
@@ -1456,6 +1468,21 @@ class RulePlanner:
 
         # A workspace reference, which most coding actions need.
         workspace = self._match(r"\b(WS-[0-9a-f]{6,})\b", raw) or ""
+        open_request = bool(
+            re.search(r"\bopen\b", text) and re.search(r"\b(workspace|repo|repository)\b", text)
+        )
+        # Every action below except opening a directory is scoped to a workspace id, and
+        # most sentences do not carry one. Emitting ``workspace_id=""`` used to hand the
+        # user the gate's vocabulary -- measured, "list the workspace" was answered
+        # ``I cannot do that: missing required parameter 'workspace_id'`` -- which is
+        # 29-B arriving through a route that built its dict in a variable, the exact
+        # blind spot 29-C admitted about the static sweep.
+        if not workspace and not open_request:
+            return Intent(
+                "coding",
+                note="Which workspace? Give me its id (WS-…).",
+                clarification=True,
+            )
 
         # --- commit ---------------------------------------------------------
         if commit_verb:
@@ -1495,7 +1522,7 @@ class RulePlanner:
             )
 
         # --- open -----------------------------------------------------------
-        if re.search(r"\bopen\b", text) and re.search(r"\b(workspace|repo|repository)\b", text):
+        if open_request:
             path = self._match(r"(/[\w./-]+)", raw)
             if not path:
                 return Intent(
@@ -1582,23 +1609,39 @@ class RulePlanner:
             re.search(r"\b(scheduled|schedules?|recurring|repeating)\b", text)
             or re.search(r"\bwhat.*(scheduled|recurring)\b", text)
         ):
+            schedule_id = self._match(r"\b([A-Z]+-[0-9a-f]{6,})", raw) or ""
+            # Cancelling, pausing and resuming all name one schedule, and a sentence
+            # that does not carry its id used to emit ``schedule_id=""`` -- the gate
+            # then answered the user with "missing required parameter 'schedule_id'",
+            # which is 29-B through a route that built its params in a variable. The
+            # id is offered rather than guessed because listing them is one sentence
+            # away, and that sentence is reachable.
+            if not schedule_id and re.search(r"\b(cancel|delete|remove|stop|pause|resume|unpause|restart)\b", text):
+                return Intent(
+                    "schedule_needs_id",
+                    note=(
+                        "Which schedule? Give me its id (SCHED-…), or say "
+                        '"list my schedules" to see them.'
+                    ),
+                    clarification=True,
+                )
             if re.search(r"\b(cancel|delete|remove|stop)\b", text):
                 return Intent(
                     "cancel_schedule",
                     tool="cancel_schedule",
-                    params={"schedule_id": self._match(r"\b([A-Z]+-[0-9a-f]{6,})", raw) or ""},
+                    params={"schedule_id": schedule_id},
                 )
             if re.search(r"\bpause\b", text):
                 return Intent(
                     "pause_schedule",
                     tool="pause_schedule",
-                    params={"schedule_id": self._match(r"\b([A-Z]+-[0-9a-f]{6,})", raw) or ""},
+                    params={"schedule_id": schedule_id},
                 )
             if re.search(r"\b(resume|unpause|restart)\b", text):
                 return Intent(
                     "resume_schedule",
                     tool="resume_schedule",
-                    params={"schedule_id": self._match(r"\b([A-Z]+-[0-9a-f]{6,})", raw) or ""},
+                    params={"schedule_id": schedule_id},
                 )
             return Intent("list_schedules", tool="list_schedules", params={})
 
@@ -1951,6 +1994,13 @@ class RulePlanner:
             date = "tomorrow" if "tomorrow" in text else ("yesterday" if "yesterday" in text else "today")
             return Intent("list_events", tool="list_events", params={"date": date, "days": 1})
 
+        # The decline below advertises cancellation and update while this rule emits
+        # neither -- `cancel_event` and `update_event` were registered and unreachable,
+        # so "cancel event 12" was answered with a promise and no action. A route that
+        # lists what it can do yields to a sentence that names one of them.
+        if self._capability_matches(text):
+            return None
+
         return Intent(
             "calendar",
             note=(
@@ -2281,3 +2331,130 @@ class RulePlanner:
             params={"command": match.group(1).lower(), "args": match.group(2).strip()},
             confidence=0.7,
         )
+
+    # -- registry-derived capability fallback --------------------------------
+    #
+    # Last in the chain. The specific routes above do better when they fit, and this
+    # one exists only so that "the sentence names a capability JARVIS has" stops being
+    # indistinguishable from "JARVIS cannot do that".
+    #: Words that are grammar rather than part of a capability's name. Verbs stay in:
+    #: ``list_workspaces`` is reached by "list the workspace", and dropping "list"
+    #: would leave one token to match on, which is a guess not an identification.
+    _NAME_STOP = frozenset({
+        "the", "a", "an", "my", "me", "our", "of", "to", "for", "on", "in", "is", "was",
+        "it", "this", "that", "these", "those", "do", "does", "did", "and", "or", "then",
+        "please", "you", "your", "their", "are", "be", "into", "with", "at", "as", "from",
+    })
+
+    #: The shapes of value a sentence can supply without the router inventing one:
+    #: a quoted phrase, an id the system itself issues (ASSET-1a2b3c), a device id
+    #: (phone_main), or a bare number. Anything else is asked for.
+    _VALUE_SHAPES = (
+        re.compile(r"[\"'“‘]([^\"'”’]+)[\"'”’]"),
+        re.compile(r"\b([A-Z][A-Z0-9]{2,}-[0-9A-Za-z]+)\b"),
+        re.compile(r"\b([A-Za-z][A-Za-z0-9]*_[A-Za-z0-9_]+)\b"),
+        re.compile(r"\b(\d{1,6})\b"),
+    )
+
+    @staticmethod
+    def _stem(word: str) -> str:
+        """``workspaces`` -> ``workspace``, ``memories`` -> ``memory``.
+
+        Singular and plural reach the same capability; an alias dictionary would have
+        to be maintained per tool, which is the thing this route exists to avoid.
+        """
+        w = word.lower()
+        if len(w) > 4 and w.endswith("ies"):
+            return w[:-3] + "y"
+        if len(w) > 3 and w.endswith("s") and not w.endswith("ss"):
+            return w[:-1]
+        return w
+
+    @classmethod
+    def _sentence_values(cls, raw: str, needed: Tuple[str, ...]) -> Dict[str, Any]:
+        """Fill ``needed`` from the sentence's value-shaped tokens, in order.
+
+        Values are taken by position and assigned to the required parameters in the
+        order the tool declares them, so a sentence that names one thing for a tool
+        that needs two fills nothing -- it is left incomplete and asked about.
+        """
+        if not needed:
+            return {}
+        found: List[tuple] = []
+        for pattern in cls._VALUE_SHAPES:
+            for match in pattern.finditer(raw):
+                found.append((match.start(), match.end(), match.group(1)))
+        found.sort()
+        values: List[str] = []
+        taken_until = -1
+        for start, end, value in found:
+            if start < taken_until:
+                continue  # already inside a quoted phrase, not a second argument
+            taken_until = end
+            values.append(value.strip())
+        return {name: values[i] for i, name in enumerate(needed) if i < len(values)}
+
+    @staticmethod
+    def _capability_question(spec) -> str:
+        """Ask for a missing argument in the registry's own words.
+
+        The ``description`` is human language the tool already carries; the parameter
+        name is not, and 29-B's lesson is that showing it to a user is showing them an
+        internal field. So this never says ``uid`` or ``workspace_id``.
+        """
+        what = (spec.description or "").rstrip(".").strip()
+        what = f"{what[0].lower()}{what[1:]}" if what else spec.name.replace("_", " ")
+        return (
+            f"I can {what} — your sentence does not say which one. "
+            f'Say it with the name or id, like "{spec.name.replace("_", " ")} <which one>"?'
+        )
+
+    def _capability_matches(self, text: str) -> List:
+        """Registered tools whose own name words the sentence contains.
+
+        Two rules can ask this and need the same answer: the fallback below, and any
+        route that *lists or advertises* capabilities. An advertising route is the one
+        that must yield to a sentence naming a specific capability -- it is describing
+        the system, not doing anything. A route that refuses or that already has a tool
+        does not yield, which is why this is called at three named sites and not from
+        the dispatch loop: silently preferring a keyword match over a refusal would be
+        a way to talk past the permission engine.
+        """
+        words = {self._stem(w) for w in re.findall(r"[A-Za-z][A-Za-z0-9_]*", text)}
+        matches = []
+        for spec in self.tools.all():
+            tokens = {self._stem(t) for t in spec.name.split("_")} - self._NAME_STOP
+            if len(tokens) >= 2 and tokens <= words:
+                matches.append(spec)
+        return matches
+
+    def _capability_fallback(self, text: str, raw: str) -> Optional[Intent]:
+        """Reach a registered capability whose own name words the sentence contains.
+
+        Measured when this was written: 127 tools registered, 28 named nowhere in this
+        file, so no typed sentence could ask for any of them and the answer was "I
+        understood the words but not the goal" -- true of the router, heard as "I can't".
+        Deriving the route from the registry rather than hand-writing one regex per tool
+        is also what covers next month's tools, and the action is validated through
+        ``ToolRegistry.validate_params`` before it is emitted, so this route structurally
+        cannot repeat Phase 29's defect of claiming an action it cannot fill.
+        """
+        matches = self._capability_matches(text)
+        if not matches:
+            return None
+        if len(matches) > 1:
+            named = "; ".join((s.description or s.name).rstrip(".") for s in matches[:3])
+            return Intent(
+                "capability_ambiguous",
+                note=f"I know {len(matches)} capabilities that fit: {named}. Which did you mean?",
+                clarification=True,
+                confidence=0.5,
+            )
+        spec = matches[0]
+        params = self._sentence_values(raw, tuple(spec.required_parameters))
+        if not self.tools.validate_params(spec.name, params):
+            return Intent(spec.name, tool=spec.name, params=params, confidence=0.55)
+        return Intent(spec.name, note=self._capability_question(spec),
+                      clarification=True, confidence=0.55)
+
+

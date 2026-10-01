@@ -9,11 +9,11 @@ world afterwards**, and written to a tamper-evident audit chain. It runs with no
 key, no network and no vendor — an LLM is optional and off by default.
 
 What this repository is mostly about is not features. It is about the difference
-between *"the handler returned"* and *"the thing happened"* — and the twenty-nine phases of
+between *"the handler returned"* and *"the thing happened"* — and the thirty phases of
 measurement spent closing that gap, in the ledger and on the screen.
 
 [![ci](https://img.shields.io/github/actions/workflow/status/abhijeet1267/jarvis-forge/ci.yml?label=tests%20%C2%B7%20macos)](https://github.com/abhijeet1267/jarvis-forge/actions/workflows/ci.yml)
-[![suite](https://img.shields.io/badge/tests-1487%20passed%20%C2%B7%200%20failed-16a34a)](tests)
+[![suite](https://img.shields.io/badge/tests-1555%20passed%20%C2%B7%200%20failed-16a34a)](tests)
 [![tools](https://img.shields.io/badge/tools-127%20across%2015%20agents-2f6df6)](jarvis/tools)
 [![offline](https://img.shields.io/badge/LLM-off%20by%20default%20%C2%B7%20runs%20fully%20offline-0f172a)](jarvis/config.py)
 [![python](https://img.shields.io/badge/python-3.11%20%C2%B7%203.12%20(CI)-6b7688)](.github/workflows/ci.yml)
@@ -21,13 +21,13 @@ measurement spent closing that gap, in the ledger and on the screen.
 | | |
 |---|---|
 | **Runtime** | Python 3.11+ · FastAPI · SQLite (32 tables) · stdlib-first |
-| **Planning** | `RulePlanner` — 38 deterministic routes, no model required |
-| **Authority** | `PermissionEngine` · 5 risk tiers · 25 confirmation-gated tools |
+| **Planning** | `RulePlanner` — 40 deterministic routes, no model required |
+| **Authority** | `PermissionEngine` · 5 risk tiers · 26 confirmation-gated tools |
 | **Proof** | tri-state `Verification` (success / failed / **unknown**) on every action |
 | **Ledger** | `action_logs` hash-chained + `audit.jsonl` append-only, `verify_chain()` |
 | **Edge** | token file `0600` · constant-time compare · same-origin · Host allowlist · 600/min |
 | **Surface** | web dashboard · voice (macOS `say`/STT) · watch queue · phone pairing |
-| **Size** | ~50k lines · 32.3k source · 15.6k tests · 46 test modules |
+| **Size** | ~54k lines · 34.4k source · 18.4k tests · 54 test modules |
 
 ---
 
@@ -39,11 +39,11 @@ and the diagrams read their counts from the live registry.
 
 | Claim | Value | Reproduce |
 |---|---|---|
-| Test suite | **1487 passed · 0 failed · 0 xfailed** (1487 collected; the network-gated arXiv test skips when arXiv is refusing requests, and passed in the run above) | `python -m pytest -q` |
-| Suite growth, Phase 9 → 29 | 875 passing / **126 failing** → 1487 passing / 0 failing / **0 xfailed** at the Phase 29 close | `cat benchmarks/suite_history.json` |
+| Test suite | **1555 passed · 0 failed · 0 xfailed** (1555 collected; the network-gated arXiv test skips when arXiv is refusing requests, and passed in the run above) | `python -m pytest -q` |
+| Suite growth, Phase 9 → 30 | 875 passing / **126 failing** → 1555 passing / 0 failing / **0 xfailed** at the Phase 30 close | `cat benchmarks/suite_history.json` |
 | Tools registered | **127** | `python -c "from jarvis.core.orchestrator import JarvisCore as J; print(len(J().tools.names()))"` |
-| Confirmation-gated | **25** of 127 | `python assets/build_diagrams.py` (prints the live counts) |
-| Risk tiers | read 68 · low 33 · external 12 · high 11 · physical 3 | same |
+| Confirmation-gated | **26** of 127 | `python assets/build_diagrams.py` (prints the live counts) |
+| Risk tiers | read 68 · low 32 · external 12 · high 12 · physical 3 | same |
 | API routes | **104** | `python -c "s=open('jarvis/api/app.py').read(); print(sum(s.count(f'@app.{v}(\"') for v in ('get','post','put','patch','delete')))"` |
 | Acceptance commands measured | 17 of 18, live, over HTTP | `python benchmarks/acceptance_run.py` |
 | Plan's safety matrix (§45) | **5 of 6** hold; the sixth is a documented gap | `python benchmarks/safety_run.py` |
@@ -80,7 +80,7 @@ and the diagrams read their counts from the live registry.
 - [Benchmarks](#benchmarks)
 - [Hardware truth](#hardware-truth)
 - [What the system says when something fails](#what-the-system-says-when-something-fails)
-- [The twenty-nine phases](#the-twenty-nine-phases)
+- [The thirty phases](#the-thirty-phases)
 - [The plan's safety matrix, run](#the-plans-safety-matrix-run)
 - [Smooth and fast](#smooth-and-fast)
 - [Security model](#security-model)
@@ -116,9 +116,9 @@ and not a quiet success.
 
 ## Benchmarks
 
-### Suite growth, Phase 9 → Phase 29
+### Suite growth, Phase 9 → Phase 30
 
-<img src="assets/chart-suite-growth.svg" alt="Test suite growth from 875 passing with 126 failing, to 1487 passing with none failing at the close of Phase 29" width="100%"/>
+<img src="assets/chart-suite-growth.svg" alt="Test suite growth from 875 passing with 126 failing, to 1555 passing with none failing at the close of Phase 30" width="100%"/>
 
 Phase 9 inherited **126 failing tests**. The cause was a single import line in
 `jarvis/tools/base.py` that left `Verification` undefined, so every tool result raised
@@ -173,7 +173,7 @@ moved, and the ledger now says exactly that. A simulated *car read* is still a s
 read — reading a labelled simulator is a real read — and that distinction is pinned by a
 test so it stays a decision rather than an accident.
 
-## The twenty-nine phases
+## The thirty phases
 
 Each closed with a report in [`audit/`](audit), and each report's claims carry the
 command that produced them.
@@ -201,6 +201,7 @@ command that produced them.
 | **27 — A retry that retries** | plan §31's `retry` was a record with no dispatch behind it. A step now stores its own parameters, and `POST /tasks/{id}/retry` re-issues the failed steps through the permission gate -- a gated step mints a fresh approval, a step whose parameters were never stored is refused rather than guessed at |
 | **28 — Reading is not writing** | "read the readme" *created a document*; an artifact route now needs an authoring verb, and `read_file` -- registered since v0.1 and unreachable from any sentence -- finally answers one |
 | **29 — A route fills its own action** | flowcharts and architecture diagrams had been dead since they were written: the route sent a title to a tool that also needs `steps` / `components`, so the gate answered the user with *"missing required parameter 'steps'"* -- even when the sentence named them. What a sentence states is now used; what it omits is asked for |
+| **30 — A capability you have is a capability you can ask for** | 46 of 127 tools answered their own name with "I understood the words but not the goal" -- twice the gap the open item had recorded, because that item had been measured by grepping the planner instead of asking the router. A registry-derived route now reaches a tool whose name words a sentence contains, validates the action with the registry before emitting it, and asks in the tool's own description when an argument is missing; three routes that *advertised* capabilities yield to a sentence naming one; and the delete-capable tool that was tiered LOW-and-unconfirmed for as long as it was unreachable was retiered in the same commit |
 
 ### Four kinds of "I ran nothing"
 
@@ -288,6 +289,45 @@ remembered. Building this also turned up a hole in the router's own reporting: a
 raised on every call was logged at `info` and returned as "no rule matched", so a broken
 append route was indistinguishable from a sentence JARVIS doesn't understand -- it now logs
 the rule's name at `warning`, with a test that pins it.
+
+### Forty-six capabilities existed and could not be asked for (Phase 30)
+
+The open item said 28 tools were unreachable, and the number had been produced by grepping
+`planner.py` for each tool's name. Asking the router instead of the source file found
+**46**: tools whose own name, typed out, was answered *"I understood the words but not the
+goal"* — `read_file`, `get_time`, `open_app`, `close_app`, `copy_file`, `list_events` among
+them, all of which have routes that are keyed on some other phrasing. Measured live, before
+the fix:
+
+```
+>>> "cancel event 12"
+    intent=calendar  kind=declined  tools=[]
+    reply='I can read your schedule, find free time, and create or cancel events. …'
+>>> "get the device capabilities of phone_main"
+    reply='I can open and close applications, … Registered tools: {127 names}.'
+>>> "list the workspace"
+    decision=BLOCK  reply="I cannot do that: missing required parameter 'workspace_id'."
+```
+
+The first is a route advertising a capability the router did not have; the second is the
+word "capabilities" being a help-rule trigger, so naming one capability earned the whole
+catalogue; the third is 29-B alive in the shipped tree, reaching a user through a route that
+built its parameters in a variable — the exact blind spot the static sweep had admitted.
+
+A capability that exists is now reachable by naming it: a registry-derived route runs last,
+matches a tool only when the sentence contains *all* of its name words (at least two, so one
+keyword never plans anything), asks `ToolRegistry.validate_params` before it emits, and when
+the argument is missing phrases the question out of the tool's own `description` rather than
+its field name — *"I can read one message in full — your sentence does not say which one."*
+Three advertising routes yield to a sentence that names a capability; refusing routes do not,
+because quietly preferring a keyword over a refusal would be a way of talking past the
+permission engine. Registering a tool is now also registering a way to ask for it.
+
+Reaching a tool changes nothing about whether it runs: `"cancel event 12"` and
+`"sweep expired memories"` both come back `CONFIRM` with no action executed, and the
+second one is why this phase retiered a tool in its own commit — `sweep_expired_memories`
+permanently deletes, was tiered `LOW` with no confirmation, and had been so for exactly as
+long as it had been unreachable. The two facts were holding each other up.
 
 ## The plan's safety matrix, run
 
@@ -391,7 +431,7 @@ curl -s -H "X-JARVIS-Token: $TOKEN" -H 'Content-Type: application/json' \
      -d '{"text":"what is my battery"}' http://127.0.0.1:8765/command
 
 # Prove it to yourself:
-python -m pytest -q                       # 1487 passed, 0 failed (one research test skips if arXiv is refusing)
+python -m pytest -q                       # 1555 passed, 0 failed (one research test skips if arXiv is refusing)
 python benchmarks/acceptance_run.py       # re-measures the README's numbers
 python assets/build_charts.py && python assets/build_diagrams.py
 ```
@@ -412,9 +452,9 @@ jarvis/
   scheduler/   recurring jobs, runner with per-run re-authorization
   car/ home/ robotics/ watch/ vision/ research/ design/ coding/
   integrations/ IMAP/SMTP and CalDAV providers with local fallbacks
-tests/         53 modules · 1487 collected · includes the dashboard's own JS, run by Node
+tests/         54 modules · 1555 collected · includes the dashboard's own JS, run by Node
 dashboard/     single-file control panel; state rendered from server fields
-audit/         31 phase reports + 4 CSV matrices — the evidence behind this README
+audit/         32 phase reports + 4 CSV matrices — the evidence behind this README
 benchmarks/    acceptance_run.py and the JSON the charts are drawn from
 assets/        generated figures + the two generators that draw them
 app/           PyInstaller spec and bundle sources (see Downloads — currently broken)
@@ -516,14 +556,15 @@ better than a gap you have to discover:
   verb leads the sentence, so "document the parser" still writes and "what does the
   document say" does not — and `read_file`, registered since v0.1 and reachable by no
   typed sentence until now, answers with the file's text.
-  **28-A** remains: that was one instance of a whole family. **28 of 127** registered
-  tools still appear nowhere in `planner.py`, so they cannot be asked for at all
-  (`cancel_event`, `update_event`, `read_email`, `search_events`, `ping_device`,
-  `get_device_capabilities`, `inspect_memory`, `get_schedule`, `list_workspaces`,
-  `propose_code_change`, `apply_code_change`, the three `extract_paper_*` among them).
-  The sentence router answers "I understood the words but not the goal", which is true
-  of the *router* and reads to a user as "I can't" — the gap is reachability, not
-  honesty, but it is a gap. **28-B** was `make a diagram of the build` answering with
+  **28-A** was that one instance of a whole family, and Phase 30 measured the family: the
+  count was not 28 but **46** tools that answered their own name with "I understood the
+  words but not the goal" (`cancel_event`, `update_event`, `read_email`, `search_events`,
+  `ping_device`, `get_device_capabilities`, `inspect_memory`, `get_schedule`,
+  `list_workspaces`, `propose_code_change`, `apply_code_change`, the three `extract_paper_*`
+  among them) — 28 had been the number of tools missing from `planner.py`, which is a
+  statement about a source file, not about behaviour. Naming a tool's own words now reaches
+  it or asks for the argument, so **the router no longer claims a capability gap it does
+  not have**. What remains is meaning rather than spelling — see **30-B**, below. **28-B** was `make a diagram of the build` answering with
   *"missing required parameter 'components'"* — closed by Phase 29, below.
 - **A route may not claim an action it cannot fill** (Phase 29). The flowchart and
   architecture-diagram routes had been dead since they were written: they sent a title
@@ -555,6 +596,24 @@ better than a gap you have to discover:
   happened to build one earlier. Measured while accounting for the runner's 6 skips
   (`audit/PHASE29_ROUTES_FILL_THEMSELVES_REPORT.md` §8); fixing it means reordering CI, which
   is a separate decision.
+- **Naming a capability now reaches it** (Phase 30). A registry-derived route runs last in
+  the chain: all of a tool's name words in the sentence reach the tool, `validate_params`
+  has to approve the action before it is emitted, and a missing argument is asked about in
+  the tool's own `description`. Reasoned in
+  `audit/PHASE30_CAPABILITIES_ARE_REACHABLE_REPORT.md`.
+  **30-A** was closed inside the phase rather than carried: `sweep_expired_memories` deletes
+  permanently and was tiered `LOW` with no confirmation, fifteen lines from
+  `clear_memory_scope`, which is `DESTRUCTIVE` and confirms — the only difference was that no
+  sentence could reach the first one. It is `DESTRUCTIVE` + confirmation now, in the same
+  commit as the route that made it typeable. What is carried:
+  **30-B** reachability is by *spelling*, not meaning — `"ping my phone"` still matches
+  nothing, because `ping_device` requires the word "device"; an alias vocabulary is the next
+  gain and the next source of false matches. **30-C** a case-by-case route still wins where it
+  claims the sentence, even when it reads it less precisely: `"list car metrics"` is answered
+  with car status (an honest reply, the wrong question). **30-D** 55 capabilities can be named
+  but not run, because their argument is an id nobody has memorised and no route offers the
+  list first — `list_workspaces` then `close_workspace` is two sentences apart, and the
+  multi-step machinery from Phase 14 already exists to close that gap.
 - **A fallback still lends its summary to the memory sentence** (26-B, R-14's remaining
   half). The ledger row for the planned step now carries `answered_by: list_directory`, and
   the outcome carries `answered_for: search_files`, so the chain can be traced; what it does

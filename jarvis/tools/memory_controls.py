@@ -514,11 +514,16 @@ SPECS = [
             name="sweep_expired_memories",
             description="Delete memories whose expiry has passed.",
             agent="memory",
-            risk=RiskLevel.LOW,
+            # Was LOW with no confirmation, fifteen lines below the tool that deletes
+            # a whole scope and is DESTRUCTIVE and confirms. Same store.forget() call,
+            # same reversible=False; the only difference was that no sentence could
+            # reach this one. Phase 30 made it reachable, so the tier had to catch up.
+            risk=RiskLevel.DESTRUCTIVE,
+            requires_confirmation=True,
             reversible=False,
             allowed_devices=["laptop_main"],
             parameters={},
-            tags=["memory"],
+            tags=["memory", "destructive"],
         ),
         sweep_expired_memories,
     ),

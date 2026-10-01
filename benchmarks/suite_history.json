@@ -146,6 +146,13 @@
    "passed": 1487,
    "failed": 0,
    "note": "a route asks instead of quoting a schema field"
+  },
+  {
+   "phase": "30 capabilities reachable",
+   "collected": 1555,
+   "passed": 1555,
+   "failed": 0,
+   "note": "a named capability is reached, or asked about"
   }
  ]
 }
