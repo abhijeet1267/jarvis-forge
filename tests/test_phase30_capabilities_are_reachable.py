@@ -98,8 +98,40 @@ def _parse(core, text: str):
     return core.planner.parse(text)
 
 
+@pytest.fixture(autouse=True)
+def _registry_restored(core):
+    """The registry is session-scoped, so a capability or handler added here outlives the
+    test that added it unless it is put back.
+
+    Measured consequence: with this file's stub ``list_workspaces`` (which answers
+    ``"list_workspaces done"`` and carries no ``output``) still installed, Phase 33's
+    tests failed in a full run and passed alone. The docstring below used to claim these
+    were "restored by the autouse fixture" when no such fixture existed -- a protection
+    asserted in a comment and not implemented.
+    """
+    import copy
+
+    specs = dict(core.tools._specs)
+    handlers = dict(core.tools._handlers)
+    nested = {name: (copy.deepcopy(s.provides_identifiers), copy.deepcopy(s.parameters))
+              for name, s in specs.items()}
+    yield
+    core.tools._specs.clear()
+    core.tools._specs.update(specs)
+    core.tools._handlers.clear()
+    core.tools._handlers.update(handlers)
+    for name, (provides, parameters) in nested.items():
+        spec = core.tools._specs.get(name)
+        if spec is None:
+            continue
+        spec.provides_identifiers.clear()
+        spec.provides_identifiers.update(provides)
+        spec.parameters.clear()
+        spec.parameters.update(parameters)
+
+
 def _handlers(core, tools):
-    """Counting handlers that succeed, restored by the autouse fixture."""
+    """Counting handlers that succeed, restored by the fixture above."""
     calls = {t: 0 for t in tools}
 
     def build(tool):

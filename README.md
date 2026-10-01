@@ -13,7 +13,7 @@ between *"the handler returned"* and *"the thing happened"* — and the thirty p
 measurement spent closing that gap, in the ledger and on the screen.
 
 [![ci](https://img.shields.io/github/actions/workflow/status/abhijeet1267/jarvis-forge/ci.yml?label=tests%20%C2%B7%20macos)](https://github.com/abhijeet1267/jarvis-forge/actions/workflows/ci.yml)
-[![suite](https://img.shields.io/badge/tests-1621%20passed%20%C2%B7%200%20failed-16a34a)](tests)
+[![suite](https://img.shields.io/badge/tests-1642%20passed%20%C2%B7%200%20failed-16a34a)](tests)
 [![tools](https://img.shields.io/badge/tools-127%20across%2015%20agents-2f6df6)](jarvis/tools)
 [![offline](https://img.shields.io/badge/LLM-off%20by%20default%20%C2%B7%20runs%20fully%20offline-0f172a)](jarvis/config.py)
 [![python](https://img.shields.io/badge/python-3.11%20%C2%B7%203.12%20(CI)-6b7688)](.github/workflows/ci.yml)
@@ -27,7 +27,7 @@ measurement spent closing that gap, in the ledger and on the screen.
 | **Ledger** | `action_logs` hash-chained + `audit.jsonl` append-only, `verify_chain()` |
 | **Edge** | token file `0600` · constant-time compare · same-origin · Host allowlist · 600/min |
 | **Surface** | web dashboard · voice (macOS `say`/STT) · watch queue · phone pairing |
-| **Size** | ~55k lines · 34.6k source · 18.9k tests · 56 test modules |
+| **Size** | ~55k lines · 34.8k source · 19.4k tests · 57 test modules |
 
 ---
 
@@ -39,8 +39,8 @@ and the diagrams read their counts from the live registry.
 
 | Claim | Value | Reproduce |
 |---|---|---|
-| Test suite | **1621 passed · 0 failed · 0 xfailed** (1621 collected; the network-gated arXiv test skips when arXiv is refusing requests, and passed in the run above) | `python -m pytest -q` |
-| Suite growth, Phase 9 → 32 | 875 passing / **126 failing** → 1621 passing / 0 failing / **0 xfailed** at the Phase 32 close | `cat benchmarks/suite_history.json` |
+| Test suite | **1642 passed · 0 failed · 0 xfailed** (1642 collected; the network-gated arXiv test skips when arXiv is refusing requests, and passed in the run above) | `python -m pytest -q` |
+| Suite growth, Phase 9 → 33 | 875 passing / **126 failing** → 1642 passing / 0 failing / **0 xfailed** at the Phase 33 close | `cat benchmarks/suite_history.json` |
 | Tools registered | **127** | `python -c "from jarvis.core.orchestrator import JarvisCore as J; print(len(J().tools.names()))"` |
 | Confirmation-gated | **27** of 127 | `python assets/build_diagrams.py` (prints the live counts) |
 | Risk tiers | read 68 · low 32 · external 12 · high 12 · physical 3 | same |
@@ -80,7 +80,7 @@ and the diagrams read their counts from the live registry.
 - [Benchmarks](#benchmarks)
 - [Hardware truth](#hardware-truth)
 - [What the system says when something fails](#what-the-system-says-when-something-fails)
-- [The thirty-two phases](#the-thirty-two-phases)
+- [The thirty-three phases](#the-thirty-three-phases)
 - [The plan's safety matrix, run](#the-plans-safety-matrix-run)
 - [Smooth and fast](#smooth-and-fast)
 - [Security model](#security-model)
@@ -116,9 +116,9 @@ and not a quiet success.
 
 ## Benchmarks
 
-### Suite growth, Phase 9 → Phase 32
+### Suite growth, Phase 9 → Phase 33
 
-<img src="assets/chart-suite-growth.svg" alt="Test suite growth from 875 passing with 126 failing, to 1621 passing with none failing at the close of Phase 32" width="100%"/>
+<img src="assets/chart-suite-growth.svg" alt="Test suite growth from 875 passing with 126 failing, to 1642 passing with none failing at the close of Phase 33" width="100%"/>
 
 Phase 9 inherited **126 failing tests**. The cause was a single import line in
 `jarvis/tools/base.py` that left `Verification` undefined, so every tool result raised
@@ -173,7 +173,7 @@ moved, and the ledger now says exactly that. A simulated *car read* is still a s
 read — reading a labelled simulator is a real read — and that distinction is pinned by a
 test so it stays a decision rather than an accident.
 
-## The thirty-two phases
+## The thirty-three phases
 
 Each closed with a report in [`audit/`](audit), and each report's claims carry the
 command that produced them.
@@ -203,6 +203,7 @@ command that produced them.
 | **29 — A route fills its own action** | flowcharts and architecture diagrams had been dead since they were written: the route sent a title to a tool that also needs `steps` / `components`, so the gate answered the user with *"missing required parameter 'steps'"* -- even when the sentence named them. What a sentence states is now used; what it omits is asked for |
 | **30 — A capability you have is a capability you can ask for** | 46 of 127 tools answered their own name with "I understood the words but not the goal" -- twice the gap the open item had recorded, because that item had been measured by grepping the planner instead of asking the router. A registry-derived route now reaches a tool whose name words a sentence contains, validates the action with the registry before emitting it, and asks in the tool's own description when an argument is missing; three routes that *advertised* capabilities yield to a sentence naming one; and the delete-capable tool that was tiered LOW-and-unconfirmed for as long as it was unreachable was retiered in the same commit |
 | **31 — The device you named is the device that changes** | "turn on the heater" resolved to **Study AC** (the gateway filed heating under cooling) and `control_home_device` was LOW with no confirmation, so the request was approved for execution and only an offline gateway stopped a device changing. The synonym, the resolver and the tier were tightened in one commit, the permission engine grew a device guard beside its path guard, and the plan's §45 matrix has held **6 of 6** since |
+| **33 — A question carries its own answer** | 55 capabilities answered a plain request by asking the user to produce an id the system had issued and could print (`list_workspaces` returns `WS-301adce395d5`). Seven enumerators now declare which identifier they own, the orchestrator offers up to four real candidates inside the question, and 19 of those 55 questions carry them. Found on the way: "close the workspace WS-…" answered with a *description* of the workspace and recorded a success. Also found: a test file whose docstring promised an autouse restore fixture that did not exist, leaving stub handlers installed for the rest of the session — green alone, red in a full run. |
 | **32 — One vocabulary, one approval** | the router kept eleven device words where the gateway keeps twenty-six, so nine words the system understood were answered as nonsense; and the confirmation prompt re-derived its own line from the raw parameters while the dashboard rendered the stored preview. The pattern is now built from the gateway's own table (pinned by adding and removing a synonym at test time, both directions), and the approval names the thing: *Will do: set Kitchen light (kitchen.light) to 40%* |
 
 ### Four kinds of "I ran nothing"
@@ -440,7 +441,7 @@ curl -s -H "X-JARVIS-Token: $TOKEN" -H 'Content-Type: application/json' \
      -d '{"text":"what is my battery"}' http://127.0.0.1:8765/command
 
 # Prove it to yourself:
-python -m pytest -q                       # 1621 passed, 0 failed (one research test skips if arXiv is refusing)
+python -m pytest -q                       # 1642 passed, 0 failed (one research test skips if arXiv is refusing)
 python benchmarks/acceptance_run.py       # re-measures the README's numbers
 python assets/build_charts.py && python assets/build_diagrams.py
 ```
@@ -461,9 +462,9 @@ jarvis/
   scheduler/   recurring jobs, runner with per-run re-authorization
   car/ home/ robotics/ watch/ vision/ research/ design/ coding/
   integrations/ IMAP/SMTP and CalDAV providers with local fallbacks
-tests/         56 modules · 1621 collected · includes the dashboard's own JS, run by Node
+tests/         57 modules · 1642 collected · includes the dashboard's own JS, run by Node
 dashboard/     single-file control panel; state rendered from server fields
-audit/         34 phase reports + 4 CSV matrices — the evidence behind this README
+audit/         35 phase reports + 4 CSV matrices — the evidence behind this README
 benchmarks/    acceptance_run.py and the JSON the charts are drawn from
 assets/        generated figures + the two generators that draw them
 app/           PyInstaller spec and bundle sources (see Downloads — currently broken)
@@ -534,6 +535,12 @@ set Kitchen light (kitchen.light) to 40%"*.
   the refusal stops firing. **32-B** a non-home confirmation still shows a parameter dump
   (`delete_file on laptop_main | path=… | permanent=False`); tools that own an identifier worth
   resolving — memory, research, workspaces — could each get the same `describe_*` treatment.
+  **33-A/33-B/33-C** from Phase 33: 36 of the 55 questions still ask for something with no
+  zero-argument source (`memory_id` — `search_memory` refuses an empty query — plus `path`,
+  `title`, `claim`, which are the user's own values rather than ids the system issued); a
+  sentence claimed by a specific route never reaches the offer ("forget paper" is asked for a
+  research topic); and the offer lists candidates the user still has to name back, because
+  resolving a *label* into an actuation target is exactly what Phase 31 forbade.
   **32-C** `dim` reaches the gateway as `action="set"`, so the approval reads "set Kitchen light
   to 40%" where a person wrote "dim": no meaning is lost, and nothing is invented, but that
   verb is still the tool's rather than the user's.

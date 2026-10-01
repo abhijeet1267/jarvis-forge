@@ -473,6 +473,8 @@ SPECS = [
             allowed_devices=["laptop_main"],
             parameters={"query": "string", "unread_only": "bool", "limit": "int"},
             tags=["email", "read"],
+            provides_identifiers={"uid": {"items": "results", "id": "uid", "label": "subject"}},
+
         ),
         search_email,
     ),

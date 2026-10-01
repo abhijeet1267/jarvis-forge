@@ -94,6 +94,10 @@ class Intent:
     confidence: float = 0.8
     note: Optional[str] = None
     tool: Optional[str] = None
+    #: Identifiers the sentence did not supply for the tool this route wanted to call.
+    #: Carried through to the plan so the orchestrator can look the candidates up in the
+    #: registry rather than making the user recite an id (Phase 33).
+    missing_identifiers: Tuple[str, ...] = ()
     #: Is this note a question the user can answer to proceed? ``None`` means "read
     #: it from the wording", which is safe here because the wording being read is the
     #: route's own sentence, not the user's punctuation. Set it to ``False`` where a
@@ -297,6 +301,7 @@ class RulePlanner:
             ask = intent.clarification if intent.clarification is not None \
                 else _asks_for_something(intent.note)
             plan.direct_reply = intent.note
+            plan.missing_identifiers = list(intent.missing_identifiers)
             if ask:
                 plan.reply_kind = "clarification"
                 plan.needs_clarification = True
@@ -1482,6 +1487,7 @@ class RulePlanner:
                 "coding",
                 note="Which workspace? Give me its id (WS-…).",
                 clarification=True,
+                missing_identifiers=("workspace_id",),
             )
 
         # --- commit ---------------------------------------------------------
@@ -1535,6 +1541,14 @@ class RulePlanner:
             return Intent(
                 "coding_report", tool="coding_report", params={"workspace_id": workspace}
             )
+
+        # The default branch is an inspect, and "workspace" appears in sentences that
+        # asked for something else entirely: measured, "close the workspace WS-…" returned
+        # "tmp16ycb2dy: 0 source file(s)…" and recorded a success. A route that falls
+        # through to a default yields to a sentence that names a specific capability --
+        # the rule Phase 31 wrote for advertising routes, applied here to a catch-all.
+        if any(spec.name != "inspect_workspace" for spec in self._capability_matches(text)):
+            return None
 
         return Intent(
             "inspect_workspace",
@@ -1624,6 +1638,7 @@ class RulePlanner:
                         '"list my schedules" to see them.'
                     ),
                     clarification=True,
+                    missing_identifiers=("schedule_id",),
                 )
             if re.search(r"\b(cancel|delete|remove|stop)\b", text):
                 return Intent(
@@ -2362,7 +2377,7 @@ class RulePlanner:
     #: (phone_main), or a bare number. Anything else is asked for.
     _VALUE_SHAPES = (
         re.compile(r"[\"'“‘]([^\"'”’]+)[\"'”’]"),
-        re.compile(r"\b([A-Z][A-Z0-9]{2,}-[0-9A-Za-z]+)\b"),
+        re.compile(r"\b([A-Z]{2,}-[0-9A-Za-z]+)\b"),
         re.compile(r"\b([A-Za-z][A-Za-z0-9]*_[A-Za-z0-9_]+)\b"),
         re.compile(r"\b(\d{1,6})\b"),
     )
@@ -2465,7 +2480,8 @@ class RulePlanner:
         params = self._sentence_values(raw, tuple(spec.required_parameters))
         if not self.tools.validate_params(spec.name, params):
             return Intent(spec.name, tool=spec.name, params=params, confidence=0.55)
+        missing = tuple(p for p in spec.required_parameters if p not in params)
         return Intent(spec.name, note=self._capability_question(spec),
-                      clarification=True, confidence=0.55)
+                      clarification=True, confidence=0.55, missing_identifiers=missing)
 
 

@@ -194,6 +194,75 @@ class JarvisCore:
             return ActionStatus.FAILED
         return ActionStatus.UNVERIFIED
 
+    #: How many candidates a question is allowed to name. Bounded because a list of
+    #: forty is a wall of text that answers nothing, and the reply is also what gets
+    #: remembered -- the same reason ``MAX_READ_EXCERPT`` exists for file reads.
+    IDENTIFIER_OFFER_LIMIT = 4
+
+    async def _offer_identifiers(self, request: CommandRequest, plan: Plan) -> None:
+        """Fill in the identifiers a question asks for, from the registry's own reads.
+
+        Only a tool declared as an ``identifier_source`` is run, and the registry admits
+        only a READ-tier one that needs no arguments of its own. What comes back is
+        offered, never chosen: this emits no action, and the sentence still ends in a
+        question. A lookup that fails or finds nothing says so, rather than leaving the
+        bare request for an id or inventing a row to fill the space.
+        """
+        if not plan.missing_identifiers:
+            return
+        asker = self.tools.get(plan.intent)
+        agent = asker.agent if asker is not None else ""
+        notes: List[str] = []
+
+        for param in plan.missing_identifiers:
+            spec = self.tools.identifier_source(param, agent)
+            if spec is None:
+                continue
+            plan.identifier_sources_used.append(spec.name)
+            shape = (spec.provides_identifiers or {}).get(param, {})
+            result = await self._run_identifier(spec, request)
+            if result is None or not getattr(result, "ok", False):
+                reason = getattr(result, "error", None) or "the check did not answer"
+                notes.append(f"I asked {spec.name} and it could not tell me: {reason}.")
+                continue
+            rows = list((getattr(result, "output", None) or {}).get(shape.get("items", "")) or [])
+            if not rows:
+                notes.append("I checked, and there is nothing of that kind right now.")
+                continue
+            shown = rows[: self.IDENTIFIER_OFFER_LIMIT]
+            listed = ", ".join(
+                "%s (%s)" % (row.get(shape.get("label", ""), ""),
+                             row.get(shape.get("id", ""), "?"))
+                for row in shown
+            )
+            more = f" (+{len(rows) - len(shown)} more)" if len(rows) > len(shown) else ""
+            notes.append(f"Here is what I have: {listed}{more}.")
+
+        if not notes:
+            return
+        addition = " ".join(notes)
+        if plan.clarification_question:
+            plan.clarification_question = f"{plan.clarification_question} {addition}"
+        if plan.direct_reply:
+            plan.direct_reply = f"{plan.direct_reply} {addition}"
+
+    async def _run_identifier(self, spec, request: CommandRequest):
+        """Run one enumerator for the purpose of phrasing a question.
+
+        Failures come back rather than raising: a lookup that cannot answer should leave
+        the question standing, not replace it with an error nobody asked about.
+        """
+        handler = self.tools.handler(spec.name)
+        if handler is None:
+            return None
+        try:
+            return await handler(self._context(request))
+        except Exception as exc:  # a read that throws must not become the user's problem
+            log.warning("identifier lookup raised",
+                        extra_fields={"tool": spec.name,
+                                      "error": f"{type(exc).__name__}: {exc}"})
+            return None
+
     @staticmethod
     def _note_unhandled(response: CommandResponse, plan: Plan) -> None:
         """Say which part of the sentence this plan did not cover.
@@ -335,6 +404,14 @@ class JarvisCore:
         response.plan = plan
         response.model_used = plan.planner
 
+        # A question that asks for an identifier the system already holds is asking the
+        # user to do a lookup the product has already done (Phase 33). Answering that
+        # part is done before either reply branch, because a route's question arrives as
+        # a ``direct_reply`` and the planner's own clarification as a
+        # ``clarification_question`` -- both are questions, and both deserve the same
+        # help.
+        await self._offer_identifiers(request, plan)
+
         if plan.direct_reply:
             response.reply = plan.direct_reply
             # ``decision`` is the permission outcome. Nothing was permitted to run
@@ -354,7 +431,11 @@ class JarvisCore:
                         # Which kind of non-action this was, so a refusal and a question
                         # stay distinguishable in the chain and not only on screen.
                         "reply_kind": plan.reply_kind,
-                        "unhandled": list(plan.unhandled)},
+                        "unhandled": list(plan.unhandled),
+                        # A question that names candidates got them from a read, and the
+                        # chain says which one (Phase 33 -- the same attribution debt R-14
+                        # settled for a fallback that answers with another tool's result).
+                        "identifier_sources_used": list(plan.identifier_sources_used)},
             )
             self._log_message(request.session_id, "assistant", response.reply, plan.intent)
             response.duration_ms = int((time.perf_counter() - started) * 1000)
@@ -379,6 +460,7 @@ class JarvisCore:
                 session_id=request.session_id,
                 request_id=response.request_id,
                 detail={"stage": "planner", "question": response.reply[:200],
+                        "identifier_sources_used": list(plan.identifier_sources_used),
                         "reply_kind": plan.reply_kind or "clarification",
                         "unhandled": list(plan.unhandled)},
             )

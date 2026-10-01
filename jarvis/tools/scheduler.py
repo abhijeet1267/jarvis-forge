@@ -271,6 +271,9 @@ SPECS = [
             allowed_devices=["laptop_main"],
             parameters={"include_cancelled": "bool"},
             tags=["scheduler", "read"],
+            provides_identifiers={"schedule_id": {"items": "schedules", "id": "schedule_id",
+                                                 "label": "name"}},
+
         ),
         list_schedules,
     ),

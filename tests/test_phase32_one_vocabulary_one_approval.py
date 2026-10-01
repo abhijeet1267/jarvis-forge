@@ -56,6 +56,36 @@ from jarvis.home.gateway import KIND_SYNONYMS, get_home_gateway
 DEVICE_WORDS = sorted({w for words in KIND_SYNONYMS.values() for w in words})
 
 
+@pytest.fixture(autouse=True)
+def _registry_restored(core):
+    """The registry is session-scoped: a capability registered or a handler stubbed for
+    one test would answer sentences in every later one. Snapshot, then put it back.
+
+    Phase 33 found this class of leak by running its file after Phase 30's: a stub
+    handler left installed made a full-suite run fail and a single-file run pass, which
+    is the worst shape a test signal can have.
+    """
+    import copy
+
+    specs = dict(core.tools._specs)
+    handlers = dict(core.tools._handlers)
+    nested = {name: (copy.deepcopy(s.provides_identifiers), copy.deepcopy(s.parameters))
+              for name, s in specs.items()}
+    yield
+    core.tools._specs.clear()
+    core.tools._specs.update(specs)
+    core.tools._handlers.clear()
+    core.tools._handlers.update(handlers)
+    for name, (provides, parameters) in nested.items():
+        spec = core.tools._specs.get(name)
+        if spec is None:
+            continue
+        spec.provides_identifiers.clear()
+        spec.provides_identifiers.update(provides)
+        spec.parameters.clear()
+        spec.parameters.update(parameters)
+
+
 def _run(core, text: str, session_id: str = "phase32"):
     return asyncio.run(core.handle(CommandRequest(
         text=text, source="phase32", session_id=session_id)))

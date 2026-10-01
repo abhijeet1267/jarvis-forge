@@ -160,6 +160,13 @@
    "passed": 1582,
    "failed": 0,
    "note": "the plan's safety matrix holds 6 of 6 for the first time"
+  },
+  {
+   "phase": "32 one vocabulary one approval",
+   "collected": 1621,
+   "passed": 1621,
+   "failed": 0,
+   "note": "the router speaks the gateway's words; the approval names the device"
   }
  ]
 }

@@ -386,6 +386,9 @@ SPECS = [
             allowed_devices=["laptop_main"],
             parameters={"project_id": "string", "kind": "string"},
             tags=["design", "read"],
+            provides_identifiers={"asset_id": {"items": "assets", "id": "asset_id",
+                                              "label": "title"}},
+
         ),
         list_design_assets,
     ),

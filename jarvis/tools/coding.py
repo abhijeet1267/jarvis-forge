@@ -350,6 +350,9 @@ SPECS = [
             allowed_devices=["laptop_main"],
             parameters={},
             tags=["coding", "read"],
+            provides_identifiers={"workspace_id": {"items": "workspaces", "id": "workspace_id",
+                                                 "label": "name"}},
+
         ),
         list_workspaces,
     ),

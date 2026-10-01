@@ -516,6 +516,9 @@ _SPECS = [
             allowed_devices=["laptop_main"],
             parameters={},
             tags=["phone", "read"],
+            provides_identifiers={"target_device": {"items": "devices", "id": "device_id",
+                                                 "label": "device_id"}},
+
         ),
         list_devices,
     ),

@@ -72,6 +72,25 @@ class ToolRegistry:
                 problems.append(f"unexpected parameter {key!r}")
         return problems
 
+    def identifier_source(self, param: str, agent: str = "") -> Optional[ToolSpec]:
+        """Which enumerator prints this identifier, or None if nothing does.
+
+        Restricted to READ-tier tools that require nothing: a lookup that exists to save
+        the user from reciting an id must not be able to change anything, and must not
+        itself need an answer first. Several can claim one name -- ``uid`` belongs to an
+        email and to a calendar event -- so the asking tool's own agent wins, and the
+        remaining order is by name so the choice never depends on dict insertion order.
+        """
+        candidates = [
+            s for s in self._specs.values()
+            if param in (s.provides_identifiers or {})
+            and s.risk is RiskLevel.READ and not s.required_parameters
+        ]
+        if not candidates:
+            return None
+        pool = [s for s in candidates if s.agent == agent] or candidates
+        return sorted(pool, key=lambda s: s.name)[0]
+
     def describe_for_prompt(self) -> str:
         """Compact tool catalogue used when prompting an LLM planner."""
         lines = []

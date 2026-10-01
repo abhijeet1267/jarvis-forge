@@ -149,6 +149,16 @@ class ToolSpec(BaseModel):
     # nothing downstream authorises from it -- see Phase 26's residual note.
     parameters: Dict[str, str] = Field(default_factory=dict)
     required_parameters: Tuple[str, ...] = ()
+    #: Identifiers this tool *prints*, and where to find them in its result:
+    #: ``{"workspace_id": {"items": "workspaces", "id": "workspace_id", "label": "name"}}``.
+    #:
+    #: Declared on the enumerator rather than on the dozens of tools that consume the
+    #: identifier, because the thing that knows the shape of an id is the thing that hands
+    #: it out. A clarification that needs one (Phase 33) looks a candidate list up here
+    #: instead of keeping a second copy of the mapping in the router -- the pattern Phase
+    #: 30 and 32 established, and the failure mode 32 documented: two lists that drift.
+    #: Only a READ-tier tool that requires nothing may be declared, and a test sweeps it.
+    provides_identifiers: Dict[str, Dict[str, str]] = Field(default_factory=dict)
     tags: Tuple[str, ...] = ()
 
     def risk_label(self) -> str:
@@ -318,6 +328,12 @@ class Plan(BaseModel):
     #: reason. A request whose second half was refused used to be answered with only
     #: the first half, silently.
     unhandled: List[str] = Field(default_factory=list)
+    #: Which read-only enumerators answered a question this plan raised (Phase 33). A
+    #: clarification built from another tool's result carries the same debt as a fallback
+    #: that answers with one: the chain has to say which lookup produced the candidates.
+    identifier_sources_used: List[str] = Field(default_factory=list)
+    #: Identifiers the sentence did not supply, so the orchestrator can look candidates up.
+    missing_identifiers: List[str] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=utcnow)
     planner: str = "rules"  # rules | llm
 

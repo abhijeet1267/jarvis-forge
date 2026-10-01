@@ -511,6 +511,9 @@ SPECS = [
             allowed_devices=["laptop_main"],
             parameters={"project_id": "string"},
             tags=["research", "read"],
+            provides_identifiers={"paper_id": {"items": "papers", "id": "paper_id",
+                                              "label": "title"}},
+
         ),
         list_papers,
     ),

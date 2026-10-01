@@ -488,6 +488,8 @@ SPECS = [
             allowed_devices=["laptop_main"],
             parameters={"date": "string", "days": "int"},
             tags=["calendar", "read"],
+            provides_identifiers={"uid": {"items": "events", "id": "uid", "label": "title"}},
+
         ),
         list_events,
     ),
