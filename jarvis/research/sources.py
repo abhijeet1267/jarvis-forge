@@ -29,6 +29,7 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
 from ..logging_setup import get_logger
+from ..net import http_read, remaining_of
 
 log = get_logger("research.sources")
 
@@ -42,6 +43,11 @@ ARXIV_ENDPOINT = "https://export.arxiv.org/api/query"
 #: A retry lives in the caller, not here, because a second 406 must still be
 #: reported as a failure rather than retried into a fiction.
 ARXIV_USER_AGENT = "JARVISForge/1.0 (+local research client; +https://github.com/abhijeet1267/jarvis-forge)"
+
+#: The whole search's budget -- both attempts together. It used to be handed to
+#: ``urlopen(timeout=...)``, which bounds silence rather than duration: measured against a
+#: server that trickles a byte every 10ms, the call was still waiting after 60s of this
+#: "20 second" timeout. ``net.http_read`` is what makes the number mean what it says.
 REQUEST_TIMEOUT = 20.0
 
 
@@ -178,13 +184,20 @@ class ArxivSource(SourceBackend):
         request = urllib.request.Request(
             f"{ARXIV_ENDPOINT}?{params}", headers={"User-Agent": ARXIV_USER_AGENT}
         )
-        # Two attempts. arXiv throttles some clients briefly and refuses others
-        # outright; the first case is worth one short wait, and only one, so a hard
-        # refusal costs a second rather than turning into a hang.
+        # Two attempts, one budget. arXiv throttles some clients briefly and refuses
+        # others outright; the first case is worth one short wait, and only one. The
+        # retry gets whatever time the total leaves, not a fresh copy of it -- two full
+        # budgets in series is not a number anyone can plan around.
+        started = time.monotonic()
         for attempt in range(2):
+            left = remaining_of(REQUEST_TIMEOUT, started)
+            if left <= 0:
+                raise RuntimeError(
+                    f"arXiv did not answer within {REQUEST_TIMEOUT:g}s (second attempt refused "
+                    "by the deadline, not by the server)")
             try:
-                with urllib.request.urlopen(request, timeout=REQUEST_TIMEOUT) as response:
-                    xml_text = response.read().decode("utf-8", errors="replace")
+                xml_text = http_read(request, total=left, what="arXiv").decode(
+                    "utf-8", errors="replace")
                 break
             except Exception as exc:
                 if attempt:

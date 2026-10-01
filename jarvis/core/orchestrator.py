@@ -23,6 +23,7 @@ from ..gateway.router import ModelRouter
 from ..logging_setup import get_logger
 from ..memory.graph import ProjectGraph
 from ..memory.store import MemoryStore
+from ..net import request_budget
 from ..registry.apps import AppRegistry
 from ..registry.devices import get_device_registry
 from ..registry.tools import ToolRegistry
@@ -45,6 +46,11 @@ from .models import (
 from .planner import RulePlanner
 from .recovery import RecoveryEngine, RecoveryOutcome
 from .tasks import LifecycleReport, TaskManager
+
+#: Ceiling on the network time one typed sentence may consume, across every read it
+#: triggers. Wider than any single call's own budget on purpose -- a 60s vision read is
+#: allowed to use the whole thing -- but it is the number that is true about the wait.
+SENTENCE_BUDGET = 60.0
 
 log = get_logger("core.orchestrator")
 
@@ -364,6 +370,14 @@ class JarvisCore:
 
     # ------------------------------------------------------------------ main
     async def handle(self, request: CommandRequest) -> CommandResponse:
+        # One sentence, one deadline. Each read already bounds itself; without a ceiling
+        # over the whole request those bounds add up -- measured, "remember that ..."
+        # made two 30s reads, so the wait a person faces was 60s and the number in the
+        # code meant nothing. A confirmation held for this long is still an answer.
+        with request_budget(SENTENCE_BUDGET):
+            return await self._handle(request)
+
+    async def _handle(self, request: CommandRequest) -> CommandResponse:
         """Process one inbound command end-to-end."""
         started = time.perf_counter()
         response = CommandResponse(session_id=request.session_id, request_id=new_id("REQ"))

@@ -8,7 +8,7 @@
   {
    "command": "Jarvis, find my latest project report.",
    "http_status": 200,
-   "ms": 84,
+   "ms": 556,
    "intent": "search_files",
    "tools": [
     "search_files"
@@ -18,12 +18,12 @@
    ],
    "audit_result": "success",
    "dashboard_state": "VERIFIED",
-   "reply": "I could not find any file matching 'project report.' under /private/tmp/p33sandbox."
+   "reply": "I could not find any file matching 'project report.' under /Users/abhijeetmiskin."
   },
   {
    "command": "Jarvis, show me my laptop battery.",
    "http_status": 200,
-   "ms": 17,
+   "ms": 18,
    "intent": "laptop_battery",
    "tools": [
     "battery_status"
@@ -112,7 +112,7 @@
   {
    "command": "Jarvis, remember that this is my AMR project.",
    "http_status": 200,
-   "ms": 5,
+   "ms": 4,
    "intent": "remember",
    "tools": [
     "remember_fact"
@@ -127,7 +127,7 @@
   {
    "command": "Jarvis, what did I work on yesterday?",
    "http_status": 200,
-   "ms": 4,
+   "ms": 5,
    "intent": "recall",
    "tools": [
     "search_memory"
@@ -137,7 +137,7 @@
    ],
    "audit_result": "success",
    "dashboard_state": "VERIFIED",
-   "reply": "Nothing was recorded in memory on 2026-09-30."
+   "reply": "Nothing was recorded in memory on 2026-10-01."
   },
   {
    "command": "Jarvis, design this system.",
@@ -153,7 +153,7 @@
   {
    "command": "Jarvis, research this idea.",
    "http_status": 200,
-   "ms": 672,
+   "ms": 173,
    "intent": "search_papers",
    "tools": [
     "search_papers"

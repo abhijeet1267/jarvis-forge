@@ -35,6 +35,7 @@ from abc import ABC, abstractmethod
 from typing import Dict, Iterable, List, Optional, Sequence
 
 from ..logging_setup import get_logger
+from ..net import http_read
 
 log = get_logger("memory.embeddings")
 
@@ -183,6 +184,10 @@ class HashingEmbedder(Embedder):
         return base
 
 
+#: Total budget for one embedding call, both attempts of a retry sharing it.
+REQUEST_TIMEOUT = 30.0
+
+
 class RemoteEmbedder(Embedder):
     """True semantic vectors from a model endpoint, when one is configured."""
 
@@ -230,8 +235,10 @@ class RemoteEmbedder(Embedder):
                 "Authorization": f"Bearer {self.settings.llm_api_key}",
             },
         )
-        with urllib.request.urlopen(request, timeout=30) as response:
-            body = json.loads(response.read().decode())
+        # Total budget, not silence budget -- this runs inside the write path of
+        # "remember that …", where an unbounded wait is an unbounded turn.
+        body = json.loads(http_read(request, total=REQUEST_TIMEOUT,
+                                    what="the embedding model").decode())
 
         vector = [float(v) for v in body["data"][0]["embedding"]]
         self.dim = len(vector)

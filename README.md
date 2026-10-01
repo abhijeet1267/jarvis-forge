@@ -13,7 +13,7 @@ between *"the handler returned"* and *"the thing happened"* — and the thirty p
 measurement spent closing that gap, in the ledger and on the screen.
 
 [![ci](https://img.shields.io/github/actions/workflow/status/abhijeet1267/jarvis-forge/ci.yml?label=tests%20%C2%B7%20macos)](https://github.com/abhijeet1267/jarvis-forge/actions/workflows/ci.yml)
-[![suite](https://img.shields.io/badge/tests-1642%20passed%20%C2%B7%200%20failed-16a34a)](tests)
+[![suite](https://img.shields.io/badge/tests-1653%20passed%20%C2%B7%200%20failed-16a34a)](tests)
 [![tools](https://img.shields.io/badge/tools-127%20across%2015%20agents-2f6df6)](jarvis/tools)
 [![offline](https://img.shields.io/badge/LLM-off%20by%20default%20%C2%B7%20runs%20fully%20offline-0f172a)](jarvis/config.py)
 [![python](https://img.shields.io/badge/python-3.11%20%C2%B7%203.12%20(CI)-6b7688)](.github/workflows/ci.yml)
@@ -27,7 +27,7 @@ measurement spent closing that gap, in the ledger and on the screen.
 | **Ledger** | `action_logs` hash-chained + `audit.jsonl` append-only, `verify_chain()` |
 | **Edge** | token file `0600` · constant-time compare · same-origin · Host allowlist · 600/min |
 | **Surface** | web dashboard · voice (macOS `say`/STT) · watch queue · phone pairing |
-| **Size** | ~55k lines · 34.8k source · 19.4k tests · 57 test modules |
+| **Size** | ~56k lines · 34.9k source · 19.8k tests · 58 test modules |
 
 ---
 
@@ -39,8 +39,8 @@ and the diagrams read their counts from the live registry.
 
 | Claim | Value | Reproduce |
 |---|---|---|
-| Test suite | **1642 passed · 0 failed · 0 xfailed** (1642 collected; the network-gated arXiv test skips when arXiv is refusing requests, and passed in the run above) | `python -m pytest -q` |
-| Suite growth, Phase 9 → 33 | 875 passing / **126 failing** → 1642 passing / 0 failing / **0 xfailed** at the Phase 33 close | `cat benchmarks/suite_history.json` |
+| Test suite | **1653 passed · 0 failed · 0 xfailed** (1653 collected; the network-gated arXiv test skips when arXiv is refusing requests, and passed in the run above) | `python -m pytest -q` |
+| Suite growth, Phase 9 → 34 | 875 passing / **126 failing** → 1653 passing / 0 failing / **0 xfailed** at the Phase 34 close | `cat benchmarks/suite_history.json` |
 | Tools registered | **127** | `python -c "from jarvis.core.orchestrator import JarvisCore as J; print(len(J().tools.names()))"` |
 | Confirmation-gated | **27** of 127 | `python assets/build_diagrams.py` (prints the live counts) |
 | Risk tiers | read 68 · low 32 · external 12 · high 12 · physical 3 | same |
@@ -80,7 +80,7 @@ and the diagrams read their counts from the live registry.
 - [Benchmarks](#benchmarks)
 - [Hardware truth](#hardware-truth)
 - [What the system says when something fails](#what-the-system-says-when-something-fails)
-- [The thirty-three phases](#the-thirty-three-phases)
+- [The thirty-four phases](#the-thirty-four-phases)
 - [The plan's safety matrix, run](#the-plans-safety-matrix-run)
 - [Smooth and fast](#smooth-and-fast)
 - [Security model](#security-model)
@@ -116,9 +116,9 @@ and not a quiet success.
 
 ## Benchmarks
 
-### Suite growth, Phase 9 → Phase 33
+### Suite growth, Phase 9 → Phase 34
 
-<img src="assets/chart-suite-growth.svg" alt="Test suite growth from 875 passing with 126 failing, to 1642 passing with none failing at the close of Phase 33" width="100%"/>
+<img src="assets/chart-suite-growth.svg" alt="Test suite growth from 875 passing with 126 failing, to 1653 passing with none failing at the close of Phase 34" width="100%"/>
 
 Phase 9 inherited **126 failing tests**. The cause was a single import line in
 `jarvis/tools/base.py` that left `Verification` undefined, so every tool result raised
@@ -173,7 +173,7 @@ moved, and the ledger now says exactly that. A simulated *car read* is still a s
 read — reading a labelled simulator is a real read — and that distinction is pinned by a
 test so it stays a decision rather than an accident.
 
-## The thirty-three phases
+## The thirty-four phases
 
 Each closed with a report in [`audit/`](audit), and each report's claims carry the
 command that produced them.
@@ -203,6 +203,7 @@ command that produced them.
 | **29 — A route fills its own action** | flowcharts and architecture diagrams had been dead since they were written: the route sent a title to a tool that also needs `steps` / `components`, so the gate answered the user with *"missing required parameter 'steps'"* -- even when the sentence named them. What a sentence states is now used; what it omits is asked for |
 | **30 — A capability you have is a capability you can ask for** | 46 of 127 tools answered their own name with "I understood the words but not the goal" -- twice the gap the open item had recorded, because that item had been measured by grepping the planner instead of asking the router. A registry-derived route now reaches a tool whose name words a sentence contains, validates the action with the registry before emitting it, and asks in the tool's own description when an argument is missing; three routes that *advertised* capabilities yield to a sentence naming one; and the delete-capable tool that was tiered LOW-and-unconfirmed for as long as it was unreachable was retiered in the same commit |
 | **31 — The device you named is the device that changes** | "turn on the heater" resolved to **Study AC** (the gateway filed heating under cooling) and `control_home_device` was LOW with no confirmation, so the request was approved for execution and only an offline gateway stopped a device changing. The synonym, the resolver and the tier were tightened in one commit, the permission engine grew a device guard beside its path guard, and the plan's §45 matrix has held **6 of 6** since |
+| **34 — One sentence, one deadline** | 29-B's "no bounded read timeout" was kinder than the code deserved: `urlopen(timeout=20)` bounds *silence*, so a server dribbling a byte every 10 ms was measured still waiting at 60 s with no end, and this phase's first red run had to be killed at five minutes because it did not fail — it hung. All three `urlopen` readers now go through `net.http_read`, whose number is a ceiling on the whole call; arXiv's two attempts share one budget; and `SENTENCE_BUDGET` caps the request, because two bounded 30 s reads in one sentence add up to a 60 s wait and the "30" in the source would have been a lie about what anyone experienced. |
 | **33 — A question carries its own answer** | 55 capabilities answered a plain request by asking the user to produce an id the system had issued and could print (`list_workspaces` returns `WS-301adce395d5`). Seven enumerators now declare which identifier they own, the orchestrator offers up to four real candidates inside the question, and 19 of those 55 questions carry them. Found on the way: "close the workspace WS-…" answered with a *description* of the workspace and recorded a success. Also found: a test file whose docstring promised an autouse restore fixture that did not exist, leaving stub handlers installed for the rest of the session — green alone, red in a full run. |
 | **32 — One vocabulary, one approval** | the router kept eleven device words where the gateway keeps twenty-six, so nine words the system understood were answered as nonsense; and the confirmation prompt re-derived its own line from the raw parameters while the dashboard rendered the stored preview. The pattern is now built from the gateway's own table (pinned by adding and removing a synonym at test time, both directions), and the approval names the thing: *Will do: set Kitchen light (kitchen.light) to 40%* |
 
@@ -441,7 +442,7 @@ curl -s -H "X-JARVIS-Token: $TOKEN" -H 'Content-Type: application/json' \
      -d '{"text":"what is my battery"}' http://127.0.0.1:8765/command
 
 # Prove it to yourself:
-python -m pytest -q                       # 1642 passed, 0 failed (one research test skips if arXiv is refusing)
+python -m pytest -q                       # 1653 passed, 0 failed (one research test skips if arXiv is refusing)
 python benchmarks/acceptance_run.py       # re-measures the README's numbers
 python assets/build_charts.py && python assets/build_diagrams.py
 ```
@@ -462,9 +463,9 @@ jarvis/
   scheduler/   recurring jobs, runner with per-run re-authorization
   car/ home/ robotics/ watch/ vision/ research/ design/ coding/
   integrations/ IMAP/SMTP and CalDAV providers with local fallbacks
-tests/         57 modules · 1642 collected · includes the dashboard's own JS, run by Node
+tests/         58 modules · 1653 collected · includes the dashboard's own JS, run by Node
 dashboard/     single-file control panel; state rendered from server fields
-audit/         35 phase reports + 4 CSV matrices — the evidence behind this README
+audit/         36 phase reports + 4 CSV matrices — the evidence behind this README
 benchmarks/    acceptance_run.py and the JSON the charts are drawn from
 assets/        generated figures + the two generators that draw them
 app/           PyInstaller spec and bundle sources (see Downloads — currently broken)
@@ -527,6 +528,15 @@ adding and removing a synonym at run time. 31-B: the confirmation prompt re-deri
 line from the raw parameters while the dashboard rendered the stored preview — two renderings
 of one consent question, and neither naming the device. One string feeds both now: *"Will do:
 set Kitchen light (kitchen.light) to 40%"*.
+- **A network read stops when it is told to** (Phase 34). Reasoned in
+  `audit/PHASE34_ONE_SENTENCE_ONE_DEADLINE.md`. It closed 29-B and left:
+  **34-A** six `httpx.Client(timeout=…)` sites still bound silence rather than duration and
+  are not behind the deadline helper — none was measured hanging, so they were counted and
+  the count pinned in a test that goes red if a seventh appears; **34-B** an abandoned read
+  keeps its socket until garbage collection, because a Python thread cannot be killed, so the
+  total budget trades a stray connection for a caller that comes back; **34-C** one 60 s
+  ceiling covers every sentence, and a voice turn plainly wants a tighter one than a research
+  brief — a decision about what may be slow, not a mechanism.
 - **A capability that exists must be reachable, and consent must name the thing** (Phases 30–32).
   Reasoned in `audit/PHASE30_CAPABILITIES_ARE_REACHABLE_REPORT.md` and
   `audit/PHASE32_ONE_VOCABULARY_ONE_APPROVAL.md`. What those two left open:
@@ -621,10 +631,11 @@ set Kitchen light (kitchen.light) to 40%"*.
   **29-A** remains: a route can now never emit an action missing a *required* parameter
   (asserted by sweeping the planner's own `Intent(tool=…, params={…})` literals against the
   registry), but *optional* ones are still not extracted — a presentation's slide content
-  comes from a fixed outline, not from the sentence. **29-B**: measured this run,
-  `research this idea` spent **41,247 ms** waiting on arXiv before its read timed out —
-  the answer stayed honest, but nothing bounds that wait, which is the network equivalent
-  of everything this phase is about. **29-C**: the same sweep covers only `params={…}`
+  comes from a fixed outline, not from the sentence. **29-B** was measured here as
+  `research this idea` spending **41,247 ms** on arXiv, and was closed by Phase 34 — where
+  it turned out the path *did* set a timeout (`urlopen(..., timeout=20)`), and that number
+  bounds silence rather than duration, so a server dribbling a byte every 10 ms was measured
+  still waiting at 60 s with no end. **29-C**: the same sweep covers only `params={…}`
   literals; a route that builds its dict in a variable is checked by behaviour tests, not
   by the static one. **29-D**: the CI check that guards against the built bundle shipping a
   stale `launcher.py` is skipped by every CI run -- `dist/` is gitignored, and the workflow

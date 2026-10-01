@@ -16,6 +16,7 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional
 
 from ..logging_setup import get_logger
+from ..net import http_read
 
 log = get_logger("vision.providers")
 
@@ -68,6 +69,12 @@ class LocalMeasurementProvider(VisionProvider):
             "Cannot describe what is depicted."
         )
         return base
+
+
+#: Total budget for one vision call. The literal 60 it replaced bounded silence
+#: between bytes, not the wait, so a server that trickled could hold a chat turn open
+#: for as long as it liked.
+REQUEST_TIMEOUT = 60.0
 
 
 class RemoteVisionProvider(VisionProvider):
@@ -126,8 +133,10 @@ class RemoteVisionProvider(VisionProvider):
             },
         )
         try:
-            with urllib.request.urlopen(request, timeout=60) as response:
-                body = json.loads(response.read().decode())
+            # A total budget, not a silence budget: see jarvis/net.py. This call sits
+            # inside a chat turn, so "60 seconds" has to mean sixty.
+            body = json.loads(http_read(request, total=REQUEST_TIMEOUT,
+                                        what="the vision model").decode())
         except Exception as exc:
             return {"ok": False, "error": f"the vision model could not be reached: {exc}"}
 

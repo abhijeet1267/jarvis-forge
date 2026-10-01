@@ -167,6 +167,20 @@
    "passed": 1621,
    "failed": 0,
    "note": "the router speaks the gateway's words; the approval names the device"
+  },
+  {
+   "phase": "33 questions carry their answers",
+   "collected": 1642,
+   "passed": 1642,
+   "failed": 0,
+   "note": "a question offers the ids it holds rather than demanding them"
+  },
+  {
+   "phase": "34 one deadline per sentence",
+   "collected": 1653,
+   "passed": 1653,
+   "failed": 0,
+   "note": "a network read that never stops being silent can no longer run forever"
   }
  ]
 }
