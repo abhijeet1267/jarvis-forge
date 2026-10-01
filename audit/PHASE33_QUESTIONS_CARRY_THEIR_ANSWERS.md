@@ -206,5 +206,33 @@ times in a row green, after the ordering fix.
 
 ## 8. Git
 
-Committed and pushed to `main` on `abhijeet1267/jarvis-forge`. The CI verdict is appended
-once the runner has produced it, not before.
+Committed and pushed to `main` on `abhijeet1267/jarvis-forge`:
+
+```
+253bce5  A question offers the identifiers the system already holds
+         23 files changed, 888 insertions(+), 37 deletions(-)
+```
+
+### The runner's verdict, measured after the push
+
+Run `36887074627`, both jobs green:
+
+| job | result | pytest line | wall |
+| --- | --- | --- | --- |
+| `suite (3.11)` | success | `1636 passed, 6 skipped, 1 warning in 84.33s` | 15:48:08 → 15:50:12Z |
+| `suite (3.12)` | success | `1636 passed, 6 skipped, 1 warning in 81.38s` | 15:48:07 → 15:49:54Z |
+
+`1636 + 6 = 1642` — the same collection as this laptop, and the six are the six accounted
+for in Phase 29 (five battery-gated, one `dist/`-gated), so none of this phase's 21 tests was
+skipped on either image.
+
+That equality is the point of this particular commit. The defect the phase found in its own
+test suite was *order*-dependent, not machine-dependent: a stub handler left installed by one
+file made another file pass alone and fail inside a full run. A single green local run of one
+file would have proved nothing about that, which is why §5 records three consecutive full-suite
+runs here rather than one, and why the runner's full-suite count matching the local count is
+reported as a measurement instead of assumed.
+
+The runner also re-ran the plan's §45 matrix in its benchmark step, and it still holds 6 of 6
+with the heater row refused — nothing in this phase touched the permission tiers, and that is
+now also verified on a machine that did not write it.
