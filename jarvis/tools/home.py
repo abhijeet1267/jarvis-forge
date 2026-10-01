@@ -19,6 +19,28 @@ def _candidates(gw: HomeGateway) -> List[str]:
     return [d.name for d in gw.devices]
 
 
+def describe_actuation(word: str, action: str, value: Any = None) -> str:
+    """Say what is about to change, in the house's terms rather than the parameter's.
+
+    A confirmation is a question about one specific thing, so the question has to name
+    that thing. ``device=kitchen light, action=set, value=40`` is the *request*; the
+    gateway is what turns a request into a device, and until Phase 32 the approval shown
+    to the user stopped at the request. If the words resolve, the answer they resolve to
+    belongs in the consent question; if they do not, nothing is invented and the words
+    are echoed honestly.
+    """
+    gw = get_home_gateway()
+    target, described = gw.actuation_target(word)
+    if target is None:
+        named = ", ".join(d.name for d in described) or "nothing this gateway matches"
+        return f"{action or 'control'} {word!r} (no single device: {named})"
+
+    verb = {"on": "switch on", "off": "switch off"}.get(action, action or "change")
+    unit = "%" if target.kind in ("light", "fan") else ("°C" if target.kind == "ac" else "")
+    tail = f" to {value}{unit}" if value not in (None, "") else ""
+    return f"{verb} {target.name} ({target.device_id}){tail}"
+
+
 def _pct(value: float) -> float:
     return round(max(0.0, min(100.0, float(value))) / 100.0, 3)
 

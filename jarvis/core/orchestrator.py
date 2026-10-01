@@ -817,12 +817,19 @@ class JarvisCore:
 
     # ------------------------------------------------------------- helpers
     def _confirmation_prompt(self, action: PlannedAction, preview: str) -> str:
-        params = ", ".join(f"{k}={v}" for k, v in action.params.items()) or "no parameters"
+        """What the user is asked to approve.
+
+        The engine already built a ``preview`` for this confirmation and the dashboard
+        renders that string; this prompt used to ignore its own argument and re-derive a
+        line from the raw parameters. Two renderings of one consent question is how they
+        start to disagree, and whichever one the user reads, only one of them is stored.
+        """
+        what = preview or ", ".join(f"{k}={v}" for k, v in action.params.items()) or "no parameters"
         return (
             f"This needs your confirmation before I run it.\n"
-            f"  Action: {action.tool}\n"
-            f"  Device: {action.device}\n"
-            f"  Details: {params}\n"
+            f"  Will do: {what}\n"
+            f"  Tool: {action.tool}\n"
+            f"  On device: {action.device}\n"
             f"Reply with /confirm {action.tool} to approve, or /cancel to stop."
         )
 

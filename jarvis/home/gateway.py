@@ -61,6 +61,34 @@ KIND_SYNONYMS: Dict[str, set] = {
     "camera": {"camera", "cameras", "cam"},
 }
 
+#: Appliance words a house plausibly has that *this* inventory does not. Not a kind, so
+#: nothing resolves from it -- the point is that the request is still recognised as a home
+#: request and refused honestly ("there is no home device matching 'heater'") instead of
+#: being answered "I understood the words but not the goal".
+#:
+#: This lives beside the synonym table rather than in the planner because it is the same
+#: thing: the vocabulary the router is allowed to use. Phase 32 found the planner keeping
+#: its own eleven-word list, which is how nine words the gateway understood became nine
+#: capabilities a user could not ask for.
+ABSENT_APPLIANCE_WORDS = frozenset({
+    "heater", "radiator", "boiler", "furnace", "thermostat", "kettle", "toaster",
+    "oven", "washing machine", "dryer", "dishwasher", "humidifier", "dehumidifier",
+})
+
+
+def device_vocabulary() -> List[str]:
+    """Every word a home device may be called, longest first.
+
+    The planner builds its home-control pattern from this, and only from this. Ordered by
+    length so "air conditioner" and "washing machine" win over the "air" and "washer"
+    fragments inside them.
+    """
+    words = set(ABSENT_APPLIANCE_WORDS)
+    for kind, synonyms in KIND_SYNONYMS.items():
+        words.add(kind)
+        words.update(synonyms)
+    return sorted(words, key=lambda w: (-len(w), w))
+
 
 # ---------------------------------------------------------------------------
 # State model

@@ -455,7 +455,21 @@ class PermissionEngine:
     # -- helpers -------------------------------------------------------------
     @staticmethod
     def _preview(spec: ToolSpec, action: PlannedAction) -> str:
-        """Human-readable summary shown before a confirmation."""
+        """Human-readable summary shown before a confirmation.
+
+        A home actuation is phrased by the home module, which is the only thing that
+        knows what the words resolve to: the user approves "switch on Living room fan
+        (living.fan)", not "device=living room fan". Everything else lists its
+        parameters, which is as specific as it can be made without a resolver.
+        """
+        if spec.agent == "home" and "device" in action.params:
+            from ..tools.home import describe_actuation
+
+            return describe_actuation(
+                str(action.params.get("device") or ""),
+                str(action.params.get("action") or ""),
+                action.params.get("value"),
+            )
         bits = [f"{spec.name} on {action.device}"]
         for key, value in action.params.items():
             bits.append(f"{key}={value}")

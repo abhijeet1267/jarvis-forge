@@ -153,6 +153,13 @@
    "passed": 1555,
    "failed": 0,
    "note": "a named capability is reached, or asked about"
+  },
+  {
+   "phase": "31 the device you named",
+   "collected": 1582,
+   "passed": 1582,
+   "failed": 0,
+   "note": "the plan's safety matrix holds 6 of 6 for the first time"
   }
  ]
 }

@@ -2025,10 +2025,17 @@ class RulePlanner:
             return Intent("home_status", tool="get_home_status")
 
         # --- control (turn / dim / set a device) ---------------------------
+        # Derived from the gateway's own vocabulary, not from a list kept here. The
+        # eleven words it replaced are why "turn on the power" -- "power" being the
+        # gateway's synonym for a plug -- was answered as nonsense: two lists for one
+        # request, and no test able to watch them drift further apart. Sorted longest
+        # first so "air conditioner" is not matched as the fragment "air".
+        from ..home.gateway import device_vocabulary
+
+        words = "|".join(re.escape(w).replace("\\ ", r"[\s_-]?") for w in device_vocabulary())
         m = re.search(
             r"\b(?P<cmd>turn on|turn off|switch on|switch off|dim|set|raise|lower)\b"
-            r"\s+(?:the\s+)?(?P<dev>(?:[a-z0-9]+[ ])*?(?:lights?|fans?|plugs?|lamps?|ac|aircon|"
-            r"heater|temperature|doors?|cameras?|sensors?))"
+            r"\s+(?:the\s+)?(?P<dev>(?:[a-z0-9]+[ ])*?(?:" + words + r"))"
             r"(?:\s+(?:to|at)\s+(?P<lvl>\d{1,3})(?:\s*(?:percent|%))?)?",
             text,
         )
