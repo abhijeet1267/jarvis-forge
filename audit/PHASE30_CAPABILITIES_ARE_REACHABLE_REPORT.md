@@ -244,5 +244,33 @@ empty required parameters was never a success, it was a BLOCK wearing an intent.
 
 ## 8. Git
 
-Committed and pushed to `main` on `abhijeet1267/jarvis-forge`. The CI verdict is appended
-once the runner has produced it, not before.
+Committed and pushed to `main` on `abhijeet1267/jarvis-forge`:
+
+```
+626b5de  Naming a capability reaches it, or the answer says what is missing
+         12 files changed
+```
+
+### The runner's verdict, measured after the push
+
+Run `36846991516`, both jobs green:
+
+| job | result | pytest line | wall |
+| --- | --- | --- | --- |
+| `suite (3.11)` | success | `1549 passed, 6 skipped, 1 warning in 65.94s` | 10:06:16 → 10:07:46Z |
+| `suite (3.12)` | success | `1549 passed, 6 skipped, 1 warning in 83.78s` | 10:06:19 → 10:08:17Z |
+
+`1549 + 6 = 1555`, which is the collection count on this laptop too, so the 68 new tests
+all exist on the runner and none of them was quietly dropped between the two machines. The
+6 skips are the same six Phase 29 accounted for -- five `skipif(not HAS_BATTERY)` and the
+`dist/`-gated bundle check -- so no phase-30 test is among them, which matters here more
+than usual: this phase's two headline tests walk the *whole registry* (every tool's own name
+through the planner; every emitted action back through `validate_params`), and a sweep like
+that is only worth its claim if it ran on a machine that is not the one that wrote it.
+The runner has no battery, no built bundle and a cold `JARVIS_HOME`, and the reachability
+sweep still reports 0 dead ends and 0 leaked field names there.
+
+`Build the desktop bundle` and `Upload measured benchmark data` ran on 3.11 and are gated
+off on 3.12 (`ci.yml:53,73`), and the benchmark step regenerated `suite_history.json` and
+the figures from this tree -- including the Phase 30 row: 1555 collected, 1555 passed, 0 failed.
+
