@@ -160,10 +160,13 @@ async def test_scheduled_simulated_actuation_is_not_logged_as_executed(core, sim
 
     The runner splits `executed` / `unverified` / `failed` on verification (Phase 12),
     so with a simulated actuation now reporting UNKNOWN it records `unverified`.
-    Asserted against what the code actually did: this test was first written to
-    expect the job to *park* at awaiting_approval, on an assumption about
-    confirmation gating, and the measurement showed it executes -- so the real
-    property, and the one that matters, is the stored outcome.
+
+    This test first expected the job to *park* at awaiting_approval, the measurement
+    said it executes, and the docstring recorded that as the assumption being wrong.
+    Phase 31 made it right again by closing 22-G: a home actuation requires
+    confirmation, and a schedule cannot grant itself one. So the park is asserted, and
+    the simulated-label claim this file exists for is then made on the approved run
+    rather than dropped.
     """
     from jarvis.scheduler.runner import SchedulerRunner
     from jarvis.scheduler.schedule import Recurrence
@@ -175,10 +178,13 @@ async def test_scheduled_simulated_actuation_is_not_logged_as_executed(core, sim
         params={"device": "kitchen light", "action": "on"}, max_risk=4)
     outcome = await SchedulerRunner(ScheduleStore()).run_job(core, job)
 
-    assert "simulated" in outcome["detail"], outcome["detail"]
-    assert outcome["outcome"] == "unverified", outcome
-    assert outcome["outcome"] != "executed", (
-        "a scheduled job that touched no real device was recorded as executed")
+    assert outcome["outcome"] == "awaiting_approval", outcome
+    assert not outcome.get("detail", "").startswith("simulated"), outcome
+
+    approved = await core.resolve_confirmation(outcome["confirmation_id"], True)
+    action = approved.actions[0]
+    assert action.verification.value != "success", action.verification
+    assert "simulat" in (action.message or "").lower(), action.message
 
 
 # ---------------------------------------------------------------------------

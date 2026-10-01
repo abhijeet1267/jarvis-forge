@@ -155,6 +155,12 @@ class PermissionEngine:
         if refusal:
             return PolicyResult(PolicyDecision.BLOCK, refusal)
 
+        # 2c. Home actuation guard -- a device the sentence did not identify is
+        #     refused for the same reason, before any approval is requested.
+        refusal = self._home_guard(action)
+        if refusal:
+            return PolicyResult(PolicyDecision.BLOCK, refusal)
+
         # 3. A revoked explicit grant blocks the tool outright.
         if self._is_revoked(action.tool, action.device):
             return PolicyResult(
@@ -225,6 +231,10 @@ class PermissionEngine:
         if refusal:
             return refusal
 
+        refusal = self._home_guard(action)
+        if refusal:
+            return refusal
+
         if self._is_revoked(action.tool, action.device):
             return f"permission for {action.tool} has been revoked"
 
@@ -264,6 +274,41 @@ class PermissionEngine:
                 return True
 
         return False
+
+    def _home_guard(self, action: PlannedAction) -> Optional[str]:
+        """Refuse a home actuation whose device the sentence did not identify.
+
+        The path guard has this rule for files, for the same reason: a confirmation is
+        a question about one specific thing, so asking "switch on Study AC?" on the
+        strength of the word "heater" gathers consent against a device nobody named.
+        Refusing here rather than in the tool is also what makes it hold for a schedule,
+        which re-evaluates through this engine and never passes through a typed sentence.
+        """
+        spec = self.tools.get(action.tool)
+        if spec is None or spec.agent != "home" or "device" not in action.params:
+            return None
+        word = str(action.params.get("device") or "").strip()
+        if not word:
+            return None
+
+        from ..home.gateway import get_home_gateway
+
+        gateway = get_home_gateway()
+        target, described = gateway.actuation_target(word)
+        if target is not None:
+            return None
+        if described:
+            return (
+                f"Which {word} did you mean -- "
+                + ", ".join(d.name for d in described)
+                + "? I will not switch one of them on a guess."
+            )
+        return (
+            f"There is no home device matching {word!r}. The gateway has: "
+            + ", ".join(d.name for d in gateway.devices[:8])
+            + ("…" if len(gateway.devices) > 8 else "")
+            + "."
+        )
 
     def _path_guard(self, action: PlannedAction) -> Optional[str]:
         """Refuse file operations aimed at protected system locations.

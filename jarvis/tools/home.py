@@ -177,18 +177,21 @@ async def control_home_device(
     gw = get_home_gateway()
     if not device:
         return fail("control_home_device", "Which device should I control?", device=ctx.device_id)
-    tied = gw.ambiguous_matches(device)
-    if tied:
+    # An actuation is resolved strictly, not by the closest match: see
+    # ``HomeGateway.actuation_target``. "heater" used to reach Study AC through the
+    # synonym table, and "the power" reached the kitchen fridge through a substring of
+    # its name -- in both cases a device changed that nobody had named.
+    target, described = gw.actuation_target(device)
+    if target is None and described:
         return fail(
             "control_home_device",
             f"Which {device} did you mean -- "
-            + ", ".join(d.name for d in tied)
+            + ", ".join(d.name for d in described)
             + "? I will not switch one of them on a guess.",
             device=ctx.device_id,
-            candidates=[d.name for d in tied],
+            candidates=[d.name for d in described],
             ambiguous=True,
         )
-    target = gw.resolve(device)
     if target is None:
         return fail(
             "control_home_device",
@@ -398,7 +401,15 @@ _SPECS = [
             name="control_home_device",
             description="Turn a home device on or off, or dim/set it. Reports delivery honestly.",
             agent="home",
+            # The tier says what kind of action this is -- switching a lamp is not
+            # deleting a file. The confirmation says that a *physical* thing changes,
+            # which no tier below PHYSICAL should be trusted to skip: measured, this
+            # was LOW with no confirmation, so "Jarvis, turn on heater." was approved
+            # for execution and only the gateway being offline stopped an appliance
+            # change (the plan's §45 has printed FAIL for it since Phase 22, 22-G).
+            # A standing grant still makes repeats quiet -- see the policy's step 5.
             risk=RiskLevel.LOW,
+            requires_confirmation=True,
             reversible=True,
             allowed_devices=["laptop_main"],
             parameters={"device": "string", "action": "string", "value": "number"},

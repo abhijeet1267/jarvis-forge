@@ -142,16 +142,23 @@ def test_recovery_does_not_call_a_no_op_a_recovered_success(core):
     try:
         response = asyncio.run(core.handle(
             CommandRequest(text="turn on the kitchen light", source="t")))
+        # Phase 31 put a confirmation in front of a home actuation (22-G), so the
+        # sentence now stops at the gate and the handler has run zero times. The claim
+        # below is about what happens *once it is allowed to run*, so the approval is
+        # taken here, inside the swap, rather than the test being relaxed to accept 0.
+        assert state["n"] == 0, "a home actuation ran before anyone approved it"
+        approved = asyncio.run(core.resolve_confirmation(response.confirmation_id, True))
     finally:
         core.tools._handlers["control_home_device"] = original
 
     assert state["n"] == 1, (
         f"{state['n']} invocations -- a home command that may already have "
         "landed must not be re-sent automatically (Phase 26 R-2)")
-    reply = response.reply.lower()
-    assert "recovered automatically" not in reply, response.reply
-    assert "succeeded on retry" not in reply, response.reply
-    assert "did not work" in reply or "could not recover" in reply, response.reply
+    reply = approved.reply.lower()
+    assert "recovered automatically" not in reply, approved.reply
+    assert "succeeded on retry" not in reply, approved.reply
+    assert any(word in reply for word in ("did not work", "could not recover", "failed")), (
+        approved.reply)
 
     rows = core.db.query(
         "SELECT recovered, attempts, strategy, note FROM failures "

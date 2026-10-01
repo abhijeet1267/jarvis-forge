@@ -242,6 +242,7 @@ class JarvisCore:
         request_id: str = "",
         unhandled: Optional[List[str]] = None,
         answered_by: str = "",
+        reason: str = "",
     ) -> None:
         # ``result`` is a status token so AuditLog.failures() can filter on it;
         # the human-readable message goes into ``detail``.
@@ -254,7 +255,12 @@ class JarvisCore:
         # are kept verbatim so ``AuditLog.failures()`` and every stored record
         # still read the same way; ``unverified`` is a third, honest state.
         if result is None:
-            status, message = "blocked", ""
+            # A block has no handler result to summarise, so the gate's own reason is
+            # the message. It used to be dropped on the floor here: the verdict carried
+            # it, the caller had it, and the chain recorded ``{"ok": false,
+            # "message": ""}`` -- which made the permission engine's refusals, the most
+            # security-relevant rows in the ledger, the only ones with no stated cause.
+            status, message = "blocked", reason
         else:
             status, message = self._audit_token(result), result.summary
 
@@ -420,7 +426,8 @@ class JarvisCore:
                 response.reply = f"I cannot do that: {verdict.reason.rstrip('.')}."
                 self._audit_action(action, request, None, "blocked", False,
                                      request_id=response.request_id,
-                                     unhandled=plan.unhandled)
+                                     unhandled=plan.unhandled,
+                                     reason=verdict.reason)
                 if job_id:
                     self.tasks.update_step(
                         job_id, action.tool, ActionStatus.BLOCKED, verdict.reason, seq=step_seqs[index]

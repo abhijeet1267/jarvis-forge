@@ -2041,13 +2041,17 @@ class RulePlanner:
             else:
                 action = "set"
             dev = m.group("dev").strip()
-            if "temperature" in dev or dev in ("ac", "aircon", "heater"):
-                dev = "ac"
             level = int(m.group("lvl")) if m.group("lvl") else None
+            # The captured words go to the gateway unchanged. This line used to read
+            # ``if "temperature" in dev or dev in ("ac", "aircon", "heater"): dev = "ac"``,
+            # which decided that a word the user said meant a device they did not name --
+            # the second half of the heater bug. The gateway is the only thing allowed to
+            # decide which device a word refers to, and the permission engine refuses an
+            # actuation whose word matches nothing, so the rule exists in one place.
             from ..home.gateway import get_home_gateway
 
-            tied = get_home_gateway().ambiguous_matches(dev)
-            if tied:
+            target, described = get_home_gateway().actuation_target(dev)
+            if target is None and described:
                 # The user named a category, not a device. Choosing one and
                 # actuating it was the old behaviour: "turn on the light" reached
                 # the kitchen light out of four, and the answer never said it had
@@ -2056,7 +2060,7 @@ class RulePlanner:
                     "home_control",
                     note=(
                         f"Which {dev} did you mean -- "
-                        + ", ".join(d.name for d in tied)
+                        + ", ".join(d.name for d in described)
                         + "? Name the room and I will switch it."
                     ),
                 )

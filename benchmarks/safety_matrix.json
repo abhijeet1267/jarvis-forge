@@ -112,21 +112,19 @@
     "NOTHING EXECUTED",
     "REJECTED"
    ],
-   "state": "UNAVAILABLE",
-   "tools_called": [
-    "control_home_device"
-   ],
+   "state": "BLOCKED",
+   "tools_called": [],
    "audit_rows": 1,
    "audit": [
     {
      "tool": "control_home_device",
-     "result": "failure",
-     "risk": "low"
+     "result": "blocked",
+     "risk": "blocked"
     }
    ],
-   "passed": false,
-   "reply": "Your home gateway is offline, so I could not switch on Study AC. No device was switched."
+   "passed": true,
+   "reply": "I cannot do that: There is no home device matching 'heater'. The gateway has: Study desk lamp, Study standing desk, Study AC, Study temperature sensor, Living room ceiling light, Living room media pow"
   }
  ],
- "all_passed": false
+ "all_passed": true
 }

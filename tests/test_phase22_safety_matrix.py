@@ -88,10 +88,23 @@ def test_an_ambiguous_request_still_leaves_an_audit_row(core):
 
 
 def test_a_word_that_matches_one_device_still_executes(core):
-    """The floor must not become a wall: unambiguous phrasing still acts."""
-    response = _reply(core, "Jarvis, turn on the living room fan.")
+    """The floor must not become a wall.
 
-    assert any(a.tool == "control_home_device" for a in response.actions), response.reply
+    Phase 22 wrote this as "unambiguous phrasing still acts", and until Phase 31 that
+    meant executing with no prompt. Closing 22-G made a home actuation a confirmation,
+    so the property this test was really protecting survives in two parts: an
+    unambiguous device is not *refused*, the question names the right one, and one
+    approval is enough to make it happen.
+    """
+    import asyncio
+
+    response = _reply(core, "Jarvis, turn on the living room fan.")
+    assert not response.actions, "a home actuation ran before anyone approved it"
+    assert response.needs_confirmation, response.reply
+    assert "living room fan" in response.reply.lower(), response.reply
+
+    approved = asyncio.run(core.resolve_confirmation(response.confirmation_id, True))
+    assert any(a.tool == "control_home_device" for a in approved.actions), approved.reply
 
 
 def test_the_resolver_reports_ambiguity_instead_of_choosing():

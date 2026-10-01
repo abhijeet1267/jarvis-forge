@@ -45,11 +45,17 @@ KINDS = ("light", "fan", "plug", "ac", "sensor", "door", "camera")
 
 #: Words the resolver accepts as each kind, so "the desk lamp" and "the
 #: desk light" both resolve to a light.
+#:
+#: ``heater`` and ``hvac`` used to be here, under ``ac``. Measured consequence: "turn
+#: on the heater" resolved to Study AC -- an appliance the user never named, through a
+#: table that files heating under cooling because both move air. This house has no
+#: heater, so the honest answer was always "there is no heater here", and the synonym
+#: was not a convenience but a redirection.
 KIND_SYNONYMS: Dict[str, set] = {
     "light": {"light", "lights", "lamp", "lamps", "ceiling", "bulb"},
     "fan": {"fan", "fans"},
     "plug": {"plug", "plugs", "power", "outlet"},
-    "ac": {"ac", "aircon", "aircon", "air", "conditioner", "heater", "hvac"},
+    "ac": {"ac", "aircon", "air", "conditioner"},
     "sensor": {"sensor", "sensors", "temperature", "motion", "energy"},
     "door": {"door", "doors"},
     "camera": {"camera", "cameras", "cam"},
@@ -442,6 +448,43 @@ class HomeGateway:
             if score > best_score:
                 best, best_score = device, score
         return best
+
+    def actuation_target(self, query: str) -> "tuple[Optional[ZoneDevice], List[ZoneDevice]]":
+        """The device a request to *change* something names, or the devices it could mean.
+
+        ``resolve`` is a read-side lookup: answering with the closest thing it knows is
+        acceptable when the worst case is reading the wrong sensor. An actuation gets no
+        such latitude, and neither does ``ambiguous_matches``, which only asks whether
+        several devices tie -- "heater" tied exactly one, because the vocabulary filed it
+        under the air conditioner, and a wrong answer that stands alone looks identical
+        to a right one.
+
+        So the rule is inverted for anything that changes the world: **every word the
+        user typed has to describe the device** -- be its id, a word in its name or room,
+        or a word that genuinely names its kind. One device described acts; several ask;
+        none says so and lists what does exist. This also retires the substring bonus,
+        which is how "the power" reached the kitchen fridge: "power" is in that plug's
+        name, so it out-scored the three other plugs and switched one of them.
+        """
+        q = _normalise(query)
+        if not q:
+            return None, []
+        words = set(q.split())
+        for device_id, device in self._by_id.items():
+            # The whole id or the whole name, never one segment of it: "ceiling" is the
+            # last component of ``living.ceiling``, and treating that as an exact
+            # reference is how a category word silently picks one of four lights.
+            if q == device_id or q == device.name.lower():
+                return device, [device]
+        described: List[ZoneDevice] = []
+        for device in self.devices:
+            kind_words = KIND_SYNONYMS.get(device.kind, set()) | {device.kind}
+            own_words = set(device.name.lower().split()) | set(device.room.lower().split())
+            if words <= (kind_words | own_words) and (words & kind_words or words & own_words):
+                described.append(device)
+        if len(described) == 1:
+            return described[0], described
+        return None, described
 
     @staticmethod
     def _score(device: ZoneDevice, q: str) -> int:

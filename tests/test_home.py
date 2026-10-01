@@ -350,7 +350,19 @@ async def test_e2e_status_when_offline(core: JarvisCore, make_request) -> None:
 
 
 async def test_e2e_control_when_offline_does_not_claim_success(core: JarvisCore, make_request) -> None:
+    """An offline gateway must not be reported as a switch that happened.
+
+    Phase 31 put a confirmation in front of every home actuation (22-G), so the
+    sentence now stops at the gate: the first assertions are that nothing ran until
+    someone approved it, and the claim this test was written for -- no success claim
+    when nothing was observed -- is made after the approval, on the way it always
+    mattered.
+    """
     response = await core.handle(make_request("turn on the kitchen light"))
     assert response.intent == "home_control"
-    assert response.actions[0].ok
-    assert "no device was switched" in response.reply.lower()
+    assert not response.actions, "a physical actuation ran before anyone approved it"
+    assert response.needs_confirmation, response.reply
+
+    approved = await core.resolve_confirmation(response.confirmation_id, True)
+    assert approved.actions[0].ok
+    assert "no device was switched" in approved.reply.lower(), approved.reply
