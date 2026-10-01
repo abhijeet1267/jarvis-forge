@@ -192,5 +192,38 @@ Full suite: **1621 passed, 0 failed, 0 xfailed** (1621 collected), up from 1582.
 
 ## 8. Git
 
-Committed and pushed to `main` on `abhijeet1267/jarvis-forge`. The CI verdict is appended once
-the runner has produced it, not before.
+Committed and pushed to `main` on `abhijeet1267/jarvis-forge`:
+
+```
+aa248e9  The words the router accepts and the thing the approval names are one thing
+         14 files changed
+```
+
+### The runner's verdict, measured after the push
+
+Run `36865970543`, both jobs green:
+
+| job | result | pytest line | wall |
+| --- | --- | --- | --- |
+| `suite (3.11)` | success | `1615 passed, 6 skipped, 1 warning in 77.34s` | 13:03:22 → 13:05:11Z |
+| `suite (3.12)` | success | `1615 passed, 6 skipped, 1 warning in 86.84s` | 13:03:22 → 13:05:20Z |
+
+`1615 + 6 = 1621` — the laptop's collection count again, and the six are the same accounted
+set from Phase 29 (five battery-gated, one `dist/`-gated), so all 39 of this phase's tests ran
+on both images. That includes the sweep over every word in the derived vocabulary and the two
+mutation tests that add and remove a synonym, which is the part of this phase that would be
+easy to pass for the wrong reason on one machine's gateway inventory.
+
+The benchmark step re-ran the safety matrix on the runner, and the row this phase must not
+have regressed is still refused there:
+
+```
+suite (3.11)  ok   Jarvis, turn on heater.   BLOCKED   "There is no home device matching 'heater'. …"
+suite (3.12)  ok   Jarvis, turn on heater.   BLOCKED   "There is no home device matching 'heater'. …"
+```
+
+Worth stating plainly, because it is the specific risk of this phase: widening recognition is
+the kind of change that can quietly delete a refusal. "heater" is not in the gateway's synonym
+table -- it is in the declared absent-appliance set, which exists so the sentence stays a home
+request and gets refused with the devices that do exist. The laptop test and both runners
+confirm that after the vocabulary change, not before it.
