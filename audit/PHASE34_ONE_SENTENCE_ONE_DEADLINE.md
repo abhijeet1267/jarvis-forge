@@ -194,3 +194,20 @@ answering, `research this idea` at 714 ms in `benchmarks/acceptance_latency.json
 fast-path test against a server that declares the length it actually sends — not CI.
 
 The §45 matrix re-ran on the runner and still holds 6 of 6, heater row included.
+
+### Follow-up, measured on the addendum's own run
+
+The addendum commit `9e0648e` triggered run `36911749436`, green, and it reported
+**`1647 passed, 6 skipped`** on both images — `1647 + 6 = 1653`, and back to the six that
+Phase 29 accounted for.
+
+That settles the inference above in both directions. The seventh skip was there on one run
+and gone on the next, with the tree unchanged in any way that touches it: which is exactly
+how a network-reachability skip behaves. It also retires the caveat attached to it — on this
+run the runner *did* exercise the real arXiv path and the test passed, so the deadline is
+verified against a live upstream on a machine that did not write it, not only locally.
+
+The honest residue is the method, not the fact: `pytest -q` gives counts without reasons, so
+two runs were needed to identify a skip that a single run could only guess at. A `-rs` on the
+CI invocation would make the next one a measurement instead — recorded with 29-D as a CI
+change this phase did not make on its own authority.
