@@ -169,4 +169,13 @@ Parent `de4f4a7` (Phase 35 addendum). Committed: `jarvis/config.py`, `jarvis/sec
 `dashboard/icon-512.png`, `.env.example`, `benchmarks/*`, `assets/*.svg`,
 `tests/test_phase36_two_applications.py`, `README.md`, this report.
 
-**CI verdict:** to be appended once the run exists — not before.
+**CI verdict:** `37014255915` on `5050c46` finished **success** on both matrix legs —
+`1704 passed, 6 skipped` on 3.11 and the same on 3.12, which closes against this machine's 1710
+collected (1704 + 6), so the runner is running the whole suite. The six skips remain unnamed: the
+workflow runs `python -m pytest -q`, so no `SKIPPED` reason reaches either log (36-A…E stand; the
+`-rs` change is still an open item, not something to edit from a feature phase). Both legs took ~10m53s against 6m14s on the Phase 35 run. The obvious suspect — the new staging
+test copying `jarvis/` and `dashboard/` into a temp directory — was measured and cleared: 0.09 s
+for all three staging tests. The cause is **not identified here**, and no substitute was invented
+for it.
+
+
