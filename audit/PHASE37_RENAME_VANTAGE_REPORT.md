@@ -144,4 +144,14 @@ guard now derives `APP_NAME`, and `tests/test_phase36_two_applications.py`, whic
 boundary tests),
 `README.md`, `benchmarks/*.json`, `assets/*.svg`, this report.
 
-**CI verdict:** to be appended once the run exists — not before.
+* **37-E** the repository is still `abhijeet1267/jarvis-forge` on GitHub and `jarvis-forge/` on
+  disk, and the README's CI badge URL points at that path. Renaming a remote is shared state — it
+  rewrites every clone's origin and any link that already exists — so it was offered and left for
+  the user to call rather than done as a side effect of a branding pass.
+
+**CI verdict:** `37028086667` on `86f1173` finished **success** on both matrix legs —
+`1711 passed, 6 skipped` each, which closes against this machine's 1717 collected (1711 + 6). The
+six skips remain unnamed for the same reason as the last two phases: `python -m pytest -q` prints
+no `SKIPPED` reason, and adding `-rs` to shared CI is still an open item rather than something to
+change from a feature commit.
+
