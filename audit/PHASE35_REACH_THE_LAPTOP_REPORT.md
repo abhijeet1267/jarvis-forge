@@ -204,6 +204,22 @@ what the finding was ever about. Locally that file is 30/30 and the suite is 168
 Two rounds of runner failures here are worth stating plainly rather than burying: this phase's
 tests were written against one machine twice over — once in what they asserted about installed
 apps, once in how long they allowed a boot to take, and once in what they assumed a startup log
-contains. The CI verdict for this commit is appended below.
+contains.
+
+### The runner's verdict, measured after the push
+
+`37003910463` on `835d399` finished **success** on both matrix legs:
+
+```
+suite (3.11)  1677 passed, 6 skipped, 1 warning in 374.59s
+suite (3.12)  1677 passed, 6 skipped, 1 warning in 372.91s
+```
+
+The arithmetic closes against this machine (`1683 passed, 0 skipped` = 1677 + 6), so the runner is
+running the same suite and not a smaller one. What the six skipped tests are is **not** recorded
+here, because the workflow runs `python -m pytest -q` and `SKIPPED` appears nowhere in either
+job's log — no reason is printed. Naming them would be a guess. Getting that decomposition is the
+`-rs` change to `.github/workflows/ci.yml` already flagged as an open item (Phase 34 §29-D), and
+shared CI is not edited unilaterally.
 
 
