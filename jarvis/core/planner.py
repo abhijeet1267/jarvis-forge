@@ -166,6 +166,7 @@ class RulePlanner:
             self._watch,
             self._battery,
             self._system_status,
+            self._agent_status,
             self._time,
             self._memory_controls,
             self._recall,
@@ -778,6 +779,37 @@ class RulePlanner:
         if re.search(r"\b(amr|amrs|robot|robots|robot arm|\barm\b)\b", text):
             return None
         return Intent("laptop_battery", tool="battery_status", confidence=0.95)
+
+    #: App names a person is likely to ask about, and the words that make the question
+    #: a status check rather than a launch request. The probe itself takes any name;
+    #: this only decides which sentences are allowed to reach it.
+    _AGENT_STATUS = re.compile(
+        r"\b(?:is|are|check (?:if )?|see (?:if )?)\s+"
+        r"(?P<app>[A-Za-z][A-Za-z0-9 ._-]{1,30}?)\s+"
+        r"(?:still\s+)?\b(working|running|up|alive|responding|installed)\b",
+        re.I,
+    )
+
+    def _agent_status(self, text: str, raw: str) -> Optional[Intent]:
+        """"is qoder working" -> check_agent_status.
+
+        Ordered next to the system-status rule because it reads the same way to a
+        person and resolves to a different tool: one asks about this machine, the
+        other about an app on it. Read-only, so it asks nothing of the user and is
+        never gated.
+        """
+        found = self._AGENT_STATUS.search(raw)
+        if not found:
+            return None
+        name = " ".join(found.group("app").split()).strip(" .")
+        if not name:
+            return Intent("check_agent_status", note="Which app should I check?")
+        return Intent(
+            "check_agent_status",
+            tool="check_agent_status",
+            params={"app": name[0].upper() + name[1:]},
+            confidence=0.85,
+        )
 
     def _system_status(self, text: str, raw: str) -> Optional[Intent]:
         if re.search(r"\b(system status|system health|cpu|memory usage|disk usage|load average)\b", text):

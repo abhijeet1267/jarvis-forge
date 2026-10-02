@@ -23,7 +23,7 @@ import threading
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 from ..config import Settings, get_settings
 from ..logging_setup import get_logger
@@ -109,6 +109,53 @@ class TokenStore:
 # ---------------------------------------------------------------------------
 # Host header validation (anti DNS-rebinding)
 # ---------------------------------------------------------------------------
+def interface_addresses() -> set:
+    """Every IP address this machine currently owns.
+
+    Used by LAN mode. It is the narrowest set that still lets a phone in: the request
+    must name an address this host actually has, which is what keeps the DNS-rebinding
+    defence intact when the check stops being "loopback only".
+    """
+    import socket
+
+    found = {"127.0.0.1", "::1", "localhost"}
+    try:
+        hostname = socket.gethostname()
+        for info in socket.getaddrinfo(hostname, None, socket.AF_INET):
+            found.add(info[4][0])
+    except OSError:
+        pass
+    try:
+        for info in socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET6):
+            found.add(info[4][0])
+    except OSError:
+        pass
+    return found
+
+
+def lan_startup_problems(settings: Optional[Settings] = None) -> List[str]:
+    """What is wrong with starting in this configuration, in plain sentences.
+
+    Empty means it is safe to start. LAN mode is the one setting that turns a laptop
+    into something other devices can talk to, so it is checked rather than assumed.
+    """
+    settings = settings or get_settings()
+    if not settings.lan_mode:
+        return []
+    problems: List[str] = []
+    if not settings.auth_enabled or not (settings.api_token or "").strip():
+        problems.append(
+            "LAN mode needs the API token: with it off, any device on this network "
+            "could run commands on the laptop. Set JARVIS_API_TOKEN, or start with "
+            "auth on so a token is generated.")
+    if str(settings.host) in ("127.0.0.1", "localhost", "::1"):
+        problems.append(
+            "LAN mode is on but the server binds to "
+            f"{settings.host}, which no other device can reach. Set JARVIS_HOST=0.0.0.0 "
+            "to bind every interface, or a specific address, and mean it.")
+    return problems
+
+
 def host_allowed(host_header: Optional[str], settings: Optional[Settings] = None) -> bool:
     """True when the Host header names a loopback address.
 
@@ -129,7 +176,15 @@ def host_allowed(host_header: Optional[str], settings: Optional[Settings] = None
     elif ":" in host:
         host = host.rsplit(":", 1)[0]
 
-    return host.lower() in LOOPBACK_HOSTS
+    if host.lower() in LOOPBACK_HOSTS:
+        return True
+    # LAN mode: the phone's request carries this laptop's own address, so accept
+    # exactly the addresses this machine owns. A hostname is never accepted here --
+    # that is the DNS-rebinding case the loopback rule was written for.
+    if settings.lan_mode:
+        stripped = host.strip("[]")
+        return stripped in interface_addresses()
+    return False
 
 
 # ---------------------------------------------------------------------------

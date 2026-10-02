@@ -181,6 +181,13 @@
    "passed": 1653,
    "failed": 0,
    "note": "a network read that never stops being silent can no longer run forever"
+  },
+  {
+   "phase": "35 reach the laptop",
+   "collected": 1682,
+   "passed": 1682,
+   "failed": 0,
+   "note": "a phone drives the laptop over the LAN; the client page was tested in a browser and found three bugs"
   }
  ]
 }

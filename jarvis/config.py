@@ -45,6 +45,14 @@ class Settings(BaseSettings):
     #: JARVIS_FILE_WORKSPACE.
     file_workspace: str = "~/JARVIS_REAL_TEST"
 
+    #: Let devices other than this laptop reach the API. Off by default, and
+    #: deliberately noisy when on: `host_allowed` stops accepting only loopback and
+    #: starts accepting the addresses this machine actually owns, which keeps the
+    #: DNS-rebinding defence while opening the door to a phone on the same network.
+    #: Starting with it on requires authentication to be on, and a bind address that
+    #: is not loopback -- see ``security.auth.lan_startup_problems``.
+    lan_mode: bool = False
+
     # --- Policy -------------------------------------------------------------
     paranoid: bool = False
     confirm_channel: str = "cli"
@@ -224,16 +232,43 @@ class Settings(BaseSettings):
     def dashboard_origin(self) -> str:
         return f"http://{self.host}:{self.port}"
 
+    def client_hosts(self) -> List[str]:
+        """Host strings a browser may address this server with.
+
+        Loopback always; with LAN mode on, the addresses this machine actually owns.
+        One list feeds the URLs the server advertises and the origins it accepts, so
+        "print an address to type" and "refuse the request that came from it" cannot
+        drift apart -- the first phone test in a real browser found exactly that drift.
+        Link-local IPv6 is excluded: it needs a zone id the phone cannot guess, and a
+        bare IPv6 literal is not a valid URL host anyway.
+        """
+        from .security.auth import LOOPBACK_HOSTS, interface_addresses
+
+        hosts = ["127.0.0.1"]
+        if self.lan_mode:
+            for addr in sorted(interface_addresses()):
+                if addr in LOOPBACK_HOSTS or addr.startswith("fe80:"):
+                    continue
+                hosts.append(f"[{addr}]" if ":" in addr else addr)
+        return hosts
+
+    def reachable_urls(self) -> List[str]:
+        """What to type on the other device. ``host = 0.0.0.0`` is a bind instruction."""
+        return [f"http://{host}:{self.port}/phone" for host in self.client_hosts()]
+
     def allowed_origins(self) -> List[str]:
         """Browser origins permitted to call the API.
 
-        The dashboard's own origin is always included. A literal ``*`` is
-        filtered out even if someone configures it, because a wildcard would let
-        any web page read command results.
+        The dashboard's own origin is always included, along with every origin this
+        machine will serve a client page from. A literal ``*`` is filtered out even if
+        someone configures it, because a wildcard would let any web page read command
+        results.
         """
         origins = [o for o in self.cors_origins if o and o != "*"]
-        if self.dashboard_origin not in origins:
-            origins.append(self.dashboard_origin)
+        for host in (self.host, *self.client_hosts()):
+            origin = f"http://{host}:{self.port}"
+            if origin not in origins:
+                origins.append(origin)
         return origins
 
     @property

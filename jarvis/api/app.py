@@ -33,6 +33,7 @@ from ..security.auth import (
     get_rate_limiter,
     get_token_store,
     host_allowed,
+    lan_startup_problems,
 )
 from ..security.privacy import PrivacyManager, describe_privacy
 from ..devices.pairing import PairingManager
@@ -53,19 +54,34 @@ _settings = get_settings()
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    """Materialise the API token before serving.
+    """Refuse an unsafe LAN configuration, then materialise the API token.
 
-    Without this the token would only be generated on the first *successful*
-    verification -- which can never happen, because nobody can know the token
-    yet. Generating it eagerly breaks that deadlock and lets the user read it
-    from disk.
+    LAN mode is the setting that lets another device run things on this laptop, so the
+    configuration is checked here rather than trusted: a token-less or loopback-bound
+    start would either open a remote shell or silently fail to connect anything.
+
+    Without eager token generation the token would only be produced on the first
+    *successful* verification -- which can never happen, because nobody can know the token
+    yet. Generating it here breaks that deadlock and lets the user read it from disk.
     """
     settings = get_settings()
+    problems = lan_startup_problems(settings)
+    if problems:
+        for problem in problems:
+            log.error("refusing to start", extra_fields={"lan_mode_problem": problem})
+        raise RuntimeError(" ".join(problems))
+
     if settings.auth_enabled:
         token_path = settings.token_path
         get_token_store().token()
         log.info("api token ready", extra_fields={"path": str(token_path)})
-        print(f"JARVIS Forge API token -> {token_path}")
+        # flush: stdout is a pipe for the desktop launcher, where it would otherwise
+        # sit in a block buffer and never reach the log the user is told to read.
+        print(f"JARVIS Forge API token -> {token_path}", flush=True)
+
+    # A phone cannot guess the laptop's address, and `0.0.0.0` is not one.
+    for url in settings.reachable_urls():
+        print(f"Phone client           -> {url}", flush=True)
 
     # v0.8: run scheduled jobs in the background while the server is up.
     core = get_core()
@@ -2318,7 +2334,30 @@ async def watch_reply_endpoint(body: WatchReplyBody, _: None = Protected) -> Dic
 # ---------------------------------------------------------------------------
 # Dashboard
 # ---------------------------------------------------------------------------
+PHONE_PAGE = Path(__file__).resolve().parents[2] / "dashboard" / "phone.html"
 DASHBOARD = Path(__file__).resolve().parents[2] / "dashboard" / "index.html"
+
+
+async def phone_client() -> Any:
+    """Serve the phone's side of the pairing flow.
+
+    Same rule as the dashboard and for the same reason: the page carries a single-use
+    bootstrap code, never the master token, because it is fetched by a device that has
+    not been trusted yet. It speaks only endpoints that already exist --
+    pair/request, pair/pending, /command, /confirm/{id} -- so it opens no second,
+    ungated path into the laptop.
+    """
+    if not PHONE_PAGE.exists():
+        raise HTTPException(status_code=404, detail="phone client not found")
+    settings = get_settings()
+    bootstrap = _issue_credential(_bootstraps, BOOTSTRAP_TTL_SECONDS) if settings.auth_enabled else ""
+    return HTMLResponse(content=PHONE_PAGE.read_text(encoding="utf-8").replace(
+        "__JARVIS_BOOTSTRAP__", bootstrap))
+
+
+@app.get("/phone", include_in_schema=False)
+async def phone_page() -> Any:
+    return await phone_client()
 
 
 @app.get("/dashboard")

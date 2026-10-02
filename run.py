@@ -101,8 +101,12 @@ def main() -> None:
     from jarvis.config import get_settings
 
     settings = get_settings()
-    print(f"JARVIS Forge core -> http://{settings.host}:{settings.port}/dashboard")
-    print(f"Voice status      -> http://{settings.host}:{settings.port}/voice/status")
+    # `0.0.0.0` is a bind instruction; nobody can type it into a browser and reach this
+    # machine. The phone URLs the app prints at startup carry the real addresses.
+    display_host = "127.0.0.1" if settings.host in ("0.0.0.0", "::") else settings.host
+    print(f"JARVIS Forge core -> http://{display_host}:{settings.port}/dashboard", flush=True)
+    print(f"Voice status      -> http://{display_host}:{settings.port}/voice/status",
+          flush=True)
     uvicorn.run(app, host=settings.host, port=settings.port, log_level="info")
 
 

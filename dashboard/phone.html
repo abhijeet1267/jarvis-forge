@@ -1,0 +1,208 @@
+<!doctype html>
+<!--
+  JARVIS Forge — phone companion.
+
+  Served public, on purpose, and it carries a single-use bootstrap code rather than the
+  API token: the laptop's master secret must never travel inside a page that a device
+  fetches before it is trusted (the dashboard learned this the hard way; see
+  dashboard/index.html's auth comment). The code is spent once at POST /auth/session.
+
+  Every call this page makes is an endpoint the laptop already exposes for exactly this:
+  /devices/pair/request, /devices/pair/pending, /command, /confirm/{id}. Nothing here is
+  a second way in — an unpaired phone can only create a pending request, and an approval
+  still has to be granted by something with a real credential.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="jarvis-bootstrap" content="__JARVIS_BOOTSTRAP__" />
+<title>JARVIS — phone</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 14px; background: #0d1117; color: #e6edf3;
+         font: 16px/1.45 -apple-system, "Segoe UI", Roboto, sans-serif; }
+  h1 { font-size: 17px; margin: 0 0 4px; letter-spacing: .01em; }
+  .sub { color: #8b949e; font-size: 13px; margin-bottom: 14px; }
+  .card { background: #161b22; border: 1px solid #21262d; border-radius: 10px;
+          padding: 12px; margin-bottom: 12px; }
+  .row { display: flex; gap: 8px; align-items: center; }
+  input, button { font: inherit; border-radius: 8px; }
+  input { flex: 1; min-width: 0; padding: 11px 12px; background: #0d1117;
+          color: #e6edf3; border: 1px solid #30363d; }
+  button { padding: 11px 14px; border: 0; background: #238636; color: #fff; font-weight: 600; }
+  button.deny { background: #6e2a2a; }
+  button.ghost { background: #21262d; color: #adbac7; font-weight: 500; }
+  button:disabled { opacity: .5; }
+  ul { list-style: none; margin: 0; padding: 0; }
+  li { padding: 9px 0; border-bottom: 1px solid #21262d; font-size: 14px; }
+  li:last-child { border-bottom: 0; }
+  .chip { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px;
+          font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+          border: 1px solid #30363d; color: #adbac7; margin-right: 6px; }
+  .ok { color: #3fb950; } .warn { color: #d29922; } .bad { color: #f85149; }
+  .detail { color: #8b949e; font-size: 12px; display: block; margin-top: 3px; }
+</style>
+</head>
+<body>
+  <h1>JARVIS on this laptop</h1>
+  <div class="sub" id="status">checking…</div>
+
+  <div class="card">
+    <div class="row">
+      <button id="pair">Pair with this laptop</button>
+      <button id="refresh" class="ghost">Refresh</button>
+    </div>
+    <div id="pairline" class="sub" style="margin:10px 0 0"></div>
+  </div>
+
+  <div class="card">
+    <div class="row">
+      <input id="cmd" placeholder="what is my battery?" autocomplete="off" />
+      <button id="send">Send</button>
+    </div>
+    <ul id="log"></ul>
+  </div>
+
+  <div class="card">
+    <strong style="font-size:14px">Waiting for you</strong>
+    <ul id="conf"><li class="sub">nothing pending</li></ul>
+  </div>
+
+<script>
+const API = "";
+const BOOTSTRAP = (document.querySelector('meta[name="jarvis-bootstrap"]') || {}).content || "";
+let token = "";
+let lastConf = null;
+// Stable per device: pairing a phone twice should not create two devices.
+const DEVICE = localStorage.getItem("jarvis.device") || ("phone_" + Math.random().toString(36).slice(2, 8));
+localStorage.setItem("jarvis.device", DEVICE);
+
+async function login() {
+  if (!BOOTSTRAP) return;              // auth off: routes answer without a credential
+  const res = await fetch(API + "/auth/session", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ bootstrap: BOOTSTRAP }),
+  });
+  if (res.ok) token = (await res.json()).session_token || "";
+  else set("status", "this page's code was already used — reload it from the laptop", "bad");
+}
+
+const headers = () => token ? { "X-JARVIS-Token": token, "Content-Type": "application/json" }
+                           : { "Content-Type": "application/json" };
+function set(id, text, cls) {
+  const el = document.getElementById(id);
+  el.className = id === "status" ? ("sub " + (cls || "")) : el.className;
+  el.textContent = text;
+}
+function esc(s) { return String(s == null ? "" : s).replace(/[&<>"]/g, c =>
+  ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
+function line(html) { document.getElementById("log").insertAdjacentHTML("afterbegin", html); }
+
+async function call(path, method, body) {
+  const res = await fetch(API + path, {
+    method: method || "GET", headers: headers(),
+    body: method ? JSON.stringify(body || {}) : undefined,
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    // A 401 here means this page's own credential was refused (expired, or the page
+    // was opened from a stale copy). Saying "not paired yet" would point the user at
+    // the wrong door: pairing is a separate thing that has already succeeded.
+    throw new Error((res.status === 401 ? "credential refused — reload this page "
+                                        : "") +
+                    (data.detail || ("HTTP " + res.status)));
+  }
+  return data;
+}
+
+async function pair() {
+  set("pairline", "asking the laptop to trust this phone…");
+  try {
+    await call("/devices/pair/request", "POST", { device_id: DEVICE, device_name: "Phone" });
+    set("pairline", "requested. Approve it on the laptop (or here, once you are in).", "warn");
+  } catch (err) { set("pairline", "pairing: " + err.message, "bad"); }
+  await refresh();
+}
+
+async function send() {
+  const input = document.getElementById("cmd");
+  const text = input.value.trim();
+  if (!text) return;
+  input.value = "";
+  line(`<li><span class="chip">you</span>${esc(text)}</li>`);
+  try {
+    const data = await call("/command", "POST", { text, source: "phone" });
+    const tone = (data.decision === "BLOCK") ? "bad" : (data.needs_confirmation ? "warn" : "ok");
+    line(`<li><span class="chip ${tone}">${esc(data.decision || "answered")}</span>`
+         + `<span>${esc(data.reply)}</span>`
+         + `<span class="detail">${esc((data.actions || []).map(a => a.tool).join(", ") || "no action")}</span></li>`);
+  } catch (err) {
+    line(`<li><span class="chip bad">error</span><span>${esc(err.message)}</span></li>`);
+  }
+  await refresh();
+}
+
+async function resolve(id, approve) {
+  try {
+    const data = await call(`/confirm/${encodeURIComponent(id)}?approve=${approve ? 1 : 0}`, "POST", {});
+    line(`<li><span class="chip ${approve ? "ok" : "bad"}">${approve ? "approved" : "denied"}</span>`
+         + `<span>${esc(data.reply)}</span></li>`);
+  } catch (err) { line(`<li><span class="chip bad">error</span><span>${esc(err.message)}</span></li>`); }
+  await refresh();
+}
+
+function rowsOf(data, key) {
+  // /devices and /confirmations answer with a bare list. Reading only an object of
+  // the form {key: [...]} is how this page once showed "nothing pending" while a
+  // confirmation was in fact waiting, because `list.confirmations` was undefined.
+  return Array.isArray(data) ? data : ((data || {})[key] || []);
+}
+
+async function refresh() {
+  try {
+    const [devices, pending] = await Promise.all([
+      call("/devices").catch(() => []),
+      call("/confirmations").catch(() => []),
+    ]);
+    const mine = rowsOf(devices, "devices").find(d => d.device_id === DEVICE);
+    const paired = !!(mine && (mine.paired || mine.auth_state === "paired"));
+    set("status", paired ? "paired as " + DEVICE
+                         : "not paired — this phone can ask, and wait for approval",
+        paired ? "ok" : "warn");
+    document.getElementById("pairline").textContent = paired
+      ? "paired. Anything JARVIS wants to do still asks you first." : document.getElementById("pairline").textContent;
+
+    const box = document.getElementById("conf");
+    const list = rowsOf(pending, "confirmations");
+    // Repaint only when the set changed. `refresh()` runs every 4 s, and rewriting the
+    // nodes on every pass detaches the button a tap has just landed on -- on a phone
+    // that eats the approval. Found by tapping Approve in a real browser.
+    const signature = list.map(c => c.confirmation_id + ":" + c.state).join(",");
+    if (signature !== lastConf) {
+      lastConf = signature;
+      box.innerHTML = list.length ? list.map(c => `
+        <li><span class="chip warn">confirm</span>${esc(c.tool)}
+          <span class="detail">${esc(c.preview || "")}</span>
+          <div class="row" style="margin-top:8px">
+            <button data-id="${esc(c.confirmation_id)}" data-approve="1">Approve</button>
+            <button class="deny" data-id="${esc(c.confirmation_id)}" data-approve="0">Deny</button>
+          </div></li>`).join("")
+        : '<li class="sub">nothing pending</li>';
+      box.querySelectorAll("button").forEach(btn => btn.onclick = () =>
+        resolve(btn.dataset.id, btn.dataset.approve === "1"));
+    }
+  } catch (err) { set("status", err.message, "bad"); }
+}
+
+document.getElementById("pair").onclick = pair;
+document.getElementById("refresh").onclick = refresh;
+document.getElementById("send").onclick = send;
+document.getElementById("cmd").addEventListener("keydown", e => { if (e.key === "Enter") send(); });
+
+login().then(refresh);
+setInterval(refresh, 4000);
+</script>
+</body>
+</html>

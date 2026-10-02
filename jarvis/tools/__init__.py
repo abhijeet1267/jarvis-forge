@@ -12,6 +12,7 @@ from ..db.database import get_db
 from ..logging_setup import get_logger
 from ..registry.tools import ToolRegistry
 from . import (
+    agents,
     apps,
     calendar,
     car,
@@ -37,6 +38,7 @@ log = get_logger("tools")
 
 def _all_specs():
     return [
+        *agents.SPECS,
         *apps.SPECS,
         *files.SPECS,
         *system.SPECS,
