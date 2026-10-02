@@ -133,4 +133,13 @@ Parent `b2e82a5`. Committed: `app/launcher.py`, `jarvis/api/app.py`,
 `tests/test_phase38_scan_to_connect.py`, `README.md`, `benchmarks/*`, `assets/*.svg`,
 `dist/Vantage.app` rebuild (not committed — build artifact), this report.
 
-**CI verdict:** to be appended once the run exists — not before.
+**CI verdict:** `37048651947` on `6e44d22` finished **success** on both matrix legs —
+`1715 passed, 9 skipped` each, which closes against this machine's 1724 collected (1715 + 9).
+
+The skips rose from 6 to 9, and the three new ones are this phase's: the file contains exactly
+three `pytest.skip` sites, all gated on the optional `qrcode` package, and the runner installs
+`requirements.txt`, where `qrcode` deliberately is not. So the runner is exercising the
+no-library fallback by skipping the code-drawing tests — consistent with the design, though
+stated as consistency rather than proof: the workflow still runs `python -m pytest -q`, so no
+skip reason reaches the log, which remains the standing `-rs` open item.
+
