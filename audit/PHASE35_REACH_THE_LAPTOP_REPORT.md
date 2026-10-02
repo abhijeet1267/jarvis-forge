@@ -222,4 +222,15 @@ job's log — no reason is printed. Naming them would be a guess. Getting that d
 `-rs` change to `.github/workflows/ci.yml` already flagged as an open item (Phase 34 §29-D), and
 shared CI is not edited unilaterally.
 
+The following commit (`284ce42`, the `.env.example` line and this verdict) was watched as
+`37004875947`: **success** on both legs.
+
+### One more check, because the deliverable is a phone screen
+
+The page was re-opened under iPhone-class emulation (390×844, touch, mobile UA) against the LAN
+address. It renders without horizontal overflow, the command row stays on one line, and the
+buttons are comfortably tappable — so "phone client" is a claim about a phone-sized viewport and
+not merely a narrow browser window. Nothing in the suite verifies this; it is recorded as observed.
+
+
 
