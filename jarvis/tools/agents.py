@@ -73,7 +73,8 @@ async def check_agent_status(ctx: ToolContext, app: str = "") -> Any:
         version = match.group(0) if match else ""
 
     code, out, _err = await run_command(["ps", "-axo", "pid=,comm="])
-    running = code == 0 and bool(out) and installed.rstrip(".app").split("/")[-1].lower() in out.lower()
+    needle = os.path.basename(installed).removesuffix(".app").lower()
+    running = code == 0 and bool(out) and needle in out.lower()
 
     parts = [f"{name} is installed"]
     parts.append(f"(version {version})" if version else "(version not reported by the bundle)")

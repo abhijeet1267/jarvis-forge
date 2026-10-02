@@ -13,7 +13,7 @@ between *"the handler returned"* and *"the thing happened"* — and the thirty p
 measurement spent closing that gap, in the ledger and on the screen.
 
 [![ci](https://img.shields.io/github/actions/workflow/status/abhijeet1267/jarvis-forge/ci.yml?label=tests%20%C2%B7%20macos)](https://github.com/abhijeet1267/jarvis-forge/actions/workflows/ci.yml)
-[![suite](https://img.shields.io/badge/tests-1682%20passed%20%C2%B7%200%20failed-16a34a)](tests)
+[![suite](https://img.shields.io/badge/tests-1683%20passed%20%C2%B7%200%20failed-16a34a)](tests)
 [![tools](https://img.shields.io/badge/tools-127%20across%2015%20agents-2f6df6)](jarvis/tools)
 [![offline](https://img.shields.io/badge/LLM-off%20by%20default%20%C2%B7%20runs%20fully%20offline-0f172a)](jarvis/config.py)
 [![python](https://img.shields.io/badge/python-3.11%20%C2%B7%203.12%20(CI)-6b7688)](.github/workflows/ci.yml)
@@ -39,8 +39,8 @@ and the diagrams read their counts from the live registry.
 
 | Claim | Value | Reproduce |
 |---|---|---|
-| Test suite | **1682 passed · 0 failed · 0 xfailed · 0 skipped** (1682 collected; the network-gated arXiv test skipped in one run and passed live in the next, which is why its skip is reported rather than smoothed over) | `python -m pytest -q -rs` |
-| Suite growth, Phase 9 → 35 | 875 passing / **126 failing** → 1682 passing / 0 failing / **0 xfailed** at the Phase 35 close | `cat benchmarks/suite_history.json` |
+| Test suite | **1683 passed · 0 failed · 0 xfailed · 0 skipped** (1683 collected; the network-gated arXiv test skipped in one run and passed live in the next, which is why its skip is reported rather than smoothed over) | `python -m pytest -q -rs` |
+| Suite growth, Phase 9 → 35 | 875 passing / **126 failing** → 1683 passing / 0 failing / **0 xfailed** at the Phase 35 close | `cat benchmarks/suite_history.json` |
 | Tools registered | **128** | `python -c "from jarvis.core.orchestrator import JarvisCore as J; print(len(J().tools.names()))"` |
 | Confirmation-gated | **27** of 128 | `python assets/build_diagrams.py` (prints the live counts) |
 | Risk tiers | read 69 · low 32 · external 12 · high 12 · physical 3 | same |
@@ -119,7 +119,7 @@ and not a quiet success.
 
 ### Suite growth, Phase 9 → Phase 35
 
-<img src="assets/chart-suite-growth.svg" alt="Test suite growth from 875 passing with 126 failing, to 1682 passing with none failing at the close of Phase 35" width="100%"/>
+<img src="assets/chart-suite-growth.svg" alt="Test suite growth from 875 passing with 126 failing, to 1683 passing with none failing at the close of Phase 35" width="100%"/>
 
 Phase 9 inherited **126 failing tests**. The cause was a single import line in
 `jarvis/tools/base.py` that left `Verification` undefined, so every tool result raised
@@ -438,13 +438,18 @@ cp .env.example .env                      # defaults are safe; everything is bla
 python run.py                             # API on 127.0.0.1:8765
 open http://127.0.0.1:8765/dashboard      # the page fetches its own session token
 
+# Let a phone on the same wifi drive this laptop (opt-in; it refuses to start otherwise):
+JARVIS_LAN_MODE=true JARVIS_HOST=0.0.0.0 python run.py
+#   -> prints e.g. "Phone client -> http://192.168.1.40:8765/phone"; open that on the phone.
+#   A double-clicked desktop app reads the same two lines from `.env` in its project folder.
+
 # Authenticated API, from a shell:
 TOKEN=$(cat ~/.jarvis-forge/api_token)
 curl -s -H "X-JARVIS-Token: $TOKEN" -H 'Content-Type: application/json' \
      -d '{"text":"what is my battery"}' http://127.0.0.1:8765/command
 
 # Prove it to yourself:
-python -m pytest -q                       # 1682 passed, 0 failed, 0 skipped (the research test skips only while arXiv refuses)
+python -m pytest -q                       # 1683 passed, 0 failed, 0 skipped (the research test skips only while arXiv refuses)
 python benchmarks/acceptance_run.py       # re-measures the README's numbers
 python assets/build_charts.py && python assets/build_diagrams.py
 ```
@@ -465,7 +470,7 @@ jarvis/
   scheduler/   recurring jobs, runner with per-run re-authorization
   car/ home/ robotics/ watch/ vision/ research/ design/ coding/
   integrations/ IMAP/SMTP and CalDAV providers with local fallbacks
-tests/         59 modules · 1682 collected · includes the shipped page JS, run by Node
+tests/         59 modules · 1683 collected · includes the shipped page JS, run by Node
 dashboard/     index.html control panel + phone.html, the client a phone uses over the LAN
 audit/         37 phase reports + 4 CSV matrices — the evidence behind this README
 benchmarks/    acceptance_run.py and the JSON the charts are drawn from

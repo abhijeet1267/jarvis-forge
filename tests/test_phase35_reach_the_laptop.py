@@ -330,7 +330,24 @@ def test_the_agent_probe_is_read_only_and_unasked(core):
     assert verdict.decision is PolicyDecision.EXECUTE, verdict.reason
 
 
-def test_the_agent_probe_reports_the_three_answers_that_are_asked(core, monkeypatch):
+@pytest.fixture()
+def bundle_root(tmp_path, monkeypatch):
+    """A stand-in for /Applications.
+
+    Without it these tests report what this particular machine has installed: the CI
+    runner has no `Qoder.app` and honestly answered `found: false`, which was the test's
+    fault, not the probe's.
+    """
+    from jarvis.tools import agents as agents_module
+
+    root = tmp_path / "Applications"
+    root.mkdir()
+    monkeypatch.setattr(agents_module, "BUNDLE_ROOTS", (str(root),))
+    return root
+
+
+def test_the_agent_probe_reports_the_three_answers_that_are_asked(core, bundle_root,
+                                                                  monkeypatch):
     """Installed? which version? running now? Anything vaguer is a shrug."""
     async def fake_run(argv, **kw):
         if argv[:2] == ["mdls", "-name"]:
@@ -341,18 +358,37 @@ def test_the_agent_probe_reports_the_three_answers_that_are_asked(core, monkeypa
 
     from jarvis.tools import agents as agents_module
 
+    (bundle_root / "Qoder.app").mkdir()
     monkeypatch.setattr(agents_module, "run_command", fake_run)
     result = asyncio.run(core.tools.handler("check_agent_status")(
         _ctx(core), app="Qoder"))
     assert result.ok is True, result.error
-    found = result.output["found"]
-    assert found is True, result.output
+    assert result.output["found"] is True, result.output
     assert "1.4.2" in str(result.output.get("version")), result.output
     assert result.output["running"] is True, result.output
     assert "Qoder" in result.message
 
 
-def test_the_agent_probe_says_no_instead_of_guessing(core, monkeypatch):
+def test_a_name_ending_in_a_keeps_its_own_identity_when_matching_processes(
+        core, bundle_root, monkeypatch):
+    """`rstrip(".app")` strips *characters*, not the suffix, so "Opera.app" became the
+    needle "oper" and "Arena" became "aren" -- a running app reported as not running."""
+    from jarvis.tools import agents as agents_module
+
+    (bundle_root / "Arena.app").mkdir()
+
+    async def fake_run(argv, **kw):
+        if argv[:2] == ["mdls", "-name"]:
+            return 0, "Version 2.0.1\n", ""
+        return 0, "  77 /Applications/Arena.app/Contents/MacOS/Arena\n", ""
+
+    monkeypatch.setattr(agents_module, "run_command", fake_run)
+    result = asyncio.run(core.tools.handler("check_agent_status")(
+        _ctx(core), app="Arena"))
+    assert result.output["running"] is True, result.output
+
+
+def test_the_agent_probe_says_no_instead_of_guessing(core, bundle_root, monkeypatch):
     from jarvis.tools import agents as agents_module
 
     async def nothing(argv, **kw):
@@ -399,7 +435,10 @@ def _ctx(core):
 # 4. the address must survive being piped to a log
 # ---------------------------------------------------------------------------
 
-_SERVER_TIMEOUT = 40.0
+# GitHub's macOS runners were measured ~7x slower than this machine at the same
+# import workload (257 s suite vs 38 s), so a boot deadline sized for the laptop
+# reads as "it refused without saying why" on a runner that is still importing.
+_SERVER_TIMEOUT = 180.0
 
 
 def _free_port() -> int:
@@ -474,7 +513,8 @@ def test_the_real_server_refuses_an_unsafe_lan_start(tmp_path):
         code = process.wait(timeout=10)
     except subprocess.TimeoutExpired:
         process.kill()
-        pytest.fail("the server started in a configuration it should have refused")
+        pytest.fail(f"the server neither refused nor booted within "
+                    f"{_SERVER_TIMEOUT:.0f} s; output so far:\n{seen[-800:]}")
     finally:
         process.kill()
     assert code != 0, f"an unsafe LAN start exited successfully:\n{seen[-1500:]}"

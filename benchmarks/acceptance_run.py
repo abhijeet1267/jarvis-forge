@@ -195,7 +195,7 @@ def suite_history() -> dict:
         ("32 one vocabulary one approval", 1621, 1621, 0, "the router speaks the gateway's words; the approval names the device"),
         ("33 questions carry their answers", 1642, 1642, 0, "a question offers the ids it holds rather than demanding them"),
         ("34 one deadline per sentence", 1653, 1653, 0, "a network read that never stops being silent can no longer run forever"),
-        ("35 reach the laptop", 1682, 1682, 0, "a phone drives the laptop over the LAN; the client page was tested in a browser and found three bugs"),
+        ("35 reach the laptop", 1683, 1683, 0, "a phone drives the laptop over the LAN; the client page was tested in a browser and found three bugs"),
     ]
     return {"phases": [{"phase": p, "collected": c, "passed": q, "failed": f, "note": n}
                        for p, c, q, f, n in points]}

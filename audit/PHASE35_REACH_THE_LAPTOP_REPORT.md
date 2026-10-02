@@ -117,7 +117,7 @@ honest "absent" answer without inventing a version, and its refusal of a hostile
 
 ```
 tests/test_phase35_reach_the_laptop.py    30 passed
-full suite                                1682 passed · 0 failed · 0 skipped · 65 s
+full suite                                1683 passed · 0 failed · 0 skipped · 45 s
 §45 safety matrix                         6 of 6 (unchanged)
 arXiv                                     skipped in one run, passed live in the next
 ```
@@ -129,7 +129,7 @@ returned three real papers, so the skip is arXiv throttling, not this code.
 
 | | before | after |
 |---|---|---|
-| tests passing | 1653 | **1682** |
+| tests passing | 1653 | **1683** |
 | tools | 127 | **128** (read tier 68 → 69) |
 | API routes | 104 | **105** |
 | confirmation-gated | 27 | 27 (the new tool is READ and stays unasked) |
@@ -169,4 +169,29 @@ Branch `main`, parent `6db1baa` (Phase 34). Committed: `jarvis/config.py`, `jarv
 `dashboard/phone.html`, `run.py`, `benchmarks/acceptance_run.py`, `benchmarks/*.json`, `assets/*.svg`,
 `tests/test_phase35_reach_the_laptop.py`, `README.md`, this report.
 
-**CI verdict:** to be appended below once the run exists — not before.
+### The first runner's verdict: three failures, and two of them were the tests' fault
+
+`37000938214` finished **failure** on `suite (3.12)` — `3 failed, 1673 passed, 6 skipped` — while
+this machine reported green. The three are recorded here because each says something different:
+
+1. `test_the_agent_probe_reports_the_three_answers_that_are_asked` asked the probe about **Qoder**
+   and asserted `found: true`. The probe answered `{'found': False, ...}`. That is the probe being
+   correct — the runner has no `/Applications/Qoder.app` — and the test being machine-dependent:
+   it faked `run_command` but the installed-check reads the real filesystem, so it passed only on
+   a laptop that happens to have the app. Fixed by giving the tests a bundle root of their own
+   (`bundle_root`), which also makes the "absent app" test actually guarantee absence.
+2. Fixing (1) exposed a real defect in the tool: the running-process needle was built with
+   `installed.rstrip(".app")`, which strips *characters*, not the suffix. `Arena.app` became the
+   needle `aren`, `Opera.app` became `oper` — a running app would be reported as not running for
+   any name ending in `a`, `p` or `.`. Now `removesuffix(".app")`, with a test naming the case.
+3. Both subprocess tests timed out: `_SERVER_TIMEOUT = 40 s` was sized by this machine, where the
+   suite takes 38 s; the runner took 257 s for the same work, and a still-importing child looks
+   identical to a child that refused. The deadline is 180 s and the failure text now says which of
+   the two happened, with the output captured so far — a slow machine must not be allowed to
+   report "it started anyway".
+
+This is the same class of finding as the browser drive above, one level over: a green local run
+was not evidence about the runner, exactly as green Python tests were not evidence about the page.
+
+Pushed as a follow-up commit; **CI verdict for the repaired tests: to be appended once it exists.**
+
