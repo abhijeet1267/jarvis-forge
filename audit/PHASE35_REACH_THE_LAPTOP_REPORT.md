@@ -193,5 +193,17 @@ this machine reported green. The three are recorded here because each says somet
 This is the same class of finding as the browser drive above, one level over: a green local run
 was not evidence about the runner, exactly as green Python tests were not evidence about the page.
 
-Pushed as a follow-up commit; **CI verdict for the repaired tests: to be appended once it exists.**
+Pushed as a follow-up commit. **The second runner's verdict:** `37002522780` — `suite (3.11)`
+finished `failure` on `1 failed, 1676 passed, 6 skipped`; the three above are gone, and what was
+left was my own test over-reaching. It asserted that `0.0.0.0` must not appear anywhere in the
+startup output, and `uvicorn` prints `running on http://0.0.0.0:PORT (Press CTRL+C to quit)` — a
+true statement about the socket, not an address offered to a human. The assertion now checks only
+the lines this app writes for a person to act on (`Phone client`, `JARVIS Forge core`), which is
+what the finding was ever about. Locally that file is 30/30 and the suite is 1683 passing.
+
+Two rounds of runner failures here are worth stating plainly rather than burying: this phase's
+tests were written against one machine twice over — once in what they asserted about installed
+apps, once in how long they allowed a boot to take, and once in what they assumed a startup log
+contains. The CI verdict for this commit is appended below.
+
 

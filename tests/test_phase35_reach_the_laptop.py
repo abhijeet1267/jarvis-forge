@@ -541,7 +541,15 @@ def test_the_phone_address_reaches_a_piped_log(tmp_path):
         found, seen = _read_until(process, "/phone")
         assert found, f"no phone address reached the pipe:\n{seen[-1500:]}"
         assert f":{port}/phone" in seen, seen
-        assert "0.0.0.0:" not in seen, f"an untypeable address was advertised:\n{seen}"
+        # Only the lines this app writes for a human to act on. uvicorn's own
+        # "running on http://0.0.0.0:PORT" is a true statement about the socket, not
+        # an address anyone can type -- asserting over the whole log failed on the
+        # runner for that reason.
+        ours = [ln for ln in seen.splitlines()
+                if ln.startswith(("Phone client", "JARVIS Forge core"))]
+        assert ours, seen[-800:]
+        for line in ours:
+            assert "0.0.0.0" not in line, f"an untypeable address was advertised: {line}"
     finally:
         process.kill()
         process.wait(timeout=10)
