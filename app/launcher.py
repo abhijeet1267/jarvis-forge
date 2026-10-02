@@ -176,6 +176,41 @@ def set_lan_switch(enabled: bool) -> Path:
     return path
 
 
+def pairing_qr_png(url: str) -> Optional[bytes]:
+    """Draw a scan code for the pairing URL, or None when the encoder is absent.
+
+    `qrcode` is deliberately not a dependency of a stdlib-first app: on a clean install the
+    panel shows the address as text, which is a smaller code, not a crash. The missing
+    library path is tested because an untested fallback is a bug waiting for someone else.
+    """
+    cached = _QR_CACHE.get(url, "unset")
+    if cached != "unset":
+        return cached  # type: ignore[return-value]
+    try:
+        import io
+
+        import qrcode
+    except ImportError:
+        _QR_CACHE[url] = None
+        return None
+    buffer = io.BytesIO()
+    qrcode.make(url).save(buffer, format="PNG")
+    _QR_CACHE[url] = buffer.getvalue()
+    return _QR_CACHE[url]
+
+
+def lan_phone_url(urls: list) -> str:
+    """The one address worth showing a phone: reachable from another device, not loopback."""
+    for url in urls or []:
+        if "127.0.0.1" in url or "localhost" in url or "::1" in url:
+            continue
+        return url
+    return ""
+
+
+_QR_CACHE: dict = {}
+
+
 def _api_token() -> str:
     """Read the per-install API token so the launcher can talk to the server.
 
@@ -556,6 +591,37 @@ def build_ui(controller: ServerController, on_quit) -> None:
     lan_hint = tk.Label(lan_row, text="", bg=BG, fg=MUTED, font=("Helvetica Neue", 10))
     lan_hint.pack(side="left", padx=8)
 
+    # --- what the phone types (or scans) ------------------------------------
+    pair_row = tk.Frame(root, bg=BG)
+    pair_row.pack(fill="x", padx=16, pady=(0, 8))
+    pair_text = tk.Label(pair_row, text="", bg=BG, fg=MUTED,
+                         font=("Menlo", 11), justify="left")
+    pair_text.pack(side="left")
+    pair_image = tk.Label(pair_row, bg=BG)          # the scan code, when it can be drawn
+    _keep = {}          # Tk frees an image with no Python reference; this holds one
+
+    def show_pairing(urls):
+        target = lan_phone_url(urls)
+        if not target:
+            pair_text.configure(text="phone: not open to other devices yet", fg=MUTED)
+            pair_image.configure(image="")
+            return
+        pair_text.configure(text=f"phone: {target}", fg=INK)
+        png = pairing_qr_png(target)
+        if png is None:
+            pair_image.configure(image="")
+            return
+        if _keep.get("url") != target:
+            import base64
+
+            # master= matters: PhotoImage otherwise binds to the first interpreter in
+            # the process, and an image from another interpreter cannot be shown here.
+            _keep["photo"] = tk.PhotoImage(
+                master=pair_image, data=base64.b64encode(png).decode("ascii"))
+            _keep["url"] = target
+        pair_image.configure(image=_keep["photo"])
+        pair_image.pack(side="left", padx=(12, 0))
+
     def toggle_lan(var):
         enabled = var.get()
         try:
@@ -638,6 +704,7 @@ def build_ui(controller: ServerController, on_quit) -> None:
         pending = health["pending_confirmations"]
         stat_labels["pending"].configure(text=str(pending), fg=BAD if pending else INK)
         stat_labels["llm"].configure(text="cloud" if health["llm_enabled"] else "rules")
+        show_pairing(health.get("phone_urls") or [])
 
         status.configure(
             text=f"running  ·  http://{controller.host}:{controller.port}", fg=OK

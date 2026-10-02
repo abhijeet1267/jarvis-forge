@@ -202,6 +202,13 @@
    "passed": 1718,
    "failed": 0,
    "note": "renamed where a person reads it; the wiring names counted identical before and after"
+  },
+  {
+   "phase": "38 scan to connect",
+   "collected": 1724,
+   "passed": 1724,
+   "failed": 0,
+   "note": "the laptop shows the address and a code; the dead URL was a server nobody had started"
   }
  ]
 }

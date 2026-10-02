@@ -9,7 +9,7 @@ world afterwards**, and written to a tamper-evident audit chain. It runs with no
 key, no network and no vendor — an LLM is optional and off by default.
 
 What this repository is mostly about is not features. It is about the difference
-between *"the handler returned"* and *"the thing happened"* — and the thirty-seven phases of
+between *"the handler returned"* and *"the thing happened"* — and the thirty-eight phases of
 measurement spent closing that gap, in the ledger and on the screen.
 
 > **On the name.** The product is **Vantage** — in the README, both web clients, the install
@@ -25,7 +25,7 @@ measurement spent closing that gap, in the ledger and on the screen.
 > too: they are dated evidence of what was true then.
 
 [![ci](https://img.shields.io/github/actions/workflow/status/abhijeet1267/jarvis-forge/ci.yml?label=tests%20%C2%B7%20macos)](https://github.com/abhijeet1267/jarvis-forge/actions/workflows/ci.yml)
-[![suite](https://img.shields.io/badge/tests-1718%20passed%20%C2%B7%200%20failed-16a34a)](tests)
+[![suite](https://img.shields.io/badge/tests-1724%20passed%20%C2%B7%200%20failed-16a34a)](tests)
 [![tools](https://img.shields.io/badge/tools-128%20across%2015%20agents-2f6df6)](jarvis/tools)
 [![offline](https://img.shields.io/badge/LLM-off%20by%20default%20%C2%B7%20runs%20fully%20offline-0f172a)](jarvis/config.py)
 [![python](https://img.shields.io/badge/python-3.11%20%C2%B7%203.12%20(CI)-6b7688)](.github/workflows/ci.yml)
@@ -39,7 +39,7 @@ measurement spent closing that gap, in the ledger and on the screen.
 | **Ledger** | `action_logs` hash-chained + `audit.jsonl` append-only, `verify_chain()` |
 | **Edge** | token file `0600` · constant-time compare · same-origin · Host allowlist · 600/min |
 | **Surface** | web dashboard · phone client page over the LAN · voice (macOS `say`/STT) · watch queue · device pairing |
-| **Size** | ~58k lines · 34.3k source · 20.8k tests · 60 test modules |
+| **Size** | ~58k lines · 34.3k source · 20.9k tests · 61 test modules |
 
 ---
 
@@ -51,8 +51,8 @@ and the diagrams read their counts from the live registry.
 
 | Claim | Value | Reproduce |
 |---|---|---|
-| Test suite | **1718 passed · 0 failed · 0 xfailed · 0 skipped** (1718 collected; the network-gated arXiv test skipped in one run and passed live in the next, which is why its skip is reported rather than smoothed over) | `python -m pytest -q -rs` |
-| Suite growth, Phase 9 → 37 | 875 passing / **126 failing** → 1718 passing / 0 failing / **0 xfailed** at the Phase 37 close | `cat benchmarks/suite_history.json` |
+| Test suite | **1724 passed · 0 failed · 0 xfailed · 0 skipped** (1724 collected; the network-gated arXiv test skipped in one run and passed live in the next, which is why its skip is reported rather than smoothed over) | `python -m pytest -q -rs` |
+| Suite growth, Phase 9 → 38 | 875 passing / **126 failing** → 1724 passing / 0 failing / **0 xfailed** at the Phase 38 close | `cat benchmarks/suite_history.json` |
 | Tools registered | **128** | `python -c "from jarvis.core.orchestrator import JarvisCore as J; print(len(J().tools.names()))"` |
 | Confirmation-gated | **27** of 128 | `python assets/build_diagrams.py` (prints the live counts) |
 | Risk tiers | read 69 · low 32 · external 12 · high 12 · physical 3 | same |
@@ -93,7 +93,7 @@ and the diagrams read their counts from the live registry.
 - [Benchmarks](#benchmarks)
 - [Hardware truth](#hardware-truth)
 - [What the system says when something fails](#what-the-system-says-when-something-fails)
-- [The thirty-six phases](#the-thirty-six-phases)
+- [The thirty-eight phases](#the-thirty-eight-phases)
 - [The plan's safety matrix, run](#the-plans-safety-matrix-run)
 - [Smooth and fast](#smooth-and-fast)
 - [Security model](#security-model)
@@ -131,7 +131,7 @@ and not a quiet success.
 
 ### Suite growth, Phase 9 → Phase 36
 
-<img src="assets/chart-suite-growth.svg" alt="Test suite growth from 875 passing with 126 failing, to 1718 passing with none failing at the close of Phase 37" width="100%"/>
+<img src="assets/chart-suite-growth.svg" alt="Test suite growth from 875 passing with 126 failing, to 1724 passing with none failing at the close of Phase 38" width="100%"/>
 
 Phase 9 inherited **126 failing tests**. The cause was a single import line in
 `jarvis/tools/base.py` that left `Verification` undefined, so every tool result raised
@@ -186,7 +186,7 @@ moved, and the ledger now says exactly that. A simulated *car read* is still a s
 read — reading a labelled simulator is a real read — and that distinction is pinned by a
 test so it stays a decision rather than an accident.
 
-## The thirty-six phases
+## The thirty-eight phases
 
 Each closed with a report in [`audit/`](audit), and each report's claims carry the
 command that produced them.
@@ -216,6 +216,7 @@ command that produced them.
 | **29 — A route fills its own action** | flowcharts and architecture diagrams had been dead since they were written: the route sent a title to a tool that also needs `steps` / `components`, so the gate answered the user with *"missing required parameter 'steps'"* -- even when the sentence named them. What a sentence states is now used; what it omits is asked for |
 | **30 — A capability you have is a capability you can ask for** | 46 of 127 tools answered their own name with "I understood the words but not the goal" -- twice the gap the open item had recorded, because that item had been measured by grepping the planner instead of asking the router. A registry-derived route now reaches a tool whose name words a sentence contains, validates the action with the registry before emitting it, and asks in the tool's own description when an argument is missing; three routes that *advertised* capabilities yield to a sentence naming one; and the delete-capable tool that was tiered LOW-and-unconfirmed for as long as it was unreachable was retiered in the same commit |
 | **31 — The device you named is the device that changes** | "turn on the heater" resolved to **Study AC** (the gateway filed heating under cooling) and `control_home_device` was LOW with no confirmation, so the request was approved for execution and only an offline gateway stopped a device changing. The synonym, the resolver and the tier were tightened in one commit, the permission engine grew a device guard beside its path guard, and the plan's §45 matrix has held **6 of 6** since |
+| **38 — Connect by scanning** | "The URL is not working." Four measurements and no code was among them: nothing was listening on 8765, no server process existed, the laptop's address was still exactly what had been given, and the firewall was off -- the URL had only ever been alive inside my own test runs, and I had killed them. So the fix is not only to start the app: `/health` now answers with the same `reachable_urls()` list that gates the `Host` check, the panel shows the LAN address rather than deriving its own (two derivations drifted once already), and it draws a scan code when the optional encoder is installed and the plain address when it is not. Getting the tests green taught three things: `tk._default_root` is only set for the first interpreter, so a passing-alone/failing-in-sequence pair was the test reading the wrong window; the fixture I added to "fix" that aborted the suite inside Tcl; and `PhotoImage` binds to the wrong interpreter unless given a `master`, with `refresh()`'s blanket `except` hiding the error as "nothing happened". |
 | **37 — Vantage** | The project was renamed, in the places a person reads it. Two patterns did almost all the work, and both required a space between the two words, so no identifier could match by accident; the rest was checked by counting every wiring name before and after and diffing (`493` `JARVIS_*` mentions, `59` token headers, `64` data-directory paths, `244` imports — all identical). The boundary was the interesting part, and it is a claim about consequence, not taste: `com.jarvisforge.app` is the identity macOS granted the microphone and speech permissions to, and `jarvis.device` is the key a handset stores its pairing under, so renaming either would cost the user something real. Two findings came out of doing it: the bundle-drift guard silently turned itself into a *skip* when the `.app` folder name changed under its own path constant — a guard that stops running is worse than one that fails — and a new boundary test failed on first run because it asserted the auth header's literal in the file that *uses* it rather than the one that defines it. |
 | **36 — Two applications** | "Make one for mobile and one for laptop so I can connect and work." Measured: the built `.app` copied *no source* — `project_path.txt` held an absolute path to this checkout, so the Phase 10 defect (an app that exits 1 because its directory moved) was still shipping 26 phases later; nothing in the launcher could set LAN mode, so Phase 35's phone work was unreachable from the app anyone would actually double-click; and the phone page had no manifest, icons or worker. Now the bundle stages its own code and prefers it, `host` (the link shown) is separated from `bind_host` (the socket), the panel has an *Allow devices on my wifi* checkbox, and the phone gets `/manifest.webmanifest`, two real rendered PNGs and a shell-only service worker. Then the browser refused the story I was about to tell: with HTTPS on and the certificate warning clicked through, Chrome reports a secure context, loads and polls the page fine, and *still* rejects `serviceWorker.register()` — "an SSL certificate error occurred when fetching the script" — so a self-signed LAN cert encrypts but does not make an installable Android app. Running the built app also found a guard that demanded a token startup had not written yet, refusing the one configuration it exists to protect. |
 | **35 — Reach the laptop** | The ask was an app on a phone that commands the laptop. Measured first: the API refused every non-loopback `Host`, bound to `127.0.0.1`, and no client page existed for the pairing protocol that does work — so the door was shut, not the lock broken. LAN mode now opens it *only* for addresses this machine owns (a forged `Host:` is still 400), refuses to boot without a token or with a loopback bind, prints the one URL a phone can actually type, and ships `/phone`: pair, command, and Approve/Deny the confirmation from the handset. `check_agent_status` answers "is qoder working" with what `mdls` and `ps` say — live, it answered *installed (version 0.3.4) and running*. Opening the door exposed three defects that only a browser could see, because they live in the page's own JavaScript -- the first live browser drive this project has performed, against the "LIVE BROWSER DRIVE: NOT PERFORMED" disclosure in `audit/PHASE25_DESKTOP_TRUTH_REPORT.md` §7. |
@@ -469,7 +470,7 @@ curl -s -H "X-JARVIS-Token: $TOKEN" -H 'Content-Type: application/json' \
      -d '{"text":"what is my battery"}' http://127.0.0.1:8765/command
 
 # Prove it to yourself:
-python -m pytest -q                       # 1718 passed, 0 failed, 0 skipped (the research test skips only while arXiv refuses)
+python -m pytest -q                       # 1724 passed, 0 failed, 0 skipped (the research test skips only while arXiv refuses)
 python benchmarks/acceptance_run.py       # re-measures the README's numbers
 python assets/build_charts.py && python assets/build_diagrams.py
 ```
@@ -490,9 +491,9 @@ jarvis/
   scheduler/   recurring jobs, runner with per-run re-authorization
   car/ home/ robotics/ watch/ vision/ research/ design/ coding/
   integrations/ IMAP/SMTP and CalDAV providers with local fallbacks
-tests/         60 modules · 1718 collected · includes the shipped page JS, run by Node
+tests/         61 modules · 1724 collected · includes the shipped page JS, run by Node
 dashboard/     index.html control panel + phone.html, the client a phone uses over the LAN
-audit/         39 phase reports + 4 CSV matrices — the evidence behind this README
+audit/         40 phase reports + 4 CSV matrices — the evidence behind this README
 benchmarks/    acceptance_run.py and the JSON the charts are drawn from
 assets/        generated figures + the two generators that draw them
 app/           PyInstaller spec and bundle sources (see Downloads — currently broken)
@@ -555,7 +556,23 @@ adding and removing a synonym at run time. 31-B: the confirmation prompt re-deri
 line from the raw parameters while the dashboard rendered the stored preview — two renderings
 of one consent question, and neither naming the device. One string feeds both now: *"Will do:
 set Kitchen light (kitchen.light) to 40%"*.
+- **A rebrand, and connecting without typing** (Phases 37–38). Reasoned in
+  `audit/PHASE37_RENAME_VANTAGE_REPORT.md` and `audit/PHASE38_CONNECT_BY_SCANNING_REPORT.md`.
+  **37-A** the project is half-renamed by design — product "Vantage", code `jarvis` — so a reader
+  meets `JarvisCore` and `JARVIS_HOME` after a README that says Vantage. **37-B** the spoken wake
+  word is still "Jarvis". **37-C** grepping for the old name still returns hits (historical
+  reports and wiring), which is why the rename was verified by counting identifiers rather than
+  by searching. **37-D** an installed copy elsewhere must be reinstalled under the new name.
+  **37-E** the GitHub repository is still `jarvis-forge`.
+  **38-A** the scan code only appears where the optional `qrcode` package is installed; without
+  it the panel shows the address as text. **38-B** the address changes when the router reassigns
+  it — nothing advertises the laptop via mDNS yet, so a new IP means opening the laptop's window
+  again. **38-C** `refresh()` in the desktop panel catches every exception into a status line,
+  which is how a constructor error surfaced as "nothing happened". **38-D** rebuilding the bundle
+  deletes it, so running `build_app.py` while the app is up kills the running app — it happened
+  once, mid-phase.
 - **Two applications, and where "installable" stops short** (Phase 36). Reasoned in
+
   `audit/PHASE36_TWO_APPLICATIONS_REPORT.md`. What it left open:
   **36-A** Chrome will not install the phone client against a self-signed LAN certificate —
   measured, not assumed: the page loads, logs in and polls `200`, `isSecureContext` is true after

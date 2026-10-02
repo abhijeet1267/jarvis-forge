@@ -436,6 +436,10 @@ async def health(_: None = Protected) -> Dict[str, Any]:
         "agents": list(core.agents.keys()),
         "llm_enabled": core.settings.llm_enabled,
         "pending_confirmations": len(core.policy.pending()),
+        # The addresses another device can actually reach. The desktop panel asks the
+        # server rather than deriving them itself, so "what to type" and "what the Host
+        # check will accept" cannot drift apart -- that drift was a Phase 35 defect.
+        "phone_urls": core.settings.reachable_urls(),
         "security": describe_security(),
         "privacy": describe_privacy(),
         "devices": {

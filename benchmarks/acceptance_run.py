@@ -198,6 +198,7 @@ def suite_history() -> dict:
         ("35 reach the laptop", 1683, 1683, 0, "a phone drives the laptop over the LAN; the client page was tested in a browser and found three bugs"),
         ("36 two applications", 1710, 1710, 0, "the .app carries its own source; the phone gets a manifest, icons and a worker"),
         ("37 vantage", 1718, 1718, 0, "renamed where a person reads it; the wiring names counted identical before and after"),
+        ("38 scan to connect", 1724, 1724, 0, "the laptop shows the address and a code; the dead URL was a server nobody had started"),
     ]
     return {"phases": [{"phase": p, "collected": c, "passed": q, "failed": f, "note": n}
                        for p, c, q, f, n in points]}
