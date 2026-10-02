@@ -374,7 +374,7 @@ class Database:
     """Thread-safe SQLite wrapper.
 
     A single connection is shared behind a lock, which is sufficient for the
-    single-user, low-concurrency workload of JARVIS Forge v0.1.
+    single-user, low-concurrency workload of Vantage v0.1.
     """
 
     def __init__(self, path: Optional[Path] = None) -> None:

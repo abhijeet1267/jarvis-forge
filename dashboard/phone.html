@@ -1,6 +1,6 @@
 <!doctype html>
 <!--
-  JARVIS Forge — phone companion.
+  Vantage — phone companion.
 
   Served public, on purpose, and it carries a single-use bootstrap code rather than the
   API token: the laptop's master secret must never travel inside a page that a device
@@ -26,8 +26,8 @@
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-<meta name="apple-mobile-web-app-title" content="JARVIS" />
-<title>JARVIS — phone</title>
+<meta name="apple-mobile-web-app-title" content="Vantage" />
+<title>Vantage — phone</title>
 <style>
   :root { color-scheme: dark; }
   * { box-sizing: border-box; }
@@ -56,7 +56,7 @@
 </style>
 </head>
 <body>
-  <h1>JARVIS on this laptop</h1>
+  <h1>Vantage on this laptop</h1>
   <div class="sub" id="status">checking…</div>
 
   <div class="card">
@@ -182,7 +182,7 @@ async function refresh() {
                          : "not paired — this phone can ask, and wait for approval",
         paired ? "ok" : "warn");
     document.getElementById("pairline").textContent = paired
-      ? "paired. Anything JARVIS wants to do still asks you first." : document.getElementById("pairline").textContent;
+      ? "paired. Anything Vantage wants to do still asks you first." : document.getElementById("pairline").textContent;
 
     const box = document.getElementById("conf");
     const list = rowsOf(pending, "confirmations");

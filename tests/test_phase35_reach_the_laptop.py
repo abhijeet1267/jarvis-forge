@@ -546,7 +546,7 @@ def test_the_phone_address_reaches_a_piped_log(tmp_path):
         # an address anyone can type -- asserting over the whole log failed on the
         # runner for that reason.
         ours = [ln for ln in seen.splitlines()
-                if ln.startswith(("Phone client", "JARVIS Forge core"))]
+                if ln.startswith(("Phone client", "Vantage core"))]
         assert ours, seen[-800:]
         for line in ours:
             assert "0.0.0.0" not in line, f"an untypeable address was advertised: {line}"

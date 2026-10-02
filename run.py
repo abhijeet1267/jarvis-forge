@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Convenience launcher for JARVIS Forge.
+"""Convenience launcher for Vantage.
 
     python run.py            # start the API + dashboard
     python run.py cli        # text REPL
@@ -104,7 +104,7 @@ def main() -> None:
     # `0.0.0.0` is a bind instruction; nobody can type it into a browser and reach this
     # machine. The phone URLs the app prints at startup carry the real addresses.
     display_host = "127.0.0.1" if settings.host in ("0.0.0.0", "::") else settings.host
-    print(f"JARVIS Forge core -> {settings.scheme}://{display_host}:{settings.port}/dashboard",
+    print(f"Vantage core       -> {settings.scheme}://{display_host}:{settings.port}/dashboard",
           flush=True)
     print(f"Voice status      -> {settings.scheme}://{display_host}:{settings.port}"
           "/voice/status", flush=True)
@@ -120,7 +120,7 @@ def main() -> None:
         try:
             material = ensure_certificate(settings)
         except TLSUnavailable as exc:
-            print(f"JARVIS Forge: HTTPS requested but unavailable -- {exc}", flush=True)
+            print(f"Vantage: HTTPS requested but unavailable -- {exc}", flush=True)
             raise SystemExit(1)
         ssl_kwargs = {"ssl_certfile": str(material.cert_path),
                       "ssl_keyfile": str(material.key_path)}

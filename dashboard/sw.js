@@ -1,4 +1,4 @@
-/* JARVIS Forge — the phone client's service worker.
+/* Vantage — the phone client's service worker.
 
    Caches the shell so the installed app opens instantly and shows its own chrome without
    a round trip. It deliberately never caches an answer from the laptop: a stored battery

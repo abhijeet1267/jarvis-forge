@@ -127,7 +127,7 @@ def test_dashboard_html_does_not_contain_the_master_token(anon: TestClient) -> N
     response = anon.get("/dashboard")
 
     assert response.status_code == 200, "the shell stays public, or the UI breaks"
-    assert "JARVIS Forge" in response.text
+    assert "Vantage" in response.text
     assert MASTER_TOKEN not in response.text
     assert "__JARVIS_BOOTSTRAP__" not in response.text, "placeholder should be replaced"
     assert '<meta name="jarvis-token"' not in response.text

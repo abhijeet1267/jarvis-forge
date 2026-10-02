@@ -36,7 +36,7 @@ def anon_client() -> TestClient:
 def test_root_and_health(client: TestClient) -> None:
     root = client.get("/")
     assert root.status_code == 200
-    assert root.json()["name"] == "JARVIS Forge Core"
+    assert root.json()["name"] == "Vantage Core"
 
     health = client.get("/health")
     assert health.status_code == 200
@@ -91,7 +91,7 @@ def test_memory_endpoint_roundtrip(client: TestClient) -> None:
 def test_dashboard_is_served(client: TestClient) -> None:
     response = client.get("/dashboard")
     assert response.status_code == 200
-    assert "JARVIS Forge" in response.text
+    assert "Vantage" in response.text
 
 
 # ---------------------------------------------------------------------------
@@ -233,7 +233,7 @@ def test_dashboard_is_public_and_carries_only_a_bootstrap(anon_client: TestClien
     """
     response = anon_client.get("/dashboard")
     assert response.status_code == 200
-    assert "JARVIS Forge" in response.text
+    assert "Vantage" in response.text
     assert TEST_TOKEN not in response.text, "the master token must never reach an anonymous page"
     assert "__JARVIS_BOOTSTRAP__" not in response.text, "placeholder should be replaced"
     assert "jarvis-bootstrap" in response.text, "the page must carry a code to exchange"

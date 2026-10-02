@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate the JARVIS Forge app icon.
+"""Generate the Vantage app icon.
 
 Renders a macOS-style rounded square ("squircle") with an arc-reactor motif,
 at every size macOS expects, then hands the iconset to ``iconutil``.

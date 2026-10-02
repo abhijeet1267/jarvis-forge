@@ -195,6 +195,13 @@
    "passed": 1710,
    "failed": 0,
    "note": "the .app carries its own source; the phone gets a manifest, icons and a worker"
+  },
+  {
+   "phase": "37 vantage",
+   "collected": 1717,
+   "passed": 1717,
+   "failed": 0,
+   "note": "renamed where a person reads it; the wiring names counted identical before and after"
   }
  ]
 }

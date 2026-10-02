@@ -1,6 +1,6 @@
 name: ci
 
-# macOS, not Ubuntu: JARVIS Forge drives `say`, `pmset`, AppleScript and the macOS
+# macOS, not Ubuntu: Vantage drives `say`, `pmset`, AppleScript and the macOS
 # Vision framework, and its tests assert on those code paths. A Linux runner would
 # be measuring a different product.
 on:

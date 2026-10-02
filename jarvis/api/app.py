@@ -1,4 +1,4 @@
-"""FastAPI surface for JARVIS Forge (section 37, Phase 0).
+"""FastAPI surface for Vantage (section 37, Phase 0).
 
 Exposes the orchestrator, registries, audit log and memory over HTTP so the
 dashboard, the CLI and (later) the phone/watch companions all talk to the same
@@ -77,7 +77,7 @@ async def lifespan(_app: FastAPI):
         log.info("api token ready", extra_fields={"path": str(token_path)})
         # flush: stdout is a pipe for the desktop launcher, where it would otherwise
         # sit in a block buffer and never reach the log the user is told to read.
-        print(f"JARVIS Forge API token -> {token_path}", flush=True)
+        print(f"Vantage API token -> {token_path}", flush=True)
 
     # A phone cannot guess the laptop's address, and `0.0.0.0` is not one.
     for url in settings.reachable_urls():
@@ -120,7 +120,7 @@ async def lifespan(_app: FastAPI):
 
 
 app = FastAPI(
-    title="JARVIS Forge Core",
+    title="Vantage Core",
     version=__version__,
     description="Permissioned multi-agent personal AI operating system (v0.3 core).",
     lifespan=lifespan,
@@ -368,7 +368,7 @@ class VoiceTextBody(BaseModel):
 @app.get("/")
 async def root() -> Dict[str, Any]:
     return {
-        "name": "JARVIS Forge Core",
+        "name": "Vantage Core",
         "version": __version__,
         "docs": "/docs",
         "dashboard": "/dashboard",
@@ -901,7 +901,7 @@ async def privacy_mode(enabled: bool = Query(...), _: None = Protected) -> Dict[
 
 @app.get("/privacy/export")
 async def privacy_export(redact_output: bool = Query(True), _: None = Protected) -> Dict[str, Any]:
-    """Export everything JARVIS stores. Redacted unless you opt out."""
+    """Export everything Vantage stores. Redacted unless you opt out."""
     return PrivacyManager().export(redact_output=redact_output)
 
 
@@ -1514,7 +1514,7 @@ class NoteBody(BaseModel):
 
 @app.get("/research/sources")
 async def research_sources(_: None = Protected) -> Dict[str, Any]:
-    """Which sources JARVIS may search."""
+    """Which sources Vantage may search."""
     from ..research.sources import describe_sources
 
     return describe_sources()
@@ -2046,7 +2046,7 @@ async def design_asset_link(
 
 @app.post("/design/assets/{asset_id}/delete")
 async def design_asset_delete(asset_id: str, _: None = Protected) -> Dict[str, Any]:
-    """Delete an asset JARVIS created."""
+    """Delete an asset Vantage created."""
     store = _design_store()
     if store.get(asset_id) is None:
         raise HTTPException(status_code=404, detail=f"no asset {asset_id!r}")
@@ -2083,7 +2083,7 @@ class CompareBody(BaseModel):
 
 @app.get("/vision/capabilities")
 async def vision_capabilities_endpoint(_: None = Protected) -> Dict[str, Any]:
-    """What vision JARVIS actually has — and what it does not."""
+    """What vision Vantage actually has — and what it does not."""
     from ..vision.providers import describe as describe_vision
 
     return describe_vision()
@@ -2190,7 +2190,7 @@ async def laptop_projects_endpoint(
     project: str = Query(""),
     _: None = Protected,
 ) -> Dict[str, Any]:
-    """Status of projects open in JARVIS (files, languages, tests, git)."""
+    """Status of projects open in Vantage (files, languages, tests, git)."""
     from ..tools import laptop_center
 
     result = await laptop_center.laptop_project_status(_tool_context(), project=project)

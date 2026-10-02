@@ -1,4 +1,4 @@
-"""Central configuration for JARVIS Forge.
+"""Central configuration for Vantage.
 
 Everything is driven by environment variables (see ``.env.example``) so the
 system can be deployed without editing code. Values are cached on first access.

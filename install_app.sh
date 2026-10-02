@@ -1,5 +1,5 @@
 #!/bin/sh
-# Build Jarvis Forge.app and install it into /Applications.
+# Build Vantage.app and install it into /Applications.
 #
 # Safe by design: an existing install is moved aside rather than deleted, so
 # you can always roll back.
@@ -7,14 +7,14 @@ set -e
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 PY="${JARVIS_PYTHON:-$HOME/.workbuddy-ai/binaries/python/envs/default/bin/python}"
-APP_NAME="Jarvis Forge.app"
+APP_NAME="Vantage.app"
 DEST="/Applications"
 
 if [ ! -x "$PY" ]; then
     PY="$(command -v python3)"
 fi
 
-echo "JARVIS Forge installer"
+echo "Vantage installer"
 echo "  project : $HERE"
 echo "  python  : $PY"
 echo

@@ -1,4 +1,4 @@
-"""Structured logging for JARVIS Forge.
+"""Structured logging for Vantage.
 
 Console output stays human-readable; the log file receives a compact JSON line
 per record so the dashboard and later analytics can parse it.

@@ -1,6 +1,6 @@
 // jarvis_speech.swift
 //
-// Minimal offline speech-to-text helper for JARVIS Forge.
+// Minimal offline speech-to-text helper for Vantage.
 //
 // Uses Apple's Speech framework (SFSpeechRecognizer) to transcribe a local
 // audio file. Compiled on demand by jarvis/voice/stt.py via `swiftc`.

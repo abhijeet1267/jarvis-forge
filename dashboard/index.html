@@ -6,7 +6,7 @@
 <!-- Injected by the server at serve time. A single-use bootstrap code, never the
      API token: see authenticate() below, which spends it on POST /auth/session. -->
 <meta name="jarvis-bootstrap" content="__JARVIS_BOOTSTRAP__" />
-<title>JARVIS Forge — Control Dashboard</title>
+<title>Vantage — Control Dashboard</title>
 <!-- Offline by design: no CDN, no fonts, no icon request to fail. -->
 <link rel="icon" href="data:," />
 <style>
@@ -111,7 +111,7 @@
 </head>
 <body>
 <header>
-  <h1>JARVIS Forge</h1>
+  <h1>Vantage</h1>
   <span class="pill" id="version">core</span>
   <span class="pill" id="llm">model: rules</span>
   <span style="flex:1"></span>
@@ -263,7 +263,7 @@ function pipelineState(data) {
   const plan = data.plan;
   if (!actions.length) {
     if (data.decision === "BLOCK" || data.blocked_reason) return "BLOCKED";
-    // JARVIS answered and deliberately ran nothing. That is a known outcome, not
+    // Vantage answered and deliberately ran nothing. That is a known outcome, not
     // an unknowable one: the Phase 15 acceptance sweep found five of eighteen
     // commands -- every honest refusal and clarification -- labelled UNKNOWN,
     // which told the user the system was unsure when it had actually said "no".
@@ -678,7 +678,7 @@ async function loadVoice() {
 }
 
 async function speakTest() {
-  const text = prompt("Text to speak:", "Jarvis Forge is online.");
+  const text = prompt("Text to speak:", "Vantage is online.");
   if (!text) return;
   document.getElementById("reply").textContent = "…synthesising speech";
   try {
@@ -805,7 +805,7 @@ async function send() {
     // so this is UNKNOWN, never FAILED: the request may well have been carried
     // out server-side before the connection dropped.
     document.getElementById("reply").textContent = "Error: " + e.message;
-    renderState("UNKNOWN", "no response from JARVIS");
+    renderState("UNKNOWN", "no response from Vantage");
     renderWorkflow("");
   }
   refresh();

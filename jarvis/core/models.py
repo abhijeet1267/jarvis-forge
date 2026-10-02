@@ -1,4 +1,4 @@
-"""Core domain models shared across JARVIS Forge.
+"""Core domain models shared across Vantage.
 
 These are deliberately plain Pydantic models so they can be serialised to the
 API, persisted to SQLite, and passed between agents without translation.

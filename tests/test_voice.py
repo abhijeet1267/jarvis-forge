@@ -95,7 +95,7 @@ def test_describe_tts_shape() -> None:
 @pytest.mark.skipif(not MacOSSayTTS().available(), reason="macOS `say` not available")
 def test_macos_tts_synthesises_real_audio() -> None:
     """The macOS backend must produce a genuine, non-empty audio file."""
-    result = asyncio.run(MacOSSayTTS().synthesize("Jarvis Forge voice test."))
+    result = asyncio.run(MacOSSayTTS().synthesize("Vantage voice test."))
 
     assert result.ok, result.error
     assert result.audio_path is not None
@@ -403,9 +403,9 @@ def test_consent_is_attributed_to_the_process_that_was_asked(
     from jarvis.voice.audio import consent_host
 
     monkeypatch.setattr(
-        sys, "executable", "/Applications/Jarvis Forge.app/Contents/MacOS/JarvisForge"
+        sys, "executable", "/Applications/Vantage.app/Contents/MacOS/JarvisForge"
     )
-    assert consent_host() == "/Applications/Jarvis Forge.app"
+    assert consent_host() == "/Applications/Vantage.app"
 
     monkeypatch.setattr(sys, "executable", "/usr/local/bin/python3")
     assert "unbundled process" in consent_host()
@@ -445,8 +445,13 @@ def test_bundled_launcher_has_not_drifted_from_source() -> None:
     """
     import filecmp
 
+    from build_app import APP_NAME
+
     root = Path(__file__).resolve().parents[1]
-    bundled = root / "dist" / "Jarvis Forge.app" / "Contents" / "Resources" / "launcher.py"
+    # Derived from the builder's own constant: when the bundle was renamed, this path was
+    # updated by hand and the guard quietly became a skip -- a check that stops running is
+    # worse than one that fails, because it still reports nothing wrong.
+    bundled = root / "dist" / f"{APP_NAME}.app" / "Contents" / "Resources" / "launcher.py"
     if not bundled.exists():
         pytest.skip("desktop app has not been built on this machine")
 

@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
-"""JARVIS Forge application launcher.
+"""Vantage application launcher.
 
-This is what the ``Jarvis Forge.app`` bundle executes. It:
+This is what the ``Vantage.app`` bundle executes. It:
 
 1. resolves the project directory and a Python interpreter,
-2. starts the JARVIS server as a managed subprocess,
+2. starts the Vantage server as a managed subprocess,
 3. shows a small control window with live status,
 4. opens the dashboard in the browser,
 5. shuts the server down cleanly when you quit.
 
 Running from inside a signed app bundle is also what lets macOS attach
-Speech Recognition and Microphone permissions to JARVIS -- a bare command-line
+Speech Recognition and Microphone permissions to Vantage -- a bare command-line
 process is refused by TCC.
 """
 
@@ -33,7 +33,7 @@ from typing import Optional
 # ---------------------------------------------------------------------------
 # Paths
 # ---------------------------------------------------------------------------
-BUNDLE_ROOT = Path(__file__).resolve().parents[1]  # .../Jarvis Forge.app/Contents
+BUNDLE_ROOT = Path(__file__).resolve().parents[1]  # .../Vantage.app/Contents
 
 
 def _resource(name: str) -> Optional[Path]:
@@ -65,7 +65,7 @@ def resolve_project_dir() -> Path:
 
     # 4. Look at the bundle's own location and the three directories above it.
     #    BUNDLE_ROOT is "<checkout>/Contents" when the launcher runs from source and
-    #    "<checkout>/dist/Jarvis Forge.app/Contents" in a build -- so the checkout is
+    #    "<checkout>/dist/Vantage.app/Contents" in a build -- so the checkout is
     #    the third ancestor. The old list (root, parent, grandparent) stopped at
     #    dist/, which meant a build inside its own tree depended entirely on the
     #    pointer recorded at build time, and relocating the checkout broke an app
@@ -246,7 +246,7 @@ MIC_WORDS = {
 def mic_note(audio: dict) -> str:
     """One honest line about the microphone, from a /voice/status payload.
 
-    "A capture binary exists" and "JARVIS is allowed to listen" are separate
+    "A capture binary exists" and "Vantage is allowed to listen" are separate
     facts, so this never reports the first as if it were the second.
     """
     mic = audio.get("microphone") or {}
@@ -282,7 +282,7 @@ def settled_voice_status(host: str, port: int, timeout: float = 25.0) -> dict:
 
 
 class ServerController:
-    """Starts, monitors and stops the JARVIS server process."""
+    """Starts, monitors and stops the Vantage server process."""
 
     def __init__(self, project_dir: Path, python: str, host: str, port: int, log_path: Path) -> None:
         self.project_dir = project_dir
@@ -419,7 +419,7 @@ def build_ui(controller: ServerController, on_quit) -> None:
     except Exception as exc:
         raise GuiUnavailable(str(exc)) from exc
 
-    root.title("JARVIS Forge")
+    root.title("Vantage")
     root.configure(bg=BG)
     root.geometry("560x460")
     root.minsize(480, 400)
@@ -436,7 +436,7 @@ def build_ui(controller: ServerController, on_quit) -> None:
     header.pack(fill="x")
 
     tk.Label(
-        header, text="JARVIS Forge", bg=PANEL, fg=INK,
+        header, text="Vantage", bg=PANEL, fg=INK,
         font=("Helvetica Neue", 18, "bold"),
     ).pack(anchor="w", padx=16, pady=(12, 0))
 
@@ -511,7 +511,7 @@ def build_ui(controller: ServerController, on_quit) -> None:
     def speak_test():
         try:
             api_post(controller.host, controller.port, "/voice/speak",
-                     {"text": "Jarvis Forge is online."})
+                     {"text": "Vantage is online."})
         except Exception as exc:
             messagebox.showerror("Speak", f"Speech failed:\n{exc}")
 
@@ -581,7 +581,7 @@ def build_ui(controller: ServerController, on_quit) -> None:
             if enabled:
                 messagebox.showinfo(
                     "Devices on your wifi",
-                    "Other devices on this network can now reach JARVIS.\n\n"
+                    "Other devices on this network can now reach Vantage.\n\n"
                     "Open http://<this laptop's address>:%s/phone on the phone -- the "
                     "exact address is in the log below.\n\nNothing runs without your "
                     "confirmation." % controller.port)
@@ -612,7 +612,7 @@ def build_ui(controller: ServerController, on_quit) -> None:
         dot.configure(fg=BAD)
         tail = "\n".join(controller.tail[-18:]) or "(no output)"
         messagebox.showerror(
-            "JARVIS Forge could not start",
+            "Vantage could not start",
             f"The server did not become ready.\n\nLast output:\n{tail}",
         )
 
@@ -677,20 +677,20 @@ def run_headless(controller: ServerController, reason: str) -> int:
     """Run the server without a control window.
 
     The control panel is a convenience; the server is the product. If a window
-    cannot be created we still bring JARVIS up, open the dashboard, and say
+    cannot be created we still bring Vantage up, open the dashboard, and say
     plainly why there is no window.
     """
     url = f"http://{controller.host}:{controller.port}/dashboard"
-    print(f"JARVIS Forge: control window unavailable ({reason})")
-    print(f"JARVIS Forge: running headless -> {url}")
+    print(f"Vantage: control window unavailable ({reason})")
+    print(f"Vantage: running headless -> {url}")
 
     if not controller.wait_ready():
-        _fatal("JARVIS Forge could not start its server. See ~/.jarvis-forge/app.log")
+        _fatal("Vantage could not start its server. See ~/.jarvis-forge/app.log")
         controller.stop()
         return 1
 
     webbrowser.open(url)
-    _notify("JARVIS Forge is running", f"The dashboard is open in your browser.\n{url}")
+    _notify("Vantage is running", f"The dashboard is open in your browser.\n{url}")
 
     try:
         # Stay alive until interrupted so the server keeps running.
@@ -863,7 +863,7 @@ def selftest(controller: ServerController) -> int:
             checks.append(("speech recognition", False, f"{type(exc).__name__}: {exc}"))
 
     # --- report -------------------------------------------------------------
-    print("\nJARVIS Forge self-test")
+    print("\nVantage self-test")
     print("=" * 62)
     for name, ok, detail in checks:
         print(f"  [{'ok  ' if ok else 'FAIL'}] {name:<24} {detail}")
@@ -935,12 +935,12 @@ def main() -> int:
 
 def _fatal(message: str) -> None:
     """Show a native alert, falling back to stderr."""
-    print(f"JARVIS Forge: {message}", file=sys.stderr)
+    print(f"Vantage: {message}", file=sys.stderr)
     if platform.system() == "Darwin":
         try:
             subprocess.run(
                 ["osascript", "-e",
-                 f'display dialog "{message}" with title "JARVIS Forge" buttons {{"OK"}} '
+                 f'display dialog "{message}" with title "Vantage" buttons {{"OK"}} '
                  "with icon caution"],
                 check=False,
             )

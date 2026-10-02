@@ -392,3 +392,45 @@ def test_the_page_does_not_break_where_the_browser_has_no_worker(client, tmp_pat
     proc = subprocess.run(["node", "-e", script], capture_output=True, text=True, timeout=60)
     assert proc.returncode == 0, proc.stderr[:300]
     assert "survived" in proc.stdout, proc.stdout
+
+
+# ---------------------------------------------------------------------------
+# 6. the rebrand boundary (Phase 37): the name people see changed; the names
+#    that carry state did not
+# ---------------------------------------------------------------------------
+
+BRAND = "Vantage"
+
+WIRING = {
+    "jarvis/api/app.py": ["__JARVIS_BOOTSTRAP__"],
+    "jarvis/security/auth.py": ["X-JARVIS-Token"],
+    "jarvis/config.py": ["JARVIS_HOME", ".jarvis-forge"],
+    "dashboard/phone.html": ["jarvis-bootstrap", "X-JARVIS-Token", "jarvis.device"],
+    "dashboard/index.html": ["jarvis-bootstrap", "X-JARVIS-Token"],
+    "build_app.py": ["com.jarvisforge.app"],
+}
+
+
+def test_the_product_is_called_vantage_everywhere_a_person_looks():
+    root = Path(__file__).resolve().parents[1]
+    for rel in ("dashboard/index.html", "dashboard/phone.html",
+                "dashboard/manifest.webmanifest"):
+        text = (root / rel).read_text(encoding="utf-8")
+        assert BRAND in text, rel
+        assert "JARVIS Forge" not in text and "Jarvis Forge" not in text, rel
+
+
+@pytest.mark.parametrize("rel,needles", sorted(WIRING.items()))
+def test_the_names_that_carry_state_kept_their_spelling(rel, needles):
+    """A brand rename that touched these would break a working install silently.
+
+    `X-JARVIS-Token` is what every authenticated call sends; `jarvis.device` is the key
+    a phone stores its pairing identity under, so renaming it un-pairs every handset;
+    `.jarvis-forge` is where the memory database, audit chain and token live;
+    `com.jarvisforge.app` is the bundle identity macOS grants microphone and speech
+    permissions to. The visible name changed. These did not, on purpose.
+    """
+    root = Path(__file__).resolve().parents[1]
+    text = (root / rel).read_text(encoding="utf-8")
+    for needle in needles:
+        assert needle in text, f"{rel} lost {needle!r} -- that is wiring, not branding"

@@ -1,4 +1,4 @@
-"""JARVIS Forge - a permissioned, multi-agent personal AI operating system.
+"""Vantage - a permissioned, multi-agent personal AI operating system.
 
 This package implements the *Core* described in section 60 of the plan:
 

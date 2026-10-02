@@ -1,7 +1,7 @@
 {
-  "name": "JARVIS on this laptop",
-  "short_name": "JARVIS",
-  "description": "Talk to the JARVIS Forge core running on your own laptop, and approve what it wants to do.",
+  "name": "Vantage on this laptop",
+  "short_name": "Vantage",
+  "description": "Talk to the Vantage core running on your own laptop, and approve what it wants to do.",
   "start_url": "/phone",
   "scope": "/",
   "display": "standalone",

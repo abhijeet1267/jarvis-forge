@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Assemble ``Jarvis Forge.app`` from the project source.
+"""Assemble ``Vantage.app`` from the project source.
 
     python build_app.py                # build into ./dist
     python build_app.py --install      # build, then copy to /Applications
@@ -19,7 +19,7 @@ import sys
 from pathlib import Path
 
 PROJECT_DIR = Path(__file__).resolve().parent
-APP_NAME = "Jarvis Forge"
+APP_NAME = "Vantage"
 BUNDLE_ID = "com.jarvisforge.app"
 VERSION = "0.2.0"
 
@@ -54,16 +54,16 @@ def build_info_plist() -> dict:
         "LSMinimumSystemVersion": "11.0",
         "LSApplicationCategoryType": "public.app-category.productivity",
         "NSHighResolutionCapable": True,
-        "NSHumanReadableCopyright": "JARVIS Forge",
+        "NSHumanReadableCopyright": "Vantage",
         # --- permission prompts -------------------------------------------------
         "NSMicrophoneUsageDescription": (
-            "JARVIS Forge uses the microphone to listen for spoken commands."
+            "Vantage uses the microphone to listen for spoken commands."
         ),
         "NSSpeechRecognitionUsageDescription": (
-            "JARVIS Forge transcribes your speech on-device to run commands."
+            "Vantage transcribes your speech on-device to run commands."
         ),
         "NSAppleEventsUsageDescription": (
-            "JARVIS Forge uses Apple Events to open and quit applications on "
+            "Vantage uses Apple Events to open and quit applications on "
             "your behalf."
         ),
     }
@@ -72,7 +72,7 @@ def build_info_plist() -> dict:
 def build_launcher_executable() -> str:
     """The bundle's main executable: a thin shim that starts the Python launcher."""
     return """#!/bin/sh
-# Jarvis Forge launcher shim.
+# Vantage launcher shim.
 # Locates a usable Python and hands off to the real launcher in Resources/.
 set -e
 
@@ -86,7 +86,7 @@ if [ ! -x "$PY" ]; then
     PY="$(command -v python3 || true)"
 fi
 if [ -z "$PY" ]; then
-    osascript -e 'display dialog "JARVIS Forge needs Python 3.10 or newer, but no python3 was found." with title "JARVIS Forge" buttons {"OK"} with icon caution'
+    osascript -e 'display dialog "Vantage needs Python 3.10 or newer, but no python3 was found." with title "Vantage" buttons {"OK"} with icon caution'
     exit 1
 fi
 
@@ -200,7 +200,7 @@ def install(app: Path) -> None:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Build Jarvis Forge.app")
+    parser = argparse.ArgumentParser(description="Build Vantage.app")
     parser.add_argument("--install", action="store_true", help="copy the app to /Applications")
     parser.add_argument("--dest", default=str(PROJECT_DIR / "dist"), help="output directory")
     args = parser.parse_args()

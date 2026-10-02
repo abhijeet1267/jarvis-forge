@@ -505,7 +505,7 @@ def to_ics(event: CalendarEvent) -> str:
     lines = [
         "BEGIN:VCALENDAR",
         "VERSION:2.0",
-        "PRODID:-//JARVIS Forge//EN",
+        "PRODID:-//Vantage//EN",
         "BEGIN:VEVENT",
         f"UID:{event.uid}",
         f"DTSTAMP:{stamp(datetime.now(timezone.utc))}",

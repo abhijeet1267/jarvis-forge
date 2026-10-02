@@ -1,4 +1,4 @@
-# JARVIS Forge — Full Project Details
+# Vantage — Full Project Details
 
 **Generated:** 25 September 2026
 **Machine:** MacBook Air (Apple Silicon, macOS 26, arm64) · project at `/Users/abhijeetmiskin/AppData/aisys/jarvis-forge/`
@@ -334,8 +334,8 @@ $PY -c "from jarvis.voice.audio import microphone_state as m; s=m(); \
 print(s['state'], s['permission'], s['host'], [d['name'] for d in s['devices']])"
 
 # App signature
-codesign --verify --verbose "dist/Jarvis Forge.app"
-JARVIS_SELFTEST=1 "dist/Jarvis Forge.app/Contents/MacOS/JarvisForge"
+codesign --verify --verbose "dist/Vantage.app"
+JARVIS_SELFTEST=1 "dist/Vantage.app/Contents/MacOS/JarvisForge"
 ```
 
 The dashboard at `http://127.0.0.1:<port>/dashboard` shows the same facts live:

@@ -1,6 +1,6 @@
-<img src="assets/hero.svg" alt="JARVIS Forge — a permissioned, local-first agent OS" width="100%"/>
+<img src="assets/hero.svg" alt="Vantage — a permissioned, local-first agent OS" width="100%"/>
 
-# JARVIS Forge
+# Vantage
 
 A permissioned, **local-first** personal agent OS. You type or say a sentence; it is
 planned by deterministic rules, gated by a permission engine, held for confirmation
@@ -9,12 +9,24 @@ world afterwards**, and written to a tamper-evident audit chain. It runs with no
 key, no network and no vendor — an LLM is optional and off by default.
 
 What this repository is mostly about is not features. It is about the difference
-between *"the handler returned"* and *"the thing happened"* — and the thirty phases of
+between *"the handler returned"* and *"the thing happened"* — and the thirty-seven phases of
 measurement spent closing that gap, in the ledger and on the screen.
 
+> **On the name.** The product is **Vantage** — in the README, both web clients, the install
+> manifest, the launcher window, the macOS permission prompts and `Vantage.app`. What did *not*
+> change is deliberate: the Python package is still `jarvis`, the 89 environment variables are
+> still `JARVIS_*`, the data directory is still `~/.jarvis-forge`, the auth header is still
+> `X-JARVIS-Token`, the phone stores its pairing under the `jarvis.device` key, the voice wake
+> word is still "Jarvis", and the bundle identifier is still `com.jarvisforge.app` — because
+> renaming that last one would drop the microphone and speech grants macOS has already given the
+> app, and renaming the data directory or the device key would orphan a working install and
+> un-pair every handset. A test pins each of those spellings so a future "finish the rename"
+> cannot quietly break them. `audit/*.md`, `STATUS.md` and `BASELINE_REPORT.md` keep the old name
+> too: they are dated evidence of what was true then.
+
 [![ci](https://img.shields.io/github/actions/workflow/status/abhijeet1267/jarvis-forge/ci.yml?label=tests%20%C2%B7%20macos)](https://github.com/abhijeet1267/jarvis-forge/actions/workflows/ci.yml)
-[![suite](https://img.shields.io/badge/tests-1710%20passed%20%C2%B7%200%20failed-16a34a)](tests)
-[![tools](https://img.shields.io/badge/tools-127%20across%2015%20agents-2f6df6)](jarvis/tools)
+[![suite](https://img.shields.io/badge/tests-1717%20passed%20%C2%B7%200%20failed-16a34a)](tests)
+[![tools](https://img.shields.io/badge/tools-128%20across%2015%20agents-2f6df6)](jarvis/tools)
 [![offline](https://img.shields.io/badge/LLM-off%20by%20default%20%C2%B7%20runs%20fully%20offline-0f172a)](jarvis/config.py)
 [![python](https://img.shields.io/badge/python-3.11%20%C2%B7%203.12%20(CI)-6b7688)](.github/workflows/ci.yml)
 
@@ -39,8 +51,8 @@ and the diagrams read their counts from the live registry.
 
 | Claim | Value | Reproduce |
 |---|---|---|
-| Test suite | **1710 passed · 0 failed · 0 xfailed · 0 skipped** (1710 collected; the network-gated arXiv test skipped in one run and passed live in the next, which is why its skip is reported rather than smoothed over) | `python -m pytest -q -rs` |
-| Suite growth, Phase 9 → 36 | 875 passing / **126 failing** → 1710 passing / 0 failing / **0 xfailed** at the Phase 36 close | `cat benchmarks/suite_history.json` |
+| Test suite | **1717 passed · 0 failed · 0 xfailed · 0 skipped** (1717 collected; the network-gated arXiv test skipped in one run and passed live in the next, which is why its skip is reported rather than smoothed over) | `python -m pytest -q -rs` |
+| Suite growth, Phase 9 → 37 | 875 passing / **126 failing** → 1717 passing / 0 failing / **0 xfailed** at the Phase 37 close | `cat benchmarks/suite_history.json` |
 | Tools registered | **128** | `python -c "from jarvis.core.orchestrator import JarvisCore as J; print(len(J().tools.names()))"` |
 | Confirmation-gated | **27** of 128 | `python assets/build_diagrams.py` (prints the live counts) |
 | Risk tiers | read 69 · low 32 · external 12 · high 12 · physical 3 | same |
@@ -49,7 +61,7 @@ and the diagrams read their counts from the live registry.
 | Plan's safety matrix (§45) | **6 of 6** hold — the sixth held since Phase 31 | `python benchmarks/safety_run.py` |
 | Launched-server sweep | 8 read endpoints **200**, unauthenticated **401**, commands answered over the network | `python run.py serve`, then the sweep in `audit/PHASE21_SPEED_RESILIENCE_REPORT.md` §1 |
 | Phone reaching the laptop over the LAN | `/phone` served **200** at the laptop's own LAN address, forged `Host:` **400**, unauthenticated **401**, and a real browser run: command → confirmation card → **Deny** → audit row `result=denied`, nothing actuated | `JARVIS_LAN_MODE=1 JARVIS_HOST=0.0.0.0 python run.py` (refuses to start without a token), then the page it prints |
-| Packaged desktop app | builds, ad-hoc signs, **launches**, and its server answers `/health`; self-test reports **7/9** (the two failures are macOS permissions, not code) | `python build_app.py && JARVIS_SELFTEST=1 "dist/Jarvis Forge.app/Contents/MacOS/JarvisForge"` |
+| Packaged desktop app | builds, ad-hoc signs, **launches**, and its server answers `/health`; self-test reports **7/9** (the two failures are macOS permissions, not code) | `python build_app.py && JARVIS_SELFTEST=1 "dist/Vantage.app/Contents/MacOS/JarvisForge"` |
 | Audit chain integrity | `verify_chain() → ok=True` over **2 recorded actions** (an empty chain verifies trivially, so run two commands first) | `JARVIS_HOME=$(mktemp -d) python -c "import asyncio;from jarvis.core.models import CommandRequest as R;from jarvis.core.orchestrator import JarvisCore as J;c=J();[asyncio.run(c.handle(R(text=t,source='probe'))) for t in ('Jarvis, what time is it.','Jarvis, what is my laptop battery.')];print(c.audit.verify_chain())"` |
 | Regenerated figures parse as SVG | 7/7 | `python assets/build_charts.py && python assets/build_diagrams.py` |
 | CI on the pushed commit | `suite (3.11)` and `suite (3.12)` both **success** | `gh run list --workflow ci.yml --limit 1` |
@@ -119,7 +131,7 @@ and not a quiet success.
 
 ### Suite growth, Phase 9 → Phase 36
 
-<img src="assets/chart-suite-growth.svg" alt="Test suite growth from 875 passing with 126 failing, to 1710 passing with none failing at the close of Phase 36" width="100%"/>
+<img src="assets/chart-suite-growth.svg" alt="Test suite growth from 875 passing with 126 failing, to 1717 passing with none failing at the close of Phase 37" width="100%"/>
 
 Phase 9 inherited **126 failing tests**. The cause was a single import line in
 `jarvis/tools/base.py` that left `Verification` undefined, so every tool result raised
@@ -204,6 +216,7 @@ command that produced them.
 | **29 — A route fills its own action** | flowcharts and architecture diagrams had been dead since they were written: the route sent a title to a tool that also needs `steps` / `components`, so the gate answered the user with *"missing required parameter 'steps'"* -- even when the sentence named them. What a sentence states is now used; what it omits is asked for |
 | **30 — A capability you have is a capability you can ask for** | 46 of 127 tools answered their own name with "I understood the words but not the goal" -- twice the gap the open item had recorded, because that item had been measured by grepping the planner instead of asking the router. A registry-derived route now reaches a tool whose name words a sentence contains, validates the action with the registry before emitting it, and asks in the tool's own description when an argument is missing; three routes that *advertised* capabilities yield to a sentence naming one; and the delete-capable tool that was tiered LOW-and-unconfirmed for as long as it was unreachable was retiered in the same commit |
 | **31 — The device you named is the device that changes** | "turn on the heater" resolved to **Study AC** (the gateway filed heating under cooling) and `control_home_device` was LOW with no confirmation, so the request was approved for execution and only an offline gateway stopped a device changing. The synonym, the resolver and the tier were tightened in one commit, the permission engine grew a device guard beside its path guard, and the plan's §45 matrix has held **6 of 6** since |
+| **37 — Vantage** | The project was renamed, in the places a person reads it. Two patterns did almost all the work, and both required a space between the two words, so no identifier could match by accident; the rest was checked by counting every wiring name before and after and diffing (`493` `JARVIS_*` mentions, `59` token headers, `64` data-directory paths, `244` imports — all identical). The boundary was the interesting part, and it is a claim about consequence, not taste: `com.jarvisforge.app` is the identity macOS granted the microphone and speech permissions to, and `jarvis.device` is the key a handset stores its pairing under, so renaming either would cost the user something real. Two findings came out of doing it: the bundle-drift guard silently turned itself into a *skip* when the `.app` folder name changed under its own path constant — a guard that stops running is worse than one that fails — and a new boundary test failed on first run because it asserted the auth header's literal in the file that *uses* it rather than the one that defines it. |
 | **36 — Two applications** | "Make one for mobile and one for laptop so I can connect and work." Measured: the built `.app` copied *no source* — `project_path.txt` held an absolute path to this checkout, so the Phase 10 defect (an app that exits 1 because its directory moved) was still shipping 26 phases later; nothing in the launcher could set LAN mode, so Phase 35's phone work was unreachable from the app anyone would actually double-click; and the phone page had no manifest, icons or worker. Now the bundle stages its own code and prefers it, `host` (the link shown) is separated from `bind_host` (the socket), the panel has an *Allow devices on my wifi* checkbox, and the phone gets `/manifest.webmanifest`, two real rendered PNGs and a shell-only service worker. Then the browser refused the story I was about to tell: with HTTPS on and the certificate warning clicked through, Chrome reports a secure context, loads and polls the page fine, and *still* rejects `serviceWorker.register()` — "an SSL certificate error occurred when fetching the script" — so a self-signed LAN cert encrypts but does not make an installable Android app. Running the built app also found a guard that demanded a token startup had not written yet, refusing the one configuration it exists to protect. |
 | **35 — Reach the laptop** | The ask was an app on a phone that commands the laptop. Measured first: the API refused every non-loopback `Host`, bound to `127.0.0.1`, and no client page existed for the pairing protocol that does work — so the door was shut, not the lock broken. LAN mode now opens it *only* for addresses this machine owns (a forged `Host:` is still 400), refuses to boot without a token or with a loopback bind, prints the one URL a phone can actually type, and ships `/phone`: pair, command, and Approve/Deny the confirmation from the handset. `check_agent_status` answers "is qoder working" with what `mdls` and `ps` say — live, it answered *installed (version 0.3.4) and running*. Opening the door exposed three defects that only a browser could see, because they live in the page's own JavaScript -- the first live browser drive this project has performed, against the "LIVE BROWSER DRIVE: NOT PERFORMED" disclosure in `audit/PHASE25_DESKTOP_TRUTH_REPORT.md` §7. |
 | **34 — One sentence, one deadline** | 29-B's "no bounded read timeout" was kinder than the code deserved: `urlopen(timeout=20)` bounds *silence*, so a server dribbling a byte every 10 ms was measured still waiting at 60 s with no end, and this phase's first red run had to be killed at five minutes because it did not fail — it hung. All three `urlopen` readers now go through `net.http_read`, whose number is a ceiling on the whole call; arXiv's two attempts share one budget; and `SENTENCE_BUDGET` caps the request, because two bounded 30 s reads in one sentence add up to a 60 s wait and the "30" in the source would have been a lie about what anyone experienced. |
@@ -456,7 +469,7 @@ curl -s -H "X-JARVIS-Token: $TOKEN" -H 'Content-Type: application/json' \
      -d '{"text":"what is my battery"}' http://127.0.0.1:8765/command
 
 # Prove it to yourself:
-python -m pytest -q                       # 1710 passed, 0 failed, 0 skipped (the research test skips only while arXiv refuses)
+python -m pytest -q                       # 1717 passed, 0 failed, 0 skipped (the research test skips only while arXiv refuses)
 python benchmarks/acceptance_run.py       # re-measures the README's numbers
 python assets/build_charts.py && python assets/build_diagrams.py
 ```
@@ -477,9 +490,9 @@ jarvis/
   scheduler/   recurring jobs, runner with per-run re-authorization
   car/ home/ robotics/ watch/ vision/ research/ design/ coding/
   integrations/ IMAP/SMTP and CalDAV providers with local fallbacks
-tests/         60 modules · 1710 collected · includes the shipped page JS, run by Node
+tests/         60 modules · 1717 collected · includes the shipped page JS, run by Node
 dashboard/     index.html control panel + phone.html, the client a phone uses over the LAN
-audit/         38 phase reports + 4 CSV matrices — the evidence behind this README
+audit/         39 phase reports + 4 CSV matrices — the evidence behind this README
 benchmarks/    acceptance_run.py and the JSON the charts are drawn from
 assets/        generated figures + the two generators that draw them
 app/           PyInstaller spec and bundle sources (see Downloads — currently broken)
@@ -497,7 +510,7 @@ distribution decision rather than a packaging step I can quietly take.
 - [Download the source (`.zip`)](https://github.com/abhijeet1267/jarvis-forge/archive/refs/heads/main.zip)
 - [Download the source (`.tar.gz`)](https://github.com/abhijeet1267/jarvis-forge/archive/refs/heads/main.tar.gz)
 - Build it yourself: `python build_app.py` (into `./dist`), or `./install_app.sh` to move
-  it into `/Applications` — it keeps any previous install as `Jarvis Forge.app.previous`
+  it into `/Applications` — it keeps any previous install as `Vantage.app.previous`
   rather than deleting it. Then `JARVIS_SELFTEST=1` on the built binary prints what the
   app can actually reach, including the microphone and speech-recognition state.
 
@@ -570,7 +583,7 @@ set Kitchen light (kitchen.light) to 40%"*.
   path, and the honest gate is the token plus per-command confirmation. Either a session should
   carry a device identity the policy engine can consult, or the page should say plainly that
   pairing is not what authorises a command. **35-D** the packaged desktop app has no way to
-  turn LAN mode on: `app/launcher.py` never sets it, so a double-clicked `Jarvis Forge.app`
+  turn LAN mode on: `app/launcher.py` never sets it, so a double-clicked `Vantage.app`
   stays laptop-only until the user exports an environment variable by hand.
 - **A network read stops when it is told to** (Phase 34). Reasoned in
   `audit/PHASE34_ONE_SENTENCE_ONE_DEADLINE.md`. It closed 29-B and left:

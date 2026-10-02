@@ -199,11 +199,11 @@ def test_an_installed_bundle_uses_the_pointer_recorded_at_build_time(tmp_path, m
     (source / "jarvis").mkdir(parents=True)
     (source / "run.py").write_text("# payload\n")
 
-    installed = tmp_path / "Applications" / "Jarvis Forge.app" / "Contents" / "Resources"
+    installed = tmp_path / "Applications" / "Vantage.app" / "Contents" / "Resources"
     installed.mkdir(parents=True)
     (installed / "project_path.txt").write_text(str(source))
 
-    # BUNDLE_ROOT is ".../Jarvis Forge.app/Contents" (launcher.py lives in Contents/Resources)
+    # BUNDLE_ROOT is ".../Vantage.app/Contents" (launcher.py lives in Contents/Resources)
     monkeypatch.setattr(launcher, "BUNDLE_ROOT", installed.parent)
     monkeypatch.delenv("JARVIS_PROJECT_DIR", raising=False)
 
@@ -216,7 +216,7 @@ def test_a_bundle_sitting_in_dist_finds_its_checkout_without_a_pointer(tmp_path,
     source = tmp_path / "checkout"
     (source / "jarvis").mkdir(parents=True)
     (source / "run.py").write_text("# payload\n")
-    resources = source / "dist" / "Jarvis Forge.app" / "Contents" / "Resources"
+    resources = source / "dist" / "Vantage.app" / "Contents" / "Resources"
     resources.mkdir(parents=True)
 
     monkeypatch.setattr(launcher, "BUNDLE_ROOT", resources.parent)

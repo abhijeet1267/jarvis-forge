@@ -1,6 +1,6 @@
 // mic_state.swift
 //
-// Reports the microphone truth for JARVIS Forge: whether macOS has granted
+// Reports the microphone truth for Vantage: whether macOS has granted
 // this process access, and which input devices actually exist.
 //
 // Compiled on demand by jarvis/voice/audio.py, like the OCR helper.
