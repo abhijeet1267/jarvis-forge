@@ -1001,6 +1001,19 @@ class RulePlanner:
             return Intent("create_project", tool="create_project", params={"name": name})
 
         if re.search(r"\b(continue|resume|open)\b.*\bproject\b", text):
+            # "open vscode with my-project" is an editor launch whose folder happens to
+            # contain the word "project". Naming an installed app makes that reading
+            # certain, and declining here made such folders impossible to open.
+            named = [
+                re.search(
+                    r"\b(?:open|launch|start|run)\s+(?P<app>[\w .+-]+?)\s+(?:with|in|to|at|for)\b",
+                    raw, re.I),
+                # "open folder ~/code/my-project in vscode" names the app last.
+                re.search(r"\s+in\s+(?P<app>[\w .+-]+?)\s*$", raw, re.I),
+            ]
+            for match in named:
+                if match and self.apps.resolve(match.group("app").strip()) is not None:
+                    return None
             return Intent(
                 "continue_project",
                 note=(
@@ -1153,6 +1166,28 @@ class RulePlanner:
         return Intent("close_app", tool="close_app", params={"app": app.key})
 
     def _open_app(self, text: str, raw: str) -> Optional[Intent]:
+        # "open folder <path> in vscode" / "open <path> in vscode"
+        m = re.search(
+            r"\bopen\b\s+(?:the\s+)?(?:folder|directory)?\s*(?P<path>.+?)\s+in\s+(?P<app>.+?)\s*$",
+            raw, re.I)
+        if m and m.group("path").strip():
+            app = self.apps.resolve(self._arg(m.group("app")))
+            if app is not None and self._folder_worth_passing(app, m.group("path")):
+                return Intent("open_app", tool="open_app",
+                              params={"app": app.key, "path": m.group("path").strip()},
+                              confidence=0.9)
+
+        # "open vscode with/in/to <folder>"
+        m = re.search(
+            r"\b(?:open|launch|start|run)\b\s+(?P<app>.+?)\s+(?:with|in|on|to|at|for)\s+"
+            r"(?P<path>.+?)\s*$", raw, re.I)
+        if m:
+            app = self.apps.resolve(self._arg(m.group("app")))
+            if app is not None and self._folder_worth_passing(app, m.group("path")):
+                return Intent("open_app", tool="open_app",
+                              params={"app": app.key, "path": m.group("path").strip()},
+                              confidence=0.9)
+
         captured = self._match(r"\b(?:open|launch|start|run)\b\s+(.+)", raw)
         if captured is None:
             return None
@@ -1160,6 +1195,21 @@ class RulePlanner:
         if app is None:
             return None
         return Intent("open_app", tool="open_app", params={"app": app.key}, confidence=0.9)
+
+    @staticmethod
+    def _folder_worth_passing(app, candidate: str) -> bool:
+        """Only treat the second half of the sentence as a folder when it plausibly is one.
+
+        "open chrome with google.com" names a page, and handing that to open_app as a
+        directory would turn a working launch into a refusal. An editor is the case where
+        the user means a folder; a path prefix is unambiguous either way.
+        """
+        value = str(candidate).strip()
+        if not value:
+            return False
+        if value.startswith(("/", "~", "./", "../")):
+            return True
+        return getattr(app, "category", "") == "development"
 
     def _transfer(self, text: str, raw: str) -> Optional[Intent]:
         """Send a file to a paired device (v0.6).

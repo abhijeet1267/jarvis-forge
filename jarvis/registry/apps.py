@@ -17,6 +17,10 @@ DEFAULT_APPS: List[AppSpec] = [
         display_name="Visual Studio Code",
         platform=["macos", "windows", "linux"],
         launch={"macos": "Visual Studio Code", "linux": "code", "windows": "code"},
+        # The macOS `code` shim is not on PATH unless the user installs it from the
+        # command palette, so the bundle's own CLI is named relative to the app:
+        # `open -a` cannot take a folder, and that is exactly the complaint.
+        cli={"macos": "Contents/Resources/app/bin/code", "linux": "code", "windows": "code"},
         aliases=["vs code", "vscode", "code", "coding environment", "ide", "editor"],
         category="development",
     ),

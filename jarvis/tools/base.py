@@ -51,14 +51,37 @@ async def run_command(
     *,
     timeout: float = 20.0,
     cwd: Optional[str] = None,
+    detach: bool = False,
 ) -> tuple[int, str, str]:
     """Run an argv list directly (no shell) and capture output.
 
     Using ``create_subprocess_exec`` with an explicit argv avoids shell
     interpolation entirely -- this is the core of "do not give the model
     unrestricted shell access".
+
+    ``detach`` is for launching applications. A GUI app keeps the pipe it inherited
+    open for as long as it runs, so a capturing caller waits for the app to *quit*
+    and reports a timeout on a launch that worked. The caller is then expected to
+    observe the real effect (that the editor opened the folder) rather than read an
+    exit code as proof.
     """
-    log.info("exec", extra_fields={"argv": args})
+    log.info("exec", extra_fields={"argv": args, "detach": detach})
+    if detach:
+        try:
+            await asyncio.create_subprocess_exec(
+                *args,
+                stdin=asyncio.subprocess.DEVNULL,
+                stdout=asyncio.subprocess.DEVNULL,
+                stderr=asyncio.subprocess.DEVNULL,
+                cwd=cwd,
+                start_new_session=True,
+            )
+        except FileNotFoundError:
+            return 127, "", f"{args[0] if args else ''} is not installed"
+        except OSError as exc:
+            return 126, "", f"could not start {args[0] if args else ''}: {exc}"
+        return 0, "", ""
+
     proc = await asyncio.create_subprocess_exec(
         *args,
         stdout=asyncio.subprocess.PIPE,

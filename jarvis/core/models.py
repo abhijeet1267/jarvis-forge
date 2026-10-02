@@ -217,6 +217,11 @@ class AppSpec(BaseModel):
     risk: RiskLevel = RiskLevel.LOW
     # Per-platform launch identifiers, e.g. {"macos": "Visual Studio Code"}
     launch: Dict[str, str] = Field(default_factory=dict)
+    #: Per-platform command line that can *take an argument*, e.g. opening a folder.
+    #: ``launch`` names the application to macOS, which cannot receive a directory, so
+    #: an app declared without a cli can be opened but never aimed at anything.
+    #: A value containing "/" is resolved relative to the installed app bundle.
+    cli: Dict[str, str] = Field(default_factory=dict)
     aliases: List[str] = Field(default_factory=list)
     category: str = "general"
 
