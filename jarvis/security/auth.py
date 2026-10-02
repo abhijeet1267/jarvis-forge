@@ -143,16 +143,17 @@ def lan_startup_problems(settings: Optional[Settings] = None) -> List[str]:
     if not settings.lan_mode:
         return []
     problems: List[str] = []
-    if not settings.auth_enabled or not (settings.api_token or "").strip():
+    if not settings.auth_enabled:
         problems.append(
-            "LAN mode needs the API token: with it off, any device on this network "
-            "could run commands on the laptop. Set JARVIS_API_TOKEN, or start with "
-            "auth on so a token is generated.")
+            "LAN mode needs the API token: with authentication off, any device on this "
+            "network could run commands on the laptop. Turn authentication on (the token "
+            "is generated and stored on first start), or leave the door shut.")
     if str(settings.host) in ("127.0.0.1", "localhost", "::1"):
         problems.append(
             "LAN mode is on but the server binds to "
             f"{settings.host}, which no other device can reach. Set JARVIS_HOST=0.0.0.0 "
-            "to bind every interface, or a specific address, and mean it.")
+            "to bind every interface, or a specific address, and mean it. (The desktop "
+            "app's 'Allow devices on my wifi' checkbox sets both.)")
     return problems
 
 

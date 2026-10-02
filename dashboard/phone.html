@@ -17,6 +17,16 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <meta name="jarvis-bootstrap" content="__JARVIS_BOOTSTRAP__" />
+<link rel="manifest" href="/manifest.webmanifest" />
+<link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
+<link rel="apple-touch-icon" href="/icons/icon-192.png" />
+<meta name="theme-color" content="#0d1117" />
+<!-- iOS installs from these, and unlike Chrome it does not require a secure context:
+     an iPhone on the LAN can add this to its home screen over plain http. -->
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="JARVIS" />
 <title>JARVIS — phone</title>
 <style>
   :root { color-scheme: dark; }
@@ -203,6 +213,13 @@ document.getElementById("cmd").addEventListener("keydown", e => { if (e.key === 
 
 login().then(refresh);
 setInterval(refresh, 4000);
+
+// The install path: a worker plus the manifest above is what makes the browser offer
+// "Add to Home Screen". It caches the shell only, so a command never reads back a
+// stored answer.
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("/sw.js").catch(() => {});
+}
 </script>
 </body>
 </html>

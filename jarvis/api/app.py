@@ -17,7 +17,7 @@ from typing import Any, AsyncIterator, Dict, List, Optional
 
 from contextlib import asynccontextmanager
 
-from fastapi import Depends, FastAPI, File, HTTPException, Query, Request, UploadFile
+from fastapi import Depends, FastAPI, File, HTTPException, Query, Request, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, StreamingResponse
 from pydantic import BaseModel, field_validator
@@ -2358,6 +2358,42 @@ async def phone_client() -> Any:
 @app.get("/phone", include_in_schema=False)
 async def phone_page() -> Any:
     return await phone_client()
+
+
+#: What makes the phone page an *installed* thing rather than a tab: a manifest, the
+#: icons it names, and a worker that caches the shell. All three are static files from
+#: `dashboard/`, served here so the page never points at a path that answers 404.
+PHONE_DIR = Path(__file__).resolve().parents[2] / "dashboard"
+
+
+@app.get("/manifest.webmanifest", include_in_schema=False)
+async def phone_manifest() -> Any:
+    path = PHONE_DIR / "manifest.webmanifest"
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="manifest not found")
+    return Response(content=path.read_bytes(), media_type="application/manifest+json")
+
+
+@app.get("/sw.js", include_in_schema=False)
+async def phone_service_worker() -> Any:
+    path = PHONE_DIR / "sw.js"
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="worker not found")
+    # Served from the site root on purpose: a worker's scope is its own directory, and a
+    # worker at /phone/sw.js could never intercept the API calls the page makes.
+    return Response(content=path.read_bytes(), media_type="application/javascript",
+                    headers={"Service-Worker-Allowed": "/"})
+
+
+@app.get("/icons/{icon_name}", include_in_schema=False)
+async def phone_icon(icon_name: str) -> Any:
+    """Only the two files that ship, by exact name: no arbitrary file read off disk."""
+    if icon_name not in {"icon-192.png", "icon-512.png"}:
+        raise HTTPException(status_code=404, detail="no such icon")
+    path = PHONE_DIR / icon_name
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="icon not found")
+    return Response(content=path.read_bytes(), media_type="image/png")
 
 
 @app.get("/dashboard")

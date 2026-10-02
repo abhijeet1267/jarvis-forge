@@ -11,12 +11,45 @@ import os
 from pathlib import Path
 from typing import List
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 def _default_home() -> Path:
     return Path(os.path.expanduser(os.environ.get("JARVIS_HOME", "~/.jarvis-forge")))
+
+
+#: The desktop app's "allow devices on my wifi" checkbox writes this file. It is read as
+#: one of exactly two words, never evaluated: a switch that parses arbitrary content is
+#: an injection surface hiding in a settings file.
+LAN_SWITCH = "lan_mode"
+
+
+def lan_mode_path(home: Path) -> Path:
+    return Path(home) / LAN_SWITCH
+
+
+def lan_mode_state(home: Path) -> "bool | None":
+    """True/false when the app wrote the switch, None when nobody ever touched it."""
+    try:
+        text = lan_mode_path(home).read_text(encoding="utf-8").strip().lower()
+    except OSError:
+        return None
+    if text in ("true", "1", "on", "yes"):
+        return True
+    if text in ("false", "0", "off", "no"):
+        return False
+    return None
+
+
+def set_lan_mode(home: Path, enabled: bool) -> Path:
+    """Record the switch. Writing it does not open anything by itself -- the startup
+    guard in `security.auth` still refuses a LAN mode without a token."""
+    path = lan_mode_path(home)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("true\n" if enabled else "false\n", encoding="utf-8")
+    os.chmod(path, 0o600)
+    return path
 
 
 class Settings(BaseSettings):
@@ -52,6 +85,11 @@ class Settings(BaseSettings):
     #: Starting with it on requires authentication to be on, and a bind address that
     #: is not loopback -- see ``security.auth.lan_startup_problems``.
     lan_mode: bool = False
+
+    #: Serve TLS in front of the API. Off by default; when on, the advertised phone URLs
+    #: become https, because a browser refuses to treat plain http from another device as
+    #: a secure context and an installable app needs one.
+    https_enabled: bool = False
 
     # --- Policy -------------------------------------------------------------
     paranoid: bool = False
@@ -207,6 +245,20 @@ class Settings(BaseSettings):
             return [item.strip() for item in value.split(",") if item.strip()]
         return value
 
+    @model_validator(mode="after")
+    def _apply_lan_switch_file(self) -> "Settings":
+        """Let the desktop app open the door without a terminal.
+
+        A double-clicked bundle never sees `export JARVIS_LAN_MODE=1`, so the switch also
+        lives in the laptop's own data directory. An explicit environment value still
+        wins, because someone debugging from a shell must be able to overrule the window.
+        """
+        if "JARVIS_LAN_MODE" not in os.environ:
+            state = lan_mode_state(self.home)
+            if state is not None:
+                self.lan_mode = state
+        return self
+
     # --- Derived paths ------------------------------------------------------
     @property
     def db_path(self) -> Path:
@@ -230,7 +282,12 @@ class Settings(BaseSettings):
 
     @property
     def dashboard_origin(self) -> str:
-        return f"http://{self.host}:{self.port}"
+        return f"{self.scheme}://{self.host}:{self.port}"
+
+    @property
+    def scheme(self) -> str:
+        """The URL scheme this server's own pages must be addressed with."""
+        return "https" if self.https_enabled else "http"
 
     def client_hosts(self) -> List[str]:
         """Host strings a browser may address this server with.
@@ -254,7 +311,8 @@ class Settings(BaseSettings):
 
     def reachable_urls(self) -> List[str]:
         """What to type on the other device. ``host = 0.0.0.0`` is a bind instruction."""
-        return [f"http://{host}:{self.port}/phone" for host in self.client_hosts()]
+        return [f"{self.scheme}://{host}:{self.port}/phone"
+                for host in self.client_hosts()]
 
     def allowed_origins(self) -> List[str]:
         """Browser origins permitted to call the API.
@@ -266,7 +324,7 @@ class Settings(BaseSettings):
         """
         origins = [o for o in self.cors_origins if o and o != "*"]
         for host in (self.host, *self.client_hosts()):
-            origin = f"http://{host}:{self.port}"
+            origin = f"{self.scheme}://{host}:{self.port}"
             if origin not in origins:
                 origins.append(origin)
         return origins

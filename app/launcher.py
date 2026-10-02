@@ -48,14 +48,22 @@ def resolve_project_dir() -> Path:
     if env and Path(env).expanduser().is_dir():
         return Path(env).expanduser().resolve()
 
-    # 2. Path recorded at build time inside the bundle.
+    # 2. The copy staged inside this bundle. Checked before the recorded path because it
+    #    is the one that travels: a bundle that carries its own source is an application,
+    #    while a pointer at someone's checkout is a shortcut that breaks when the
+    #    checkout moves or the app is copied to another user's machine.
+    staged = BUNDLE_ROOT / "Resources" / "app"
+    if (staged / "run.py").exists() and (staged / "jarvis").is_dir():
+        return staged.resolve()
+
+    # 3. Path recorded at build time inside the bundle.
     recorded = _resource("project_path.txt")
     if recorded:
         text = recorded.read_text(encoding="utf-8").strip()
         if text and Path(text).is_dir():
             return Path(text)
 
-    # 3. Look at the bundle's own location and the three directories above it.
+    # 4. Look at the bundle's own location and the three directories above it.
     #    BUNDLE_ROOT is "<checkout>/Contents" when the launcher runs from source and
     #    "<checkout>/dist/Jarvis Forge.app/Contents" in a build -- so the checkout is
     #    the third ancestor. The old list (root, parent, grandparent) stopped at
@@ -134,6 +142,38 @@ def port_in_use(host: str, port: int) -> bool:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
         sock.settimeout(0.5)
         return sock.connect_ex((host, port)) == 0
+
+
+def data_home() -> Path:
+    """Where this install keeps its files -- the same directory as the token."""
+    configured = os.environ.get("JARVIS_HOME")
+    if configured:
+        return Path(configured).expanduser()
+    return Path.home() / ".jarvis-forge"
+
+
+def lan_switch_state() -> bool:
+    """Whether the user has already allowed devices on their wifi.
+
+    Written as a plain word rather than imported from `jarvis.config`: the control panel
+    has to work when the server it manages does not, and a test pins the two readers to
+    the same file so they cannot drift.
+    """
+    try:
+        return (data_home() / "lan_mode").read_text(encoding="utf-8").strip().lower() == "true"
+    except OSError:
+        return False
+
+
+def set_lan_switch(enabled: bool) -> Path:
+    path = data_home() / "lan_mode"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("true\n" if enabled else "false\n", encoding="utf-8")
+    try:
+        path.chmod(0o600)
+    except OSError:
+        pass
+    return path
 
 
 def _api_token() -> str:
@@ -249,6 +289,11 @@ class ServerController:
         self.python = python
         self.host = host
         self.port = port
+        #: What the server binds. Distinct from `host`, which is the address the panel and
+        #: the browser use to *reach* it -- `http://0.0.0.0:8765` is not a page anyone can
+        #: open, and a laptop that only binds loopback cannot be reached by a phone at all.
+        #: So the wifi switch moves the bind, never the link shown to the user.
+        self.bind_host = self._initial_bind(host)
         self.log_path = log_path
         self.process: Optional[subprocess.Popen] = None
         self.attached = False  # True when we adopted an already-running server
@@ -260,6 +305,14 @@ class ServerController:
         self.tail: list[str] = []
 
     # -- lifecycle ----------------------------------------------------------
+    @staticmethod
+    def _initial_bind(host: str) -> str:
+        """Honour a saved wifi switch on every launch, and an explicit env var first."""
+        explicit = os.environ.get("JARVIS_HOST")
+        if explicit:
+            return explicit
+        return "0.0.0.0" if lan_switch_state() else host
+
     def start(self) -> None:
         if port_in_use(self.host, self.port):
             self.attached = True
@@ -272,7 +325,7 @@ class ServerController:
 
         env = dict(os.environ)
         env["PYTHONUNBUFFERED"] = "1"
-        env.setdefault("JARVIS_HOST", self.host)
+        env.setdefault("JARVIS_HOST", self.bind_host)
         env.setdefault("JARVIS_PORT", str(self.port))
 
         self.process = subprocess.Popen(
@@ -482,6 +535,65 @@ def build_ui(controller: ServerController, on_quit) -> None:
     make_button(buttons, "Speak", speak_test).pack(side="left")
     make_button(buttons, "Restart", do_restart).pack(side="left", padx=8)
     make_button(buttons, "Quit", do_quit).pack(side="right")
+
+    # --- devices on your wifi ----------------------------------------------
+    # The switch lives here, in a window the user already owns, and nowhere in the HTTP
+    # API. The phone is served the same dashboard as the laptop, so a settings endpoint
+    # that accepted `lan_mode` would let a connected device open remote access to the
+    # machine it is talking to.
+    lan_row = tk.Frame(root, bg=BG)
+    lan_row.pack(fill="x", padx=16, pady=(0, 6))
+    lan_var = tk.BooleanVar(value=lan_switch_state())
+    tk.Checkbutton(
+        lan_row,
+        text="Allow devices on my wifi to connect",
+        variable=lan_var,
+        command=lambda: toggle_lan(lan_var),
+        bg=BG, fg=INK, activebackground=BG, activeforeground=INK,
+        selectcolor=PANEL, relief="flat", highlightthickness=0,
+        font=("Helvetica Neue", 11), cursor="hand2",
+    ).pack(side="left")
+    lan_hint = tk.Label(lan_row, text="", bg=BG, fg=MUTED, font=("Helvetica Neue", 10))
+    lan_hint.pack(side="left", padx=8)
+
+    def toggle_lan(var):
+        enabled = var.get()
+        try:
+            set_lan_switch(enabled)
+        except OSError as exc:
+            var.set(not enabled)
+            messagebox.showerror("Devices on your wifi",
+                                 f"Could not save the setting:\n{exc}")
+            return
+        # The server reads the switch when it starts, so applying it means restarting --
+        # and it still refuses a LAN mode with no token, which must be shown rather than
+        # swallowed: a checkbox that appears to do nothing is worse than one that says no.
+        controller.bind_host = "0.0.0.0" if enabled else "127.0.0.1"
+        status.configure(text="restarting…", fg=MUTED)
+        dot.configure(fg=MUTED)
+        root.update_idletasks()
+        controller.restart()
+        if controller.wait_ready():
+            refresh()
+            lan_hint.configure(text="" if not enabled else
+                               "phone: open the printed address on the device",
+                               fg=MUTED)
+            if enabled:
+                messagebox.showinfo(
+                    "Devices on your wifi",
+                    "Other devices on this network can now reach JARVIS.\n\n"
+                    "Open http://<this laptop's address>:%s/phone on the phone -- the "
+                    "exact address is in the log below.\n\nNothing runs without your "
+                    "confirmation." % controller.port)
+        else:
+            var.set(False)
+            set_lan_switch(False)
+            controller.bind_host = "127.0.0.1"
+            controller.restart()
+            lan_hint.configure(text="refused: the laptop needs an API token before "
+                                    "another device can reach it", fg="#b91c1c")
+            show_failure()
+
 
     # --- log ---------------------------------------------------------------
     tk.Label(root, text="RECENT ACTIVITY", bg=BG, fg=MUTED,

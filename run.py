@@ -104,10 +104,30 @@ def main() -> None:
     # `0.0.0.0` is a bind instruction; nobody can type it into a browser and reach this
     # machine. The phone URLs the app prints at startup carry the real addresses.
     display_host = "127.0.0.1" if settings.host in ("0.0.0.0", "::") else settings.host
-    print(f"JARVIS Forge core -> http://{display_host}:{settings.port}/dashboard", flush=True)
-    print(f"Voice status      -> http://{display_host}:{settings.port}/voice/status",
+    print(f"JARVIS Forge core -> {settings.scheme}://{display_host}:{settings.port}/dashboard",
           flush=True)
-    uvicorn.run(app, host=settings.host, port=settings.port, log_level="info")
+    print(f"Voice status      -> {settings.scheme}://{display_host}:{settings.port}"
+          "/voice/status", flush=True)
+
+    ssl_kwargs: dict = {}
+    if settings.https_enabled:
+        # A browser refuses to treat plain http from another device as a secure context,
+        # and without one a phone cannot install the client as an app. The certificate is
+        # self-signed, so the handset shows a warning the user has to accept: that is the
+        # honest cost of encrypting a link with no domain name behind it.
+        from jarvis.transport.tls import TLSUnavailable, ensure_certificate
+
+        try:
+            material = ensure_certificate(settings)
+        except TLSUnavailable as exc:
+            print(f"JARVIS Forge: HTTPS requested but unavailable -- {exc}", flush=True)
+            raise SystemExit(1)
+        ssl_kwargs = {"ssl_certfile": str(material.cert_path),
+                      "ssl_keyfile": str(material.key_path)}
+        print(f"TLS certificate   -> {material.cert_path} (sha256 {material.fingerprint[:16]}…)",
+              flush=True)
+
+    uvicorn.run(app, host=settings.host, port=settings.port, log_level="info", **ssl_kwargs)
 
 
 if __name__ == "__main__":

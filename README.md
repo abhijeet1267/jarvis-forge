@@ -13,7 +13,7 @@ between *"the handler returned"* and *"the thing happened"* — and the thirty p
 measurement spent closing that gap, in the ledger and on the screen.
 
 [![ci](https://img.shields.io/github/actions/workflow/status/abhijeet1267/jarvis-forge/ci.yml?label=tests%20%C2%B7%20macos)](https://github.com/abhijeet1267/jarvis-forge/actions/workflows/ci.yml)
-[![suite](https://img.shields.io/badge/tests-1683%20passed%20%C2%B7%200%20failed-16a34a)](tests)
+[![suite](https://img.shields.io/badge/tests-1710%20passed%20%C2%B7%200%20failed-16a34a)](tests)
 [![tools](https://img.shields.io/badge/tools-127%20across%2015%20agents-2f6df6)](jarvis/tools)
 [![offline](https://img.shields.io/badge/LLM-off%20by%20default%20%C2%B7%20runs%20fully%20offline-0f172a)](jarvis/config.py)
 [![python](https://img.shields.io/badge/python-3.11%20%C2%B7%203.12%20(CI)-6b7688)](.github/workflows/ci.yml)
@@ -27,7 +27,7 @@ measurement spent closing that gap, in the ledger and on the screen.
 | **Ledger** | `action_logs` hash-chained + `audit.jsonl` append-only, `verify_chain()` |
 | **Edge** | token file `0600` · constant-time compare · same-origin · Host allowlist · 600/min |
 | **Surface** | web dashboard · phone client page over the LAN · voice (macOS `say`/STT) · watch queue · device pairing |
-| **Size** | ~57k lines · 34.2k source · 20.4k tests · 59 test modules |
+| **Size** | ~58k lines · 34.3k source · 20.8k tests · 60 test modules |
 
 ---
 
@@ -39,12 +39,12 @@ and the diagrams read their counts from the live registry.
 
 | Claim | Value | Reproduce |
 |---|---|---|
-| Test suite | **1683 passed · 0 failed · 0 xfailed · 0 skipped** (1683 collected; the network-gated arXiv test skipped in one run and passed live in the next, which is why its skip is reported rather than smoothed over) | `python -m pytest -q -rs` |
-| Suite growth, Phase 9 → 35 | 875 passing / **126 failing** → 1683 passing / 0 failing / **0 xfailed** at the Phase 35 close | `cat benchmarks/suite_history.json` |
+| Test suite | **1710 passed · 0 failed · 0 xfailed · 0 skipped** (1710 collected; the network-gated arXiv test skipped in one run and passed live in the next, which is why its skip is reported rather than smoothed over) | `python -m pytest -q -rs` |
+| Suite growth, Phase 9 → 36 | 875 passing / **126 failing** → 1710 passing / 0 failing / **0 xfailed** at the Phase 36 close | `cat benchmarks/suite_history.json` |
 | Tools registered | **128** | `python -c "from jarvis.core.orchestrator import JarvisCore as J; print(len(J().tools.names()))"` |
 | Confirmation-gated | **27** of 128 | `python assets/build_diagrams.py` (prints the live counts) |
 | Risk tiers | read 69 · low 32 · external 12 · high 12 · physical 3 | same |
-| API routes | **105** | `python -c "s=open('jarvis/api/app.py').read(); print(sum(s.count(f'@app.{v}(\"') for v in ('get','post','put','patch','delete')))"` |
+| API routes | **108** | `python -c "s=open('jarvis/api/app.py').read(); print(sum(s.count(f'@app.{v}(\"') for v in ('get','post','put','patch','delete')))"` |
 | Acceptance commands measured | 17 of 18, live, over HTTP | `python benchmarks/acceptance_run.py` |
 | Plan's safety matrix (§45) | **6 of 6** hold — the sixth held since Phase 31 | `python benchmarks/safety_run.py` |
 | Launched-server sweep | 8 read endpoints **200**, unauthenticated **401**, commands answered over the network | `python run.py serve`, then the sweep in `audit/PHASE21_SPEED_RESILIENCE_REPORT.md` §1 |
@@ -81,7 +81,7 @@ and the diagrams read their counts from the live registry.
 - [Benchmarks](#benchmarks)
 - [Hardware truth](#hardware-truth)
 - [What the system says when something fails](#what-the-system-says-when-something-fails)
-- [The thirty-five phases](#the-thirty-five-phases)
+- [The thirty-six phases](#the-thirty-six-phases)
 - [The plan's safety matrix, run](#the-plans-safety-matrix-run)
 - [Smooth and fast](#smooth-and-fast)
 - [Security model](#security-model)
@@ -117,9 +117,9 @@ and not a quiet success.
 
 ## Benchmarks
 
-### Suite growth, Phase 9 → Phase 35
+### Suite growth, Phase 9 → Phase 36
 
-<img src="assets/chart-suite-growth.svg" alt="Test suite growth from 875 passing with 126 failing, to 1683 passing with none failing at the close of Phase 35" width="100%"/>
+<img src="assets/chart-suite-growth.svg" alt="Test suite growth from 875 passing with 126 failing, to 1710 passing with none failing at the close of Phase 36" width="100%"/>
 
 Phase 9 inherited **126 failing tests**. The cause was a single import line in
 `jarvis/tools/base.py` that left `Verification` undefined, so every tool result raised
@@ -174,7 +174,7 @@ moved, and the ledger now says exactly that. A simulated *car read* is still a s
 read — reading a labelled simulator is a real read — and that distinction is pinned by a
 test so it stays a decision rather than an accident.
 
-## The thirty-five phases
+## The thirty-six phases
 
 Each closed with a report in [`audit/`](audit), and each report's claims carry the
 command that produced them.
@@ -204,6 +204,7 @@ command that produced them.
 | **29 — A route fills its own action** | flowcharts and architecture diagrams had been dead since they were written: the route sent a title to a tool that also needs `steps` / `components`, so the gate answered the user with *"missing required parameter 'steps'"* -- even when the sentence named them. What a sentence states is now used; what it omits is asked for |
 | **30 — A capability you have is a capability you can ask for** | 46 of 127 tools answered their own name with "I understood the words but not the goal" -- twice the gap the open item had recorded, because that item had been measured by grepping the planner instead of asking the router. A registry-derived route now reaches a tool whose name words a sentence contains, validates the action with the registry before emitting it, and asks in the tool's own description when an argument is missing; three routes that *advertised* capabilities yield to a sentence naming one; and the delete-capable tool that was tiered LOW-and-unconfirmed for as long as it was unreachable was retiered in the same commit |
 | **31 — The device you named is the device that changes** | "turn on the heater" resolved to **Study AC** (the gateway filed heating under cooling) and `control_home_device` was LOW with no confirmation, so the request was approved for execution and only an offline gateway stopped a device changing. The synonym, the resolver and the tier were tightened in one commit, the permission engine grew a device guard beside its path guard, and the plan's §45 matrix has held **6 of 6** since |
+| **36 — Two applications** | "Make one for mobile and one for laptop so I can connect and work." Measured: the built `.app` copied *no source* — `project_path.txt` held an absolute path to this checkout, so the Phase 10 defect (an app that exits 1 because its directory moved) was still shipping 26 phases later; nothing in the launcher could set LAN mode, so Phase 35's phone work was unreachable from the app anyone would actually double-click; and the phone page had no manifest, icons or worker. Now the bundle stages its own code and prefers it, `host` (the link shown) is separated from `bind_host` (the socket), the panel has an *Allow devices on my wifi* checkbox, and the phone gets `/manifest.webmanifest`, two real rendered PNGs and a shell-only service worker. Then the browser refused the story I was about to tell: with HTTPS on and the certificate warning clicked through, Chrome reports a secure context, loads and polls the page fine, and *still* rejects `serviceWorker.register()` — "an SSL certificate error occurred when fetching the script" — so a self-signed LAN cert encrypts but does not make an installable Android app. Running the built app also found a guard that demanded a token startup had not written yet, refusing the one configuration it exists to protect. |
 | **35 — Reach the laptop** | The ask was an app on a phone that commands the laptop. Measured first: the API refused every non-loopback `Host`, bound to `127.0.0.1`, and no client page existed for the pairing protocol that does work — so the door was shut, not the lock broken. LAN mode now opens it *only* for addresses this machine owns (a forged `Host:` is still 400), refuses to boot without a token or with a loopback bind, prints the one URL a phone can actually type, and ships `/phone`: pair, command, and Approve/Deny the confirmation from the handset. `check_agent_status` answers "is qoder working" with what `mdls` and `ps` say — live, it answered *installed (version 0.3.4) and running*. Opening the door exposed three defects that only a browser could see, because they live in the page's own JavaScript -- the first live browser drive this project has performed, against the "LIVE BROWSER DRIVE: NOT PERFORMED" disclosure in `audit/PHASE25_DESKTOP_TRUTH_REPORT.md` §7. |
 | **34 — One sentence, one deadline** | 29-B's "no bounded read timeout" was kinder than the code deserved: `urlopen(timeout=20)` bounds *silence*, so a server dribbling a byte every 10 ms was measured still waiting at 60 s with no end, and this phase's first red run had to be killed at five minutes because it did not fail — it hung. All three `urlopen` readers now go through `net.http_read`, whose number is a ceiling on the whole call; arXiv's two attempts share one budget; and `SENTENCE_BUDGET` caps the request, because two bounded 30 s reads in one sentence add up to a 60 s wait and the "30" in the source would have been a lie about what anyone experienced. |
 | **33 — A question carries its own answer** | 55 capabilities answered a plain request by asking the user to produce an id the system had issued and could print (`list_workspaces` returns `WS-301adce395d5`). Seven enumerators now declare which identifier they own, the orchestrator offers up to four real candidates inside the question, and 19 of those 55 questions carry them. Found on the way: "close the workspace WS-…" answered with a *description* of the workspace and recorded a success. Also found: a test file whose docstring promised an autouse restore fixture that did not exist, leaving stub handlers installed for the rest of the session — green alone, red in a full run. |
@@ -441,7 +442,13 @@ open http://127.0.0.1:8765/dashboard      # the page fetches its own session tok
 # Let a phone on the same wifi drive this laptop (opt-in; it refuses to start otherwise):
 JARVIS_LAN_MODE=true JARVIS_HOST=0.0.0.0 python run.py
 #   -> prints e.g. "Phone client -> http://192.168.1.40:8765/phone"; open that on the phone.
-#   A double-clicked desktop app reads the same two lines from `.env` in its project folder.
+#   The desktop app needs neither variable: tick "Allow devices on my wifi to connect"
+#   in its window and it writes the switch and rebinds.
+# Encrypt the link (the session credential then stops crossing the wifi in cleartext):
+JARVIS_HTTPS_ENABLED=true JARVIS_LAN_MODE=true JARVIS_HOST=0.0.0.0 python run.py
+#   -> the phone URL becomes https://… and the handset shows a certificate warning first.
+#      Chrome will still not *install* the client against this self-signed certificate;
+#      see 36-A under Known open items for what was measured.
 
 # Authenticated API, from a shell:
 TOKEN=$(cat ~/.jarvis-forge/api_token)
@@ -449,7 +456,7 @@ curl -s -H "X-JARVIS-Token: $TOKEN" -H 'Content-Type: application/json' \
      -d '{"text":"what is my battery"}' http://127.0.0.1:8765/command
 
 # Prove it to yourself:
-python -m pytest -q                       # 1683 passed, 0 failed, 0 skipped (the research test skips only while arXiv refuses)
+python -m pytest -q                       # 1710 passed, 0 failed, 0 skipped (the research test skips only while arXiv refuses)
 python benchmarks/acceptance_run.py       # re-measures the README's numbers
 python assets/build_charts.py && python assets/build_diagrams.py
 ```
@@ -463,16 +470,16 @@ Set `JARVIS_LLM_*` only if you want the optional model path.
 jarvis/
   core/        orchestrator, RulePlanner, models, recovery, tasks, briefing
   security/    permission engine, audit chain, redaction, privacy, path guard
-  api/         FastAPI app: 105 routes, auth, origin gate, LAN gate, rate limit
+  api/         FastAPI app: 108 routes, auth, origin gate, LAN gate, rate limit
   agents/      15 agents — laptop, phone, home, robotics, car, watch, email, …
   tools/       128 tools across 5 risk tiers, each declaring its own spec
   memory/      hybrid retrieval, lifecycle, forgetting
   scheduler/   recurring jobs, runner with per-run re-authorization
   car/ home/ robotics/ watch/ vision/ research/ design/ coding/
   integrations/ IMAP/SMTP and CalDAV providers with local fallbacks
-tests/         59 modules · 1683 collected · includes the shipped page JS, run by Node
+tests/         60 modules · 1710 collected · includes the shipped page JS, run by Node
 dashboard/     index.html control panel + phone.html, the client a phone uses over the LAN
-audit/         37 phase reports + 4 CSV matrices — the evidence behind this README
+audit/         38 phase reports + 4 CSV matrices — the evidence behind this README
 benchmarks/    acceptance_run.py and the JSON the charts are drawn from
 assets/        generated figures + the two generators that draw them
 app/           PyInstaller spec and bundle sources (see Downloads — currently broken)
@@ -535,6 +542,20 @@ adding and removing a synonym at run time. 31-B: the confirmation prompt re-deri
 line from the raw parameters while the dashboard rendered the stored preview — two renderings
 of one consent question, and neither naming the device. One string feeds both now: *"Will do:
 set Kitchen light (kitchen.light) to 40%"*.
+- **Two applications, and where "installable" stops short** (Phase 36). Reasoned in
+  `audit/PHASE36_TWO_APPLICATIONS_REPORT.md`. What it left open:
+  **36-A** Chrome will not install the phone client against a self-signed LAN certificate —
+  measured, not assumed: the page loads, logs in and polls `200`, `isSecureContext` is true after
+  the warning is clicked through, and `serviceWorker.register()` still fails with "an SSL
+  certificate error occurred when fetching the script". So `JARVIS_HTTPS_ENABLED=true` buys
+  encryption on the wifi and *not* an Android install; that needs a certificate the handset
+  trusts, or an APK, and neither can be produced or verified on this machine. **36-B** the iOS
+  standalone install is asserted from the tags the page serves, not from an iPhone.
+  **36-C** the checkbox restarts the server, and the panel does not explain that a few seconds of
+  silence is a restart rather than a hang. **36-D** `python_path.txt` still records an absolute
+  interpreter: the bundle now carries its own *source*, but the runtime has to exist on whatever
+  machine the app is copied to. **36-E** the worker precaches by exact path, so a second client
+  page must be added to that list or it silently never caches.
 - **Another device can reach the laptop, and says so honestly** (Phase 35). Reasoned in
   `audit/PHASE35_REACH_THE_LAPTOP_REPORT.md`. What it left open:
   **35-A** the phone page's *rendering* is covered only by the two contract tests that feed a

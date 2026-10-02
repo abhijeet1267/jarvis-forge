@@ -188,6 +188,13 @@
    "passed": 1683,
    "failed": 0,
    "note": "a phone drives the laptop over the LAN; the client page was tested in a browser and found three bugs"
+  },
+  {
+   "phase": "36 two applications",
+   "collected": 1710,
+   "passed": 1710,
+   "failed": 0,
+   "note": "the .app carries its own source; the phone gets a manifest, icons and a worker"
   }
  ]
 }

@@ -196,6 +196,7 @@ def suite_history() -> dict:
         ("33 questions carry their answers", 1642, 1642, 0, "a question offers the ids it holds rather than demanding them"),
         ("34 one deadline per sentence", 1653, 1653, 0, "a network read that never stops being silent can no longer run forever"),
         ("35 reach the laptop", 1683, 1683, 0, "a phone drives the laptop over the LAN; the client page was tested in a browser and found three bugs"),
+        ("36 two applications", 1710, 1710, 0, "the .app carries its own source; the phone gets a manifest, icons and a worker"),
     ]
     return {"phases": [{"phase": p, "collected": c, "passed": q, "failed": f, "note": n}
                        for p, c, q, f, n in points]}

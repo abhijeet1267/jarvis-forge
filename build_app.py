@@ -98,6 +98,42 @@ def run(cmd: list[str], **kwargs) -> subprocess.CompletedProcess:
     return subprocess.run(cmd, capture_output=True, text=True, **kwargs)
 
 
+#: What the app needs to run, and nothing else. The checkout holds a 300 MB interpreter,
+#: the test suite, previous builds and every cache in the tree; copying it wholesale
+#: would ship those inside an application bundle and make the bundle slow to build,
+#: impossible to sign quickly, and larger than the thing it launches.
+STAGED_ITEMS = ("jarvis", "dashboard", "run.py", "requirements.txt", "pyproject.toml",
+                ".env.example")
+STAGED_SKIP = {".venv", "venv", "tests", "dist", "build", ".git", "__pycache__",
+               ".pytest_cache", ".ruff_cache", "node_modules"}
+
+
+def stage_project(resources: Path) -> Path:
+    """Copy the source the app actually runs into the bundle.
+
+    Until now `project_path.txt` held an absolute path to this checkout, so the built
+    `.app` was a shortcut rather than an application: move it, or delete the checkout it
+    points at, and the icon exits 1 -- the Phase 10 finding, still live in Phase 35.
+    """
+    target = resources / "app"
+    if target.exists():
+        shutil.rmtree(target)
+    target.mkdir(parents=True)
+
+    def ignore(_directory: str, names: list[str]) -> set[str]:
+        return {n for n in names if n in STAGED_SKIP or n.endswith((".pyc", ".pyo"))}
+
+    for item in STAGED_ITEMS:
+        source = PROJECT_DIR / item
+        if not source.exists():
+            continue
+        if source.is_dir():
+            shutil.copytree(source, target / item, ignore=ignore)
+        else:
+            shutil.copy2(source, target / item)
+    return target
+
+
 def build(dest_root: Path, python: Path) -> Path:
     app = dest_root / f"{APP_NAME}.app"
     if app.exists():
@@ -125,6 +161,8 @@ def build(dest_root: Path, python: Path) -> Path:
     shutil.copy2(PROJECT_DIR / "app" / "launcher.py", resources / "launcher.py")
     (resources / "project_path.txt").write_text(str(PROJECT_DIR), encoding="utf-8")
     (resources / "python_path.txt").write_text(str(python), encoding="utf-8")
+    print("  · staging the project inside the bundle")
+    stage_project(resources)
 
     # --- Info.plist ---------------------------------------------------------
     print("  · writing Info.plist")
