@@ -119,6 +119,23 @@ The README's own drift guard failed once during this phase, correctly: it had be
 repository ships 39 evidence reports before the 39th file existed. It was satisfied by writing
 this file, not by editing the claim back down.
 
+## 6b. The last link in "connect my phone", driven rather than assumed
+
+Asked whether the applications actually work together, the honest answer had a hole in it: the
+wifi checkbox had never been clicked by anything. The bundle self-test counts **four probe
+widgets** — a label and a button it constructs itself — so "control panel widgets: 4 constructed"
+said nothing about the real panel, and no Python test can click a Tk widget by accident.
+
+So `build_ui` is now constructed in a test with the checkbox found by widget class and
+`invoke()`d: it writes `lan_mode=true`, restarts with `bind_host == "0.0.0.0"`, shows a dialog
+containing the address to type, and clicking again writes `false` and rebinds to `127.0.0.1`.
+The shipped app's own self-test was re-run on `dist/Vantage.app` after the rename: project
+directory resolves inside the bundle, server up with 128 tools, **7/9** — the two failures remain
+the macOS microphone and speech grants, which are the user's to give.
+
+What is still not verified: a real handset. Everything up to the phone's browser is measured; the
+last hop is the user's.
+
 ## 7. Carried forward
 
 * **37-A** the project is now half-renamed by design: product "Vantage", code `jarvis`. A reader

@@ -198,8 +198,8 @@
   },
   {
    "phase": "37 vantage",
-   "collected": 1717,
-   "passed": 1717,
+   "collected": 1718,
+   "passed": 1718,
    "failed": 0,
    "note": "renamed where a person reads it; the wiring names counted identical before and after"
   }

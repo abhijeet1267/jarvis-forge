@@ -434,3 +434,81 @@ def test_the_names_that_carry_state_kept_their_spelling(rel, needles):
     text = (root / rel).read_text(encoding="utf-8")
     for needle in needles:
         assert needle in text, f"{rel} lost {needle!r} -- that is wiring, not branding"
+
+
+# ---------------------------------------------------------------------------
+# 7. the window's checkbox, actually clicked
+# ---------------------------------------------------------------------------
+
+
+def _walk(widget, want, found):
+    try:
+        if widget.winfo_class() == want:
+            found.append(widget)
+    except Exception:
+        return
+    for child in widget.winfo_children():
+        _walk(child, want, found)
+
+
+def test_ticking_the_wifi_box_writes_the_switch_and_rebinds(tmp_path, monkeypatch):
+    """The one link in "connect my phone" that no test had reached.
+
+    The self-test counts four *probe* widgets, so it never proved the real panel had a
+    checkbox, that clicking it writes the switch, or that it rebinds the server. Here the
+    shipped `build_ui` is constructed, the checkbox is found by class and invoked.
+    """
+    launcher = _launcher_module()
+    tk = pytest.importorskip("tkinter")
+    messagebox = pytest.importorskip("tkinter.messagebox")
+
+    home = tmp_path / "data"
+    home.mkdir()
+    monkeypatch.setattr(launcher, "data_home", lambda: home)
+    monkeypatch.setattr(tk.Tk, "mainloop", lambda self: None)   # build it, never block on it
+    shown = []
+    monkeypatch.setattr(messagebox, "showinfo", lambda t, m: shown.append((t, m)))
+    monkeypatch.setattr(messagebox, "showerror", lambda t, m: shown.append((t, m)))
+
+    health = {"tools": 128, "agents": ["laptop"], "pending_confirmations": 0,
+              "llm_enabled": False}
+    monkeypatch.setattr(launcher, "api_get",
+                        lambda host, port, path: health if path.startswith("/health")
+                        else ([] if path.startswith(("/devices", "/audit")) else {}))
+    monkeypatch.setattr(launcher, "api_post", lambda *a, **k: {})
+    monkeypatch.setattr(launcher, "port_in_use", lambda *a: True)
+
+    restarted = []
+
+    class Stub:
+        host, port, tail, project_dir_error, attached, process = \
+            "127.0.0.1", 8765, [], "", False, None
+        bind_host = "127.0.0.1"
+
+        def restart(self_inner):
+            restarted.append(self_inner.bind_host)
+
+        def wait_ready(self_inner, timeout=45.0):
+            return True
+
+        def stop(self_inner): pass
+
+        def running(self_inner):
+            return True
+
+    controller = Stub()
+    launcher.build_ui(controller, lambda: None)
+
+    boxes = []
+    _walk(tk._default_root, "Checkbutton", boxes)
+    assert len(boxes) == 1, f"expected one wifi checkbox, found {len(boxes)}"
+    assert "wifi" in boxes[0].cget("text").lower()
+
+    boxes[0].invoke()                                  # the user's click
+    assert (home / "lan_mode").read_text().strip() == "true", "the click wrote nothing"
+    assert restarted == ["0.0.0.0"], f"it did not rebind: {restarted}"
+    assert shown and "http" in shown[0][1], "the user was never told what to type"
+
+    boxes[0].invoke()                                  # and clicking again turns it off
+    assert (home / "lan_mode").read_text().strip() == "false"
+    assert restarted == ["0.0.0.0", "127.0.0.1"], restarted
