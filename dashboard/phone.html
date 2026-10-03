@@ -289,14 +289,18 @@ async function loadQuick() {
 }
 
 // -- microphone -------------------------------------------------------------
-// Two separate gates, and the page can only know one of them:
-//   1. the laptop must have a speech backend that actually hears (can_listen), and
-//   2. this browser must hand the page a microphone, which it refuses on an insecure
-//      origin -- so over plain http on a LAN address, getUserMedia is simply absent.
-// Both are reported, because "disabled" with no reason reads as broken rather than
-// as honest.
+// Three things can stop a spoken word, and they need three different sentences:
+//   1. the laptop has never been asked (`untested`) -- so the attempt is the point,
+//   2. the laptop was asked and macOS said no (`refused`), and
+//   3. this browser will not hand the page a microphone, which it refuses on any
+//      insecure origin -- so over plain http on a LAN address `getUserMedia` is absent.
+// `can_listen` means *proven here*, which a fresh install is not; gating the button on
+// that alone would make the first transcription impossible, because the first attempt is
+// the only thing that ever produces the proof. `may_try` is the field a client offers.
 const mic = document.getElementById("mic");
-let canListen = false;
+let earState = "untested";
+let mayTry = false;
+let earReason = "checking the laptop's microphone…";
 let recorder = null;
 let chunks = [];
 let recording = false;
@@ -307,9 +311,15 @@ function browserHasMic() {
 }
 
 function paintMic() {
-  mic.disabled = !(canListen && browserHasMic());
-  if (!mic.disabled) { micNote("tap to speak, tap again to stop", "", ""); return; }
-  if (!canListen) { micNote("the laptop has no working microphone.", earReason, "warn"); return; }
+  mic.disabled = !(mayTry && browserHasMic());
+  if (!mic.disabled) {
+    micNote(earState === "proven" ? "tap to speak, tap again to stop"
+                                  : "never tried on this laptop — tap and it will find out",
+            "", "");
+    return;
+  }
+  if (earState === "refused") { micNote("the laptop has no working microphone.", earReason, "warn"); return; }
+  if (earState === "untested") { micNote("this laptop has never been asked to listen.", earReason, "warn"); return; }
   micNote("the laptop can hear, but this browser will not hand the page a microphone on "
     + "an insecure address — open it over https or from the laptop itself", "", "warn");
 }
@@ -331,18 +341,18 @@ function micNote(short, advice, cls) {
   note.appendChild(more);
 }
 
-let earReason = "checking the laptop's microphone…";
-
 async function loadEars() {
   let stt = null;
   try { stt = (await call("/voice/status")).stt; } catch (err) { stt = null; }
   if (!stt) {
-    canListen = false;
+    earState = "untested";
+    mayTry = false;
     earReason = "cannot read the laptop's voice state — pair or reload this page";
     paintMic();
     return;
   }
-  canListen = !!stt.can_listen;
+  earState = stt.state || (stt.can_listen ? "proven" : "untested");
+  mayTry = typeof stt.may_try === "boolean" ? stt.may_try : !!stt.can_listen;
   earReason = stt.advice || "this laptop has no working microphone backend";
   paintMic();
 }
@@ -394,6 +404,9 @@ async function transcribe() {
   }
   set("micline", "heard: " + data.text, "ok");
   document.getElementById("cmd").value = data.text;
+  // Whatever the laptop just learned about its own ears, this page should too: an
+  // attempt is what turns `untested` into `proven` or `refused`.
+  loadEars();
   send();
 }
 

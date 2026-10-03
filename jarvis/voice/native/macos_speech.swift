@@ -43,16 +43,31 @@ guard FileManager.default.fileExists(atPath: audioPath) else {
     fail("audio file not found: \(audioPath)")
 }
 
-// --- Authorisation ---------------------------------------------------------
-let authSemaphore = DispatchSemaphore(value: 0)
-var authStatus: SFSpeechRecognizerAuthorizationStatus = .notDetermined
-
-SFSpeechRecognizer.requestAuthorization { status in
-    authStatus = status
-    authSemaphore.signal()
+// --- Waiting without deadlocking ourselves ---------------------------------
+// Both callbacks below arrive on the main queue. A semaphore wait on the main
+// thread therefore blocks the only thread that can release it, so every call
+// ran to its deadline and reported "timed out" — which reads like an Apple
+// refusal and is not one. Pumping the run loop is the difference between a
+// machine that cannot hear and one that was never given the chance to answer.
+func pumpUntil(_ deadline: Date, pending: () -> Bool) {
+    while pending() && Date() < deadline {
+        RunLoop.current.run(mode: .default, before: Date().addingTimeInterval(0.05))
+    }
 }
 
-if authSemaphore.wait(timeout: .now() + 20) == .timedOut {
+// --- Authorisation ---------------------------------------------------------
+var authStatus: SFSpeechRecognizerAuthorizationStatus = .notDetermined
+var authAnswered = false
+
+SFSpeechRecognizer.requestAuthorization { status in
+    DispatchQueue.main.async {
+        authStatus = status
+        authAnswered = true
+    }
+}
+
+pumpUntil(Date().addingTimeInterval(20)) { !authAnswered }
+if !authAnswered {
     fail("speech authorisation request timed out")
 }
 
@@ -82,30 +97,35 @@ guard recognizer.isAvailable else {
 let request = SFSpeechURLRecognitionRequest(url: URL(fileURLWithPath: audioPath))
 request.shouldReportPartialResults = false
 
-let semaphore = DispatchSemaphore(value: 0)
 var transcript = ""
 var confidence: Float = 0
 var failureReason: String?
+var taskAnswered = false
+var keepAlive: SFSpeechRecognitionTask?
 
-recognizer.recognitionTask(with: request) { result, error in
-    if let error = error {
-        failureReason = error.localizedDescription
-        semaphore.signal()
-        return
-    }
-    guard let result = result, result.isFinal else { return }
+keepAlive = recognizer.recognitionTask(with: request) { result, error in
+    DispatchQueue.main.async {
+        if let error = error {
+            failureReason = error.localizedDescription
+            taskAnswered = true
+            return
+        }
+        guard let result = result, result.isFinal else { return }
 
-    transcript = result.bestTranscription.formattedString
-    let segments = result.bestTranscription.segments
-    if !segments.isEmpty {
-        confidence = segments.map { $0.confidence }.reduce(0, +) / Float(segments.count)
+        transcript = result.bestTranscription.formattedString
+        let segments = result.bestTranscription.segments
+        if !segments.isEmpty {
+            confidence = segments.map { $0.confidence }.reduce(0, +) / Float(segments.count)
+        }
+        taskAnswered = true
     }
-    semaphore.signal()
 }
 
-if semaphore.wait(timeout: .now() + 60) == .timedOut {
+pumpUntil(Date().addingTimeInterval(60)) { !taskAnswered }
+if !taskAnswered {
     fail("transcription timed out")
 }
+keepAlive?.cancel()
 
 if let reason = failureReason {
     fail("transcription failed: \(reason)")

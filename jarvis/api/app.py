@@ -687,7 +687,11 @@ async def voice_transcribe(file: UploadFile = File(...), _: None = Protected) ->
         "confidence": result.confidence,
         "error": result.error,
         "duration_ms": result.duration_ms,
-        "can_listen": bool(getattr(session.stt, "real", True)),
+        # Read back from the backend's own state, after the attempt. This used to be
+        # `bool(stt.real)` -- a statement about which class answered, which is why a
+        # response carrying "transcription timed out" also carried `can_listen: true`.
+        "state": getattr(session.stt, "state", "untested"),
+        "can_listen": getattr(session.stt, "state", "untested") == "proven",
     }
 
 

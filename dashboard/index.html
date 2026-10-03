@@ -878,7 +878,14 @@ async function loadVoice() {
   const audio = v.audio || {};
 
   const ttsBackend = Object.entries(tts.available || {}).find(([, ok]) => ok)?.[0] || "none";
-  const sttBackend = Object.entries(stt.available || {}).find(([, ok]) => ok)?.[0] || "none";
+  // "available" means *may be tried*, which is not the same question as "has ever
+  // worked here" -- picking the first true out of that list used to print `transcript`,
+  // a passthrough that cannot hear, as though it were the microphone.
+  const sttStates = stt.states || {};
+  const sttProven = Object.entries(sttStates).find(([, s]) => s === "proven")?.[0];
+  const sttTryable = Object.entries(sttStates).find(([, s]) => s !== "refused")?.[0];
+  const sttBackend = sttProven || sttTryable || "none";
+  const sttWord = `${sttBackend} · ${stt.state || "untested"}`;
 
   const line = (label, value, ok) =>
     `<div class="row"><span>${label}</span><span class="${ok ? "ok" : "off"}">${value}</span></div>`;
@@ -911,7 +918,7 @@ async function loadVoice() {
   document.getElementById("voice").innerHTML =
     line("Wake word", (v.wake?.wake_words || []).join(" / "), true) +
     line("TTS", ttsBackend, ttsBackend !== "none") +
-    line("STT", sttBackend, sttBackend !== "none") +
+    line("STT", sttWord, !!sttProven) +
     micRow(audio) +
     line("Voice", v.enabled ? "enabled" : "disabled", v.enabled) +
     `<div class="row"><span class="muted">Try it</span>

@@ -9,7 +9,7 @@ world afterwards**, and written to a tamper-evident audit chain. It runs with no
 key, no network and no vendor — an LLM is optional and off by default.
 
 What this repository is mostly about is not features. It is about the difference
-between *"the handler returned"* and *"the thing happened"* — and the forty-six phases of
+between *"the handler returned"* and *"the thing happened"* — and the forty-seven phases of
 measurement spent closing that gap, in the ledger and on the screen.
 
 > **On the name.** The product is **Vantage** — in the README, both web clients, the install
@@ -25,7 +25,7 @@ measurement spent closing that gap, in the ledger and on the screen.
 > too: they are dated evidence of what was true then.
 
 [![ci](https://img.shields.io/github/actions/workflow/status/abhijeet1267/jarvis-forge/ci.yml?label=tests%20%C2%B7%20macos)](https://github.com/abhijeet1267/jarvis-forge/actions/workflows/ci.yml)
-[![suite](https://img.shields.io/badge/tests-1884%20passed%20%C2%B7%200%20failed-16a34a)](tests)
+[![suite](https://img.shields.io/badge/tests-1896%20passed%20%C2%B7%200%20failed-16a34a)](tests)
 [![tools](https://img.shields.io/badge/tools-129%20across%2015%20agents-2f6df6)](jarvis/tools)
 [![offline](https://img.shields.io/badge/LLM-off%20by%20default%20%C2%B7%20runs%20fully%20offline-0f172a)](jarvis/config.py)
 [![python](https://img.shields.io/badge/python-3.11%20%C2%B7%203.12%20(CI)-6b7688)](.github/workflows/ci.yml)
@@ -39,7 +39,7 @@ measurement spent closing that gap, in the ledger and on the screen.
 | **Ledger** | `action_logs` hash-chained + `audit.jsonl` append-only, `verify_chain()` |
 | **Edge** | token file `0600` · constant-time compare · same-origin · Host allowlist · 600/min |
 | **Surface** | web dashboard · phone client page over the LAN · voice (macOS `say`/STT) · watch queue · device pairing |
-| **Size** | 62.5k lines of versioned Python/HTML/JS · 38.6k source · 23.9k tests · 73 test modules |
+| **Size** | 63.1k lines of versioned Python/HTML/JS/Swift · 38.9k source · 24.2k tests · 74 test modules |
 
 ---
 
@@ -51,8 +51,8 @@ and the diagrams read their counts from the live registry.
 
 | Claim | Value | Reproduce |
 |---|---|---|
-| Test suite | **1884 passed · 0 failed · 0 xfailed · 0 skipped** (1884 collected; the network-gated arXiv test answered in this run — when it does skip, `-rs` prints its reason and the row says so rather than smoothing it over) | `python -m pytest -q -rs` |
-| Suite growth, Phase 9 → 46 | 875 passing / **126 failing** → 1884 passing / 0 failing / **0 xfailed** at the Phase 46 close | `cat benchmarks/suite_history.json` |
+| Test suite | **1896 passed · 0 failed · 0 xfailed · 0 skipped** (1896 collected; the network-gated arXiv test answered in this run — when it does skip, `-rs` prints its reason and the row says so rather than smoothing it over) | `python -m pytest -q -rs` |
+| Suite growth, Phase 9 → 47 | 875 passing / **126 failing** → 1896 passing / 0 failing / **0 xfailed** at the Phase 47 close | `cat benchmarks/suite_history.json` |
 | Tools registered | **134** | `python -c "from jarvis.core.orchestrator import JarvisCore as J; print(len(J().tools.names()))"` |
 | Confirmation-gated | **28** of 134 | `python assets/build_diagrams.py` (prints the live counts) |
 | Risk tiers | read 71 · low 35 · external 13 · high 12 · physical 3 | same |
@@ -80,9 +80,9 @@ and the diagrams read their counts from the live registry.
 | Watch delivery | **UNPAIRED** | prompts queue locally; a simulated companion *delivers*, never *answers* |
 | Phone | **NO DEVICE PAIRED** | refuses the question instead of reporting a battery level |
 | Email / calendar accounts | **LOCAL STORES ONLY** | `local_maildir` / `local_calendar`; no credentials configured |
-| Voice capture | **ENVIRONMENT-BLOCKED** | macOS denied the microphone to an unbundled process |
+| Voice capture | **WORKING — on-device** | Apple's Speech framework transcribed a real clip in 637 ms at 0.94 confidence; the twelve-phase "macOS denied it" was a main-thread deadlock in our own helper plus an x86_64 build on an arm64 Mac (Phase 47) |
 
-| Live browser-driven UI test | **NOT PERFORMED** | browser interaction is blocked by the agent runtime's policy; the page's JS is instead executed from the shipped file by Node |
+| Live browser-driven UI test | **PERFORMED** | Playwright drives both clients at 375 px and 1440 px over loopback and the LAN address: taps, dialogs, console, overflow; the shipped page JS is additionally parsed by `node --check` in the suite |
 
 ---
 
@@ -93,7 +93,7 @@ and the diagrams read their counts from the live registry.
 - [Benchmarks](#benchmarks)
 - [Hardware truth](#hardware-truth)
 - [What the system says when something fails](#what-the-system-says-when-something-fails)
-- [The forty-six phases](#the-forty-six-phases)
+- [The forty-seven phases](#the-forty-seven-phases)
 - [The plan's safety matrix, run](#the-plans-safety-matrix-run)
 - [Smooth and fast](#smooth-and-fast)
 - [Security model](#security-model)
@@ -131,7 +131,7 @@ and not a quiet success.
 
 ### Suite growth, Phase 9 → Phase 45
 
-<img src="assets/chart-suite-growth.svg" alt="Test suite growth from 875 passing with 126 failing, to 1884 passing with none failing at the close of Phase 46" width="100%"/>
+<img src="assets/chart-suite-growth.svg" alt="Test suite growth from 875 passing with 126 failing, to 1896 passing with none failing at the close of Phase 47" width="100%"/>
 
 Phase 9 inherited **126 failing tests**. The cause was a single import line in
 `jarvis/tools/base.py` that left `Verification` undefined, so every tool result raised
@@ -187,7 +187,7 @@ moved, and the ledger now says exactly that. A simulated *car read* is still a s
 read — reading a labelled simulator is a real read — and that distinction is pinned by a
 test so it stays a decision rather than an accident.
 
-## The forty-six phases
+## The forty-seven phases
 
 Each closed with a report in [`audit/`](audit), and each report's claims carry the
 command that produced them.
@@ -217,7 +217,8 @@ command that produced them.
 | **29 — A route fills its own action** | flowcharts and architecture diagrams had been dead since they were written: the route sent a title to a tool that also needs `steps` / `components`, so the gate answered the user with *"missing required parameter 'steps'"* -- even when the sentence named them. What a sentence states is now used; what it omits is asked for |
 | **30 — A capability you have is a capability you can ask for** | 46 of 127 tools answered their own name with "I understood the words but not the goal" -- twice the gap the open item had recorded, because that item had been measured by grepping the planner instead of asking the router. A registry-derived route now reaches a tool whose name words a sentence contains, validates the action with the registry before emitting it, and asks in the tool's own description when an argument is missing; three routes that *advertised* capabilities yield to a sentence naming one; and the delete-capable tool that was tiered LOW-and-unconfirmed for as long as it was unreachable was retiered in the same commit |
 | **31 — The device you named is the device that changes** | "turn on the heater" resolved to **Study AC** (the gateway filed heating under cooling) and `control_home_device` was LOW with no confirmation, so the request was approved for execution and only an offline gateway stopped a device changing. The synonym, the resolver and the tier were tightened in one commit, the permission engine grew a device guard beside its path guard, and the plan's §45 matrix has held **6 of 6** since |
-| **46 — Buttons, not typing** | Asked for "UI better with buttons", both clients were screenshotted first: the phone had **three controls** and hard-coded colours while the panel had moved every colour into tokens, and 134 capabilities were reachable only by inventing a sentence. The buttons type their sentence and run the same `/command` path as typing does -- permission, confirmation, verification and the audit row stay behind every tap, and a second path would be a second set of gates to keep in sync. Two guards turned out to matter more than the styling. **A button's tool existing is not enough:** the first draft said `ask about {subject}`, which parses to `unknown`, so every shipped sentence is now parsed by the real planner in the suite, and the Ask button became `explain {subject}` after measuring which form survives a person's wording. **And the revoke endpoint had no host check** -- while probing for this phase I ran `POST /devices/laptop_main/revoke` against the running app and it answered 200, leaving the laptop's own record `revoked` with no client able to undo it. The guard sits under the route (`HostDeviceError`, refused before any write, 409 plus a `denied` ledger row) because `remove_phone` calls the same layer and escapes only by accident; `/devices` gained `is_host` so the page never guesses which machine it is standing on. The browser then rejected the design twice: the server's 530-character ear advice rendered as **101px of text wall** under a disabled mic (now one line plus a disclosure), and opening it pushed **627px of page into a 375px viewport** on one unbreakable file path. Measured after: 1884 passing, 0 console errors on both pages at 375 and 1440, `scrollWidth` 375 = `clientWidth` 375, and a Storage tap on the dashboard answering *31.3 GiB free of 228.3 GiB on /* with `VERIFIED`. |
+| **47 — The microphone was never blocked by Apple** | "macOS denied the microphone" had been repeated since Phase 43, in the README, in the marker file, in the error text and in the advice -- and it had never been tested against the thing it blamed, because the marker in the data home was dated Sep 25, before the desktop bundle existed. Sending a real clip to a properly launched Vantage found two defects of ours wearing a refusal's clothes: the Swift helper **blocked the main thread on a semaphore waiting for callbacks Apple delivers on the main queue**, so every call ran to its deadline and a timeout reads exactly like a denial; and the helper was being built **x86_64 on an arm64 Mac** (4m08s) by inheritance rather than choice, where the native build takes 2.2 s. Proving the second part required building the helper inside its own signed bundle, which still aborted -- so the sentence "run from a bundled host" was retired as unactionable advice, replaced by the variable that actually decides it: whether macOS will attribute the process to an app with a usage string, which is about *how it was launched*. Availability became three-state (`proven` / `refused` / `untested`), because a fresh home was answering `can_listen: true` before anything had ever been tried, and the same response body carried `can_listen: true` next to `"transcription timed out"`. The client gates on `may_try` rather than the proof, since a button that only works once it has already worked can never be pressed for the first time. Measured live on the delivered app: **"What is my battery", 0.94 confidence, 637 ms**, wake word stripped, reply spoken, phone mic enabled. |
+| **46 — Buttons, not typing** | Asked for "UI better with buttons", both clients were screenshotted first: the phone had **three controls** and hard-coded colours while the panel had moved every colour into tokens, and 134 capabilities were reachable only by inventing a sentence. The buttons type their sentence and run the same `/command` path as typing does -- permission, confirmation, verification and the audit row stay behind every tap, and a second path would be a second set of gates to keep in sync. Two guards turned out to matter more than the styling. **A button's tool existing is not enough:** the first draft of the Ask button said `ask about {subject}`, which parses to `unknown`, so every shipped sentence is now parsed by the real planner in the suite, and the Ask button became `explain {subject}` after measuring which form survives a person's wording. **And the revoke endpoint had no host check** -- while probing for this phase I ran `POST /devices/laptop_main/revoke` against the running app and it answered 200, leaving the laptop's own record `revoked` with no client able to undo it. The guard sits under the route (`HostDeviceError`, refused before any write, 409 plus a `denied` ledger row) because `remove_phone` calls the same layer and escapes only by accident; `/devices` gained `is_host` so the page never guesses which machine it is standing on. The browser then rejected my own design twice: the server's 530-character ear advice rendered as **101px of text wall** under a disabled mic (now one line plus a disclosure), and opening it pushed **627px of page into a 375px viewport** on one unbreakable file path. Measured after: 1884 passing, 0 console errors on both pages at 375 and 1440, `scrollWidth` 375 = `clientWidth` 375, and a Storage tap on the dashboard answering *31.3 GiB free of 228.3 GiB on /* with `VERIFIED`. |
 | **45a — A key the app can be given without damaging it** | Phase 42 ended with "put your key in an environment variable", which works and is also the worst place available: `Settings` reads `.env` from the current working directory, and for the installed app that directory is `Vantage.app/Contents/Resources/app` -- the one file to edit sits **inside the bundle**, and Phase 40 had already proved what a file added after signing does to the seal. So the key moved next to the data: `~/.jarvis-forge/llm.env`, 0600, outside the bundle. The shell still beats it, a typo in the file cannot stop the product booting, and a file readable by the whole machine is complained about out loud while still being honoured -- with a test that the warning never prints the secret. `/health` gained `llm_source`, because "configured" already hid the difference between a real key, a typo and an empty file. Measured end to end with a deliberately fake key: an unrecognised sentence reached Google's endpoint, was refused, and reported itself unavailable rather than inventing an answer. What is missing for Gemini is now only the key. |
 | **44 — Answers, greetings, and a question that was not a shell command** | Asked to "make it like ChatGPT — what I say they understand", nine natural sentences were run through the router first. Seven returned the fallback they pasted at me. Two were worse: **`what trains run from mumbai to pune` parsed as a request to execute a program called `from`**, and `how do I run a marathon` as one to run `a`, because `\brun\b` matched anywhere in a sentence. The allowlist gate is the only reason that is a routing bug rather than an incident, and a question must never reach an executor: the route is now imperative and anchored, with the real `run ls -la` still routed and the permission verdict proven unchanged. `hello` and `thanks` are answered like greetings instead of parse failures. And `ask_question` gives it actual answers with no model and no key — a Wikipedia summary, the article named in the sentence, READ tier like the paper research that has been fetching all along. Measured live: *what is a train* answered from the real article; *who is apj kalam* 404'd because the article is titled *A. P. J. Abdul Kalam*, which is a textbook feature that fails on real questions, so a miss now searches first and follows the best title — and if the search finds nothing, the reply names the topic and says there is no answer rather than producing one. |
 | **43 — A passthrough is not a microphone** | Asked for voice from the phone, one real recording was sent to the running app before anything was built on top of the speech path. It came back **`ok: true, confidence: 1.0`, with no text**. Nothing on the machine can transcribe — Apple refuses Speech Recognition to a process it has not authorised (a marker had sat in the data home since Sep 25), whisper.cpp is not installed, hosted Whisper has no key — so `get_stt()` had fallen through to `TranscriptSTT`, the class whose entire job is echoing a string a *test* fed it, and that stand-in had agreed to have heard a recording. A mic button built here would have reported silence as success and let anything downstream act on it. So the fix went at the claim rather than the caller: backends now declare whether they are `real`, the passthrough refuses a file it was not fed, the endpoint returns an honest failure that names the three ways to give the machine ears — ordered by cost, with the one that ships audio off the box labelled as that — and `/voice/status` answers `can_listen`, which a client can actually use. The button was **not** built, on purpose: it goes in the moment something can hear. |
@@ -479,7 +480,7 @@ curl -s -H "X-JARVIS-Token: $TOKEN" -H 'Content-Type: application/json' \
      -d '{"text":"what is my battery"}' http://127.0.0.1:8765/command
 
 # Prove it to yourself:
-python -m pytest -q                       # 1884 passed, 0 failed (the research test skips only while arXiv refuses)
+python -m pytest -q                       # 1896 passed, 0 failed (the research test skips only while arXiv refuses)
 python benchmarks/acceptance_run.py       # re-measures the README's numbers
 python assets/build_charts.py && python assets/build_diagrams.py
 ```
@@ -500,9 +501,9 @@ jarvis/
   scheduler/   recurring jobs, runner with per-run re-authorization
   car/ home/ robotics/ watch/ vision/ research/ design/ coding/
   integrations/ IMAP/SMTP and CalDAV providers with local fallbacks
-tests/         73 modules · 1884 collected · includes the shipped page JS, run by Node
+tests/         74 modules · 1896 collected · includes the shipped page JS, run by Node
 dashboard/     index.html control panel + phone.html, the client a phone uses over the LAN
-audit/         48 phase reports + 4 CSV matrices — the evidence behind this README
+audit/         49 phase reports + 4 CSV matrices — the evidence behind this README
 benchmarks/    acceptance_run.py and the JSON the charts are drawn from
 assets/        generated figures + the two generators that draw them
 app/           PyInstaller spec and bundle sources (the launcher and its wifi switch; see the Phase 36 report)
@@ -565,6 +566,24 @@ adding and removing a synonym at run time. 31-B: the confirmation prompt re-deri
 line from the raw parameters while the dashboard rendered the stored preview — two renderings
 of one consent question, and neither naming the device. One string feeds both now: *"Will do:
 set Kitchen light (kitchen.light) to 40%"*.
+- **The microphone was never blocked by Apple** (Phase 47 — closes 43-A, 43-B, 43-D, 42-A,
+  46-A). Reasoned in `audit/PHASE47_THE_MICROPHONE_WAS_NEVER_BLOCKED_REPORT.md`. Voice input
+  works on this machine now: on-device, no key, 637 ms, 0.94 confidence, wake word stripped,
+  reply spoken, and the phone's mic button live. What it left open:
+  **47-A** the app exited cleanly during the first experiment and the cause is not established
+  -- uvicorn's own `Shutting down` line says a deliberate stop, not a crash, and no crash
+  report exists; it happened while a 90 s request and a `swiftc` build were in flight, so an
+  unattributed coincidence is the honest description until it repeats. **47-B** `proven` is a
+  cache written only by success, so revoking the permission in System Settings leaves the state
+  stale in exactly the direction that matters, and deleting the data home resets a working
+  machine to `untested`. **47-C** a cold home still pays a helper build inside the first
+  request (17.5 s, down from 4m08s); shipping the compiled binary or building it at launch
+  removes it. **47-D** a spoken risky command takes two round trips (transcribe → command →
+  confirmation card → approve), which is correct for safety and slower than speaking. **47-E**
+  `whisper_cpp` and `openai_whisper` remain `untested`, so the three-state machine has been
+  earned by one backend only. **47-F** the plan's literal acceptance sentence -- *"Vantage,
+  open VS Code."* -- was not fired; the loop was proven with a read-only utterance because the
+  real one opens an editor on the user's screen.
 - **Buttons, not typing** (Phase 46). Reasoned in `audit/PHASE46_BUTTONS_NOT_TYPING_REPORT.md`.
   What it left open:
   **46-A** `can_listen` reports what backends exist, not whether a spoken word will become text

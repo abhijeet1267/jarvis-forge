@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import platform
 import shutil
 import subprocess
 import time
@@ -61,6 +62,50 @@ class STTBackend(ABC):
 
     def __init__(self, settings: Optional[Settings] = None) -> None:
         self.settings = settings or get_settings()
+
+    # -- what has actually been shown about this backend -------------------
+    #
+    # `available()` answers "may this be tried". `state` answers "what did trying it
+    # last reveal". They are different questions, and merging them is what let a
+    # machine that had never transcribed anything report `can_listen: true`.
+    @property
+    def _proven_marker(self) -> Path:
+        """Written only by a transcription that returned text."""
+        return self.settings.voice_path / "native" / f".proven_{self.name}"
+
+    def _refused_here(self) -> bool:
+        return False
+
+    def _mark_proven(self) -> None:
+        try:
+            self._proven_marker.parent.mkdir(parents=True, exist_ok=True)
+            self._proven_marker.write_text(time.strftime("%Y-%m-%dT%H:%M:%S%z\n"))
+        except OSError:  # pragma: no cover - a home we cannot write is reported as untested
+            pass
+
+    @property
+    def state(self) -> str:
+        """``proven`` | ``refused`` | ``untested``."""
+        if self._proven_marker.exists():
+            return "proven"
+        if self._refused_here():
+            return "refused"
+        return "untested"
+
+    @property
+    def can_listen(self) -> bool:
+        """True once this backend has transcribed something here. Not a promise before."""
+        return self.state == "proven"
+
+    @property
+    def may_try(self) -> bool:
+        """Whether a client should still offer the microphone.
+
+        ``untested`` must stay offered: the first attempt is the only thing that can
+        ever produce proof. ``refused`` is not, because the reason is a permission
+        this machine has already said no to.
+        """
+        return self.real and self.state != "refused"
 
     @abstractmethod
     def available(self) -> bool:
@@ -150,6 +195,9 @@ class MacOSSpeechSTT(STTBackend):
     def runtime_note(self) -> Optional[str]:
         return self._runtime_note
 
+    def _refused_here(self) -> bool:
+        return self._blocked_marker.exists()
+
     def _ensure_binary(self) -> Optional[Path]:
         if self._binary and self._binary.exists():
             return self._binary
@@ -169,6 +217,10 @@ class MacOSSpeechSTT(STTBackend):
             proc = subprocess.run(
                 [
                     "swiftc", "-O",
+                    # Pin the machine this runs on. Measured 2026-10-03: inherited from a
+                    # translated parent, the helper came out x86_64 on an arm64 Mac and
+                    # took 4m08s to build; the same source built natively took 2.2s.
+                    "-target", f"{platform.machine().lower()}-apple-macosx11.0",
                     "-framework", "Speech",
                     "-framework", "Foundation",
                     "-o", str(binary),
@@ -212,14 +264,16 @@ class MacOSSpeechSTT(STTBackend):
 
         # SIGABRT (134) means TCC aborted the process before it could answer.
         if proc.returncode in (134, -6):
-            self._runtime_note = "blocked by TCC (not a signed app bundle)"
+            self._runtime_note = "blocked by TCC (this process was not attributable to Vantage)"
             # Remember the block so auto-selection stops picking this backend.
             try:
                 self._blocked_marker.parent.mkdir(parents=True, exist_ok=True)
                 self._blocked_marker.write_text(
-                    "Apple's Speech framework aborted this process because it is not "
-                    "a signed app bundle.\nDelete this file after running JARVIS from "
-                    "a bundled host with Speech Recognition permission granted.\n"
+                    "Apple's Speech framework aborted the helper because macOS would not"
+                    " attribute it to a signed application with a speech usage string."
+                    " This happens when Vantage was started from a terminal rather than"
+                    " opened as an app. Delete this file after launching Vantage with"
+                    " `open Vantage.app` (or by double-clicking it).\n"
                 )
             except OSError:
                 pass
@@ -228,12 +282,11 @@ class MacOSSpeechSTT(STTBackend):
                 False,
                 self.name,
                 error=(
-                    "macOS Speech blocked this process. Apple only grants Speech "
-                    "Recognition to a signed application bundle with the "
-                    "NSSpeechRecognitionUsageDescription entitlement, and aborts "
-                    "bare command-line binaries. Run JARVIS from a bundled host, or "
-                    "configure a different STT backend "
-                    "(JARVIS_STT_BACKEND=whisper_cpp or openai_whisper)."
+                    "macOS Speech aborted the helper: this process was not attributable"
+                    " to the Vantage app, which happens when it is started from a"
+                    " terminal instead of opened as an application. Open Vantage.app and"
+                    f" try again, or configure another backend"
+                    " (JARVIS_STT_BACKEND=whisper_cpp or openai_whisper)."
                 ),
                 duration_ms=elapsed,
             )
@@ -257,9 +310,13 @@ class MacOSSpeechSTT(STTBackend):
             )
 
         self._runtime_note = None
+        text = payload.get("text", "")
+        if text.strip():
+            # The proof is a transcript. A silent "success" says nothing about ears.
+            self._mark_proven()
         return STTResult(
             True, self.name,
-            text=payload.get("text", ""),
+            text=text,
             confidence=float(payload.get("confidence", 0.0)),
             duration_ms=elapsed,
         )
@@ -391,9 +448,11 @@ def ears_advice() -> str:
     """The sentence a caller shows when a transcription cannot happen."""
     marker = MacOSSpeechSTT()._blocked_marker
     return (
-        "No microphone backend is working here. Three ways to fix it, cheapest first: "
-        f"(1) System Settings → Privacy & Security → Speech Recognition, allow Vantage, "
-        f"then delete {marker} so the app retries Apple's on-device transcription; "
+        "No microphone backend has transcribed anything here yet. Three ways, cheapest "
+        "first: (1) run Vantage as the app it is — double-click it, or `open Vantage.app` "
+        "— because a copy started from a terminal is not the process macOS will grant "
+        "speech to; then allow Speech Recognition when asked, and if it was refused "
+        f"before, delete {marker} to retry Apple's on-device transcription; "
         "(2) install whisper.cpp (`brew install whisper-cpp`) for offline transcription "
         "with no permission dance; (3) set a hosted key with JARVIS_LLM_API_KEY to "
         "transcribe over the network, which sends the audio off this machine."
@@ -401,33 +460,49 @@ def ears_advice() -> str:
 
 
 def describe_stt() -> dict:
-    """Report STT availability (used by /voice/status)."""
+    """Report what is *known* about each backend, not what is configured."""
     settings = get_settings()
-    native = MacOSSpeechSTT(settings)
-    blocked = native._blocked_marker.exists()
-
+    backends = {
+        "macos_speech": MacOSSpeechSTT(settings),
+        "whisper_cpp": WhisperCppSTT(settings),
+        "openai_whisper": OpenAIWhisperSTT(settings),
+    }
+    states = {name: backend.state for name, backend in backends.items()}
+    available = {name: backend.available() for name, backend in backends.items()}
     notes = []
-    if blocked:
+    if states["macos_speech"] == "refused":
         notes.append(
-            "macos_speech is marked blocked: Apple's Speech framework aborts "
-            "non-bundled processes. Delete "
-            f"{native._blocked_marker} after running from a bundled host."
+            "macos_speech was refused by macOS: the helper was aborted before it could "
+            "answer, which is what happens when Vantage runs from a terminal instead of "
+            f"as an app. Delete {backends['macos_speech']._blocked_marker} after opening"
+            " Vantage.app to retry."
         )
 
-    real = {
-        "macos_speech": native.available(),
-        "whisper_cpp": WhisperCppSTT(settings).available(),
-        "openai_whisper": OpenAIWhisperSTT(settings).available(),
-    }
+    proven = [name for name, state in states.items() if state == "proven"]
+    # The aggregate is "refused" only when every candidate said no; one untested backend
+    # left is a machine that has not been asked yet, which is a different sentence.
+    if proven:
+        aggregate = "proven"
+    elif all(state == "refused" for state in states.values()):
+        aggregate = "refused"
+    else:
+        aggregate = "untested"
+
     return {
         "configured_backend": settings.stt_backend,
         "language": settings.stt_language,
-        #: Whether a spoken word can become text at all. `available.transcript` is not
-        #: part of this: the passthrough echoes a test's string, it does not hear.
-        "can_listen": any(real.values()),
-        "available": {**real, "transcript": True},
+        #: Whether a spoken word has become text on this machine. Proven, not promised:
+        #: `available()` means "may be tried", and treating that as ears is what made a
+        #: fresh install report `can_listen: true` before anything had ever been sent.
+        "can_listen": bool(proven),
+        "state": aggregate,
+        #: Whether a client should still offer its microphone. True while a backend is
+        #: untested, because the first attempt is the only thing that can prove one.
+        "may_try": any(b.may_try and b.available() for b in backends.values()),
+        "states": states,
+        "available": {**available, "transcript": True},
         "notes": notes,
         #: The reason a caller with no ears can be told. Was only reachable on a failed
         #: transcription, which left a disabled microphone button with nothing to say.
-        "advice": "" if any(real.values()) else ears_advice(),
+        "advice": "" if proven else ears_advice(),
     }
