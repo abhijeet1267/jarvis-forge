@@ -172,7 +172,10 @@ and a lifetime of ten seconds (04:31:39 → 04:31:49Z). The check-run annotation
 Re-running the workflow produced the same ten-second, zero-step, no-runner pair 314 s later, so
 this is not a queue timeout or a transient capacity refusal — although the second annotation,
 "jobs targeting macOS arm64 runners may experience longer queue times", is also present and is
-not the operative one. **Nothing in this report's numbers is therefore claimed to be
+not the operative one. The push of this addendum (`78c833a`) was refused the same way under
+four minutes later (04:40:30 → 04:40:37Z, `suite (3.11)`, `suite (3.12)`, no runner, no steps),
+which is the useful property of the condition: it is steady, so a red badge here carries no
+information about the code either way. **Nothing in this report's numbers is therefore claimed to be
 runner-verified for this commit.** The distinction matters here more than usual, because CI on
 this project is load-bearing rather than decorative: it is the only place the suite runs on a
 machine with no battery, no ffmpeg and no Spotlight index, and the bundle build step exists to
