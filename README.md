@@ -9,7 +9,7 @@ world afterwards**, and written to a tamper-evident audit chain. It runs with no
 key, no network and no vendor — an LLM is optional and off by default.
 
 What this repository is mostly about is not features. It is about the difference
-between *"the handler returned"* and *"the thing happened"* — and the thirty-eight phases of
+between *"the handler returned"* and *"the thing happened"* — and the thirty-nine phases of
 measurement spent closing that gap, in the ledger and on the screen.
 
 > **On the name.** The product is **Vantage** — in the README, both web clients, the install
@@ -25,21 +25,21 @@ measurement spent closing that gap, in the ledger and on the screen.
 > too: they are dated evidence of what was true then.
 
 [![ci](https://img.shields.io/github/actions/workflow/status/abhijeet1267/jarvis-forge/ci.yml?label=tests%20%C2%B7%20macos)](https://github.com/abhijeet1267/jarvis-forge/actions/workflows/ci.yml)
-[![suite](https://img.shields.io/badge/tests-1724%20passed%20%C2%B7%200%20failed-16a34a)](tests)
-[![tools](https://img.shields.io/badge/tools-128%20across%2015%20agents-2f6df6)](jarvis/tools)
+[![suite](https://img.shields.io/badge/tests-1775%20passed%20%C2%B7%200%20failed-16a34a)](tests)
+[![tools](https://img.shields.io/badge/tools-129%20across%2015%20agents-2f6df6)](jarvis/tools)
 [![offline](https://img.shields.io/badge/LLM-off%20by%20default%20%C2%B7%20runs%20fully%20offline-0f172a)](jarvis/config.py)
 [![python](https://img.shields.io/badge/python-3.11%20%C2%B7%203.12%20(CI)-6b7688)](.github/workflows/ci.yml)
 
 | | |
 |---|---|
 | **Runtime** | Python 3.11+ · FastAPI · SQLite (32 tables) · stdlib-first |
-| **Planning** | `RulePlanner` — 40 deterministic routes, no model required |
-| **Authority** | `PermissionEngine` · 5 risk tiers · 27 confirmation-gated tools |
+| **Planning** | `RulePlanner` — 42 deterministic routes, no model required |
+| **Authority** | `PermissionEngine` · 5 risk tiers · 28 confirmation-gated tools |
 | **Proof** | tri-state `Verification` (success / failed / **unknown**) on every action |
 | **Ledger** | `action_logs` hash-chained + `audit.jsonl` append-only, `verify_chain()` |
 | **Edge** | token file `0600` · constant-time compare · same-origin · Host allowlist · 600/min |
 | **Surface** | web dashboard · phone client page over the LAN · voice (macOS `say`/STT) · watch queue · device pairing |
-| **Size** | ~58k lines · 34.3k source · 20.9k tests · 61 test modules |
+| **Size** | ~60.3k lines of versioned Python/HTML/JS · 38.4k source · 21.8k tests · 64 test modules |
 
 ---
 
@@ -51,11 +51,11 @@ and the diagrams read their counts from the live registry.
 
 | Claim | Value | Reproduce |
 |---|---|---|
-| Test suite | **1724 passed · 0 failed · 0 xfailed · 0 skipped** (1724 collected; the network-gated arXiv test skipped in one run and passed live in the next, which is why its skip is reported rather than smoothed over) | `python -m pytest -q -rs` |
-| Suite growth, Phase 9 → 38 | 875 passing / **126 failing** → 1724 passing / 0 failing / **0 xfailed** at the Phase 38 close | `cat benchmarks/suite_history.json` |
-| Tools registered | **128** | `python -c "from jarvis.core.orchestrator import JarvisCore as J; print(len(J().tools.names()))"` |
-| Confirmation-gated | **27** of 128 | `python assets/build_diagrams.py` (prints the live counts) |
-| Risk tiers | read 69 · low 32 · external 12 · high 12 · physical 3 | same |
+| Test suite | **1775 passed · 0 failed · 0 xfailed · 0 skipped** (1775 collected; the run before this one reported **1 skipped**, the network-gated arXiv test refusing to pass because arXiv timed out, which is why the skip is reported when it happens rather than smoothed over) | `python -m pytest -q -rs` |
+| Suite growth, Phase 9 → 39 | 875 passing / **126 failing** → 1775 passing / 0 failing / **0 xfailed** at the Phase 39 close | `cat benchmarks/suite_history.json` |
+| Tools registered | **129** | `python -c "from jarvis.core.orchestrator import JarvisCore as J; print(len(J().tools.names()))"` |
+| Confirmation-gated | **28** of 129 | `python assets/build_diagrams.py` (prints the live counts) |
+| Risk tiers | read 69 · low 32 · external 13 · high 12 · physical 3 | same |
 | API routes | **108** | `python -c "s=open('jarvis/api/app.py').read(); print(sum(s.count(f'@app.{v}(\"') for v in ('get','post','put','patch','delete')))"` |
 | Acceptance commands measured | 17 of 18, live, over HTTP | `python benchmarks/acceptance_run.py` |
 | Plan's safety matrix (§45) | **6 of 6** hold — the sixth held since Phase 31 | `python benchmarks/safety_run.py` |
@@ -93,7 +93,7 @@ and the diagrams read their counts from the live registry.
 - [Benchmarks](#benchmarks)
 - [Hardware truth](#hardware-truth)
 - [What the system says when something fails](#what-the-system-says-when-something-fails)
-- [The thirty-eight phases](#the-thirty-eight-phases)
+- [The thirty-nine phases](#the-thirty-nine-phases)
 - [The plan's safety matrix, run](#the-plans-safety-matrix-run)
 - [Smooth and fast](#smooth-and-fast)
 - [Security model](#security-model)
@@ -129,9 +129,9 @@ and not a quiet success.
 
 ## Benchmarks
 
-### Suite growth, Phase 9 → Phase 36
+### Suite growth, Phase 9 → Phase 39
 
-<img src="assets/chart-suite-growth.svg" alt="Test suite growth from 875 passing with 126 failing, to 1724 passing with none failing at the close of Phase 38" width="100%"/>
+<img src="assets/chart-suite-growth.svg" alt="Test suite growth from 875 passing with 126 failing, to 1775 passing with none failing at the close of Phase 39" width="100%"/>
 
 Phase 9 inherited **126 failing tests**. The cause was a single import line in
 `jarvis/tools/base.py` that left `Verification` undefined, so every tool result raised
@@ -144,27 +144,28 @@ read auditable as a success.
 
 | Command | State the user sees | Audit token | ms |
 |---|---|---|---|
-| show me my laptop battery | VERIFIED | success | 14 |
+| show me my laptop battery | VERIFIED | success | 18 |
 | plan my day | VERIFIED | success | 5 |
-| remember that this is my AMR project | VERIFIED | success | 5 |
+| remember that this is my AMR project | VERIFIED | success | 4 |
 | what did I work on yesterday | VERIFIED | success | 4 |
-| check my car fuel | **UNAVAILABLE** | failure | 7 |
+| check my car fuel | **UNAVAILABLE** | failure | 5 |
 | turn on study mode | **UNAVAILABLE** | failure | 5 |
 | transfer this file to my phone | **NOTHING EXECUTED** | no_action | 4 |
-| design this system | **NOT RECOGNISED** | no_action | 4 |
-| schedule two hours for project work tomorrow | **NEEDS DETAIL** | no_action | 3 |
+| design this system | **NOT RECOGNISED** | no_action | 9 |
+| schedule two hours for project work tomorrow | **NEEDS DETAIL** | no_action | 4 |
 | draft an email to my teammate | **FAILED** | failure | 5 |
-| research this idea | VERIFIED (degraded) | success | 41,247 |
-| find my latest project report | VERIFIED | success | 65 |
+| research this idea | VERIFIED | success | 151 |
+| find my latest project report | VERIFIED | success | 413 |
 
-Median command: **5 ms**. The 17 measured commands sum to **41,389 ms** in this run,
-but that single number is two different facts: the 16 commands that touch no network total
-**142 ms** (median 5 ms), and `research this idea` alone is **41,247 ms** -- it waits on arXiv, which answered this week with a read timeout after 41 seconds rather than the 406 that usually comes back in ~1.2 s. The command still
-ended VERIFIED-degraded, naming the refusal instead of inventing a paper, which is 15-F; what
-this run adds is **29-B**, the measurement that no bounded read timeout exists on that path.
-`find my latest project report` is 65 ms here because `$HOME` was sandboxed to a scratch tree, so the walk had nothing
-to descend -- the search root is inside the row's recorded reply, so a sandbox run and a
-real-home run (346-1,217 ms across five runs) stay tellable apart afterwards.
+Median command: **5 ms**; the 17 measured commands sum to **647 ms** in this run. That one
+number still moves with the network: the 16 commands that touch nothing total **496 ms**
+(median 5 ms), and `research this idea` alone is **151 ms** here because arXiv answered. In
+the run this table carried before, the same row was **41,247 ms** and ended
+*VERIFIED (degraded)* — it named the refusal instead of inventing a paper, which is 15-F, and
+the wait itself was 29-B, since bounded by `net.http_read` and by `SENTENCE_BUDGET`.
+`find my latest project report` is 413 ms here because the search root is the real `$HOME`,
+which has something to descend; an earlier row of 65 ms was measured with `$HOME` sandboxed to
+an empty scratch tree, so the two are only comparable once you know which one you are reading.
 
 Note *"what did I work on yesterday"* reading **VERIFIED** with an empty result: since
 Phase 20 it answers about the *day asked about* — `Nothing was recorded in memory on
@@ -186,7 +187,7 @@ moved, and the ledger now says exactly that. A simulated *car read* is still a s
 read — reading a labelled simulator is a real read — and that distinction is pinned by a
 test so it stays a decision rather than an accident.
 
-## The thirty-eight phases
+## The thirty-nine phases
 
 Each closed with a report in [`audit/`](audit), and each report's claims carry the
 command that produced them.
@@ -216,6 +217,7 @@ command that produced them.
 | **29 — A route fills its own action** | flowcharts and architecture diagrams had been dead since they were written: the route sent a title to a tool that also needs `steps` / `components`, so the gate answered the user with *"missing required parameter 'steps'"* -- even when the sentence named them. What a sentence states is now used; what it omits is asked for |
 | **30 — A capability you have is a capability you can ask for** | 46 of 127 tools answered their own name with "I understood the words but not the goal" -- twice the gap the open item had recorded, because that item had been measured by grepping the planner instead of asking the router. A registry-derived route now reaches a tool whose name words a sentence contains, validates the action with the registry before emitting it, and asks in the tool's own description when an argument is missing; three routes that *advertised* capabilities yield to a sentence naming one; and the delete-capable tool that was tiered LOW-and-unconfirmed for as long as it was unreachable was retiered in the same commit |
 | **31 — The device you named is the device that changes** | "turn on the heater" resolved to **Study AC** (the gateway filed heating under cooling) and `control_home_device` was LOW with no confirmation, so the request was approved for execution and only an offline gateway stopped a device changing. The synonym, the resolver and the tier were tightened in one commit, the permission engine grew a device guard beside its path guard, and the plan's §45 matrix has held **6 of 6** since |
+| **39 — The folder you named, the agent you command, and the page between** | Three complaints, three measurements, and one of them was not the code. *"It opens VS Code but not the folder"*: the planner had thrown the path away, `open_app` took no `path` parameter, and a second rule answered *"open my project in VS Code"* with a project summary — so nothing downstream could have opened anything; and after both were fixed the tool still waited 20 s and returned "timed out" while the editor sat open, because **launching a GUI and capturing its stdout are the same bug in different clothes** — the real bundled CLI keeps the inherited pipe open for as long as the editor lives, so the detached spawn got its own `DEVNULL` and the poll went to VS Code's own record on disk rather than to a claim. *"Not give cmds in claude code"*: no tool existed; `run_coding_agent` now shells to the real CLI with `-p --output-format json --add-dir <workspace>`, is EXTERNAL and confirmation-gated, and the consent line names the prompt and the folder leaf rather than the raw dict; live, it asked Claude Code to write a marker into a workspace and the file was on disk afterwards, with the answer read back from the CLI's own JSON (`$0.14033`, one turn, `Verification.SUCCESS`), and the same sentence from the LAN side held for confirmation instead of running. *"Make its UI better"*: the dashboard had **zero** `:hover`, `:focus`, `@media`, `prefers-color-scheme`, `prefers-reduced-motion` or `aria-` rules — the whole dark theme was one unapplied variable block — and the honest fix was to measure it in a browser at 375 and 1440 in both schemes, which is also where the fix for the grid was found: not by reading my own diff, but by failing twice on it (a duplicated function declaration that only Node could see, and a measurement taken from the app's *staged* copy instead of the file I had just edited). |
 | **38 — Connect by scanning** | "The URL is not working." Four measurements and no code was among them: nothing was listening on 8765, no server process existed, the laptop's address was still exactly what had been given, and the firewall was off -- the URL had only ever been alive inside my own test runs, and I had killed them. So the fix is not only to start the app: `/health` now answers with the same `reachable_urls()` list that gates the `Host` check, the panel shows the LAN address rather than deriving its own (two derivations drifted once already), and it draws a scan code when the optional encoder is installed and the plain address when it is not. Getting the tests green taught three things: `tk._default_root` is only set for the first interpreter, so a passing-alone/failing-in-sequence pair was the test reading the wrong window; the fixture I added to "fix" that aborted the suite inside Tcl; and `PhotoImage` binds to the wrong interpreter unless given a `master`, with `refresh()`'s blanket `except` hiding the error as "nothing happened". |
 | **37 — Vantage** | The project was renamed, in the places a person reads it. Two patterns did almost all the work, and both required a space between the two words, so no identifier could match by accident; the rest was checked by counting every wiring name before and after and diffing (`493` `JARVIS_*` mentions, `59` token headers, `64` data-directory paths, `244` imports — all identical). The boundary was the interesting part, and it is a claim about consequence, not taste: `com.jarvisforge.app` is the identity macOS granted the microphone and speech permissions to, and `jarvis.device` is the key a handset stores its pairing under, so renaming either would cost the user something real. Two findings came out of doing it: the bundle-drift guard silently turned itself into a *skip* when the `.app` folder name changed under its own path constant — a guard that stops running is worse than one that fails — and a new boundary test failed on first run because it asserted the auth header's literal in the file that *uses* it rather than the one that defines it. |
 | **36 — Two applications** | "Make one for mobile and one for laptop so I can connect and work." Measured: the built `.app` copied *no source* — `project_path.txt` held an absolute path to this checkout, so the Phase 10 defect (an app that exits 1 because its directory moved) was still shipping 26 phases later; nothing in the launcher could set LAN mode, so Phase 35's phone work was unreachable from the app anyone would actually double-click; and the phone page had no manifest, icons or worker. Now the bundle stages its own code and prefers it, `host` (the link shown) is separated from `bind_host` (the socket), the panel has an *Allow devices on my wifi* checkbox, and the phone gets `/manifest.webmanifest`, two real rendered PNGs and a shell-only service worker. Then the browser refused the story I was about to tell: with HTTPS on and the certificate warning clicked through, Chrome reports a secure context, loads and polls the page fine, and *still* rejects `serviceWorker.register()` — "an SSL certificate error occurred when fetching the script" — so a self-signed LAN cert encrypts but does not make an installable Android app. Running the built app also found a guard that demanded a token startup had not written yet, refusing the one configuration it exists to protect. |
@@ -397,7 +399,7 @@ Measured, because "feels faster" is not evidence:
 |---|---|---|
 | `search_files`, query that matches nothing, rooted at `~` | **6,955 ms** | **346–1,217 ms** |
 | `search_files`, the acceptance command | 11,299 ms | 1,217 ms (346 ms on a quieter run) |
-| All 17 measured acceptance commands | 22,573 ms | **41,389 ms** as measured, **142 ms** of it once `research` is separated out (see the note above) |
+| All 17 measured acceptance commands | 22,573 ms | **647 ms** as measured, **496 ms** of it once `research` is separated out (see the note above) |
 | Any API read (`/tools`, `/tasks`, `/audit`, `/memory`) | 1-2 ms | unchanged |
 | `GET /health`, launched server, warm | 1.5-8 ms (first call in a process: 110 ms) | unchanged — nothing expensive runs per request |
 | `JarvisCore()` construction | 29 ms | unchanged |
@@ -470,7 +472,7 @@ curl -s -H "X-JARVIS-Token: $TOKEN" -H 'Content-Type: application/json' \
      -d '{"text":"what is my battery"}' http://127.0.0.1:8765/command
 
 # Prove it to yourself:
-python -m pytest -q                       # 1724 passed, 0 failed, 0 skipped (the research test skips only while arXiv refuses)
+python -m pytest -q                       # 1775 passed, 0 failed (the research test skips only while arXiv refuses)
 python benchmarks/acceptance_run.py       # re-measures the README's numbers
 python assets/build_charts.py && python assets/build_diagrams.py
 ```
@@ -486,17 +488,17 @@ jarvis/
   security/    permission engine, audit chain, redaction, privacy, path guard
   api/         FastAPI app: 108 routes, auth, origin gate, LAN gate, rate limit
   agents/      15 agents — laptop, phone, home, robotics, car, watch, email, …
-  tools/       128 tools across 5 risk tiers, each declaring its own spec
+  tools/       129 tools across 5 risk tiers, each declaring its own spec
   memory/      hybrid retrieval, lifecycle, forgetting
   scheduler/   recurring jobs, runner with per-run re-authorization
   car/ home/ robotics/ watch/ vision/ research/ design/ coding/
   integrations/ IMAP/SMTP and CalDAV providers with local fallbacks
-tests/         61 modules · 1724 collected · includes the shipped page JS, run by Node
+tests/         64 modules · 1775 collected · includes the shipped page JS, run by Node
 dashboard/     index.html control panel + phone.html, the client a phone uses over the LAN
-audit/         40 phase reports + 4 CSV matrices — the evidence behind this README
+audit/         41 phase reports + 4 CSV matrices — the evidence behind this README
 benchmarks/    acceptance_run.py and the JSON the charts are drawn from
 assets/        generated figures + the two generators that draw them
-app/           PyInstaller spec and bundle sources (see Downloads — currently broken)
+app/           PyInstaller spec and bundle sources (the launcher and its wifi switch; see the Phase 36 report)
 ```
 
 ## Downloads
@@ -556,6 +558,20 @@ adding and removing a synonym at run time. 31-B: the confirmation prompt re-deri
 line from the raw parameters while the dashboard rendered the stored preview — two renderings
 of one consent question, and neither naming the device. One string feeds both now: *"Will do:
 set Kitchen light (kitchen.light) to 40%"*.
+- **The folder, the agent, and the interface** (Phase 39). Reasoned in
+  `audit/PHASE39_THE_FOLDER_AND_THE_AGENT_REPORT.md`. What it left open:
+  **39-A** a launch is verified by watching a third party's storage file for 5 s, so an editor
+  that opens without recording — or records a second late — comes back `unverified`. The window
+  is a guess about someone else's timing, and `detach` returning at exec means the exit code
+  cannot catch a process that dies immediately afterwards. **39-B** only VS Code and Cursor have
+  a storage path this tool can read; opening a folder in any other app is unverifiable by design
+  and says so. **39-C** the coding agent runs with its own permission mode left at the default,
+  so a first *file edit* would prompt inside a CLI nobody is watching — measured on one
+  read-only prompt and not beyond it. **39-D** the dashboard's dark palette was matched to the
+  phone client, not audited for WCAG ratios; the token test proves completeness, not legibility.
+  **39-E** the laptop's address changed mid-phase (172.20.169.34 → 172.20.169.185) and the URL
+  already handed to the user died by itself — 38-B arriving inside a day. The panel address and
+  the scan code absorb it; only mDNS removes it.
 - **A rebrand, and connecting without typing** (Phases 37–38). Reasoned in
   `audit/PHASE37_RENAME_VANTAGE_REPORT.md` and `audit/PHASE38_CONNECT_BY_SCANNING_REPORT.md`.
   **37-A** the project is half-renamed by design — product "Vantage", code `jarvis` — so a reader

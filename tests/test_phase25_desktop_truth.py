@@ -318,6 +318,24 @@ def test_the_readme_does_not_still_call_the_bundle_broken():
     assert "exits 1 on launch" not in readme, "same claim, reworded, in Downloads"
 
 
+def test_the_readme_counts_the_planner_routes_it_ships():
+    """"40 deterministic routes" was true until a rule was added, and stayed printed.
+
+    The badge rows are the numbers a reader quotes to someone else, so they age in the
+    loudest possible way: every later phase inherits them as fact.
+    """
+    import re
+
+    from jarvis.core.orchestrator import JarvisCore
+
+    readme = (REPO / "README.md").read_text()
+    claimed = int(re.search(r"RulePlanner` — (\d+) deterministic routes", readme).group(1))
+    measured = len(JarvisCore().planner._rules)
+
+    assert claimed == measured, (
+        f"the planner has {measured} routes; the README still advertises {claimed}")
+
+
 def test_the_bundle_build_declares_the_dependency_it_needs():
     """``python build_app.py`` on a fresh clone used to fail, and nothing said why.
 
