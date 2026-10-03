@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 from pathlib import Path
 from typing import Any, List, Optional, Tuple
 
@@ -98,6 +99,92 @@ def resolve_folder(value: str, ctx: ToolContext):
     return None, (f"No open workspace matches {value!r} and it is not a directory on disk. "
                   f"Open workspaces: {open_names}. If it is somewhere else, give the path "
                   "and I will open_workspace for it first.")
+
+
+#: Editors this tool knows how to aim at a folder, in preference order. A name here is
+#: a claim that `EDITOR_STORAGE` or a CLI can prove the folder opened; anything else the
+#: machine has installed is deliberately not included, because an unverifiable launch
+#: would be reported as success anyway.
+EDITOR_KEYS = ("vscode", "cursor")
+
+
+def _app_installed(spec, platform: str) -> bool:
+    """Whether the app is actually on this machine, from the same places a person would look."""
+    import shutil
+
+    target = spec.launch.get(platform, "")
+    if platform == "macos":
+        from .agents import BUNDLE_ROOTS
+
+        return any(os.path.isdir(os.path.expanduser(root) + f"/{target}.app")
+                   for root in BUNDLE_ROOTS)
+    return shutil.which(target) is not None
+
+
+def installed_editors(apps, platform: str = "macos") -> List[Any]:
+    """The registered editors present on this machine, best first."""
+    found = []
+    for key in EDITOR_KEYS:
+        spec = apps.get(key)
+        if spec is not None and _app_installed(spec, platform):
+            found.append(spec)
+    return found
+
+
+async def open_project_folder(ctx: ToolContext, project: str = "") -> Any:
+    """Open a project's folder in an editor, choosing the editor from what is installed.
+
+    "Open my project" used to be answered with a note claiming the build had no file
+    agent. It does, and the folder-open it needed was built a phase earlier, so this is
+    that path with the project named -- and with the honest answers kept: no open project
+    says so, two open projects asks which, and nothing is invented in either case.
+    """
+    from ..coding.workspace import get_workspace_registry
+
+    needle = str(project or "").strip()
+    if needle:
+        folder, problem = resolve_folder(needle, ctx)
+        if folder is None:
+            return fail("open_project_folder", problem, device=ctx.device_id)
+    else:
+        workspaces = get_workspace_registry().all()
+        if not workspaces:
+            return fail(
+                "open_project_folder",
+                "No project is open in me yet. Give me its folder and I will "
+                "open_workspace it first, then I can open it in the editor.",
+                device=ctx.device_id,
+            )
+        if len(workspaces) > 1:
+            names = ", ".join(w.display for w in workspaces[:4])
+            return fail(
+                "open_project_folder",
+                f"More than one project is open: {names}. Which one?",
+                device=ctx.device_id,
+                candidates=[str(w.root) for w in workspaces[:4]],
+            )
+        folder = Path(workspaces[0].root)
+
+    editors = installed_editors(ctx.apps, platform=ctx.platform)
+    if not editors:
+        return fail(
+            "open_project_folder",
+            f"{folder.name} is a real folder, but no editor I can aim at a folder is "
+            f"installed ({', '.join(EDITOR_KEYS)}). Open it yourself, or install one.",
+            device=ctx.device_id,
+            folder=str(folder),
+        )
+
+    editor = editors[0]
+    result = await open_app(ctx, app=editor.display_name, path=str(folder))
+    if not result.ok:
+        return fail("open_project_folder", result.error, device=ctx.device_id,
+                    **{**result.output, "folder": str(folder)})
+    #: The inner result already reports the folder and the app; `editor` is the name a
+    #: person recognises, so it is added rather than duplicated.
+    details = {**result.output, "folder": str(folder), "editor": editor.display_name}
+    return ok("open_project_folder", result.message, device=ctx.device_id,
+              verification=result.verification, **details)
 
 
 async def open_app(ctx: ToolContext, app: str = "", path: str = "") -> "object":
@@ -254,6 +341,19 @@ SPECS = [
             tags=["computer", "app"],
         ),
         open_app,
+    ),
+    (
+        ToolSpec(
+            name="open_project_folder",
+            description="Open a project's folder in an installed editor, by name or the one open project.",
+            risk=RiskLevel.LOW,
+            requires_confirmation=False,
+            reversible=True,
+            parameters={"project": "string"},
+            required_parameters=[],
+            tags=["computer", "app", "project"],
+        ),
+        open_project_folder,
     ),
     (
         ToolSpec(

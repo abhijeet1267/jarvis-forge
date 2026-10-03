@@ -71,14 +71,27 @@ def _registry_restored(core):
 
 @pytest.fixture()
 def open_workspace(core):
-    """One real workspace, so a candidate list has something true to say."""
+    """One real workspace, so a candidate list has something true to say.
+
+    Closed afterwards: the registry is process-wide, and a workspace left open here
+    turns a later test's "the one open project" into "more than one" -- green alone,
+    red in a full run.
+    """
     import tempfile
+    from jarvis.coding.workspace import get_workspace_registry
     from jarvis.tools.base import ToolContext
 
     area = tempfile.mkdtemp(prefix="p33-ws-")
     ctx = ToolContext(device_id="laptop_main", session_id="p33-seed")
     asyncio.run(core.tools.handler("open_workspace")(ctx, path=area))
-    return area
+    opened = {w.workspace_id for w in get_workspace_registry().all()
+              if str(w.root).startswith(area)}
+    try:
+        yield area
+    finally:
+        registry = get_workspace_registry()
+        for workspace_id in opened:
+            registry.close(workspace_id)
 
 
 def _run(core, text: str, session_id: str = "phase33"):

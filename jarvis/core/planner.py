@@ -165,6 +165,7 @@ class RulePlanner:
             self._location,
             self._watch,
             self._battery,
+            self._storage,
             self._system_status,
             self._agent_status,
             self._time,
@@ -766,6 +767,17 @@ class RulePlanner:
             return Intent("location_summary", tool="get_location_summary", params={"date": date})
         return None
 
+    def _storage(self, text: str, raw: str) -> Optional[Intent]:
+        if not re.search(r"\bstorage\b|\bdisk (space|full|usage)\b|\bfree space\b"
+                         r"|\bspace (left|free)\b", text):
+            return None
+        if re.search(r"\b(phone|mobile|android)\b", text):
+            return Intent(
+                "phone_storage",
+                note=f"I cannot read that device's storage: {UNAVAILABLE_REASONS['phone']}.",
+            )
+        return Intent("check_storage", tool="check_storage")
+
     def _battery(self, text: str, raw: str) -> Optional[Intent]:
         if not re.search(r"\bbattery\b|\bpower level\b|\bcharge level\b", text):
             return None
@@ -1015,13 +1027,12 @@ class RulePlanner:
             for match in named:
                 if match and self.apps.resolve(match.group("app").strip()) is not None:
                     return None
-            return Intent(
-                "continue_project",
-                note=(
-                    "Project continuation needs the design and file agents, which are not "
-                    "in this build yet. I can still summarise a project if you name it."
-                ),
-            )
+            # This used to be declined with a note about missing agents. The build has
+            # them, and has had the folder-open since the phase before, so the sentence
+            # is now an action on whatever project the user named -- or the one open.
+            name = self._match(r"\b(?:my|the)\s+([A-Za-z0-9 _-]+?)\s+project\b", raw)
+            params = {"project": name.strip()} if name else {}
+            return Intent("continue_project", tool="open_project_folder", params=params)
         return None
 
     def _search_files(self, text: str, raw: str) -> Optional[Intent]:

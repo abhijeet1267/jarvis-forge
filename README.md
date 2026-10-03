@@ -33,7 +33,7 @@ measurement spent closing that gap, in the ledger and on the screen.
 | | |
 |---|---|
 | **Runtime** | Python 3.11+ · FastAPI · SQLite (32 tables) · stdlib-first |
-| **Planning** | `RulePlanner` — 42 deterministic routes, no model required |
+| **Planning** | `RulePlanner` — 43 deterministic routes, no model required |
 | **Authority** | `PermissionEngine` · 5 risk tiers · 28 confirmation-gated tools |
 | **Proof** | tri-state `Verification` (success / failed / **unknown**) on every action |
 | **Ledger** | `action_logs` hash-chained + `audit.jsonl` append-only, `verify_chain()` |

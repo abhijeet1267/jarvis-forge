@@ -25,6 +25,18 @@ DEFAULT_APPS: List[AppSpec] = [
         category="development",
     ),
     AppSpec(
+        key="cursor",
+        display_name="Cursor",
+        platform=["macos"],
+        launch={"macos": "Cursor"},
+        # No `cli`: the path inside its bundle was never observed on a machine that has
+        # Cursor installed, and a guessed one is how a folder-open starts silently failing.
+        # What does run is `open -a Cursor --args <folder>`, whose effect is then read from
+        # Cursor's own workspaceStorage, which `EDITOR_STORAGE` already names.
+        aliases=["cursor"],
+        category="development",
+    ),
+    AppSpec(
         key="chrome",
         display_name="Google Chrome",
         platform=["macos", "windows", "linux"],
