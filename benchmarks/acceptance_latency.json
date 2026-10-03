@@ -8,7 +8,7 @@
   {
    "command": "Jarvis, find my latest project report.",
    "http_status": 200,
-   "ms": 569,
+   "ms": 627,
    "intent": "search_files",
    "tools": [
     "search_files"
@@ -60,7 +60,7 @@
   {
    "command": "Jarvis, plan my day.",
    "http_status": 200,
-   "ms": 5,
+   "ms": 6,
    "intent": "daily_schedule",
    "tools": [
     "daily_schedule"
@@ -75,7 +75,7 @@
   {
    "command": "Jarvis, schedule two hours for project work tomorrow.",
    "http_status": 200,
-   "ms": 4,
+   "ms": 3,
    "intent": "schedule_task",
    "tools": [],
    "verification": [],
@@ -153,7 +153,7 @@
   {
    "command": "Jarvis, research this idea.",
    "http_status": 200,
-   "ms": 705,
+   "ms": 262,
    "intent": "search_papers",
    "tools": [
     "search_papers"

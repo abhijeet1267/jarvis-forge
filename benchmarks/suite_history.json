@@ -223,6 +223,13 @@
    "passed": 1786,
    "failed": 0,
    "note": "a copied app broke its own seal by being used, and outlived its window as a listening server"
+  },
+  {
+   "phase": "41 the sentences you say",
+   "collected": 1816,
+   "passed": 1815,
+   "failed": 0,
+   "note": "one refusal was a false claim about the build, and a hostname was being read as a filename"
   }
  ]
 }

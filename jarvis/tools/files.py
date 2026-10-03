@@ -20,7 +20,7 @@ from typing import Any, Dict, List, Optional
 
 from ..core.models import RiskLevel, ToolSpec
 from ..logging_setup import get_logger
-from .base import ToolContext, fail, human_size, ok, run_command
+from .base import ToolContext, fail, human_size, ok, run_command, unverified
 
 log = get_logger("tools.files")
 
@@ -201,6 +201,52 @@ async def search_files(
         scanned=scanned,
         truncated=truncated,
         skipped=sorted(skipped),
+    )
+
+
+async def find_and_open(ctx: ToolContext, query: str = "", directory: str = "~") -> Any:
+    """Find the best-matching file and hand it to the system, in one sentence.
+
+    "find my resume and open it" was two capabilities the build already had and no route
+    between them. The finding is verified the way `search_files` verifies; the opening is
+    not, because `open` exiting 0 only proves LaunchServices accepted the request -- no
+    channel here says a window took the file. So the answer is UNKNOWN about the open,
+    and says which half is which.
+    """
+    if not str(query).strip():
+        return fail("find_and_open", "Which file should I look for?", device=ctx.device_id)
+
+    found = await search_files(ctx, query=query, directory=directory)
+    if not found.ok:
+        return fail("find_and_open", found.error, device=ctx.device_id)
+    results = found.output.get("results") or []
+    if not results:
+        return fail(
+            "find_and_open",
+            f"I found nothing matching {query!r}, so there is nothing to open.",
+            device=ctx.device_id, query=query,
+        )
+
+    top = results[0]
+    path = str(top.get("path") or "")
+    if not path or not Path(path).is_file():
+        return fail("find_and_open",
+                    f"The best match, {top.get('name') or path!r}, is not a file I can open.",
+                    device=ctx.device_id)
+
+    code, _out, err = await run_command(["open", path])
+    if code != 0:
+        return fail("find_and_open", f"Could not open {Path(path).name}: "
+                    f"{err or 'the system refused'}", device=ctx.device_id, path=path)
+
+    runner_up = results[1]["name"] if len(results) > 1 else ""
+    return unverified(
+        "find_and_open",
+        f"Asked your Mac to open {Path(path).name}"
+        + (f" (other match: {runner_up})" if runner_up else "")
+        + ". I could not confirm a window took it.",
+        device=ctx.device_id, path=path, name=Path(path).name,
+        matches=[r.get("path") for r in results[:5]],
     )
 
 
@@ -626,6 +672,18 @@ SPECS = [
             tags=["files", "read"],
         ),
         search_files,
+    ),
+    (
+        ToolSpec(
+            name="find_and_open",
+            description="Find the best-matching file by name and ask the system to open it.",
+            risk=RiskLevel.LOW,
+            reversible=True,
+            parameters={"query": "string", "directory": "string"},
+            required_parameters=["query"],
+            tags=["files", "open"],
+        ),
+        find_and_open,
     ),
     (
         ToolSpec(

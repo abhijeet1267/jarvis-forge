@@ -13,6 +13,7 @@ from ..logging_setup import get_logger
 from ..registry.tools import ToolRegistry
 from . import (
     agents,
+    browser,
     coding_agent,
     apps,
     calendar,
@@ -41,6 +42,7 @@ log = get_logger("tools")
 def _all_specs():
     return [
         *agents.SPECS,
+        *browser.SPECS,
         *coding_agent.SPECS,
         *apps.SPECS,
         *files.SPECS,

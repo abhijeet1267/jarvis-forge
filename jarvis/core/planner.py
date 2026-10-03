@@ -182,6 +182,8 @@ class RulePlanner:
             self._write_file,
             self._append_file,
             self._close_app,
+            self._find_and_open,
+            self._open_url,
             self._open_app,
             self._research,
             self._vision,
@@ -1206,6 +1208,79 @@ class RulePlanner:
             return Intent("run_coding_agent", note="What should I ask the coding agent to do?")
         return Intent("run_coding_agent", tool="run_coding_agent",
                       params={"prompt": prompt}, confidence=0.85)
+
+    def _open_url(self, text: str, raw: str) -> Optional[Intent]:
+        """A site to open, as opposed to a file or an app.
+
+        Before this rule existed, `open github.com` was read as a file and the planner
+        built `<home>/github.com`. A domain-shaped token is the signal; a known name plus
+        the word "site" is the other one. Anything else is left alone -- guessing a
+        domain points a logged-in browser at a stranger's address.
+        """
+        from ..tools.browser import NAMED_SITES, normalise
+
+        #: Suffixes that look like a domain but are a document on disk.
+        extensions = {"pdf", "txt", "md", "doc", "docx", "xls", "xlsx", "csv", "pptx",
+                      "png", "jpg", "jpeg", "gif", "heic", "zip", "tar", "gz", "json",
+                      "yaml", "yml", "py", "js", "ts", "rb", "go", "rs", "mp4", "mov",
+                      "mp3", "wav", "log", "ini", "env", "sql", "ipynb", "tsx"}
+        if not re.search(r"\b(?:open|go to|visit|bring up|pull up)\b", text):
+            return None
+
+        browser = ""
+        named = re.search(r"\bin\s+(chrome|safari|firefox|edge|brave|browser|"
+                          r"web browser|google chrome)\b", text)
+        if named:
+            browser = named.group(1)
+
+        candidates = re.findall(r"(?:[\w-]+\.)+[a-z]{2,}(?:[/?#][\w./?%&=#-]*)?", raw, re.I)
+        for token in candidates:
+            suffix = token.split("/")[0].rsplit(".", 1)[-1].lower()
+            if suffix in extensions:
+                continue
+            url, problem = normalise(token)
+            if url:
+                params = {"url": url}
+                if browser:
+                    params["browser"] = browser
+                return Intent("open_url", tool="open_url", params=params)
+
+        site = re.search(r"\b(?:the\s+)?(?P<name>[\w ]+?)\s+(?:site|website|webpage|page)\b",
+                         text)
+        if site:
+            url, _problem = normalise(site.group("name"))
+            if url:
+                params = {"url": url}
+                if browser:
+                    params["browser"] = browser
+                return Intent("open_url", tool="open_url", params=params)
+
+        for name in NAMED_SITES:
+            if re.search(rf"\b{re.escape(name)}\b", text):
+                params = {"url": NAMED_SITES[name]}
+                if browser:
+                    params["browser"] = browser
+                return Intent("open_url", tool="open_url", params=params)
+        return None
+
+    def _find_and_open(self, text: str, raw: str) -> Optional[Intent]:
+        """"Find my resume and open it" -- two capabilities the build had, and no route.
+
+        Both verbs must be present, so a plain search still reaches `search_files` and a
+        plain open still reaches the file and app rules.
+        """
+        if not re.search(r"\b(?:find|locate|search(?:\s+for)?|look for)\b", text):
+            return None
+        if not re.search(r"\b(?:open|show)\b", text):
+            return None
+        got = re.search(
+            r"\b(?:find|locate|search(?:\s+for)?|look\s+for)\s+(?:me\s+)?(?:my|the)?\s*"
+            r"(?P<what>[\w .,-]+?)\s+(?:and\s+|then\s+)?(?:open|show)(?:\s+it)?\b",
+            raw, re.I)
+        query = got.group("what").strip() if got else ""
+        if not query:
+            return None
+        return Intent("find_and_open", tool="find_and_open", params={"query": query})
 
     def _open_app(self, text: str, raw: str) -> Optional[Intent]:
         # "open folder <path> in vscode" / "open <path> in vscode"
