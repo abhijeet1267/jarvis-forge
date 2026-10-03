@@ -198,6 +198,41 @@ def test_the_sentence_reaches_the_tool_instead_of_a_note(core):
     assert getattr(plan, "reply_kind", "") != "declined"
 
 
+def test_the_machine_answers_to_the_name_on_the_window(core):
+    """The product was renamed in Phase 37 and the words it answers to were not (37-B).
+
+    Typed first, because that is where it was noticed: "hey vantage check storage" was
+    not understood while "jarvis, check storage" was.
+    """
+    for said in ("vantage check storage", "hey vantage check storage",
+                 "ok vantage, check storage", "Vantage. Check storage",
+                 "jarvis check storage", "hey jarvis check storage"):
+        plan = core.planner.parse(said)
+        assert [a.tool for a in plan.actions] == ["check_storage"], (
+            said, [a.tool for a in plan.actions])
+
+
+def test_the_wake_word_list_for_the_microphone_includes_both_names(core):
+    """The listener and the parser must accept the same two names, or one of them lies."""
+    from jarvis.config import Settings
+    from jarvis.voice.wakeword import TextWakeWordDetector
+
+    words = [w.lower() for w in Settings().wake_words]
+    assert any("vantage" in w for w in words), words
+    for said in ("vantage open github.com", "hey vantage open github.com"):
+        match = TextWakeWordDetector(Settings()).detect(said)
+        assert match.detected, said
+        assert "github" in match.command.lower(), match.command
+
+
+def test_a_word_that_is_not_a_prefix_survives(core, tmp_path):
+    """Anchored at the start, or a file called `vantage-notes.txt` loses its name."""
+    document = tmp_path / "vantage-notes.txt"
+    document.write_text("x")
+    plan = core.planner.parse(f"open {document}")
+    assert str(document) in str(plan.actions[0].params), plan.actions[0].params
+
+
 def test_the_new_tool_declares_its_own_risk(core):
     spec = core.tools.get("open_project_folder")
     assert spec is not None, "registered with the rest of the laptop tools"

@@ -214,7 +214,13 @@ class Settings(BaseSettings):
     stt_language: str = "en-US"
     stt_model: str = "whisper-1"
     # Wake words accepted before a command (case-insensitive).
-    wake_words: List[str] = Field(default_factory=lambda: ["jarvis", "hey jarvis", "ok jarvis"])
+    #: The product answers to its own name as well as the original one. Renaming the
+    #: brand without touching this list left the voice pipeline listening for a name
+    #: no longer on the window.
+    wake_words: List[str] = Field(default_factory=lambda: [
+        "jarvis", "hey jarvis", "ok jarvis",
+        "vantage", "hey vantage", "ok vantage",
+    ])
     require_wake_word: bool = True
     # Audio capture
     audio_device: str = ":1"     # ffmpeg avfoundation input (":1" = default mic)

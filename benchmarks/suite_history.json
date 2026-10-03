@@ -226,8 +226,8 @@
   },
   {
    "phase": "41 the sentences you say",
-   "collected": 1816,
-   "passed": 1815,
+   "collected": 1819,
+   "passed": 1819,
    "failed": 0,
    "note": "one refusal was a false claim about the build, and a hostname was being read as a filename"
   }

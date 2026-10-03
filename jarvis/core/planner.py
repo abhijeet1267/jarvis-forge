@@ -29,7 +29,7 @@ from .models import Plan, PlannedAction
 
 log = get_logger("core.planner")
 
-_WAKE = re.compile(r"^\s*(hey\s+|ok\s+|okay\s+)?jarvis[,.\s]+", re.I)
+_WAKE = re.compile(r"^\s*(hey\s+|ok\s+|okay\s+)?(jarvis|vantage)[,.\s]+", re.I)
 _WS = re.compile(r"\s+")
 
 #: The only sequence markers this planner will decompose on. A bare "then" is
@@ -1307,6 +1307,11 @@ class RulePlanner:
 
         captured = self._match(r"\b(?:open|launch|start|run)\b\s+(.+)", raw)
         if captured is None:
+            return None
+        #: A path is not an application. `open ~/notes/vantage-notes.txt` resolved to the
+        #: Notes app because "notes" is one of its aliases and appears inside the filename.
+        spoken = captured.strip()
+        if spoken.startswith(("/", "~", "./", "../")) or Path(spoken).exists():
             return None
         app = self.apps.resolve(self._arg(captured))
         if app is None:

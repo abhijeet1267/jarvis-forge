@@ -88,10 +88,10 @@ shrug.
 ## 5. Regressions and numbers
 
 ```
-new tests        14 (project + storage) + 16 (site + find-and-open) = 30
-full suite       1815 passed · 0 failed · 0 xfailed · 1 skipped
-                 (the skip is arXiv timing out in this run; the same test passed live twice earlier
-                 in the phase, so the skip is reported rather than smoothed over)
+full suite       1819 passed · 0 failed · 0 xfailed · 0 skipped
+                 (an earlier run of the same phase reported 1 skipped -- the network-gated arXiv
+                 test timing out -- so both runs are what the row in README is written from)
+new tests        30 + 3 (the name it answers to, and a path that is not an app) = 33
 safety matrix    6 of 6
 tools            133 (read 70 · low 35 · external 13 · high 12 · physical 3)
 confirmation-gated  28 (unchanged -- nothing added here needs a gate; all four are LOCAL/READ)
@@ -106,13 +106,29 @@ The number being wrong is small; the pattern is the thing — a printed count ha
 true unless something re-measures it, and no external check exists while the runner cannot
 start (39-F, 40-E).
 
+## 3b. Two more defects the sentences turned over
+
+**The name on the window is not the name it answers to.** The wake list was still
+`jarvis` / `hey jarvis` / `ok jarvis`, so with `require_wake_word` on, the voice pipeline
+listened for a name that left the product four phases ago. Typed sentences happened to work
+anyway -- the routes key on their own words, not the prefix -- which is exactly the kind of
+half-true state that survives a rename: `hey vantage open github` was understood once
+`open_url` existed, while *speaking* to it still did not wake it. Both lists now carry
+`vantage`, and the test asserts the microphone's list and the parser's prefix regex agree.
+
+**A filename was an application.** `open ~/notes/vantage-notes.txt` resolved to the **Notes**
+app, because `"notes"` is one of its aliases and appears inside the filename -- so the system
+would have launched a notepad and dropped the path. Found by a test written for something else
+(a prefix that must not eat a word), and fixed with the rule the sentence already implied:
+something that starts with `/`, `~`, `./` or names a file that exists is a path, not an app.
+Measured after the fix: `open ~/Desktop/vantage-notes.txt` → `read_file` with that path.
+
 ## 6. Carried forward
 
-* **41-A — "hey Vantage" still does not wake it.** The wake list is still `jarvis`/`hey
-  jarvis`/`ok jarvis` (37-B). This phase fixed what a sentence *means*; it did not change what
-  the machine *listens for*, because that list also carries the voice pipeline's behaviour and
-  deserves its own measurement. The typed path is equally affected: `hey vantage open github`
-  is not understood.
+* **41-A — closed inside the phase** (§3b): the voice and typed wake lists both accept
+  `vantage` now. What remains unmeasured is the *microphone* path on this machine, because
+  macOS has not granted the app a microphone (§4 of Phase 40's self-test still reports
+  `blocked`), so the fuzzy matcher is proven against transcripts, not against speech.
 * **41-B — "give summary of that data" is not answered.** A page's content is not reachable
   from here without either the browser's cooperation (which §3 shows is not granted) or a
   fetch, and a summary with the model off would be an extract of whatever HTML happened to
