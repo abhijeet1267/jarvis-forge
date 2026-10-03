@@ -298,14 +298,15 @@ class Settings(BaseSettings):
     def client_hosts(self) -> List[str]:
         """Host strings a browser may address this server with.
 
-        Loopback always; with LAN mode on, the addresses this machine actually owns.
+        Loopback always; with LAN mode on, the addresses this machine actually owns plus
+        its mDNS name when that name resolves to one of them.
         One list feeds the URLs the server advertises and the origins it accepts, so
         "print an address to type" and "refuse the request that came from it" cannot
         drift apart -- the first phone test in a real browser found exactly that drift.
         Link-local IPv6 is excluded: it needs a zone id the phone cannot guess, and a
         bare IPv6 literal is not a valid URL host anyway.
         """
-        from .security.auth import LOOPBACK_HOSTS, interface_addresses
+        from .security.auth import LOOPBACK_HOSTS, interface_addresses, mdns_name_is_ours
 
         hosts = ["127.0.0.1"]
         if self.lan_mode:
@@ -313,6 +314,20 @@ class Settings(BaseSettings):
                 if addr in LOOPBACK_HOSTS or addr.startswith("fe80:"):
                     continue
                 hosts.append(f"[{addr}]" if ":" in addr else addr)
+            # The mDNS name is the one address that survives a lease renewal. It is added
+            # here rather than printed separately so the gate that accepts it, the origin
+            # list that allows it, and the URL that advertises it cannot disagree -- and
+            # it is only advertised when it genuinely resolves to this machine.
+            import socket
+
+            # Lowercased on purpose: a browser lowers the host before it sends `Origin`,
+            # so a name advertised in mixed case is advertised in a form that comes back
+            # different -- and the origin gate read that as a foreign site. Measured: the
+            # panel printed `Abhijeets-MacBook-Air-2.local`, Chrome sent the lowercase,
+            # and POST /auth/session answered 403 on a page that had just loaded.
+            name = socket.gethostname().lower()
+            if mdns_name_is_ours(name) and name not in hosts:
+                hosts.append(name)
         return hosts
 
     def reachable_urls(self) -> List[str]:

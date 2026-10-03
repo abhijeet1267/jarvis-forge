@@ -199,13 +199,35 @@ def pairing_qr_png(url: str) -> Optional[bytes]:
     return _QR_CACHE[url]
 
 
+def _reachable(urls: list) -> list:
+    """The entries another device on the wifi can actually open."""
+    return [u for u in (urls or [])
+            if u and "127.0.0.1" not in u and "localhost" not in u and "::1" not in u]
+
+
 def lan_phone_url(urls: list) -> str:
-    """The one address worth showing a phone: reachable from another device, not loopback."""
-    for url in urls or []:
-        if "127.0.0.1" in url or "localhost" in url or "::1" in url:
-            continue
-        return url
-    return ""
+    """The one address worth showing a phone: reachable, and the one that stays put.
+
+    A ``.local`` name beats an address, because the address is what the router hands out
+    again at every lease renewal -- the failure this panel has been telling people to
+    work around since Phase 35, in writing, in its own README.
+    """
+    open_urls = _reachable(urls)
+    for url in open_urls:
+        if ".local:" in url:
+            return url
+    return open_urls[0] if open_urls else ""
+
+
+def lan_fallback_url(urls: list) -> str:
+    """The number to print under the name.
+
+    Android's Chrome does not reliably resolve mDNS, so a panel that shows only the name
+    would fix the iPhone and break the Android. This is the next thing a phone could try.
+    """
+    preferred = lan_phone_url(urls)
+    rest = [u for u in _reachable(urls) if u != preferred]
+    return rest[0] if rest else ""
 
 
 _QR_CACHE: dict = {}
@@ -620,7 +642,11 @@ def build_ui(controller: ServerController, on_quit) -> None:
             pair_text.configure(text="phone: not open to other devices yet", fg=MUTED)
             pair_image.configure(image="")
             return
-        pair_text.configure(text=f"phone: {target}", fg=INK)
+        fallback = lan_fallback_url(urls)
+        pair_text.configure(
+            text=f"phone: {target}"
+                 + (f"\n   or, if that name does not resolve: {fallback}" if fallback else ""),
+            fg=INK)
         png = pairing_qr_png(target)
         if png is None:
             pair_image.configure(image="")

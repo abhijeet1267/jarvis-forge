@@ -133,6 +133,33 @@ def interface_addresses() -> set:
     return found
 
 
+#: RFC 6762 reserves this suffix for multicast DNS, and public DNS never answers for it.
+#: That is the only reason a hostname can be trusted by the LAN gate at all.
+MDNS_SUFFIX = ".local"
+
+#: How long a name answer stands. A lease renewal changes the address, and a "no" that
+#: never expires would lock out a network that has since been fixed.
+MDNS_TTL_SECONDS = 60.0
+
+#: name -> (monotonic time it was answered, whether it was ours)
+_mdns_cache: dict = {}
+
+
+def _now() -> float:
+    """Indirection so the expiry rule can be tested without stopping the real clock."""
+    return time.monotonic()
+
+
+def _resolve_mdns(name: str) -> List[str]:
+    """Every address the OS resolver has for ``name``; empty when it has none."""
+    import socket
+
+    try:
+        return [info[4][0] for info in socket.getaddrinfo(name, None)]
+    except OSError:
+        return []
+
+
 def lan_startup_problems(settings: Optional[Settings] = None) -> List[str]:
     """What is wrong with starting in this configuration, in plain sentences.
 
@@ -155,6 +182,32 @@ def lan_startup_problems(settings: Optional[Settings] = None) -> List[str]:
             "to bind every interface, or a specific address, and mean it. (The desktop "
             "app's 'Allow devices on my wifi' checkbox sets both.)")
     return problems
+
+
+def mdns_name_is_ours(name: str, *, ttl: float = MDNS_TTL_SECONDS) -> bool:
+    """True when ``name`` is a ``.local`` name pointing at an address this machine owns.
+
+    Two conditions, because one is not enough. ``.local`` is reserved for multicast DNS
+    and cannot be answered by public DNS, so an attacker cannot register it and point it
+    here the way ``evil.example.com`` can be pointed at 127.0.0.1 -- that half closes the
+    rebinding door the loopback rule was written for. And the name must still resolve to
+    an address in :func:`interface_addresses`, because a stranger's laptop on the same
+    wifi has a ``.local`` name too.
+
+    The answer is cached per name: this runs on every request, and a resolver call per
+    request is a slow path any device on the network can drive.
+    """
+    if not name.lower().endswith(MDNS_SUFFIX):
+        return False
+    key = name.lower()
+    now = _now()
+    hit = _mdns_cache.get(key)
+    if hit is not None and now - hit[0] < ttl:
+        return hit[1]
+    answers = set(_resolve_mdns(name))
+    ours = bool(answers) and bool(answers & interface_addresses())
+    _mdns_cache[key] = (now, ours)
+    return ours
 
 
 def host_allowed(host_header: Optional[str], settings: Optional[Settings] = None) -> bool:
@@ -180,11 +233,12 @@ def host_allowed(host_header: Optional[str], settings: Optional[Settings] = None
     if host.lower() in LOOPBACK_HOSTS:
         return True
     # LAN mode: the phone's request carries this laptop's own address, so accept
-    # exactly the addresses this machine owns. A hostname is never accepted here --
-    # that is the DNS-rebinding case the loopback rule was written for.
+    # exactly the addresses this machine owns, plus its mDNS name when that name
+    # resolves to one of them. A public hostname is still never accepted -- that is
+    # the DNS-rebinding case the loopback rule was written for. See `mdns_name_is_ours`.
     if settings.lan_mode:
         stripped = host.strip("[]")
-        return stripped in interface_addresses()
+        return stripped in interface_addresses() or mdns_name_is_ours(stripped)
     return False
 
 

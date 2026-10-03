@@ -280,7 +280,10 @@ def _refuse_unless_same_origin(request: Request, settings: Any) -> None:
         # sets ``Sec-Fetch-Site`` itself, which a web page cannot forge.
         if request.headers.get("sec-fetch-site", "").lower() != "same-origin":
             raise HTTPException(status_code=403, detail="Same-origin request required.")
-    elif origin not in settings.allowed_origins():
+    elif origin.lower() not in {o.lower() for o in settings.allowed_origins()}:
+        # Case-insensitive because the host part of a URL is: a browser lowers the name
+        # it was given before sending `Origin`, so an exact string match refused this
+        # laptop's own page -- 403 on /auth/session, then 401 on everything after it.
         raise HTTPException(status_code=403, detail="Origin not allowed.")
 
 
