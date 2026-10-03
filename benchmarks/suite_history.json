@@ -237,6 +237,13 @@
    "passed": 1827,
    "failed": 0,
    "note": "a configured model had no caller: zero chat calls, two embedding calls"
+  },
+  {
+   "phase": "43 not a microphone",
+   "collected": 1833,
+   "passed": 1833,
+   "failed": 0,
+   "note": "a test passthrough answered a real audio clip with ok and confidence 1.0"
   }
  ]
 }

@@ -54,6 +54,10 @@ class STTBackend(ABC):
     """Transcribes an audio file to text."""
 
     name: str = "base"
+    #: False for a stand-in that echoes text a test fed it. A caller must never treat a
+    #: non-real backend as ears: `TranscriptSTT` answering `ok` for a recording is how a
+    #: machine with no microphone reports having heard something.
+    real: bool = True
 
     def __init__(self, settings: Optional[Settings] = None) -> None:
         self.settings = settings or get_settings()
@@ -71,10 +75,15 @@ class TranscriptSTT(STTBackend):
     """Pass-through backend: treats supplied text as the transcript.
 
     This is what makes the voice pipeline testable without a microphone, and
-    what powers text input into the same session abstraction.
+    what powers text input into the same session abstraction. It is **not** a
+    backend that can hear: given a recording and nothing fed to it, it says so.
+    Until that was true, a machine with no working speech backend fell through
+    to this class and `/voice/transcribe` answered a real clip with
+    `ok: true, confidence: 1.0, text: ""`.
     """
 
     name = "transcript"
+    real = False
 
     def __init__(self, settings: Optional[Settings] = None, text: str = "") -> None:
         super().__init__(settings)
@@ -88,8 +97,16 @@ class TranscriptSTT(STTBackend):
         self.text = text
 
     async def transcribe(self, audio_path: Path) -> STTResult:
+        if not self.text:
+            return STTResult(
+                False, self.name, confidence=0.0,
+                error=("no microphone on this machine: the transcript backend only repeats "
+                       "text a test handed it, and this is an audio file"),
+                meta={"source": "none", "audio": str(audio_path)},
+            )
         return STTResult(
-            True, self.name, text=self.text, confidence=1.0, meta={"source": "text"}
+            True, self.name, text=self.text, confidence=1.0,
+            meta={"source": "text", "passthrough": True},
         )
 
 
@@ -364,8 +381,23 @@ def get_stt(settings: Optional[Settings] = None, transcript: str = "") -> STTBac
             log.info("stt backend selected", extra_fields={"backend": name})
             return backend
 
-    log.info("no stt backend available; using transcript passthrough")
+    log.info("no stt backend available; the transcript passthrough cannot hear audio")
     return TranscriptSTT(settings, transcript)
+
+
+#: What a person has to do to give this machine ears, cheapest first. Built when asked,
+#: because the marker path belongs to whichever home this process was pointed at.
+def ears_advice() -> str:
+    """The sentence a caller shows when a transcription cannot happen."""
+    marker = MacOSSpeechSTT()._blocked_marker
+    return (
+        "No microphone backend is working here. Three ways to fix it, cheapest first: "
+        f"(1) System Settings → Privacy & Security → Speech Recognition, allow Vantage, "
+        f"then delete {marker} so the app retries Apple's on-device transcription; "
+        "(2) install whisper.cpp (`brew install whisper-cpp`) for offline transcription "
+        "with no permission dance; (3) set a hosted key with JARVIS_LLM_API_KEY to "
+        "transcribe over the network, which sends the audio off this machine."
+    )
 
 
 def describe_stt() -> dict:
@@ -382,14 +414,17 @@ def describe_stt() -> dict:
             f"{native._blocked_marker} after running from a bundled host."
         )
 
+    real = {
+        "macos_speech": native.available(),
+        "whisper_cpp": WhisperCppSTT(settings).available(),
+        "openai_whisper": OpenAIWhisperSTT(settings).available(),
+    }
     return {
         "configured_backend": settings.stt_backend,
         "language": settings.stt_language,
-        "available": {
-            "macos_speech": native.available(),
-            "whisper_cpp": WhisperCppSTT(settings).available(),
-            "openai_whisper": OpenAIWhisperSTT(settings).available(),
-            "transcript": True,
-        },
+        #: Whether a spoken word can become text at all. `available.transcript` is not
+        #: part of this: the passthrough echoes a test's string, it does not hear.
+        "can_listen": any(real.values()),
+        "available": {**real, "transcript": True},
         "notes": notes,
     }

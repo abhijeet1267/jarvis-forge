@@ -660,6 +660,14 @@ async def voice_transcribe(file: UploadFile = File(...), _: None = Protected) ->
     target.write_bytes(await file.read())
 
     result = await session.stt.transcribe(target)
+    if getattr(session.stt, "real", True) is False:
+        from ..voice.stt import ears_advice
+
+        # A stand-in that echoes text is not a microphone. Answering `ok` here is how a
+        # laptop with no working speech backend told a caller it had heard a recording.
+        result = type(result)(
+            False, result.backend, confidence=0.0, error=ears_advice(),
+            meta={"can_listen": False, "saved": str(target)})
     return {
         "ok": result.ok,
         "backend": result.backend,
@@ -667,6 +675,7 @@ async def voice_transcribe(file: UploadFile = File(...), _: None = Protected) ->
         "confidence": result.confidence,
         "error": result.error,
         "duration_ms": result.duration_ms,
+        "can_listen": bool(getattr(session.stt, "real", True)),
     }
 
 

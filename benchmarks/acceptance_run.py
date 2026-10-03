@@ -203,6 +203,7 @@ def suite_history() -> dict:
         ("40 the copy still launches", 1786, 1786, 0, "a copied app broke its own seal by being used, and outlived its window as a listening server"),
         ("41 the sentences you say", 1820, 1820, 0, "one refusal was a false claim about the build, and a hostname was being read as a filename"),
         ("42 what a key buys", 1827, 1827, 0, "a configured model had no caller: zero chat calls, two embedding calls"),
+        ("43 not a microphone", 1833, 1833, 0, "a test passthrough answered a real audio clip with ok and confidence 1.0"),
     ]
     return {"phases": [{"phase": p, "collected": c, "passed": q, "failed": f, "note": n}
                        for p, c, q, f, n in points]}
