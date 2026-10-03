@@ -12,6 +12,7 @@ engine authorises; the orchestrator coordinates and reports.
 from __future__ import annotations
 
 import json
+import re
 import time
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
@@ -204,6 +205,53 @@ class JarvisCore:
     #: forty is a wall of text that answers nothing, and the reply is also what gets
     #: remembered -- the same reason ``MAX_READ_EXCERPT`` exists for file reads.
     IDENTIFIER_OFFER_LIMIT = 4
+
+    async def _advise_from_model(self, request: CommandRequest, rules_reply: str):
+        """Ask the configured model about a sentence the rules did not recognise.
+
+        The model may speak and may name one thing it would suggest. It cannot plan,
+        cannot execute, and cannot raise a confirmation card -- those stay behind the gate
+        a typed sentence goes through, and a suggestion is only ever reported as one.
+
+        Its words are appended to the rule router's own sentence rather than replacing it:
+        the rules did not recognise the sentence, and a reply that merely read as fluent
+        would be a claim about the pipeline that is not true.
+        """
+        model = self.settings.llm_model or "the configured model"
+        note: Dict[str, Any] = {"model": model}
+        system = (
+            "You are advising a local assistant on the user's own Mac. Its rule router did "
+            "not recognise the sentence, so answer in at most two short sentences of plain "
+            "words. You have no ability to run anything and must never say that a thing was "
+            "done, opened, deleted or sent. If the sentence looks like a request the "
+            "assistant could carry out, name at most one tool from this list that you would "
+            "suggest, and say the user has to ask for it themselves. If you cannot tell what "
+            "was meant, say so and ask one question.\nTools: "
+            + ", ".join(sorted(self.tools.names()))
+        )
+        try:
+            answer = await self.router.complete(system, request.text,
+                                                task_type="conversation", timeout=20.0)
+        except Exception as exc:  # a transport failure is itself an answer about transport
+            answer = None
+            note["error"] = str(exc)[:120]
+
+        if not answer:
+            note["stage"] = "model_unavailable"
+            return (f"{rules_reply}\n\nI also asked the model you configured ({model}), and "
+                    "it was unavailable, so that answer is the rule router's own.", note)
+
+        text = " ".join(str(answer).split())[:600]
+        suggested = next((name for name in sorted(self.tools.names())
+                          if re.search(rf"\b{re.escape(name)}\b", text)), "")
+        note["stage"] = "model"
+        if suggested:
+            note["suggested_tool"] = suggested
+            closer = (f"It suggested {suggested}. I did not run anything on that -- ask me "
+                      "for it yourself and it goes through the usual approval.")
+        else:
+            closer = "I did not run anything on its answer."
+        return f"{rules_reply}\n\n{model} said: {text}\n\n{closer}", note
 
     async def _offer_identifiers(self, request: CommandRequest, plan: Plan) -> None:
         """Fill in the identifiers a question asks for, from the registry's own reads.
@@ -428,6 +476,13 @@ class JarvisCore:
 
         if plan.direct_reply:
             response.reply = plan.direct_reply
+            stage = "planner"
+            model_note: Dict[str, Any] = {}
+            if plan.reply_kind == "not_understood" and self.settings.llm_enabled:
+                response.reply, model_note = await self._advise_from_model(
+                    request, plan.direct_reply)
+                response.model_used = model_note.get("model") or "rules"
+                stage = model_note.get("stage", "planner")
             # ``decision`` is the permission outcome. Nothing was permitted to run
             # here -- the ledger row written just below says ``no_action`` -- so it
             # is left unset rather than claiming EXECUTE. It was EXECUTE for as
@@ -441,7 +496,8 @@ class JarvisCore:
                 device=request.device_id,
                 session_id=request.session_id,
                 request_id=response.request_id,
-                detail={"stage": "planner", "reply": response.reply[:200],
+                detail={"stage": stage,
+                        "reply": response.reply[:200],
                         # Which kind of non-action this was, so a refusal and a question
                         # stay distinguishable in the chain and not only on screen.
                         "reply_kind": plan.reply_kind,
@@ -449,7 +505,8 @@ class JarvisCore:
                         # A question that names candidates got them from a read, and the
                         # chain says which one (Phase 33 -- the same attribution debt R-14
                         # settled for a fallback that answers with another tool's result).
-                        "identifier_sources_used": list(plan.identifier_sources_used)},
+                        "identifier_sources_used": list(plan.identifier_sources_used),
+                        **({"model": model_note} if model_note else {})},
             )
             self._log_message(request.session_id, "assistant", response.reply, plan.intent)
             response.duration_ms = int((time.perf_counter() - started) * 1000)

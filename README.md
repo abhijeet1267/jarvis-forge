@@ -9,7 +9,7 @@ world afterwards**, and written to a tamper-evident audit chain. It runs with no
 key, no network and no vendor — an LLM is optional and off by default.
 
 What this repository is mostly about is not features. It is about the difference
-between *"the handler returned"* and *"the thing happened"* — and the forty-one phases of
+between *"the handler returned"* and *"the thing happened"* — and the forty-two phases of
 measurement spent closing that gap, in the ledger and on the screen.
 
 > **On the name.** The product is **Vantage** — in the README, both web clients, the install
@@ -25,7 +25,7 @@ measurement spent closing that gap, in the ledger and on the screen.
 > too: they are dated evidence of what was true then.
 
 [![ci](https://img.shields.io/github/actions/workflow/status/abhijeet1267/jarvis-forge/ci.yml?label=tests%20%C2%B7%20macos)](https://github.com/abhijeet1267/jarvis-forge/actions/workflows/ci.yml)
-[![suite](https://img.shields.io/badge/tests-1820%20passed%20%C2%B7%200%20failed-16a34a)](tests)
+[![suite](https://img.shields.io/badge/tests-1827%20passed%20%C2%B7%200%20failed-16a34a)](tests)
 [![tools](https://img.shields.io/badge/tools-129%20across%2015%20agents-2f6df6)](jarvis/tools)
 [![offline](https://img.shields.io/badge/LLM-off%20by%20default%20%C2%B7%20runs%20fully%20offline-0f172a)](jarvis/config.py)
 [![python](https://img.shields.io/badge/python-3.11%20%C2%B7%203.12%20(CI)-6b7688)](.github/workflows/ci.yml)
@@ -39,7 +39,7 @@ measurement spent closing that gap, in the ledger and on the screen.
 | **Ledger** | `action_logs` hash-chained + `audit.jsonl` append-only, `verify_chain()` |
 | **Edge** | token file `0600` · constant-time compare · same-origin · Host allowlist · 600/min |
 | **Surface** | web dashboard · phone client page over the LAN · voice (macOS `say`/STT) · watch queue · device pairing |
-| **Size** | ~61.9k lines of versioned Python/HTML/JS · 39.1k source · 22.8k tests · 68 test modules |
+| **Size** | ~62.1k lines of versioned Python/HTML/JS · 39.1k source · 22.9k tests · 69 test modules |
 
 ---
 
@@ -51,8 +51,8 @@ and the diagrams read their counts from the live registry.
 
 | Claim | Value | Reproduce |
 |---|---|---|
-| Test suite | **1820 passed · 0 failed · 0 xfailed · 0 skipped** (1820 collected; the skip is the network-gated arXiv test, which timed out in this run and passed live in the two before it — `-rs` prints its reason, an earlier run of the same phase reported **1 skipped** for that test, which is why a skip is named when it happens rather than smoothed over) | `python -m pytest -q -rs` |
-| Suite growth, Phase 9 → 41 | 875 passing / **126 failing** → 1820 passing / 0 failing / **0 xfailed** at the Phase 41 close | `cat benchmarks/suite_history.json` |
+| Test suite | **1827 passed · 0 failed · 0 xfailed · 0 skipped** (1827 collected; the skip is the network-gated arXiv test, which timed out in this run and passed live in the two before it — `-rs` prints its reason, an earlier run of the same phase reported **1 skipped** for that test, which is why a skip is named when it happens rather than smoothed over) | `python -m pytest -q -rs` |
+| Suite growth, Phase 9 → 42 | 875 passing / **126 failing** → 1827 passing / 0 failing / **0 xfailed** at the Phase 42 close | `cat benchmarks/suite_history.json` |
 | Tools registered | **133** | `python -c "from jarvis.core.orchestrator import JarvisCore as J; print(len(J().tools.names()))"` |
 | Confirmation-gated | **28** of 133 | `python assets/build_diagrams.py` (prints the live counts) |
 | Risk tiers | read 70 · low 35 · external 13 · high 12 · physical 3 | same |
@@ -93,7 +93,7 @@ and the diagrams read their counts from the live registry.
 - [Benchmarks](#benchmarks)
 - [Hardware truth](#hardware-truth)
 - [What the system says when something fails](#what-the-system-says-when-something-fails)
-- [The forty-one phases](#the-forty-one-phases)
+- [The forty-two phases](#the-forty-two-phases)
 - [The plan's safety matrix, run](#the-plans-safety-matrix-run)
 - [Smooth and fast](#smooth-and-fast)
 - [Security model](#security-model)
@@ -129,9 +129,9 @@ and not a quiet success.
 
 ## Benchmarks
 
-### Suite growth, Phase 9 → Phase 41
+### Suite growth, Phase 9 → Phase 42
 
-<img src="assets/chart-suite-growth.svg" alt="Test suite growth from 875 passing with 126 failing, to 1820 passing with none failing at the close of Phase 41" width="100%"/>
+<img src="assets/chart-suite-growth.svg" alt="Test suite growth from 875 passing with 126 failing, to 1827 passing with none failing at the close of Phase 42" width="100%"/>
 
 Phase 9 inherited **126 failing tests**. The cause was a single import line in
 `jarvis/tools/base.py` that left `Verification` undefined, so every tool result raised
@@ -144,28 +144,28 @@ read auditable as a success.
 
 | Command | State the user sees | Audit token | ms |
 |---|---|---|---|
-| show me my laptop battery | VERIFIED | success | 19 |
+| show me my laptop battery | VERIFIED | success | 17 |
 | plan my day | VERIFIED | success | 5 |
-| remember that this is my AMR project | VERIFIED | success | 5 |
+| remember that this is my AMR project | VERIFIED | success | 4 |
 | what did I work on yesterday | VERIFIED | success | 4 |
 | check my car fuel | **UNAVAILABLE** | failure | 5 |
 | turn on study mode | **UNAVAILABLE** | failure | 5 |
 | transfer this file to my phone | **NOTHING EXECUTED** | no_action | 4 |
-| design this system | **NOT RECOGNISED** | no_action | 5 |
-| schedule two hours for project work tomorrow | **NEEDS DETAIL** | no_action | 4 |
+| design this system | **NOT RECOGNISED** | no_action | 4 |
+| schedule two hours for project work tomorrow | **NEEDS DETAIL** | no_action | 3 |
 | draft an email to my teammate | **FAILED** | failure | 5 |
-| research this idea | VERIFIED | success | 280 |
-| find my latest project report | VERIFIED | success | 763 |
+| research this idea | VERIFIED | success | 393 |
+| find my latest project report | VERIFIED | success | 882 |
 
-Median command: **5 ms**; the 17 measured commands sum to **1,124 ms** in this run. That one
-number moves with the network and with the disk, so the split is the part worth reading: the
-15 commands that touch neither total **81 ms**, `research this idea` was **280 ms** waiting on
-arXiv, and `find my latest project report` was **763 ms** walking a real `$HOME`. The same two
-rows have measured **41,247 ms** (ending *VERIFIED (degraded)* — it named the refusal instead
-of inventing a paper, which is 15-F, and the wait itself was 29-B, since bounded by
-`net.http_read` and `SENTENCE_BUDGET`) and **65 ms** (with `$HOME` sandboxed to an empty
-scratch tree, so there was nothing to descend). A row of this table is only comparable to
-another row of it when the machine underneath is the same one.
+Median command: **5 ms**; the 17 measured commands sum to **1,352 ms** in the Phase 42 run.
+That one number moves with the network and with the disk, so the split is the part worth
+reading: the 15 commands that touch neither total **56 ms**, `research this idea` was **393 ms**
+waiting on arXiv, and `find my latest project report` was **882 ms** walking a real `$HOME`. The
+same two rows have measured **41,247 ms** (ending *VERIFIED (degraded)* — it named the refusal
+instead of inventing a paper, which is 15-F, and the wait itself was 29-B, since bounded by
+`net.http_read` and `SENTENCE_BUDGET`) and **65 ms** (with `$HOME` sandboxed to an empty scratch
+tree, so there was nothing to descend). A row of this table belongs to one run on one machine;
+re-running the command above overwrites the JSON it is drawn from.
 
 Note *"what did I work on yesterday"* reading **VERIFIED** with an empty result: since
 Phase 20 it answers about the *day asked about* — `Nothing was recorded in memory on
@@ -187,7 +187,7 @@ moved, and the ledger now says exactly that. A simulated *car read* is still a s
 read — reading a labelled simulator is a real read — and that distinction is pinned by a
 test so it stays a decision rather than an accident.
 
-## The forty-one phases
+## The forty-two phases
 
 Each closed with a report in [`audit/`](audit), and each report's claims carry the
 command that produced them.
@@ -217,6 +217,7 @@ command that produced them.
 | **29 — A route fills its own action** | flowcharts and architecture diagrams had been dead since they were written: the route sent a title to a tool that also needs `steps` / `components`, so the gate answered the user with *"missing required parameter 'steps'"* -- even when the sentence named them. What a sentence states is now used; what it omits is asked for |
 | **30 — A capability you have is a capability you can ask for** | 46 of 127 tools answered their own name with "I understood the words but not the goal" -- twice the gap the open item had recorded, because that item had been measured by grepping the planner instead of asking the router. A registry-derived route now reaches a tool whose name words a sentence contains, validates the action with the registry before emitting it, and asks in the tool's own description when an argument is missing; three routes that *advertised* capabilities yield to a sentence naming one; and the delete-capable tool that was tiered LOW-and-unconfirmed for as long as it was unreachable was retiered in the same commit |
 | **31 — The device you named is the device that changes** | "turn on the heater" resolved to **Study AC** (the gateway filed heating under cooling) and `control_home_device` was LOW with no confirmation, so the request was approved for execution and only an offline gateway stopped a device changing. The synonym, the resolver and the tier were tightened in one commit, the permission engine grew a device guard beside its path guard, and the plan's §45 matrix has held **6 of 6** since |
+| **42 — What a model key actually buys** | Offered an API key, the model path was measured before asking for it: config had `llm_base_url`/`llm_api_key`, the router built a real OpenAI-compatible request with a `Bearer` header and a JSON mode, `/health` reported `llm_enabled: true` — and against a local endpoint that logs every call, three sentences produced **zero chat calls and two embedding calls**. `ModelRouter.complete()` had no caller anywhere: a key bought a badge and an egress path for memory text while no sentence ever asked the model anything. So the model was given a job with hard limits — consulted only when the rules return `not_understood`, never when they answer, its words **appended** to the rule router's own sentence rather than replacing it (a fluent reply would claim the pipeline understood something it did not), and its suggestions reported, never executed: no actions, no approval card for something nobody asked for, `stage: model` in the ledger so the chain never reads as if the rules knew. Measured again after the change: `what is my battery` → 0 chat calls; `wobbleth from glintar` → 1, answered with the model's own words, including when they were useless. |
 | **41 — The sentences a person actually says** | Asked for "control on the system, an AI like Iron Man", six sentences were run through the planner **before** anything was written, and four of them were broken in four different ways. `open my project` was **declined with a false excuse** -- a note claiming the build had no design or file agent, in a build that registers both and had opened folders in an editor since the phase before. `check storage` had no tool at all. `open github.com` was the interesting one: a hostname was read as a **filename**, so the system built `<home>/github.com` and offered to read it -- not a missing capability but a wrong one, already reachable and already acting. And `find my resume and open it` was two capabilities that both existed with no route between them. Four new tools later (`open_project_folder`, `check_storage`, `open_url`, `find_and_open`), running them found two more things: an Apple event asking Chrome what it is showing **hangs** rather than failing, so the page query now carries its own 4 s deadline like every other read in this build; and a `find_and_open` that found the file and was refused by LaunchServices reported the system's own complaint instead of a success. A name that is not on the short allow-list is **not** guessed into a domain, because inventing one points a logged-in browser at a stranger. |
 | **40 — The application, as files** | Asked for the programs as files rather than a commit, so the artifact was copied, run and *checked*: the copy launched, served `/phone` and answered a command, and failed `codesign --verify` — *"a sealed resource is missing or invalid"* — because the bundle had been sealed with 145 files and then grown 127 more just by being used (the server compiles next to the source it reads). Then the app was quit and **kept listening**: the panel died, `ps` showed its server reparented to launchd with PPID 1, and `curl` still got `200` on the wifi address, with nothing on screen able to stop it. The first fix — `SIGTERM`/`SIGINT` handlers — did not work, and was measured rather than assumed: rebuilt, re-delivered, same orphan. Tk does not die by signal; it calls Tcl's `exit`, which leaves the interpreter from C, so no Python handler and no `atexit` ever runs. The guarantee is now made twice, because the two halves fail differently: the panel's own `exit` is bound to the same cleanup the Quit button uses, and the server is told its parent's pid and notices when it is gone — which is the only half that covers a crash or a SIGKILL. Quit: refused, immediate. `kill -9` on the window: the server is gone within six seconds. |
 | **39 — The folder you named, the agent you command, and the page between** | Three complaints, three measurements, and one of them was not the code. *"It opens VS Code but not the folder"*: the planner had thrown the path away, `open_app` took no `path` parameter, and a second rule answered *"open my project in VS Code"* with a project summary — so nothing downstream could have opened anything; and after both were fixed the tool still waited 20 s and returned "timed out" while the editor sat open, because **launching a GUI and capturing its stdout are the same bug in different clothes** — the real bundled CLI keeps the inherited pipe open for as long as the editor lives, so the detached spawn got its own `DEVNULL` and the poll went to VS Code's own record on disk rather than to a claim. *"Not give cmds in claude code"*: no tool existed; `run_coding_agent` now shells to the real CLI with `-p --output-format json --add-dir <workspace>`, is EXTERNAL and confirmation-gated, and the consent line names the prompt and the folder leaf rather than the raw dict; live, it asked Claude Code to write a marker into a workspace and the file was on disk afterwards, with the answer read back from the CLI's own JSON (`$0.14033`, one turn, `Verification.SUCCESS`), and the same sentence from the LAN side held for confirmation instead of running. *"Make its UI better"*: the dashboard had **zero** `:hover`, `:focus`, `@media`, `prefers-color-scheme`, `prefers-reduced-motion` or `aria-` rules — the whole dark theme was one unapplied variable block — and the honest fix was to measure it in a browser at 375 and 1440 in both schemes, which is also where the fix for the grid was found: not by reading my own diff, but by failing twice on it (a duplicated function declaration that only Node could see, and a measurement taken from the app's *staged* copy instead of the file I had just edited). |
@@ -401,7 +402,7 @@ Measured, because "feels faster" is not evidence:
 |---|---|---|
 | `search_files`, query that matches nothing, rooted at `~` | **6,955 ms** | **346–1,217 ms** |
 | `search_files`, the acceptance command | 11,299 ms | 1,217 ms (346 ms on a quieter run) |
-| All 17 measured acceptance commands | 22,573 ms | **1,124 ms** as measured, **81 ms** of it once `research` and the `$HOME` walk are separated out (see the note above) |
+| All 17 measured acceptance commands | 22,573 ms | **1,352 ms** as measured, **56 ms** of it once `research` and the `$HOME` walk are separated out (see the note above) |
 | Any API read (`/tools`, `/tasks`, `/audit`, `/memory`) | 1-2 ms | unchanged |
 | `GET /health`, launched server, warm | 1.5-8 ms (first call in a process: 110 ms) | unchanged — nothing expensive runs per request |
 | `JarvisCore()` construction | 29 ms | unchanged |
@@ -474,7 +475,7 @@ curl -s -H "X-JARVIS-Token: $TOKEN" -H 'Content-Type: application/json' \
      -d '{"text":"what is my battery"}' http://127.0.0.1:8765/command
 
 # Prove it to yourself:
-python -m pytest -q                       # 1820 passed, 0 failed (the research test skips only while arXiv refuses)
+python -m pytest -q                       # 1827 passed, 0 failed (the research test skips only while arXiv refuses)
 python benchmarks/acceptance_run.py       # re-measures the README's numbers
 python assets/build_charts.py && python assets/build_diagrams.py
 ```
@@ -495,9 +496,9 @@ jarvis/
   scheduler/   recurring jobs, runner with per-run re-authorization
   car/ home/ robotics/ watch/ vision/ research/ design/ coding/
   integrations/ IMAP/SMTP and CalDAV providers with local fallbacks
-tests/         68 modules · 1820 collected · includes the shipped page JS, run by Node
+tests/         69 modules · 1827 collected · includes the shipped page JS, run by Node
 dashboard/     index.html control panel + phone.html, the client a phone uses over the LAN
-audit/         43 phase reports + 4 CSV matrices — the evidence behind this README
+audit/         44 phase reports + 4 CSV matrices — the evidence behind this README
 benchmarks/    acceptance_run.py and the JSON the charts are drawn from
 assets/        generated figures + the two generators that draw them
 app/           PyInstaller spec and bundle sources (the launcher and its wifi switch; see the Phase 36 report)
@@ -560,6 +561,17 @@ adding and removing a synonym at run time. 31-B: the confirmation prompt re-deri
 line from the raw parameters while the dashboard rendered the stored preview — two renderings
 of one consent question, and neither naming the device. One string feeds both now: *"Will do:
 set Kitchen light (kitchen.light) to 40%"*.
+- **What a model key buys, and what it does not** (Phase 42). Reasoned in
+  `audit/PHASE42_WHAT_A_MODEL_KEY_BUYS_REPORT.md`. What it left open:
+  **42-A** voice from the phone is still not built — `/voice/transcribe` takes a clip and the
+  phone page has no microphone, so on a handset the only voice path today is the keyboard's own
+  dictation button. A real loop needs an STT backend that works, and on this machine macOS
+  speech is permission-blocked and no whisper binary is installed. **42-B** `/health`'s
+  `llm_enabled` means *configured*, not *reachable*: a wrong key still reports true and the
+  advice path degrades to "it was unavailable". **42-C** the advice hop is sequential, so an
+  unrecognised sentence now takes as long as the model takes. **42-D** the model still cannot
+  be asked to summarise something the system has read — 41-B is the open item, this phase only
+  built the route in.
 - **The sentences a person actually says** (Phase 41). Reasoned in
   `audit/PHASE41_THE_SENTENCES_YOU_ACTUALLY_SAY_REPORT.md`. What it left open:
   **41-A** *"hey Vantage"* still does not wake it — the spoken and typed wake list is still

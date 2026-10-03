@@ -202,6 +202,7 @@ def suite_history() -> dict:
         ("39 the folder and the agent", 1775, 1775, 0, "launching a GUI was waiting for it to quit; the editor's own record, not my word, proves the folder opened"),
         ("40 the copy still launches", 1786, 1786, 0, "a copied app broke its own seal by being used, and outlived its window as a listening server"),
         ("41 the sentences you say", 1820, 1820, 0, "one refusal was a false claim about the build, and a hostname was being read as a filename"),
+        ("42 what a key buys", 1827, 1827, 0, "a configured model had no caller: zero chat calls, two embedding calls"),
     ]
     return {"phases": [{"phase": p, "collected": c, "passed": q, "failed": f, "note": n}
                        for p, c, q, f, n in points]}

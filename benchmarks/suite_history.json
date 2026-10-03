@@ -230,6 +230,13 @@
    "passed": 1820,
    "failed": 0,
    "note": "one refusal was a false claim about the build, and a hostname was being read as a filename"
+  },
+  {
+   "phase": "42 what a key buys",
+   "collected": 1827,
+   "passed": 1827,
+   "failed": 0,
+   "note": "a configured model had no caller: zero chat calls, two embedding calls"
   }
  ]
 }
