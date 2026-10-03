@@ -21,6 +21,55 @@
     --warn: #d97706;
     --bad: #dc2626;
     --radius: 10px;
+    /* Every colour the page paints is named here. The dark block below has to
+      restate the same list, which a test enforces -- a dark mode that forgets a
+      token is not a dark mode, it is invisible text. */
+    --on-accent: #ffffff;
+    --console-bg: #0f172a;
+    --console-ink: #e6edf7;
+    --console-muted: #8b98ab;
+    --ok-ink: #16a34a;
+    --warn-ink: #f0b429;
+    --bad-ink: #ff6b6b;
+    --pill-bg: #eef3ff;
+    --tag-bg: #eef1f6;
+    --ghost-bg: #f1f3f7;
+    --focus: #2f6df6;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0d1117;
+      --panel: #161b22;
+      --ink: #e6edf3;
+      --muted: #9198a1;
+      --line: #21262d;
+      --accent: #4c8dff;
+      --ok: #3fb950;
+      --warn: #d29922;
+      --bad: #f85149;
+      --radius: 10px;
+      --on-accent: #0b1220;
+      --console-bg: #0b1220;
+      --console-ink: #e6edf7;
+      --console-muted: #8b98ab;
+      --ok-ink: #3fb950;
+      --warn-ink: #e3b341;
+      --bad-ink: #ff8080;
+      --pill-bg: #13274d;
+      --tag-bg: #21262d;
+      --ghost-bg: #21262d;
+      --focus: #6ea8ff;
+    }
+  }
+  /* Keyboard focus is a feature, not a decoration: it is the only way to see
+     where a command will go without touching the trackpad. */
+  :focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    * { animation: none !important; transition: none !important; }
   }
   * { box-sizing: border-box; }
   body {
@@ -35,10 +84,10 @@
   header h1 { font-size: 17px; margin: 0; letter-spacing: .3px; }
   .pill {
     font-size: 12px; padding: 3px 9px; border-radius: 999px;
-    background: #eef3ff; color: var(--accent); font-weight: 600;
+    background: var(--pill-bg); color: var(--accent); font-weight: 600;
   }
   .wrap { padding: 18px 22px 40px; max-width: 1240px; margin: 0 auto; }
-  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr)); gap: 16px; }
   .card {
     background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
     padding: 14px 16px;
@@ -61,7 +110,7 @@
   }
   .cmdbar button {
     padding: 11px 18px; border: 0; border-radius: var(--radius);
-    background: var(--accent); color: #fff; font-weight: 600; cursor: pointer;
+    background: var(--accent); color: var(--on-accent); font-weight: 600; cursor: pointer;
   }
   .cmdbar button:hover { filter: brightness(.95); }
   /* Pipeline state chip. Reuses the existing ok/warn/bad tone classes rather
@@ -71,13 +120,13 @@
     font-size: 12px; letter-spacing: .04em; font-weight: 600;
   }
   .state .chip {
-    padding: 3px 10px; border-radius: 999px; background: #0f172a;
+    padding: 3px 10px; border-radius: 999px; background: var(--console-bg);
     border: 1px solid currentColor; text-transform: uppercase;
   }
   .state.ok .chip { color: var(--ok); }
-  .state.warn .chip { color: #f0b429; }
-  .state.bad .chip { color: #ff6b6b; }
-  .state.muted .chip { color: #8b98ab; font-weight: 500; }
+  .state.warn .chip { color: var(--warn-ink); }
+  .state.bad .chip { color: var(--bad-ink); }
+  .state.muted .chip { color: var(--console-muted); font-weight: 500; }
   /* One line per step of a multi-step goal, read from GET /tasks/{job_id}. */
   .steps { list-style: none; margin: 0 0 10px; padding: 0; font-size: 12px; }
   .steps li { display: flex; gap: 8px; align-items: baseline; padding: 2px 0; }
@@ -87,26 +136,60 @@
     flex: 0 0 auto; min-width: 96px; text-align: center;
   }
   .steps li.ok .chip { color: var(--ok); }
-  .steps li.warn .chip { color: #f0b429; }
-  .steps li.bad .chip { color: #ff6b6b; }
-  .steps li.muted .chip { color: #8b98ab; font-weight: 500; }
-  .steps li .name { color: #e6edf7; font-weight: 600; flex: 0 0 auto; }
-  .steps li .detail { color: #8b98ab; }
+  .steps li.warn .chip { color: var(--warn-ink); }
+  .steps li.bad .chip { color: var(--bad-ink); }
+  .steps li.muted .chip { color: var(--console-muted); font-weight: 500; }
+  .steps li .name { color: var(--console-ink); font-weight: 600; flex: 0 0 auto; }
+  .steps li .detail { color: var(--console-muted); }
   pre.reply {
-    background: #0f172a; color: #e6edf7; padding: 12px 14px; border-radius: var(--radius);
+    background: var(--console-bg); color: var(--console-ink); padding: 12px 14px; border-radius: var(--radius);
     white-space: pre-wrap; word-break: break-word; font-size: 13px; margin: 0 0 16px;
     min-height: 42px;
   }
   table { width: 100%; border-collapse: collapse; font-size: 13px; }
-  th, td { text-align: left; padding: 6px 4px; border-bottom: 1px solid var(--line); }
+  th, td { text-align: left; padding: 6px 4px; border-bottom: 1px solid var(--line);
+           overflow-wrap: anywhere; }
+  .card { min-width: 0; }
   th { color: var(--muted); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: .5px; }
   .risk-0 { color: var(--muted); }
   .risk-1 { color: var(--ok); }
   .risk-2 { color: var(--warn); }
   .risk-3, .risk-4 { color: var(--bad); }
-  .tag { font-size: 11px; padding: 1px 7px; border-radius: 999px; background: #eef1f6; color: var(--muted); }
-  .approve { background: var(--ok); color: #fff; border: 0; border-radius: 6px; padding: 4px 10px; cursor: pointer; font-size: 12px; }
-  .deny { background: #f1f3f7; color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: 4px 10px; cursor: pointer; font-size: 12px; }
+  .tag { font-size: 11px; padding: 1px 7px; border-radius: 999px; background: var(--tag-bg); color: var(--muted); }
+  .approve { background: var(--ok); color: var(--on-accent); border: 0; border-radius: 6px; padding: 4px 10px; cursor: pointer; font-size: 12px; }
+  .deny { background: var(--ghost-bg); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: 4px 10px; cursor: pointer; font-size: 12px; }
+  /* Pointer and keyboard feedback on everything a person can act on. The page
+     had one hover rule in total, so nothing else admitted it was clickable. */
+  .cmdbar button:hover, .approve:hover, .deny:hover { filter: brightness(.96); }
+  .cmdbar button:active, .approve:active, .deny:active { transform: translateY(1px); }
+  .card:hover { border-color: var(--accent); }
+  .row:hover { background: color-mix(in srgb, var(--panel) 70%, var(--accent) 8%); }
+  button { transition: filter .12s ease, transform .06s ease; }
+  .loading { animation: pulse 1.2s ease-in-out infinite; }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .45; } }
+  .empty { color: var(--muted); font-size: 13px; line-height: 1.5; }
+  .empty b { color: var(--ink); font-weight: 600; }
+
+  /* Below a laptop lid's worth of width the grid gives up pretending to be
+     three columns, and the command bar stops sitting on one line. */
+  @media (max-width: 900px) {
+    .grid { grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr)); }
+  }
+  @media (max-width: 620px) {
+    header { flex-wrap: wrap; gap: 8px; padding: 12px 14px; }
+    #clock { display: none; }
+    .wrap { padding: 12px 12px 32px; }
+    /* minmax(0, 1fr), not 1fr: a `1fr` track refuses to shrink below its widest
+       content, so one long audit row pushed the whole page past the viewport. */
+    .grid { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+    .cmdbar { flex-direction: column; }
+    .cmdbar button { width: 100%; }
+  }
+  @media (max-width: 420px) {
+    header h1 { font-size: 15px; }
+    .card { padding: 12px; }
+    th, td { font-size: 12px; padding: 5px 3px; }
+  }
 </style>
 </head>
 <body>
@@ -120,26 +203,26 @@
 
 <div class="wrap">
   <div class="cmdbar">
-    <input id="cmd" placeholder='Try: "what is my battery"  ·  "find my report"  ·  "help"' autocomplete="off" />
-    <button id="send">Send</button>
+    <input id="cmd" aria-label="Command for Vantage" placeholder='Try: "what is my battery"  ·  "find my report"  ·  "help"' autocomplete="off" />
+    <button id="send" aria-label="Send command">Send</button>
   </div>
   <!-- Rendered from the backend's own fields. See pipelineState() for exactly
        which ones, and why an HTTP 200 or action.ok is never one of them. -->
-  <div class="state muted" id="state"><span class="chip" id="stateChip">IDLE</span><span class="muted" id="stateNote"></span></div>
+  <div class="state muted" id="state" role="status" aria-live="polite"><span class="chip" id="stateChip">IDLE</span><span class="muted" id="stateNote"></span></div>
   <!-- A goal that became several steps. Each line is the server's own step
        status; nothing here is inferred from the request having been sent. -->
   <ol class="steps" id="steps" hidden></ol>
-  <pre class="reply" id="reply">Ready. Type a command above, or say "help" to see what I can do.</pre>
+  <pre class="reply" id="reply" aria-live="polite">Ready. Type a command above, or say "help" to see what I can do.</pre>
 
   <div class="grid">
     <div class="card">
       <h2>Devices</h2>
-      <div id="devices"><span class="muted">loading…</span></div>
+      <div id="devices"><span class="muted loading">loading…</span></div>
     </div>
 
     <div class="card">
       <h2>Peripherals &amp; Gateways</h2>
-      <div id="peripherals"><span class="muted">loading…</span></div>
+      <div id="peripherals"><span class="muted loading">loading…</span></div>
     </div>
 
     <div class="card">
@@ -149,32 +232,32 @@
 
     <div class="card">
       <h2>Recent Actions</h2>
-      <div id="audit"><span class="muted">loading…</span></div>
+      <div id="audit"><span class="muted loading">loading…</span></div>
     </div>
 
     <div class="card">
       <h2>Memory</h2>
-      <div id="memory"><span class="muted">loading…</span></div>
+      <div id="memory"><span class="muted loading">loading…</span></div>
     </div>
 
     <div class="card">
       <h2>Voice</h2>
-      <div id="voice"><span class="muted">loading…</span></div>
+      <div id="voice"><span class="muted loading">loading…</span></div>
     </div>
 
     <div class="card">
       <h2>Health &amp; Recovery</h2>
-      <div id="health-metrics"><span class="muted">loading…</span></div>
+      <div id="health-metrics"><span class="muted loading">loading…</span></div>
     </div>
 
     <div class="card">
       <h2>Privacy</h2>
-      <div id="privacy"><span class="muted">loading…</span></div>
+      <div id="privacy"><span class="muted loading">loading…</span></div>
     </div>
 
     <div class="card" style="grid-column: 1 / -1;">
       <h2>Tool Registry</h2>
-      <div id="tools"><span class="muted">loading…</span></div>
+      <div id="tools"><span class="muted loading">loading…</span></div>
     </div>
   </div>
 </div>
@@ -444,6 +527,13 @@ function peripheralWord(info) {
 
 async function loadDevices() {
   const devices = await get("/devices");
+  if (!devices.length) {
+    // An empty box reads as broken. Say what is missing and how it gets filled.
+    document.getElementById("devices").innerHTML =
+      '<div class="empty"><b>Nothing paired yet.</b> Open the phone client on this '
+      + 'laptop\'s address and tap "Pair with this laptop", or plug in a watch.</div>';
+    return;
+  }
   document.getElementById("devices").innerHTML = devices.map(d => {
     const word = PERIPHERAL_OF[d.device_id] ? peripheralWord(_peripherals[PERIPHERAL_OF[d.device_id]]) : null;
     const auth = AUTH_WORD[d.auth_state] || d.auth_state || "unknown";
@@ -554,7 +644,11 @@ async function loadPeripherals() {
 async function loadConfirmations() {
   const items = await get("/confirmations");
   const box = document.getElementById("confirmations");
-  if (!items.length) { box.innerHTML = '<span class="muted">none</span>'; return; }
+  if (!items.length) {
+    box.innerHTML = '<div class="empty"><b>Nothing waiting.</b> Anything risky I am asked '
+      + 'to do appears here for you to approve or deny.</div>';
+    return;
+  }
   box.innerHTML = items.map(c => `
     <div class="row">
       <span>${escapeHtml(c.tool)}<br><span class="muted" style="font-size:12px">${escapeHtml(c.preview)}</span></span>
