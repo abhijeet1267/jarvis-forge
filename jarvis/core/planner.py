@@ -201,6 +201,8 @@ class RulePlanner:
             self._robotics,
             self._laptop_center,
             self._run_command,
+            self._smalltalk,
+            self._ask_question,
             self._capability_fallback,
         ]
 
@@ -2558,15 +2560,86 @@ class RulePlanner:
         return None
 
     def _run_command(self, text: str, raw: str) -> Optional[Intent]:
-        match = re.search(r"\brun\b\s+([A-Za-z0-9_-]+)\s*(.*)", raw, re.I)
+        # Imperative and anchored. This used to match `run` anywhere in the sentence, so
+        # "what trains run from mumbai to pune" became a request to execute a program
+        # called `from`, and "how do I run a marathon" one called `a`. The allowlist gate
+        # is what kept that harmless; a question should never reach an executor at all.
+        match = re.match(
+            r"^\s*(?:please\s+|can you\s+|could you\s+|now\s+)?run\b\s+([A-Za-z0-9_.-]+)\s*(.*)$",
+            text, re.I)
         if not match:
+            return None
+        command = match.group(1).lower()
+        if command in self._NAME_STOP:
             return None
         return Intent(
             "run_command",
             tool="run_allowlisted_command",
-            params={"command": match.group(1).lower(), "args": match.group(2).strip()},
+            params={"command": command, "args": match.group(2).strip()},
             confidence=0.7,
         )
+
+    _SMALLTALK = {
+        "hello": "Hello. I am Vantage, on your laptop and listening over your wifi.",
+        "hi": "Hi. Ask me about the battery, a file, a project, or your wifi-connected phone.",
+        "hey": "Hey. What should I do?",
+        "thanks": "Anytime.",
+        "thank you": "Anytime.",
+        "ok": "Right. Say the word.",
+        "good morning": "Good morning. Battery, files, calendar -- what do you need?",
+    }
+
+    def _smalltalk(self, text: str, raw: str) -> Optional[Intent]:
+        """Greeting a greeting instead of reporting a failure to parse it.
+
+        "hello" reaching the not-understood sentence is the most obvious way a system built
+        out of capability lists announces that nobody thought about being talked to.
+        """
+        words = text.strip().strip(".!?,").lower()
+        if not words or len(words.split()) > 3:
+            return None
+        reply = self._SMALLTALK.get(words)
+        if reply is None:
+            return None
+        return Intent("smalltalk", note=reply)
+
+    #: Question shapes whose subject is a topic to look up, in the order they are tried.
+    #: Deliberately few: a sentence that is not one of these is not an encyclopedia query.
+    _QUESTION_FORMS = (
+        r"^\s*(?:can|could|would|will)\s+you\s+(?:tell|explain)\s+me\s+(?:about\s+)?(.+)$",
+        r"^\s*(?:please\s+)?(?:explain|describe)\s+(?:about\s+)?(.+)$",
+        r"^\s*tell\s+me\s+(?:about\s+)?(?:the\s+)?(.+)$",
+        r"^\s*what\s+(?:is|are|was|were)\s+(?:the\s+|a\s+|an\s+)?(.+)$",
+        r"^\s*who\s+(?:is|was|are|were)\s+(?:the\s+|a\s+|an\s+)?(.+)$",
+        r"^\s*(?:define|meaning\s+of)\s+(?:the\s+|a\s+|an\s+)?(.+)$",
+    )
+    #: A subject with these words in it is about this machine, not about the world, and
+    #: the specific routes above already answered it. Anything left is a lookup.
+    _NOT_A_TOPIC = re.compile(r"\b(my|i|me|we|our|project|file|battery|calendar|email|"
+                              r"workspace|robot|car|home|phone|watch|laptop|today|"
+                              r"yesterday|tomorrow|schedule|memory)\b", re.I)
+
+    def _ask_question(self, text: str, raw: str) -> Optional[Intent]:
+        """A factual question, answered by looking it up rather than by guessing.
+
+        The shape is narrow on purpose: *what is X*, *who is X*, *explain X*, *tell me
+        about X*. Anything else stays with the specific routes, the registry fallback or
+        the model, and an empty subject is never sent off to be looked up.
+        """
+        stripped = re.sub(r"^\s*(?:hey|ok|hi|hello|vantage|jarvis)[,.!\s]+", "", text,
+                          flags=re.I).strip()
+        for form in self._QUESTION_FORMS:
+            got = re.match(form, stripped, re.I)
+            if not got:
+                continue
+            topic = got.group(1).strip().strip(".!?").strip()
+            if len(topic) < 2 or len(topic.split()) > 8:
+                return None
+            if self._NOT_A_TOPIC.search(topic):
+                return None
+            return Intent("ask_question", tool="ask_question", params={"topic": topic},
+                          confidence=0.75)
+        return None
 
     # -- registry-derived capability fallback --------------------------------
     #

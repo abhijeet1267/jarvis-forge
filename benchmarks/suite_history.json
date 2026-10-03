@@ -244,6 +244,13 @@
    "passed": 1833,
    "failed": 0,
    "note": "a test passthrough answered a real audio clip with ok and confidence 1.0"
+  },
+  {
+   "phase": "44 answers, not command lists",
+   "collected": 1845,
+   "passed": 1845,
+   "failed": 0,
+   "note": "a question containing the word run was parsed as a command to execute"
   }
  ]
 }

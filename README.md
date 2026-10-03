@@ -9,7 +9,7 @@ world afterwards**, and written to a tamper-evident audit chain. It runs with no
 key, no network and no vendor — an LLM is optional and off by default.
 
 What this repository is mostly about is not features. It is about the difference
-between *"the handler returned"* and *"the thing happened"* — and the forty-three phases of
+between *"the handler returned"* and *"the thing happened"* — and the forty-four phases of
 measurement spent closing that gap, in the ledger and on the screen.
 
 > **On the name.** The product is **Vantage** — in the README, both web clients, the install
@@ -25,7 +25,7 @@ measurement spent closing that gap, in the ledger and on the screen.
 > too: they are dated evidence of what was true then.
 
 [![ci](https://img.shields.io/github/actions/workflow/status/abhijeet1267/jarvis-forge/ci.yml?label=tests%20%C2%B7%20macos)](https://github.com/abhijeet1267/jarvis-forge/actions/workflows/ci.yml)
-[![suite](https://img.shields.io/badge/tests-1833%20passed%20%C2%B7%200%20failed-16a34a)](tests)
+[![suite](https://img.shields.io/badge/tests-1845%20passed%20%C2%B7%200%20failed-16a34a)](tests)
 [![tools](https://img.shields.io/badge/tools-129%20across%2015%20agents-2f6df6)](jarvis/tools)
 [![offline](https://img.shields.io/badge/LLM-off%20by%20default%20%C2%B7%20runs%20fully%20offline-0f172a)](jarvis/config.py)
 [![python](https://img.shields.io/badge/python-3.11%20%C2%B7%203.12%20(CI)-6b7688)](.github/workflows/ci.yml)
@@ -33,13 +33,13 @@ measurement spent closing that gap, in the ledger and on the screen.
 | | |
 |---|---|
 | **Runtime** | Python 3.11+ · FastAPI · SQLite (32 tables) · stdlib-first |
-| **Planning** | `RulePlanner` — 45 deterministic routes, no model required |
+| **Planning** | `RulePlanner` — 47 deterministic routes, no model required |
 | **Authority** | `PermissionEngine` · 5 risk tiers · 28 confirmation-gated tools |
 | **Proof** | tri-state `Verification` (success / failed / **unknown**) on every action |
 | **Ledger** | `action_logs` hash-chained + `audit.jsonl` append-only, `verify_chain()` |
 | **Edge** | token file `0600` · constant-time compare · same-origin · Host allowlist · 600/min |
 | **Surface** | web dashboard · phone client page over the LAN · voice (macOS `say`/STT) · watch queue · device pairing |
-| **Size** | ~62.3k lines of versioned Python/HTML/JS · 39.2k source · 23.1k tests · 70 test modules |
+| **Size** | ~62.6k lines of versioned Python/HTML/JS · 39.3k source · 23.3k tests · 71 test modules |
 
 ---
 
@@ -51,11 +51,11 @@ and the diagrams read their counts from the live registry.
 
 | Claim | Value | Reproduce |
 |---|---|---|
-| Test suite | **1833 passed · 0 failed · 0 xfailed · 0 skipped** (1833 collected; the skip is the network-gated arXiv test, which timed out in this run and passed live in the two before it — `-rs` prints its reason, an earlier run of the same phase reported **1 skipped** for that test, which is why a skip is named when it happens rather than smoothed over) | `python -m pytest -q -rs` |
-| Suite growth, Phase 9 → 43 | 875 passing / **126 failing** → 1833 passing / 0 failing / **0 xfailed** at the Phase 43 close | `cat benchmarks/suite_history.json` |
-| Tools registered | **133** | `python -c "from jarvis.core.orchestrator import JarvisCore as J; print(len(J().tools.names()))"` |
-| Confirmation-gated | **28** of 133 | `python assets/build_diagrams.py` (prints the live counts) |
-| Risk tiers | read 70 · low 35 · external 13 · high 12 · physical 3 | same |
+| Test suite | **1845 passed · 0 failed · 0 xfailed · 0 skipped** (1845 collected; the skip is the network-gated arXiv test, which timed out in this run and passed live in the two before it — `-rs` prints its reason, an earlier run of the same phase reported **1 skipped** for that test, which is why a skip is named when it happens rather than smoothed over) | `python -m pytest -q -rs` |
+| Suite growth, Phase 9 → 44 | 875 passing / **126 failing** → 1845 passing / 0 failing / **0 xfailed** at the Phase 44 close | `cat benchmarks/suite_history.json` |
+| Tools registered | **134** | `python -c "from jarvis.core.orchestrator import JarvisCore as J; print(len(J().tools.names()))"` |
+| Confirmation-gated | **28** of 134 | `python assets/build_diagrams.py` (prints the live counts) |
+| Risk tiers | read 71 · low 35 · external 13 · high 12 · physical 3 | same |
 | API routes | **108** | `python -c "s=open('jarvis/api/app.py').read(); print(sum(s.count(f'@app.{v}(\"') for v in ('get','post','put','patch','delete')))"` |
 | Acceptance commands measured | 17 of 18, live, over HTTP | `python benchmarks/acceptance_run.py` |
 | Plan's safety matrix (§45) | **6 of 6** hold — the sixth held since Phase 31 | `python benchmarks/safety_run.py` |
@@ -93,7 +93,7 @@ and the diagrams read their counts from the live registry.
 - [Benchmarks](#benchmarks)
 - [Hardware truth](#hardware-truth)
 - [What the system says when something fails](#what-the-system-says-when-something-fails)
-- [The forty-three phases](#the-forty-three-phases)
+- [The forty-four phases](#the-forty-four-phases)
 - [The plan's safety matrix, run](#the-plans-safety-matrix-run)
 - [Smooth and fast](#smooth-and-fast)
 - [Security model](#security-model)
@@ -129,9 +129,9 @@ and not a quiet success.
 
 ## Benchmarks
 
-### Suite growth, Phase 9 → Phase 43
+### Suite growth, Phase 9 → Phase 44
 
-<img src="assets/chart-suite-growth.svg" alt="Test suite growth from 875 passing with 126 failing, to 1833 passing with none failing at the close of Phase 43" width="100%"/>
+<img src="assets/chart-suite-growth.svg" alt="Test suite growth from 875 passing with 126 failing, to 1845 passing with none failing at the close of Phase 44" width="100%"/>
 
 Phase 9 inherited **126 failing tests**. The cause was a single import line in
 `jarvis/tools/base.py` that left `Verification` undefined, so every tool result raised
@@ -187,7 +187,7 @@ moved, and the ledger now says exactly that. A simulated *car read* is still a s
 read — reading a labelled simulator is a real read — and that distinction is pinned by a
 test so it stays a decision rather than an accident.
 
-## The forty-three phases
+## The forty-four phases
 
 Each closed with a report in [`audit/`](audit), and each report's claims carry the
 command that produced them.
@@ -217,6 +217,7 @@ command that produced them.
 | **29 — A route fills its own action** | flowcharts and architecture diagrams had been dead since they were written: the route sent a title to a tool that also needs `steps` / `components`, so the gate answered the user with *"missing required parameter 'steps'"* -- even when the sentence named them. What a sentence states is now used; what it omits is asked for |
 | **30 — A capability you have is a capability you can ask for** | 46 of 127 tools answered their own name with "I understood the words but not the goal" -- twice the gap the open item had recorded, because that item had been measured by grepping the planner instead of asking the router. A registry-derived route now reaches a tool whose name words a sentence contains, validates the action with the registry before emitting it, and asks in the tool's own description when an argument is missing; three routes that *advertised* capabilities yield to a sentence naming one; and the delete-capable tool that was tiered LOW-and-unconfirmed for as long as it was unreachable was retiered in the same commit |
 | **31 — The device you named is the device that changes** | "turn on the heater" resolved to **Study AC** (the gateway filed heating under cooling) and `control_home_device` was LOW with no confirmation, so the request was approved for execution and only an offline gateway stopped a device changing. The synonym, the resolver and the tier were tightened in one commit, the permission engine grew a device guard beside its path guard, and the plan's §45 matrix has held **6 of 6** since |
+| **44 — Answers, greetings, and a question that was not a shell command** | Asked to "make it like ChatGPT — what I say they understand", nine natural sentences were run through the router first. Seven returned the fallback they pasted at me. Two were worse: **`what trains run from mumbai to pune` parsed as a request to execute a program called `from`**, and `how do I run a marathon` as one to run `a`, because `\brun\b` matched anywhere in a sentence. The allowlist gate is the only reason that is a routing bug rather than an incident, and a question must never reach an executor: the route is now imperative and anchored, with the real `run ls -la` still routed and the permission verdict proven unchanged. `hello` and `thanks` are answered like greetings instead of parse failures. And `ask_question` gives it actual answers with no model and no key — a Wikipedia summary, the article named in the sentence, READ tier like the paper research that has been fetching all along. Measured live: *what is a train* answered from the real article; *who is apj kalam* 404'd because the article is titled *A. P. J. Abdul Kalam*, which is a textbook feature that fails on real questions, so a miss now searches first and follows the best title — and if the search finds nothing, the reply names the topic and says there is no answer rather than producing one. |
 | **43 — A passthrough is not a microphone** | Asked for voice from the phone, one real recording was sent to the running app before anything was built on top of the speech path. It came back **`ok: true, confidence: 1.0`, with no text**. Nothing on the machine can transcribe — Apple refuses Speech Recognition to a process it has not authorised (a marker had sat in the data home since Sep 25), whisper.cpp is not installed, hosted Whisper has no key — so `get_stt()` had fallen through to `TranscriptSTT`, the class whose entire job is echoing a string a *test* fed it, and that stand-in had agreed to have heard a recording. A mic button built here would have reported silence as success and let anything downstream act on it. So the fix went at the claim rather than the caller: backends now declare whether they are `real`, the passthrough refuses a file it was not fed, the endpoint returns an honest failure that names the three ways to give the machine ears — ordered by cost, with the one that ships audio off the box labelled as that — and `/voice/status` answers `can_listen`, which a client can actually use. The button was **not** built, on purpose: it goes in the moment something can hear. |
 | **42 — What a model key actually buys** | Offered an API key, the model path was measured before asking for it: config had `llm_base_url`/`llm_api_key`, the router built a real OpenAI-compatible request with a `Bearer` header and a JSON mode, `/health` reported `llm_enabled: true` — and against a local endpoint that logs every call, three sentences produced **zero chat calls and two embedding calls**. `ModelRouter.complete()` had no caller anywhere: a key bought a badge and an egress path for memory text while no sentence ever asked the model anything. So the model was given a job with hard limits — consulted only when the rules return `not_understood`, never when they answer, its words **appended** to the rule router's own sentence rather than replacing it (a fluent reply would claim the pipeline understood something it did not), and its suggestions reported, never executed: no actions, no approval card for something nobody asked for, `stage: model` in the ledger so the chain never reads as if the rules knew. Measured again after the change: `what is my battery` → 0 chat calls; `wobbleth from glintar` → 1, answered with the model's own words, including when they were useless. |
 | **41 — The sentences a person actually says** | Asked for "control on the system, an AI like Iron Man", six sentences were run through the planner **before** anything was written, and four of them were broken in four different ways. `open my project` was **declined with a false excuse** -- a note claiming the build had no design or file agent, in a build that registers both and had opened folders in an editor since the phase before. `check storage` had no tool at all. `open github.com` was the interesting one: a hostname was read as a **filename**, so the system built `<home>/github.com` and offered to read it -- not a missing capability but a wrong one, already reachable and already acting. And `find my resume and open it` was two capabilities that both existed with no route between them. Four new tools later (`open_project_folder`, `check_storage`, `open_url`, `find_and_open`), running them found two more things: an Apple event asking Chrome what it is showing **hangs** rather than failing, so the page query now carries its own 4 s deadline like every other read in this build; and a `find_and_open` that found the file and was refused by LaunchServices reported the system's own complaint instead of a success. A name that is not on the short allow-list is **not** guessed into a domain, because inventing one points a logged-in browser at a stranger. |
@@ -476,7 +477,7 @@ curl -s -H "X-JARVIS-Token: $TOKEN" -H 'Content-Type: application/json' \
      -d '{"text":"what is my battery"}' http://127.0.0.1:8765/command
 
 # Prove it to yourself:
-python -m pytest -q                       # 1833 passed, 0 failed (the research test skips only while arXiv refuses)
+python -m pytest -q                       # 1845 passed, 0 failed (the research test skips only while arXiv refuses)
 python benchmarks/acceptance_run.py       # re-measures the README's numbers
 python assets/build_charts.py && python assets/build_diagrams.py
 ```
@@ -492,14 +493,14 @@ jarvis/
   security/    permission engine, audit chain, redaction, privacy, path guard
   api/         FastAPI app: 108 routes, auth, origin gate, LAN gate, rate limit
   agents/      15 agents — laptop, phone, home, robotics, car, watch, email, …
-  tools/       133 tools across 5 risk tiers, each declaring its own spec
+  tools/       134 tools across 5 risk tiers, each declaring its own spec
   memory/      hybrid retrieval, lifecycle, forgetting
   scheduler/   recurring jobs, runner with per-run re-authorization
   car/ home/ robotics/ watch/ vision/ research/ design/ coding/
   integrations/ IMAP/SMTP and CalDAV providers with local fallbacks
-tests/         70 modules · 1833 collected · includes the shipped page JS, run by Node
+tests/         71 modules · 1845 collected · includes the shipped page JS, run by Node
 dashboard/     index.html control panel + phone.html, the client a phone uses over the LAN
-audit/         45 phase reports + 4 CSV matrices — the evidence behind this README
+audit/         46 phase reports + 4 CSV matrices — the evidence behind this README
 benchmarks/    acceptance_run.py and the JSON the charts are drawn from
 assets/        generated figures + the two generators that draw them
 app/           PyInstaller spec and bundle sources (the launcher and its wifi switch; see the Phase 36 report)
@@ -562,6 +563,15 @@ adding and removing a synonym at run time. 31-B: the confirmation prompt re-deri
 line from the raw parameters while the dashboard rendered the stored preview — two renderings
 of one consent question, and neither naming the device. One string feeds both now: *"Will do:
 set Kitchen light (kitchen.light) to 40%"*.
+- **Answers, greetings, and a question that was not a shell command** (Phase 44). Reasoned in
+  `audit/PHASE44_ANSWERS_NOT_COMMAND_LISTS_REPORT.md`. What it left open:
+  **44-A** an answer is the encyclopedia's own opening paragraph, not a synthesis — a long or
+  comparative question gets one side of it. **44-B** English only: a question in another language
+  is searched in English. **44-C** *what is the capital of France* resolves to the article
+  *"Capital of France"*, which is not an answer; that needs a reasoning model or a data source,
+  recorded rather than patched with more regex. **44-D** every title miss costs a second network
+  read. And the honest frame for all of it: 47 anchored rule shapes is still a phrase list, so
+  "what I say they understand" ends at the model, which ends at a key (Phase 42).
 - **A passthrough is not a microphone** (Phase 43). Reasoned in
   `audit/PHASE43_A_PASSTHROUGH_IS_NOT_A_MIC_REPORT.md`. What it left open:
   **43-A** the phone's microphone button, deliberately unbuilt until `can_listen` is true —
