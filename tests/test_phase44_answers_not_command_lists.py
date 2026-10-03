@@ -237,3 +237,15 @@ def test_a_name_in_no_article_stays_unanswered(wiki):
         ToolContext(device_id="laptop_main", session_id="p44"), topic="zzqx vvoop"))
     assert result.ok is False, result
     assert "zzqx" in result.error
+
+
+def test_the_fallback_hint_names_the_things_it_can_now_do(core):
+    """The sentence people see when lost was written before half these abilities existed.
+
+    It is the product's front door, and a stale one advertises a smaller system than the
+    one on the machine -- which is how a person ends up believing they have to memorise
+    commands.
+    """
+    reply = core.planner.parse("wobbleth from glintar").direct_reply.lower()
+    for hint in ("what is a train", "open github.com", "check storage", "open my project"):
+        assert hint in reply, f"{hint!r} missing from the hint: {reply}"

@@ -227,9 +227,10 @@ class RulePlanner:
             intent="unknown",
             reply_kind="not_understood",
             direct_reply=(
-                "I understood the words but not the goal yet. Try things like "
-                '"open VS Code", "find my report", "what is my battery", '
-                '"remember that ...", or "what did I work on yesterday".'
+                "I understood the words but not the goal yet. You don't have to remember "
+                'a command list -- things I can do right now: "what is a train", '
+                '"open github.com", "check storage", "open my project", "find my report", '
+                '"what is my battery", "remember that ...", "what did I work on yesterday".'
             ),
             planner="rules",
         )

@@ -8,7 +8,7 @@
   {
    "command": "Jarvis, find my latest project report.",
    "http_status": 200,
-   "ms": 1038,
+   "ms": 1000,
    "intent": "search_files",
    "tools": [
     "search_files"
@@ -38,7 +38,7 @@
   {
    "command": "Jarvis, transfer this file to my phone.",
    "http_status": 200,
-   "ms": 5,
+   "ms": 4,
    "intent": "transfer",
    "tools": [],
    "verification": [],
@@ -49,7 +49,7 @@
   {
    "command": "Jarvis, what is my phone battery?",
    "http_status": 200,
-   "ms": 4,
+   "ms": 3,
    "intent": "phone_battery",
    "tools": [],
    "verification": [],
@@ -60,7 +60,7 @@
   {
    "command": "Jarvis, plan my day.",
    "http_status": 200,
-   "ms": 6,
+   "ms": 5,
    "intent": "daily_schedule",
    "tools": [
     "daily_schedule"
@@ -112,7 +112,7 @@
   {
    "command": "Jarvis, remember that this is my AMR project.",
    "http_status": 200,
-   "ms": 13,
+   "ms": 5,
    "intent": "remember",
    "tools": [
     "remember_fact"
@@ -127,7 +127,7 @@
   {
    "command": "Jarvis, what did I work on yesterday?",
    "http_status": 200,
-   "ms": 5,
+   "ms": 4,
    "intent": "recall",
    "tools": [
     "search_memory"
@@ -148,12 +148,12 @@
    "verification": [],
    "audit_result": "no_action",
    "dashboard_state": "NOT RECOGNISED",
-   "reply": "I understood the words but not the goal yet. Try things like \"open VS Code\", \"find my report\", \"what is my battery\", \"remember that ...\", or \"what did I work on"
+   "reply": "I understood the words but not the goal yet. You don't have to remember a command list -- things I can do right now: \"what is a train\", \"open github.com\", \"chec"
   },
   {
    "command": "Jarvis, research this idea.",
    "http_status": 200,
-   "ms": 611,
+   "ms": 237,
    "intent": "search_papers",
    "tools": [
     "search_papers"
@@ -183,7 +183,7 @@
   {
    "command": "Jarvis, check my car charge.",
    "http_status": 200,
-   "ms": 5,
+   "ms": 4,
    "intent": "car_telemetry",
    "tools": [
     "get_car_telemetry"

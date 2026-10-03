@@ -204,7 +204,7 @@ def suite_history() -> dict:
         ("41 the sentences you say", 1820, 1820, 0, "one refusal was a false claim about the build, and a hostname was being read as a filename"),
         ("42 what a key buys", 1827, 1827, 0, "a configured model had no caller: zero chat calls, two embedding calls"),
         ("43 not a microphone", 1833, 1833, 0, "a test passthrough answered a real audio clip with ok and confidence 1.0"),
-        ("44 answers, not command lists", 1845, 1845, 0, "a question containing the word run was parsed as a command to execute"),
+        ("44 answers, not command lists", 1846, 1846, 0, "a question containing the word run was parsed as a command to execute"),
     ]
     return {"phases": [{"phase": p, "collected": c, "passed": q, "failed": f, "note": n}
                        for p, c, q, f, n in points]}

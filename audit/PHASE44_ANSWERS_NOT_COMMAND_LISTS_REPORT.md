@@ -90,8 +90,8 @@ the safe container for, waiting on a key. And the microphone is waiting on ears 
 ## 6. Numbers
 
 ```
-new tests        12
-full suite       1845 passed · 0 failed · 0 xfailed · 0 skipped
+new tests        13
+full suite       1846 passed · 0 failed · 0 xfailed · 0 skipped
 tools            134 (read 71 · low 35 · external 13 · high 12 · physical 3)
 planner routes   47 (was 45; the guard caught the published 45 → 47 again)
 API routes       108 handlers / 106 distinct paths
@@ -111,6 +111,15 @@ safety matrix    6 of 6      acceptance commands measured 17 of 18
 * **44-D** the search fallback costs a second network read on every miss (6 s deadline,
   sentence budget on top of it).
 * Unchanged: 43-A…D, 42-B…D, 41-B…F, 40-A…E, 39-A…E, 38-A…D, 37-A…E, 36-A…E, 35-A…C, 34-A…C.
+
+## 7b. The front door, corrected
+
+The sentence a person sees when nothing matched was written before half of this existed, and it
+listed five abilities while omitting the four they had just asked for -- which is how
+"make it like ChatGPT" turns into "I have to memorise commands". It now says they do not
+have to remember a command list, and names what works today: `what is a train`,
+`open github.com`, `check storage`, `open my project`, alongside the old ones. A test
+pins those four, so the hint cannot silently age again the way it just did.
 
 ## 8. Git
 
