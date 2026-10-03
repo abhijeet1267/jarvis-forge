@@ -36,7 +36,8 @@ from ..security.auth import (
     lan_startup_problems,
 )
 from ..security.privacy import PrivacyManager, describe_privacy
-from ..devices.pairing import PairingManager
+from ..devices.pairing import HostDeviceError, PairingManager
+from ..registry.devices import HOST_DEVICE_ID
 from ..transport.server import TransferServer
 from ..transport.tls import describe_tls
 from ..core.models import MemoryScope, MemoryType, RiskLevel, utcnow
@@ -549,7 +550,15 @@ async def confirmations(_: None = Protected) -> List[Dict[str, Any]]:
 
 @app.get("/devices")
 async def devices(_: None = Protected) -> List[Dict[str, Any]]:
-    return [d.model_dump() for d in get_core().devices.all()]
+    rows = []
+    for device in get_core().devices.all():
+        row = device.model_dump()
+        # The client is the one that must decide which row may be forgotten, and it has no
+        # way to know what machine it is talking to. Say so, instead of letting the page
+        # guess from a device id it would have to invent.
+        row["is_host"] = device.device_id == HOST_DEVICE_ID
+        rows.append(row)
+    return rows
 
 
 @app.get("/tools")
@@ -1039,6 +1048,17 @@ async def device_revoke(device_id: str, _: None = Protected) -> Dict[str, Any]:
     manager = PairingManager()
     try:
         result = manager.revoke(device_id)
+    except HostDeviceError as exc:
+        get_core().audit.record(
+            intent="device.revoke",
+            tool="remove_phone",
+            target=device_id,
+            risk="high",
+            confirmation=True,
+            result="denied",
+            detail={"reason": str(exc)},
+        )
+        raise HTTPException(status_code=409, detail=str(exc))
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
 

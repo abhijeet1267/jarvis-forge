@@ -16,6 +16,15 @@ from ..logging_setup import get_logger
 
 log = get_logger("registry.devices")
 
+#: The machine this process is running on, as its own device record.
+#:
+#: A single source because both the pairing layer and the clients have to agree on it:
+#: the row is what a person reads as "this laptop", and revoking it is not disconnecting
+#: a gadget -- it is the host deleting its own identity, with no client left that could
+#: restore it. Measured 2026-10-03: the HTTP route had no such check and a single POST
+#: set the running laptop to ``revoked``.
+HOST_DEVICE_ID = "laptop_main"
+
 # Devices present in the v0.1 reference deployment.
 DEFAULT_DEVICES: List[DeviceSpec] = [
     DeviceSpec(

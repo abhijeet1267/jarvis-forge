@@ -113,6 +113,28 @@
     background: var(--accent); color: var(--on-accent); font-weight: 600; cursor: pointer;
   }
   .cmdbar button:hover { filter: brightness(.95); }
+  /* Quick actions: the sentences a person actually says, as buttons. A tap types the
+     sentence into the command box and runs the same send() as typing does, so permission,
+     confirmation, verification and the audit row still sit behind every one. */
+  .quick { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 14px; }
+  .quick button {
+    padding: 7px 12px; font-size: 13px; font-weight: 500; cursor: pointer;
+    background: var(--ghost-bg); color: var(--ink);
+    border: 1px solid var(--line); border-radius: 999px;
+  }
+  .quick button:hover { filter: brightness(.94); }
+  .quick button:active { transform: translateY(1px); }
+  .quick .muted { font-size: 12px; }
+  /* A device row that is not this machine can be dismissed. Deliberately quiet: it is
+     cleanup, not a call to action. */
+  .forget { background: var(--ghost-bg); color: var(--bad-ink); border: 1px solid var(--line);
+            border-radius: 6px; padding: 3px 9px; cursor: pointer; font-size: 11px;
+            margin-left: 8px; }
+  .toolbar { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+  .toolbar input { flex: 1; max-width: 340px; padding: 7px 10px; font-size: 13px;
+                   border: 1px solid var(--line); border-radius: var(--radius);
+                   background: var(--panel); color: var(--ink); }
+  .note { font-size: 12px; margin: 6px 0 0; }
   /* Pipeline state chip. Reuses the existing ok/warn/bad tone classes rather
      than inventing a palette, so it reads as part of this page. */
   .state {
@@ -206,6 +228,10 @@
     <input id="cmd" aria-label="Command for Vantage" placeholder='Try: "what is my battery"  ·  "find my report"  ·  "help"' autocomplete="off" />
     <button id="send" aria-label="Send command">Send</button>
   </div>
+  <!-- Rendered against GET /tools: a button exists only while the capability does. -->
+  <div class="quick" id="quick" role="group" aria-label="Quick actions">
+    <span class="muted">checking what this laptop can do…</span>
+  </div>
   <!-- Rendered from the backend's own fields. See pipelineState() for exactly
        which ones, and why an HTTP 200 or action.ok is never one of them. -->
   <div class="state muted" id="state" role="status" aria-live="polite"><span class="chip" id="stateChip">IDLE</span><span class="muted" id="stateNote"></span></div>
@@ -257,6 +283,11 @@
 
     <div class="card" style="grid-column: 1 / -1;">
       <h2>Tool Registry</h2>
+      <div class="toolbar">
+        <input id="toolFilter" placeholder="filter by name or description"
+               aria-label="Filter the tool registry" autocomplete="off" />
+        <span class="muted" id="toolCount"></span>
+      </div>
       <div id="tools"><span class="muted loading">loading…</span></div>
     </div>
   </div>
@@ -302,6 +333,92 @@ function escapeHtml(value) {
   return String(value ?? "").replace(/[&<>"']/g, c => (
     { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]
   ));
+}
+
+// ---------------------------------------------------------------------------
+// Quick actions
+// ---------------------------------------------------------------------------
+//
+// The sentences worth saying, so a person does not have to remember a command list.
+// `say` is what gets typed into the command box, and `{site}` / `{name}` / `{subject}`
+// are the one word a tap cannot know -- the page asks for those, and sends nothing if
+// the answer comes back blank. A slot that reached /command literally would search for
+// a file called "{name}".
+//
+// Why a button types a sentence instead of calling a tool endpoint directly: every
+// command has to pass permission, confirmation, verification and the audit row, and the
+// /command path is the only thing that runs all of them. A second path would be a second
+// set of gates to keep in sync, which is how a UI ends up advertising a capability the
+// system no longer grants.
+//
+// "Explain something" says `explain {subject}` rather than passing a free question
+// through, measured on this build: "what trains run from pune to mumbai" parses to
+// nothing at all, while "explain what a load balancer does" hands the lookup the whole
+// clause as its topic. A button that only works when the person happens to phrase the
+// question in one particular shape is not a button.
+const QUICK = [
+  { label: "Battery", tool: "battery_status", say: "what is my battery" },
+  { label: "Storage", tool: "check_storage", say: "check storage" },
+  { label: "Open project", tool: "open_project_folder", say: "open my project" },
+  { label: "Find a file", tool: "find_and_open", say: "find {name} and open it" },
+  { label: "Open a site", tool: "open_url", say: "open {site}" },
+  { label: "Explain something", tool: "ask_question", say: "explain {subject}" },
+  { label: "What I remember", tool: "memory_overview", say: "what do you remember" },
+  { label: "Screenshot", tool: "take_screenshot", say: "take a screenshot" },
+  { label: "Time", tool: "get_time", say: "what time is it" }
+];
+
+const SLOT_ASK = {
+  site: "Which site?",
+  name: "What should I look for?",
+  subject: "Explain what? (one topic, up to 8 words)"
+};
+
+function tap(action) {
+  const answers = {};
+  let blank = false;
+  (action.say.match(/\{\w+\}/g) || []).forEach(slot => {
+    const key = slot.slice(1, -1);
+    if (answers[key] === undefined) {
+      const answer = (prompt(SLOT_ASK[key] || (key + "?"), "") || "").trim();
+      if (!answer) blank = true;
+      answers[key] = answer;
+    }
+  });
+  if (blank) return;
+  const text = action.say.replace(/\{(\w+)\}/g, (_, key) => answers[key]);
+  document.getElementById("cmd").value = text;
+  send();
+}
+
+// Rendered against the registry the laptop just reported, so removing a tool removes its
+// button. `_toolsFailed` keeps a failed read from being painted as "nothing available":
+// an empty list is a claim about the machine, and a request that threw says nothing about
+// it. `_quickSource` records which read the band currently shows came from, so a stale
+// band cannot survive a successful one.
+let _tools = [];
+let _toolsFailed = null;
+let _quickSignature = null;
+
+function renderQuick() {
+  const box = document.getElementById("quick");
+  if (_toolsFailed && !_tools.length) {
+    box.innerHTML = `<span class="muted">cannot read the tool registry: ${escapeHtml(_toolsFailed)}</span>`;
+    _quickSignature = null;
+    return;
+  }
+  const names = _tools.map(t => t.name);
+  const live = QUICK.filter(a => names.indexOf(a.tool) !== -1);
+  const signature = live.map(a => a.tool).join(",");
+  if (signature === _quickSignature) return;      // repaint only on a real change
+  _quickSignature = signature;
+  const hidden = QUICK.length - live.length;
+  box.innerHTML = (live.length
+    ? live.map((a, i) => `<button data-i="${i}" aria-label="${escapeHtml("Ask Vantage: " + a.label)}">`
+        + `${escapeHtml(a.label)}</button>`).join("")
+    : '<span class="muted">this laptop reports none of these capabilities</span>')
+    + (hidden ? `<span class="muted">${hidden} hidden: not available here</span>` : "");
+  box.querySelectorAll("button").forEach(btn => btn.onclick = () => tap(live[Number(btn.dataset.i)]));
 }
 
 // Pipeline state, rendered from fields the server already sends. This function
@@ -502,6 +619,7 @@ const AUTH_WORD = {
 };
 const PERIPHERAL_OF = { car_main: "car", watch_main: "watch", home_gateway: "home" };
 let _peripherals = {};
+let _deviceNote = "";
 
 function peripheralWord(info) {
   if (!info) return null;
@@ -525,31 +643,62 @@ function peripheralWord(info) {
   return { text: "unknown", cls: "off" };
 }
 
+async function forgetDevice(id) {
+  // Deliberately asked for in words: revoking destroys the device's key, and the only
+  // way back is for that device to pair again.
+  if (!window.confirm(`Forget ${id}? Its key is destroyed and it has to pair again.`)) return;
+  try {
+    const res = await fetch(API + `/devices/${encodeURIComponent(id)}/revoke`, {
+      method: "POST", headers: authHeaders({ "Content-Type": "application/json" }),
+    });
+    const data = await res.json().catch(() => ({}));
+    _deviceNote = res.ok
+      ? `${id} forgotten.`
+      : `Would not forget ${id}: ${data.detail || ("HTTP " + res.status)}`;
+  } catch (e) {
+    // No answer is not a failure to revoke; it is a state nobody has observed.
+    _deviceNote = `No answer from Vantage about ${id} — nothing was confirmed either way.`;
+  }
+  refresh();
+}
+
 async function loadDevices() {
   const devices = await get("/devices");
+  const box = document.getElementById("devices");
   if (!devices.length) {
     // An empty box reads as broken. Say what is missing and how it gets filled.
-    document.getElementById("devices").innerHTML =
+    box.innerHTML =
       '<div class="empty"><b>Nothing paired yet.</b> Open the phone client on this '
       + 'laptop\'s address and tap "Pair with this laptop", or plug in a watch.</div>';
     return;
   }
-  document.getElementById("devices").innerHTML = devices.map(d => {
+  box.innerHTML = devices.map(d => {
     const word = PERIPHERAL_OF[d.device_id] ? peripheralWord(_peripherals[PERIPHERAL_OF[d.device_id]]) : null;
     const auth = AUTH_WORD[d.auth_state] || d.auth_state || "unknown";
     const cls = word ? word.cls
       : d.online ? "ok"
       : d.auth_state === "revoked" ? "bad"
       : d.auth_state === "pending" ? "warn" : "off";
+    // "offline" would be a lie about a forgotten device: it says *not here right now*,
+    // and the row is in fact permanently unpaired until it pairs again. Measured in the
+    // browser -- the card read OFFLINE for a device the same page had just revoked.
     const state = word ? word.text
+      : d.auth_state === "revoked" ? "revoked"
       : d.online ? "online"
       : PERIPHERAL_OF[d.device_id] ? auth : "offline";
+    // Which row is the machine itself comes from the server (`is_host`), not from an id
+    // this page invented -- a laptop cannot be forgotten from here, and a button offering
+    // to would be a lie about what is recoverable.
+    const tail = d.is_host
+      ? ' <span class="tag">this machine</span>'
+      : ` <button class="forget" data-id="${escapeHtml(d.device_id)}">Forget</button>`;
     return `
     <div class="row">
       <span>${escapeHtml(d.device_id)} <span class="tag">${escapeHtml(d.type)}</span></span>
-      <span class="${cls}">${escapeHtml(state.toUpperCase())}</span>
+      <span class="${cls}">${escapeHtml(state.toUpperCase())}${tail}</span>
     </div>`;
-  }).join("");
+  }).join("") + (_deviceNote ? `<p class="note muted">${escapeHtml(_deviceNote)}</p>` : "");
+  box.querySelectorAll(".forget").forEach(btn => btn.onclick = () => forgetDevice(btn.dataset.id));
 }
 
 function renderPeripherals() {
@@ -852,12 +1001,43 @@ async function loadPrivacy() {
 }
 
 async function loadTools() {
-  const tools = await get("/tools");
-  document.getElementById("tools").innerHTML = `
+  try {
+    _tools = await get("/tools");
+    _toolsFailed = null;
+  } catch (e) {
+    // A registry that could not be read is not a registry that is empty. Say which.
+    _toolsFailed = e.message;
+    document.getElementById("tools").innerHTML =
+      `<div class="empty"><b>Tool registry not readable.</b> ${escapeHtml(e.message)}</div>`;
+    document.getElementById("toolCount").textContent = "";
+    renderQuick();
+    return;
+  }
+  renderTools();
+  renderQuick();
+}
+
+function renderTools() {
+  const box = document.getElementById("tools");
+  const q = document.getElementById("toolFilter").value.trim().toLowerCase();
+  const rows = q
+    ? _tools.filter(t => (`${t.name} ${t.description || ""}`).toLowerCase().includes(q))
+    : _tools;
+  document.getElementById("toolCount").textContent = q
+    ? `${rows.length} of ${_tools.length} match`
+    : `${_tools.length} tools`;
+  if (!rows.length) {
+    box.innerHTML = `<div class="empty">no tool matches &ldquo;${escapeHtml(q)}&rdquo;. `
+      + `Clear the filter to see all ${_tools.length}.</div>`;
+    return;
+  }
+  // The filter box lives in the markup, not in this string: rewriting the card on every
+  // keystroke would detach the input the caret is sitting in.
+  box.innerHTML = `
     <table>
       <thead><tr><th>Tool</th><th>Agent</th><th>Risk</th><th>Confirm</th><th>Description</th></tr></thead>
       <tbody>
-        ${tools.map(t => `
+        ${rows.map(t => `
           <tr>
             <td><strong>${escapeHtml(t.name)}</strong></td>
             <td class="muted">${escapeHtml(t.agent)}</td>
@@ -924,6 +1104,7 @@ function refresh() {
 
 document.getElementById("send").onclick = send;
 document.getElementById("cmd").addEventListener("keydown", e => { if (e.key === "Enter") send(); });
+document.getElementById("toolFilter").addEventListener("input", renderTools);
 setInterval(tick, 1000);
 tick();
 

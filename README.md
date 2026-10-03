@@ -9,7 +9,7 @@ world afterwards**, and written to a tamper-evident audit chain. It runs with no
 key, no network and no vendor — an LLM is optional and off by default.
 
 What this repository is mostly about is not features. It is about the difference
-between *"the handler returned"* and *"the thing happened"* — and the forty-five phases of
+between *"the handler returned"* and *"the thing happened"* — and the forty-six phases of
 measurement spent closing that gap, in the ledger and on the screen.
 
 > **On the name.** The product is **Vantage** — in the README, both web clients, the install
@@ -25,7 +25,7 @@ measurement spent closing that gap, in the ledger and on the screen.
 > too: they are dated evidence of what was true then.
 
 [![ci](https://img.shields.io/github/actions/workflow/status/abhijeet1267/jarvis-forge/ci.yml?label=tests%20%C2%B7%20macos)](https://github.com/abhijeet1267/jarvis-forge/actions/workflows/ci.yml)
-[![suite](https://img.shields.io/badge/tests-1856%20passed%20%C2%B7%200%20failed-16a34a)](tests)
+[![suite](https://img.shields.io/badge/tests-1884%20passed%20%C2%B7%200%20failed-16a34a)](tests)
 [![tools](https://img.shields.io/badge/tools-129%20across%2015%20agents-2f6df6)](jarvis/tools)
 [![offline](https://img.shields.io/badge/LLM-off%20by%20default%20%C2%B7%20runs%20fully%20offline-0f172a)](jarvis/config.py)
 [![python](https://img.shields.io/badge/python-3.11%20%C2%B7%203.12%20(CI)-6b7688)](.github/workflows/ci.yml)
@@ -39,7 +39,7 @@ measurement spent closing that gap, in the ledger and on the screen.
 | **Ledger** | `action_logs` hash-chained + `audit.jsonl` append-only, `verify_chain()` |
 | **Edge** | token file `0600` · constant-time compare · same-origin · Host allowlist · 600/min |
 | **Surface** | web dashboard · phone client page over the LAN · voice (macOS `say`/STT) · watch queue · device pairing |
-| **Size** | ~63.0k lines of versioned Python/HTML/JS · 39.5k source · 23.5k tests · 72 test modules |
+| **Size** | 62.5k lines of versioned Python/HTML/JS · 38.6k source · 23.9k tests · 73 test modules |
 
 ---
 
@@ -51,8 +51,8 @@ and the diagrams read their counts from the live registry.
 
 | Claim | Value | Reproduce |
 |---|---|---|
-| Test suite | **1856 passed · 0 failed · 0 xfailed · 0 skipped** (1856 collected; the skip is the network-gated arXiv test, which timed out in this run and passed live in the two before it — `-rs` prints its reason, an earlier run of the same phase reported **1 skipped** for that test, which is why a skip is named when it happens rather than smoothed over) | `python -m pytest -q -rs` |
-| Suite growth, Phase 9 → 45 | 875 passing / **126 failing** → 1856 passing / 0 failing / **0 xfailed** at the Phase 45 close | `cat benchmarks/suite_history.json` |
+| Test suite | **1884 passed · 0 failed · 0 xfailed · 0 skipped** (1884 collected; the network-gated arXiv test answered in this run — when it does skip, `-rs` prints its reason and the row says so rather than smoothing it over) | `python -m pytest -q -rs` |
+| Suite growth, Phase 9 → 46 | 875 passing / **126 failing** → 1884 passing / 0 failing / **0 xfailed** at the Phase 46 close | `cat benchmarks/suite_history.json` |
 | Tools registered | **134** | `python -c "from jarvis.core.orchestrator import JarvisCore as J; print(len(J().tools.names()))"` |
 | Confirmation-gated | **28** of 134 | `python assets/build_diagrams.py` (prints the live counts) |
 | Risk tiers | read 71 · low 35 · external 13 · high 12 · physical 3 | same |
@@ -93,7 +93,7 @@ and the diagrams read their counts from the live registry.
 - [Benchmarks](#benchmarks)
 - [Hardware truth](#hardware-truth)
 - [What the system says when something fails](#what-the-system-says-when-something-fails)
-- [The forty-five phases](#the-forty-five-phases)
+- [The forty-six phases](#the-forty-six-phases)
 - [The plan's safety matrix, run](#the-plans-safety-matrix-run)
 - [Smooth and fast](#smooth-and-fast)
 - [Security model](#security-model)
@@ -131,7 +131,7 @@ and not a quiet success.
 
 ### Suite growth, Phase 9 → Phase 45
 
-<img src="assets/chart-suite-growth.svg" alt="Test suite growth from 875 passing with 126 failing, to 1856 passing with none failing at the close of Phase 45" width="100%"/>
+<img src="assets/chart-suite-growth.svg" alt="Test suite growth from 875 passing with 126 failing, to 1884 passing with none failing at the close of Phase 46" width="100%"/>
 
 Phase 9 inherited **126 failing tests**. The cause was a single import line in
 `jarvis/tools/base.py` that left `Verification` undefined, so every tool result raised
@@ -187,7 +187,7 @@ moved, and the ledger now says exactly that. A simulated *car read* is still a s
 read — reading a labelled simulator is a real read — and that distinction is pinned by a
 test so it stays a decision rather than an accident.
 
-## The forty-five phases
+## The forty-six phases
 
 Each closed with a report in [`audit/`](audit), and each report's claims carry the
 command that produced them.
@@ -217,6 +217,7 @@ command that produced them.
 | **29 — A route fills its own action** | flowcharts and architecture diagrams had been dead since they were written: the route sent a title to a tool that also needs `steps` / `components`, so the gate answered the user with *"missing required parameter 'steps'"* -- even when the sentence named them. What a sentence states is now used; what it omits is asked for |
 | **30 — A capability you have is a capability you can ask for** | 46 of 127 tools answered their own name with "I understood the words but not the goal" -- twice the gap the open item had recorded, because that item had been measured by grepping the planner instead of asking the router. A registry-derived route now reaches a tool whose name words a sentence contains, validates the action with the registry before emitting it, and asks in the tool's own description when an argument is missing; three routes that *advertised* capabilities yield to a sentence naming one; and the delete-capable tool that was tiered LOW-and-unconfirmed for as long as it was unreachable was retiered in the same commit |
 | **31 — The device you named is the device that changes** | "turn on the heater" resolved to **Study AC** (the gateway filed heating under cooling) and `control_home_device` was LOW with no confirmation, so the request was approved for execution and only an offline gateway stopped a device changing. The synonym, the resolver and the tier were tightened in one commit, the permission engine grew a device guard beside its path guard, and the plan's §45 matrix has held **6 of 6** since |
+| **46 — Buttons, not typing** | Asked for "UI better with buttons", both clients were screenshotted first: the phone had **three controls** and hard-coded colours while the panel had moved every colour into tokens, and 134 capabilities were reachable only by inventing a sentence. The buttons type their sentence and run the same `/command` path as typing does -- permission, confirmation, verification and the audit row stay behind every tap, and a second path would be a second set of gates to keep in sync. Two guards turned out to matter more than the styling. **A button's tool existing is not enough:** the first draft said `ask about {subject}`, which parses to `unknown`, so every shipped sentence is now parsed by the real planner in the suite, and the Ask button became `explain {subject}` after measuring which form survives a person's wording. **And the revoke endpoint had no host check** -- while probing for this phase I ran `POST /devices/laptop_main/revoke` against the running app and it answered 200, leaving the laptop's own record `revoked` with no client able to undo it. The guard sits under the route (`HostDeviceError`, refused before any write, 409 plus a `denied` ledger row) because `remove_phone` calls the same layer and escapes only by accident; `/devices` gained `is_host` so the page never guesses which machine it is standing on. The browser then rejected the design twice: the server's 530-character ear advice rendered as **101px of text wall** under a disabled mic (now one line plus a disclosure), and opening it pushed **627px of page into a 375px viewport** on one unbreakable file path. Measured after: 1884 passing, 0 console errors on both pages at 375 and 1440, `scrollWidth` 375 = `clientWidth` 375, and a Storage tap on the dashboard answering *31.3 GiB free of 228.3 GiB on /* with `VERIFIED`. |
 | **45a — A key the app can be given without damaging it** | Phase 42 ended with "put your key in an environment variable", which works and is also the worst place available: `Settings` reads `.env` from the current working directory, and for the installed app that directory is `Vantage.app/Contents/Resources/app` -- the one file to edit sits **inside the bundle**, and Phase 40 had already proved what a file added after signing does to the seal. So the key moved next to the data: `~/.jarvis-forge/llm.env`, 0600, outside the bundle. The shell still beats it, a typo in the file cannot stop the product booting, and a file readable by the whole machine is complained about out loud while still being honoured -- with a test that the warning never prints the secret. `/health` gained `llm_source`, because "configured" already hid the difference between a real key, a typo and an empty file. Measured end to end with a deliberately fake key: an unrecognised sentence reached Google's endpoint, was refused, and reported itself unavailable rather than inventing an answer. What is missing for Gemini is now only the key. |
 | **44 — Answers, greetings, and a question that was not a shell command** | Asked to "make it like ChatGPT — what I say they understand", nine natural sentences were run through the router first. Seven returned the fallback they pasted at me. Two were worse: **`what trains run from mumbai to pune` parsed as a request to execute a program called `from`**, and `how do I run a marathon` as one to run `a`, because `\brun\b` matched anywhere in a sentence. The allowlist gate is the only reason that is a routing bug rather than an incident, and a question must never reach an executor: the route is now imperative and anchored, with the real `run ls -la` still routed and the permission verdict proven unchanged. `hello` and `thanks` are answered like greetings instead of parse failures. And `ask_question` gives it actual answers with no model and no key — a Wikipedia summary, the article named in the sentence, READ tier like the paper research that has been fetching all along. Measured live: *what is a train* answered from the real article; *who is apj kalam* 404'd because the article is titled *A. P. J. Abdul Kalam*, which is a textbook feature that fails on real questions, so a miss now searches first and follows the best title — and if the search finds nothing, the reply names the topic and says there is no answer rather than producing one. |
 | **43 — A passthrough is not a microphone** | Asked for voice from the phone, one real recording was sent to the running app before anything was built on top of the speech path. It came back **`ok: true, confidence: 1.0`, with no text**. Nothing on the machine can transcribe — Apple refuses Speech Recognition to a process it has not authorised (a marker had sat in the data home since Sep 25), whisper.cpp is not installed, hosted Whisper has no key — so `get_stt()` had fallen through to `TranscriptSTT`, the class whose entire job is echoing a string a *test* fed it, and that stand-in had agreed to have heard a recording. A mic button built here would have reported silence as success and let anything downstream act on it. So the fix went at the claim rather than the caller: backends now declare whether they are `real`, the passthrough refuses a file it was not fed, the endpoint returns an honest failure that names the three ways to give the machine ears — ordered by cost, with the one that ships audio off the box labelled as that — and `/voice/status` answers `can_listen`, which a client can actually use. The button was **not** built, on purpose: it goes in the moment something can hear. |
@@ -478,7 +479,7 @@ curl -s -H "X-JARVIS-Token: $TOKEN" -H 'Content-Type: application/json' \
      -d '{"text":"what is my battery"}' http://127.0.0.1:8765/command
 
 # Prove it to yourself:
-python -m pytest -q                       # 1856 passed, 0 failed (the research test skips only while arXiv refuses)
+python -m pytest -q                       # 1884 passed, 0 failed (the research test skips only while arXiv refuses)
 python benchmarks/acceptance_run.py       # re-measures the README's numbers
 python assets/build_charts.py && python assets/build_diagrams.py
 ```
@@ -492,16 +493,16 @@ Set `JARVIS_LLM_*` only if you want the optional model path.
 jarvis/
   core/        orchestrator, RulePlanner, models, recovery, tasks, briefing
   security/    permission engine, audit chain, redaction, privacy, path guard
-  api/         FastAPI app: 108 routes, auth, origin gate, LAN gate, rate limit
+  api/         FastAPI app: 112 routes (106 distinct paths), auth, origin gate, LAN gate, rate limit
   agents/      15 agents — laptop, phone, home, robotics, car, watch, email, …
   tools/       134 tools across 5 risk tiers, each declaring its own spec
   memory/      hybrid retrieval, lifecycle, forgetting
   scheduler/   recurring jobs, runner with per-run re-authorization
   car/ home/ robotics/ watch/ vision/ research/ design/ coding/
   integrations/ IMAP/SMTP and CalDAV providers with local fallbacks
-tests/         72 modules · 1856 collected · includes the shipped page JS, run by Node
+tests/         73 modules · 1884 collected · includes the shipped page JS, run by Node
 dashboard/     index.html control panel + phone.html, the client a phone uses over the LAN
-audit/         47 phase reports + 4 CSV matrices — the evidence behind this README
+audit/         48 phase reports + 4 CSV matrices — the evidence behind this README
 benchmarks/    acceptance_run.py and the JSON the charts are drawn from
 assets/        generated figures + the two generators that draw them
 app/           PyInstaller spec and bundle sources (the launcher and its wifi switch; see the Phase 36 report)
@@ -564,6 +565,21 @@ adding and removing a synonym at run time. 31-B: the confirmation prompt re-deri
 line from the raw parameters while the dashboard rendered the stored preview — two renderings
 of one consent question, and neither naming the device. One string feeds both now: *"Will do:
 set Kitchen light (kitchen.light) to 40%"*.
+- **Buttons, not typing** (Phase 46). Reasoned in `audit/PHASE46_BUTTONS_NOT_TYPING_REPORT.md`.
+  What it left open:
+  **46-A** `can_listen` reports what backends exist, not whether a spoken word will become text
+  here -- measured the same day, a fresh home says `true` for `macos_speech` and the delivered app
+  says `false`, because the first real attempt is what writes the block marker, so a first tap can
+  enable a button that then fails (it self-corrects on the next status read). **46-B** one accent
+  per surface: the phone's primary action is green, the panel's is blue, both are now named tokens
+  and neither was changed -- that is a design call with a reviewer missing. **46-C** eight device
+  rows in `~/.jarvis-forge` are mine from live test drives; the Forget button can clear them in
+  eight taps and did not, because they are the user's data and the ask was a UI. **46-D** the
+  ledger labels a host-targeted revoke `remove_phone`, the tool that does that job, so the row
+  names a phone while the target is the laptop. **46-E** the mic still has no working backend on
+  this machine (43-A unchanged): the control is built, gated and explained. **46-F** `tags` were
+  never added to `/tools` -- 134 annotations to power a filter the registry's own names and
+  descriptions already serve would have been a taxonomy invented after the fact.
 - **A key the app can be given without damaging it** (Phase 45a). Reasoned in
   `audit/PHASE45_A_KEY_OUTSIDE_THE_BUNDLE_REPORT.md`. What it left open:
   **45-A** the phone's microphone button, still waiting on ears (43-A) -- and this key file is

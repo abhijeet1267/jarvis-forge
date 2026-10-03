@@ -8,9 +8,14 @@
   dashboard/index.html's auth comment). The code is spent once at POST /auth/session.
 
   Every call this page makes is an endpoint the laptop already exposes for exactly this:
-  /devices/pair/request, /devices/pair/pending, /command, /confirm/{id}. Nothing here is
-  a second way in — an unpaired phone can only create a pending request, and an approval
-  still has to be granted by something with a real credential.
+  /devices/pair/request, /devices/pair/pending, /command, /confirm/{id}, /tools,
+  /voice/status, /voice/transcribe. Nothing here is a second way in — an unpaired phone
+  can only create a pending request, and an approval still has to be granted by something
+  with a real credential.
+
+  The quick actions are shortcuts for a sentence, not a second command path: each one
+  fills the text box and runs the same send() as typing does, so permission,
+  confirmation, verification and the audit row still sit behind every tap.
 -->
 <html lang="en">
 <head>
@@ -20,6 +25,7 @@
 <link rel="manifest" href="/manifest.webmanifest" />
 <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
 <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+<!-- A meta tag cannot read a CSS variable, so this one colour is a literal by necessity. -->
 <meta name="theme-color" content="#0d1117" />
 <!-- iOS installs from these, and unlike Chrome it does not require a secure context:
      an iPhone on the LAN can add this to its home screen over plain http. -->
@@ -29,30 +35,88 @@
 <meta name="apple-mobile-web-app-title" content="Vantage" />
 <title>Vantage — phone</title>
 <style>
-  :root { color-scheme: dark; }
+  /* Dark on purpose: this page is a companion held in the dark, and the laptop panel's
+     dark block is the palette it borrows. Every colour the page paints is named here. */
+  :root {
+    color-scheme: dark;
+    --bg: #0d1117;
+    --panel: #161b22;
+    --ink: #e6edf3;
+    --muted: #9198a1;
+    --line: #21262d;
+    --accent: #4c8dff;
+    --ok: #3fb950;
+    --warn: #d29922;
+    --bad: #f85149;
+    --radius: 10px;
+    --radius-sm: 8px;
+    --on-accent: #0b1220;
+    --ghost-bg: #21262d;
+    --ghost-ink: #adbac7;
+    --field-line: #30363d;
+    --deny-bg: #6e2a2a;
+    --focus: #6ea8ff;
+    /* The two colours this page has that the laptop panel does not: its send button
+       shipped green. Re-named here rather than re-typed, and not switched to the
+       panel's blue -- changing a primary action's colour is a design decision, and
+       this page has no reviewer. Tracked as an open item, not a solved one. */
+    --go: #238636;
+    --on-go: #ffffff;
+  }
   * { box-sizing: border-box; }
-  body { margin: 0; padding: 14px; background: #0d1117; color: #e6edf3;
+  body { margin: 0; padding: 14px; background: var(--bg); color: var(--ink);
          font: 16px/1.45 -apple-system, "Segoe UI", Roboto, sans-serif; }
   h1 { font-size: 17px; margin: 0 0 4px; letter-spacing: .01em; }
-  .sub { color: #8b949e; font-size: 13px; margin-bottom: 14px; }
-  .card { background: #161b22; border: 1px solid #21262d; border-radius: 10px;
+  .sub { color: var(--muted); font-size: 13px; margin-bottom: 14px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
           padding: 12px; margin-bottom: 12px; }
   .row { display: flex; gap: 8px; align-items: center; }
-  input, button { font: inherit; border-radius: 8px; }
-  input { flex: 1; min-width: 0; padding: 11px 12px; background: #0d1117;
-          color: #e6edf3; border: 1px solid #30363d; }
-  button { padding: 11px 14px; border: 0; background: #238636; color: #fff; font-weight: 600; }
-  button.deny { background: #6e2a2a; }
-  button.ghost { background: #21262d; color: #adbac7; font-weight: 500; }
-  button:disabled { opacity: .5; }
+  input, button { font: inherit; border-radius: var(--radius-sm); }
+  input { flex: 1; min-width: 0; padding: 11px 12px; background: var(--bg);
+          color: var(--ink); border: 1px solid var(--field-line); }
+  button { padding: 11px 14px; border: 0; background: var(--go); color: var(--on-go);
+           font-weight: 600; transition: filter .12s ease, transform .06s ease; }
+  button.deny { background: var(--deny-bg); }
+  button.ghost { background: var(--ghost-bg); color: var(--ghost-ink); font-weight: 500; }
+  button:hover { filter: brightness(1.14); }
+  button:active { transform: translateY(1px); }
+  button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+  button:disabled { opacity: .5; filter: none; transform: none; cursor: not-allowed; }
   ul { list-style: none; margin: 0; padding: 0; }
-  li { padding: 9px 0; border-bottom: 1px solid #21262d; font-size: 14px; }
+  li { padding: 9px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
   li:last-child { border-bottom: 0; }
   .chip { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px;
           font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
-          border: 1px solid #30363d; color: #adbac7; margin-right: 6px; }
-  .ok { color: #3fb950; } .warn { color: #d29922; } .bad { color: #f85149; }
-  .detail { color: #8b949e; font-size: 12px; display: block; margin-top: 3px; }
+          border: 1px solid var(--field-line); color: var(--ghost-ink); margin-right: 6px; }
+  .ok { color: var(--ok); } .warn { color: var(--warn); } .bad { color: var(--bad); }
+  .detail { color: var(--muted); font-size: 12px; display: block; margin-top: 3px; }
+
+  /* Quick actions: the sentences a person actually says, as targets to tap. They fill
+     the text box instead of firing a private endpoint, so nothing bypasses the pipeline. */
+  .quick { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+  .quick button { flex: 1 1 auto; min-width: 108px; min-height: 44px; padding: 10px 12px;
+                  font-size: 14px; font-weight: 500; background: var(--ghost-bg);
+                  color: var(--ink); border: 1px solid var(--line); }
+  .microw { margin-top: 8px; align-items: flex-start; }
+  .microw #mic { min-width: 74px; }
+  .microw #mic.rec { background: var(--bad); color: var(--on-go); animation: pulse 1.4s infinite; }
+  .microw #micline { flex: 1; margin: 0; font-size: 12px; line-height: 1.4;
+                     /* The advice names a marker path, and one unbreakable 70-character
+                        token was measured pushing this page to 627px inside a 375px
+                        viewport -- horizontal scroll on a phone. */
+                     overflow-wrap: anywhere; min-width: 0; }
+  /* The reason a mic is dead shows in one line; the remedy opens on demand. The server's
+     advice is one 530-character sentence, which measured as 101px of text wall under a
+     disabled button on a 375px screen. */
+  #micline details { margin-top: 4px; }
+  #micline summary { cursor: pointer; color: var(--accent); font-size: 12px; }
+  #micline summary:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+  #micline details p { margin: 4px 0 0; color: var(--muted); }
+  @keyframes pulse { 50% { opacity: .62; } }
+  @media (prefers-reduced-motion: reduce) {
+    * { animation: none !important; transition: none !important; }
+    button:active { transform: none; }
+  }
 </style>
 </head>
 <body>
@@ -68,9 +132,17 @@
   </div>
 
   <div class="card">
+    <!-- Rendered from /tools: a tap is only offered for a capability this laptop has. -->
+    <div class="quick" id="quick" role="group" aria-label="Quick actions">
+      <span class="sub" style="margin:0">checking what this laptop can do…</span>
+    </div>
     <div class="row">
       <input id="cmd" placeholder="what is my battery?" autocomplete="off" />
       <button id="send">Send</button>
+    </div>
+    <div class="row microw">
+      <button id="mic" class="ghost" aria-label="Speak a command to the laptop" disabled>Mic</button>
+      <div class="sub micline" id="micline">checking the laptop&rsquo;s microphone…</div>
     </div>
     <ul id="log"></ul>
   </div>
@@ -85,9 +157,29 @@ const API = "";
 const BOOTSTRAP = (document.querySelector('meta[name="jarvis-bootstrap"]') || {}).content || "";
 let token = "";
 let lastConf = null;
+let lastQuick = null;
 // Stable per device: pairing a phone twice should not create two devices.
 const DEVICE = localStorage.getItem("jarvis.device") || ("phone_" + Math.random().toString(36).slice(2, 8));
 localStorage.setItem("jarvis.device", DEVICE);
+
+// The sentences worth tapping, in the words a person uses. `say` is what gets typed into
+// the command box, and `{site}` / `{name}` / `{subject}` ask for the one word the tap
+// cannot know. Each is checked in the test suite against the real planner, because a
+// button whose sentence routes to another tool is a button that does the wrong thing.
+const QUICK = [
+  { label: "Battery", tool: "battery_status", say: "what is my battery" },
+  { label: "Storage", tool: "check_storage", say: "check storage" },
+  { label: "Open project", tool: "open_project_folder", say: "open my project" },
+  { label: "Find a file", tool: "find_and_open", say: "find {name} and open it" },
+  { label: "Open a site", tool: "open_url", say: "open {site}" },
+  { label: "Explain", tool: "ask_question", say: "explain {subject}" }
+];
+
+const SLOT_ASK = {
+  site: "Which site?",
+  name: "What should I look for?",
+  subject: "Explain what? (one topic, up to 8 words)"
+};
 
 async function login() {
   if (!BOOTSTRAP) return;              // auth off: routes answer without a credential
@@ -154,6 +246,157 @@ async function send() {
   await refresh();
 }
 
+// A tap asks for the word the button cannot know, then types the whole sentence and
+// sends it. An empty answer sends nothing: a literal "{site}" is not a site.
+function tap(action) {
+  const answers = {};
+  let missing = false;
+  (action.say.match(/\{\w+\}/g) || []).forEach(slot => {
+    const key = slot.slice(1, -1);
+    if (answers[key] === undefined) {
+      const answer = (prompt(SLOT_ASK[key] || (key + "?"), "") || "").trim();
+      if (!answer) missing = true;
+      answers[key] = answer;
+    }
+  });
+  if (missing) return;
+  const text = action.say.replace(/\{(\w+)\}/g, (_, key) => answers[key]);
+  document.getElementById("cmd").value = text;
+  send();
+}
+
+// Rendered once per registry change, and only against tools that exist: the day the
+// laptop loses a capability the button has to disappear with it, not survive as a lie.
+async function loadQuick() {
+  let names;
+  try {
+    names = (await call("/tools")).map(t => t.name);
+  } catch (err) {
+    document.getElementById("quick").innerHTML =
+      `<span class="sub" style="margin:0">cannot read what this laptop can do — ${esc(err.message)}</span>`;
+    return;
+  }
+  const live = QUICK.filter(a => names.indexOf(a.tool) !== -1);
+  const signature = live.map(a => a.tool).join(",");
+  if (signature === lastQuick) return;
+  lastQuick = signature;
+  document.getElementById("quick").innerHTML = live.length
+    ? live.map((a, i) => `<button data-i="${i}" aria-label="${esc("Ask Vantage: " + a.label)}"`
+        + `>${esc(a.label)}</button>`).join("")
+    : '<span class="sub" style="margin:0">this laptop reports none of those capabilities</span>';
+  document.getElementById("quick").querySelectorAll("button")
+    .forEach(btn => btn.onclick = () => tap(live[Number(btn.dataset.i)]));
+}
+
+// -- microphone -------------------------------------------------------------
+// Two separate gates, and the page can only know one of them:
+//   1. the laptop must have a speech backend that actually hears (can_listen), and
+//   2. this browser must hand the page a microphone, which it refuses on an insecure
+//      origin -- so over plain http on a LAN address, getUserMedia is simply absent.
+// Both are reported, because "disabled" with no reason reads as broken rather than
+// as honest.
+const mic = document.getElementById("mic");
+let canListen = false;
+let recorder = null;
+let chunks = [];
+let recording = false;
+
+function browserHasMic() {
+  return !!(window.MediaRecorder && navigator.mediaDevices
+            && navigator.mediaDevices.getUserMedia);
+}
+
+function paintMic() {
+  mic.disabled = !(canListen && browserHasMic());
+  if (!mic.disabled) { micNote("tap to speak, tap again to stop", "", ""); return; }
+  if (!canListen) { micNote("the laptop has no working microphone.", earReason, "warn"); return; }
+  micNote("the laptop can hear, but this browser will not hand the page a microphone on "
+    + "an insecure address — open it over https or from the laptop itself", "", "warn");
+}
+
+// One line of reason, the remedy behind it. Built with nodes rather than a string
+// because the advice comes from the server and is not markup this page controls.
+function micNote(short, advice, cls) {
+  const note = document.getElementById("micline");
+  note.className = "sub micline " + (cls || "");
+  note.textContent = short;
+  if (!advice || advice === short) return;
+  const more = document.createElement("details");
+  const sum = document.createElement("summary");
+  sum.textContent = "how to give this laptop ears";
+  const body = document.createElement("p");
+  body.textContent = advice;
+  more.appendChild(sum);
+  more.appendChild(body);
+  note.appendChild(more);
+}
+
+let earReason = "checking the laptop's microphone…";
+
+async function loadEars() {
+  let stt = null;
+  try { stt = (await call("/voice/status")).stt; } catch (err) { stt = null; }
+  if (!stt) {
+    canListen = false;
+    earReason = "cannot read the laptop's voice state — pair or reload this page";
+    paintMic();
+    return;
+  }
+  canListen = !!stt.can_listen;
+  earReason = stt.advice || "this laptop has no working microphone backend";
+  paintMic();
+}
+
+async function stopMic() {
+  recording = false;
+  mic.textContent = "Mic";
+  mic.classList.remove("rec");
+  if (recorder && recorder.state !== "inactive") recorder.stop();
+}
+
+function startMic() {
+  chunks = [];
+  navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+    recorder = new MediaRecorder(stream);
+    recorder.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
+    recorder.onstop = () => {
+      stream.getTracks().forEach(t => t.stop());
+      transcribe();
+    };
+    recorder.start();
+    recording = true;
+    mic.textContent = "Stop";
+    mic.classList.add("rec");
+    set("micline", "listening — tap Stop when you have said it", "ok");
+  }).catch(err => {
+    set("micline", "this browser refused the microphone: " + err.message, "bad");
+  });
+}
+
+async function transcribe() {
+  if (!chunks.length) { set("micline", "recorded nothing, so nothing was sent", "warn"); return; }
+  set("micline", "turning that into text on the laptop…", "");
+  const blob = new Blob(chunks, { type: recorder && recorder.mimeType ? recorder.mimeType : "audio/webm" });
+  const form = new FormData();
+  form.append("file", blob, "voice.webm");
+  const res = await fetch(API + "/voice/transcribe", {
+    method: "POST",
+    headers: token ? { "X-JARVIS-Token": token } : {},
+    body: form,
+  }).catch(() => null);
+  if (!res) { set("micline", "the laptop did not answer — nothing was transcribed", "bad"); return; }
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || !data.ok || !data.text) {
+    // The reason comes from the server, which is the only place that knows which
+    // backends it tried. Repeating it here is what makes a dead mic fixable.
+    set("micline", data.error || data.detail || "no text came back from that recording", "bad");
+    return;
+  }
+  set("micline", "heard: " + data.text, "ok");
+  document.getElementById("cmd").value = data.text;
+  send();
+}
+
 async function resolve(id, approve) {
   try {
     const data = await call(`/confirm/${encodeURIComponent(id)}?approve=${approve ? 1 : 0}`, "POST", {});
@@ -204,14 +447,16 @@ async function refresh() {
         resolve(btn.dataset.id, btn.dataset.approve === "1"));
     }
   } catch (err) { set("status", err.message, "bad"); }
+  loadQuick().catch(() => {});
 }
 
 document.getElementById("pair").onclick = pair;
-document.getElementById("refresh").onclick = refresh;
+document.getElementById("refresh").onclick = () => { loadEars(); refresh(); };
 document.getElementById("send").onclick = send;
+document.getElementById("mic").onclick = () => (recording ? stopMic() : startMic());
 document.getElementById("cmd").addEventListener("keydown", e => { if (e.key === "Enter") send(); });
 
-login().then(refresh);
+login().then(() => { loadEars(); refresh(); });
 setInterval(refresh, 4000);
 
 // The install path: a worker plus the manifest above is what makes the browser offer

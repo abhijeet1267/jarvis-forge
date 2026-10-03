@@ -91,6 +91,16 @@ class PairingRequest:
         }
 
 
+class HostDeviceError(ValueError):
+    """A revoke that would take the machine running the server off its own identity.
+
+    Subclassed from ``ValueError`` so the tool path (``remove_phone``), which already
+    turns ``ValueError`` into a spoken failure, refuses without learning about this case.
+    The HTTP route has to catch it first: it used to map every ``ValueError`` to 404,
+    which answered "no such device" about a device the same page was listing.
+    """
+
+
 class PairingManager:
     """Owns the pairing lifecycle and the device key store."""
 
@@ -274,12 +284,17 @@ class PairingManager:
 
     def revoke(self, device_id: str, reason: str = "user revoked") -> Dict[str, Any]:
         """Remove trust and destroy the key material."""
-        from ..registry.devices import get_device_registry
+        from ..registry.devices import HOST_DEVICE_ID, get_device_registry
 
         registry = get_device_registry()
         device = registry.get(device_id)
         if device is None:
             raise ValueError(f"unknown device {device_id!r}")
+        if device_id == HOST_DEVICE_ID:
+            raise HostDeviceError(
+                f"{device_id} is the machine Vantage runs on. Forgetting it revokes the "
+                "host, not a device, and no client can undo that from here."
+            )
 
         self.forget_secret(device_id)
         self.db.execute(

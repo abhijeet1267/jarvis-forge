@@ -427,4 +427,7 @@ def describe_stt() -> dict:
         "can_listen": any(real.values()),
         "available": {**real, "transcript": True},
         "notes": notes,
+        #: The reason a caller with no ears can be told. Was only reachable on a failed
+        #: transcription, which left a disabled microphone button with nothing to say.
+        "advice": "" if any(real.values()) else ears_advice(),
     }
