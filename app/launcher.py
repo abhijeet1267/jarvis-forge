@@ -360,6 +360,14 @@ class ServerController:
 
         env = dict(os.environ)
         env["PYTHONUNBUFFERED"] = "1"
+        # A bundle is signed once, after its program has been staged. If the server it
+        # spawns compiles that program, the .pyc files land inside the sealed folder and
+        # the copy the user then makes fails `codesign --verify`.
+        env["PYTHONDONTWRITEBYTECODE"] = "1"
+        # The server watches this pid. If the panel disappears on a path Python never
+        # sees -- Tk's own `exit`, a crash, a SIGKILL -- the child would otherwise be
+        # adopted by launchd and keep listening on the wifi address.
+        env["JARVIS_GUARDIAN_PID"] = str(os.getpid())
         env.setdefault("JARVIS_HOST", self.bind_host)
         env.setdefault("JARVIS_PORT", str(self.port))
 
@@ -565,6 +573,12 @@ def build_ui(controller: ServerController, on_quit) -> None:
         on_quit()
         root.destroy()
 
+    # Tk does not signal itself when the system asks it to quit -- `tell application
+    # "Vantage" to quit`, the Quit menu and Cmd-Q all invoke Tcl's `exit`, which leaves
+    # the interpreter from C. Python signal handlers and atexit never run on that path,
+    # so the command itself has to be the one that cleans up.
+    root.createcommand("exit", lambda *args: do_quit())
+
     make_button(buttons, "Open Dashboard", open_dashboard, primary=True).pack(side="left")
     make_button(buttons, "Voice Status", voice_status).pack(side="left", padx=8)
     make_button(buttons, "Speak", speak_test).pack(side="left")
@@ -740,6 +754,29 @@ def build_ui(controller: ServerController, on_quit) -> None:
 # ---------------------------------------------------------------------------
 # Entrypoint
 # ---------------------------------------------------------------------------
+def install_shutdown_handlers(controller: ServerController) -> None:
+    """Stop the server on every exit path, not only the Quit button.
+
+    Measured on the delivered app: `tell application "Vantage" to quit` signals the panel,
+    the panel dies on its default handler, and the server kept answering over the wifi
+    address with no window left to close it. Force Quit, logout and `shutdown` take the
+    same route, so the Quit button cannot be the only cleanup.
+    """
+    import signal
+
+    def handler(number, frame):  # noqa: ARG001
+        controller.stop()
+        raise SystemExit(0)
+
+    for number in (signal.SIGTERM, signal.SIGINT, getattr(signal, "SIGHUP", None)):
+        if number is None:
+            continue
+        try:
+            signal.signal(number, handler)
+        except (ValueError, OSError):
+            pass  # not the main thread; nothing to do
+
+
 def run_headless(controller: ServerController, reason: str) -> int:
     """Run the server without a control window.
 
@@ -982,6 +1019,7 @@ def main() -> int:
     controller = ServerController(project_dir, python, host, port, log_path)
 
     controller.start()
+    install_shutdown_handlers(controller)
 
     def on_quit():
         pass

@@ -127,6 +127,14 @@ def main() -> None:
         print(f"TLS certificate   -> {material.cert_path} (sha256 {material.fingerprint[:16]}…)",
               flush=True)
 
+    # Started by the desktop panel? Then the panel's death is ours: a server adopted by
+    # launchd keeps the wifi port open with no window left to close it.
+    import os
+
+    from jarvis.process import start_guardian_from_env
+
+    start_guardian_from_env(on_exit=lambda: os._exit(0))
+
     uvicorn.run(app, host=settings.host, port=settings.port, log_level="info", **ssl_kwargs)
 
 
