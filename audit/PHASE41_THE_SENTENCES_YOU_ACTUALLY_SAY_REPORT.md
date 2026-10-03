@@ -88,17 +88,18 @@ shrug.
 ## 5. Regressions and numbers
 
 ```
-full suite       1819 passed · 0 failed · 0 xfailed · 0 skipped
+full suite       1820 passed · 0 failed · 0 xfailed · 0 skipped
                  (an earlier run of the same phase reported 1 skipped -- the network-gated arXiv
                  test timing out -- so both runs are what the row in README is written from)
-new tests        30 + 3 (the name it answers to, and a path that is not an app) = 33
+new tests        30 + 4 (the name it answers to, a path that is not an app, a
+                 folder that is not a document) = 34
 safety matrix    6 of 6
 tools            133 (read 70 · low 35 · external 13 · high 12 · physical 3)
 confirmation-gated  28 (unchanged -- nothing added here needs a gate; all four are LOCAL/READ)
 planner routes   45 (was 42; the README said 43 mid-phase and the guard caught it again)
 API routes       108 handlers / 106 distinct paths
 test modules     68          reports 43
-size             61,551 lines of versioned Python/HTML/JS (38,867 source · 22,684 tests)
+size             61,859 lines of versioned Python/HTML/JS (38,867 source · 22,684 tests)
 ```
 
 The route-count guard has now caught a stale published number in three consecutive phases.
@@ -122,6 +123,13 @@ would have launched a notepad and dropped the path. Found by a test written for 
 (a prefix that must not eat a word), and fixed with the rule the sentence already implied:
 something that starts with `/`, `~`, `./` or names a file that exists is a path, not an app.
 Measured after the fix: `open ~/Desktop/vantage-notes.txt` → `read_file` with that path.
+
+**A folder is not a document.** The same guard let `open /tmp/vantage-demo` fall through to
+`read_file`, which answered *"File not found"* about a directory that plainly exists -- a
+correct refusal about the wrong verb. An existing directory in an `open` sentence now goes to
+the editor route, which is the one that can verify it happened. Live, on the delivered app
+over its wifi address: `open /tmp/vantage-demo` → *"Opened vantage-demo in Visual Studio
+Code."*, `verification=success`.
 
 ## 6. Carried forward
 

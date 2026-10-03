@@ -1312,6 +1312,12 @@ class RulePlanner:
         #: Notes app because "notes" is one of its aliases and appears inside the filename.
         spoken = captured.strip()
         if spoken.startswith(("/", "~", "./", "../")) or Path(spoken).exists():
+            #: A folder is not a document. `open /tmp/my-project` reaching read_file
+            #: answered "File not found" about a directory that exists; the editor route
+            #: is the one that can actually open it, and verify that it did.
+            if Path(spoken).expanduser().is_dir():
+                return Intent("open_folder", tool="open_project_folder",
+                              params={"project": spoken}, confidence=0.9)
             return None
         app = self.apps.resolve(self._arg(captured))
         if app is None:

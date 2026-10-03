@@ -201,7 +201,7 @@ def suite_history() -> dict:
         ("38 scan to connect", 1724, 1724, 0, "the laptop shows the address and a code; the dead URL was a server nobody had started"),
         ("39 the folder and the agent", 1775, 1775, 0, "launching a GUI was waiting for it to quit; the editor's own record, not my word, proves the folder opened"),
         ("40 the copy still launches", 1786, 1786, 0, "a copied app broke its own seal by being used, and outlived its window as a listening server"),
-        ("41 the sentences you say", 1819, 1819, 0, "one refusal was a false claim about the build, and a hostname was being read as a filename"),
+        ("41 the sentences you say", 1820, 1820, 0, "one refusal was a false claim about the build, and a hostname was being read as a filename"),
     ]
     return {"phases": [{"phase": p, "collected": c, "passed": q, "failed": f, "note": n}
                        for p, c, q, f, n in points]}

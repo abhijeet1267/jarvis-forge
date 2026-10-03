@@ -25,7 +25,7 @@ measurement spent closing that gap, in the ledger and on the screen.
 > too: they are dated evidence of what was true then.
 
 [![ci](https://img.shields.io/github/actions/workflow/status/abhijeet1267/jarvis-forge/ci.yml?label=tests%20%C2%B7%20macos)](https://github.com/abhijeet1267/jarvis-forge/actions/workflows/ci.yml)
-[![suite](https://img.shields.io/badge/tests-1819%20passed%20%C2%B7%200%20failed-16a34a)](tests)
+[![suite](https://img.shields.io/badge/tests-1820%20passed%20%C2%B7%200%20failed-16a34a)](tests)
 [![tools](https://img.shields.io/badge/tools-129%20across%2015%20agents-2f6df6)](jarvis/tools)
 [![offline](https://img.shields.io/badge/LLM-off%20by%20default%20%C2%B7%20runs%20fully%20offline-0f172a)](jarvis/config.py)
 [![python](https://img.shields.io/badge/python-3.11%20%C2%B7%203.12%20(CI)-6b7688)](.github/workflows/ci.yml)
@@ -39,7 +39,7 @@ measurement spent closing that gap, in the ledger and on the screen.
 | **Ledger** | `action_logs` hash-chained + `audit.jsonl` append-only, `verify_chain()` |
 | **Edge** | token file `0600` · constant-time compare · same-origin · Host allowlist · 600/min |
 | **Surface** | web dashboard · phone client page over the LAN · voice (macOS `say`/STT) · watch queue · device pairing |
-| **Size** | ~61.8k lines of versioned Python/HTML/JS · 39.1k source · 22.8k tests · 68 test modules |
+| **Size** | ~61.9k lines of versioned Python/HTML/JS · 39.1k source · 22.8k tests · 68 test modules |
 
 ---
 
@@ -51,8 +51,8 @@ and the diagrams read their counts from the live registry.
 
 | Claim | Value | Reproduce |
 |---|---|---|
-| Test suite | **1819 passed · 0 failed · 0 xfailed · 0 skipped** (1819 collected; the skip is the network-gated arXiv test, which timed out in this run and passed live in the two before it — `-rs` prints its reason, an earlier run of the same phase reported **1 skipped** for that test, which is why a skip is named when it happens rather than smoothed over) | `python -m pytest -q -rs` |
-| Suite growth, Phase 9 → 41 | 875 passing / **126 failing** → 1819 passing / 0 failing / **0 xfailed** at the Phase 41 close | `cat benchmarks/suite_history.json` |
+| Test suite | **1820 passed · 0 failed · 0 xfailed · 0 skipped** (1820 collected; the skip is the network-gated arXiv test, which timed out in this run and passed live in the two before it — `-rs` prints its reason, an earlier run of the same phase reported **1 skipped** for that test, which is why a skip is named when it happens rather than smoothed over) | `python -m pytest -q -rs` |
+| Suite growth, Phase 9 → 41 | 875 passing / **126 failing** → 1820 passing / 0 failing / **0 xfailed** at the Phase 41 close | `cat benchmarks/suite_history.json` |
 | Tools registered | **133** | `python -c "from jarvis.core.orchestrator import JarvisCore as J; print(len(J().tools.names()))"` |
 | Confirmation-gated | **28** of 133 | `python assets/build_diagrams.py` (prints the live counts) |
 | Risk tiers | read 70 · low 35 · external 13 · high 12 · physical 3 | same |
@@ -131,7 +131,7 @@ and not a quiet success.
 
 ### Suite growth, Phase 9 → Phase 41
 
-<img src="assets/chart-suite-growth.svg" alt="Test suite growth from 875 passing with 126 failing, to 1819 passing with none failing at the close of Phase 41" width="100%"/>
+<img src="assets/chart-suite-growth.svg" alt="Test suite growth from 875 passing with 126 failing, to 1820 passing with none failing at the close of Phase 41" width="100%"/>
 
 Phase 9 inherited **126 failing tests**. The cause was a single import line in
 `jarvis/tools/base.py` that left `Verification` undefined, so every tool result raised
@@ -474,7 +474,7 @@ curl -s -H "X-JARVIS-Token: $TOKEN" -H 'Content-Type: application/json' \
      -d '{"text":"what is my battery"}' http://127.0.0.1:8765/command
 
 # Prove it to yourself:
-python -m pytest -q                       # 1819 passed, 0 failed (the research test skips only while arXiv refuses)
+python -m pytest -q                       # 1820 passed, 0 failed (the research test skips only while arXiv refuses)
 python benchmarks/acceptance_run.py       # re-measures the README's numbers
 python assets/build_charts.py && python assets/build_diagrams.py
 ```
@@ -495,7 +495,7 @@ jarvis/
   scheduler/   recurring jobs, runner with per-run re-authorization
   car/ home/ robotics/ watch/ vision/ research/ design/ coding/
   integrations/ IMAP/SMTP and CalDAV providers with local fallbacks
-tests/         68 modules · 1819 collected · includes the shipped page JS, run by Node
+tests/         68 modules · 1820 collected · includes the shipped page JS, run by Node
 dashboard/     index.html control panel + phone.html, the client a phone uses over the LAN
 audit/         43 phase reports + 4 CSV matrices — the evidence behind this README
 benchmarks/    acceptance_run.py and the JSON the charts are drawn from

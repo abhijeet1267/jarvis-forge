@@ -78,6 +78,18 @@ def test_the_build_has_the_agents_the_refusal_says_it_lacks(core):
         assert agent in core.agents, f"{agent} is registered; the refusal said it was not"
 
 
+def test_a_folder_in_a_sentence_opens_in_the_editor_not_as_a_document(core, tmp_path):
+    """Live, `open /tmp/vantage-demo` reached read_file and answered "File not found".
+
+    A directory is not a document; the honest reading of "open <folder>" is the one the
+    editor route already serves, and it is verified there rather than assumed here.
+    """
+    plan = core.planner.parse(f"open {tmp_path}")
+    tools = [a.tool for a in plan.actions]
+    assert tools == ["open_project_folder"], (tools, plan.actions[0].params)
+    assert str(tmp_path) in str(plan.actions[0].params["project"])
+
+
 def test_the_one_open_project_opens_in_the_editor(core, _clean_workspaces, tmp_path,
                                                   monkeypatch):
     registry = _clean_workspaces
