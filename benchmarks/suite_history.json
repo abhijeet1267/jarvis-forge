@@ -216,6 +216,13 @@
    "passed": 1775,
    "failed": 0,
    "note": "launching a GUI was waiting for it to quit; the editor's own record, not my word, proves the folder opened"
+  },
+  {
+   "phase": "40 the copy still launches",
+   "collected": 1786,
+   "passed": 1786,
+   "failed": 0,
+   "note": "a copied app broke its own seal by being used, and outlived its window as a listening server"
   }
  ]
 }
