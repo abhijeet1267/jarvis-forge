@@ -205,6 +205,7 @@ def suite_history() -> dict:
         ("42 what a key buys", 1827, 1827, 0, "a configured model had no caller: zero chat calls, two embedding calls"),
         ("43 not a microphone", 1833, 1833, 0, "a test passthrough answered a real audio clip with ok and confidence 1.0"),
         ("44 answers, not command lists", 1846, 1846, 0, "a question containing the word run was parsed as a command to execute"),
+        ("45a a key outside the bundle", 1856, 1856, 0, "the natural place to put a key was inside the signed bundle, where it breaks the seal"),
     ]
     return {"phases": [{"phase": p, "collected": c, "passed": q, "failed": f, "note": n}
                        for p, c, q, f, n in points]}

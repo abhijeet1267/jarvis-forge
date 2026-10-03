@@ -23,7 +23,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Streamin
 from pydantic import BaseModel, field_validator
 
 from .. import __version__
-from ..config import get_settings
+from ..config import get_settings, llm_source
 from ..core.models import CommandRequest, CommandResponse
 from ..core.orchestrator import JarvisCore
 from ..logging_setup import get_logger
@@ -435,6 +435,9 @@ async def health(_: None = Protected) -> Dict[str, Any]:
         "tools": len(core.tools.names()),
         "agents": list(core.agents.keys()),
         "llm_enabled": core.settings.llm_enabled,
+        # "configured" and "reachable" are not the same claim, and neither is
+        # "set in the shell" and "set in a file that failed to load".
+        "llm_source": llm_source(),
         "pending_confirmations": len(core.policy.pending()),
         # The addresses another device can actually reach. The desktop panel asks the
         # server rather than deriving them itself, so "what to type" and "what the Host

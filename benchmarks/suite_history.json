@@ -251,6 +251,13 @@
    "passed": 1846,
    "failed": 0,
    "note": "a question containing the word run was parsed as a command to execute"
+  },
+  {
+   "phase": "45a a key outside the bundle",
+   "collected": 1856,
+   "passed": 1856,
+   "failed": 0,
+   "note": "the natural place to put a key was inside the signed bundle, where it breaks the seal"
   }
  ]
 }

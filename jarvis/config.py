@@ -344,9 +344,109 @@ class Settings(BaseSettings):
         self.home.mkdir(parents=True, exist_ok=True)
 
 
+LLM_FILE_NAME = "llm.env"
+
+#: Where the model configuration came from. `llm_enabled` only says "something is set",
+#: which is the difference between a working key, a typo and an empty file -- and the
+#: first thing a person asks when the model does not answer.
+_LLM_SOURCE = "none"
+
+
+def llm_file_path() -> Path:
+    """The key file's place: beside the data, never inside the app bundle.
+
+    `Settings` reads `.env` from the current working directory, and for the installed app
+    that directory *is* `Vantage.app/Contents/Resources/app`. A file created there after the
+    bundle was signed invalidates its seal -- the exact defect Phase 40 found by copying the
+    app and running `codesign --verify` -- so a key that breaks the thing it configures is
+    not a feature.
+    """
+    root = os.environ.get("JARVIS_HOME") or _default_home()
+    return Path(root).expanduser() / LLM_FILE_NAME
+
+
+def llm_source() -> str:
+    """One of "none", "env", "llm.env"."""
+    return _LLM_SOURCE
+
+
+def apply_llm_file() -> list[str]:
+    """Load `llm.env` into the environment, and return what is worth saying out loud.
+
+    The real environment always wins: a key exported in a shell is the one that process
+    meant, and a file silently outranking it is how a stale key outlives the thing it was
+    written to replace. A file readable by anyone on the machine is complained about and
+    still honoured -- refusing to boot over a permission bit would be its own bad trade --
+    and no warning ever repeats the secret itself.
+    """
+    global _LLM_SOURCE
+
+    path = llm_file_path()
+    warnings: list[str] = []
+    already = bool(os.environ.get("JARVIS_LLM_API_KEY"))
+
+    if path.is_file():
+        import stat
+
+        try:
+            mode = stat.S_IMODE(path.stat().st_mode)
+        except OSError:
+            mode = 0
+        if mode & 0o077:
+            warnings.append(
+                f"{path} is readable beyond its owner (mode {mode:o}) and holds a "
+                "credential; run: chmod 600 " + str(path))
+        try:
+            lines = path.read_text(encoding="utf-8").splitlines()
+        except OSError as exc:
+            warnings.append(f"{path} could not be read: {exc}")
+            lines = []
+
+        for line in lines:
+            text = line.strip()
+            if not text or text.startswith("#") or "=" not in text:
+                continue
+            key, _, value = text.partition("=")
+            key = key.strip()
+            value = value.strip().strip('"').strip("'")
+            if not key:
+                continue
+            name = key if key.startswith("JARVIS_") else f"JARVIS_{key}"
+            if os.environ.get(name) or not value:
+                continue
+            os.environ[name] = value
+
+    if already:
+        _LLM_SOURCE = "env"
+    elif os.environ.get("JARVIS_LLM_API_KEY"):
+        _LLM_SOURCE = "llm.env"
+    else:
+        _LLM_SOURCE = "none"
+    return warnings
+
+
 @functools.lru_cache(maxsize=1)
 def get_settings() -> Settings:
-    """Return the process-wide settings singleton."""
+    """Return the process-wide settings singleton.
+
+    `llm.env` is applied first because pydantic reads the environment when the model is
+    constructed, and the file must not outrank a variable the shell already set.
+    """
+    for warning in apply_llm_file():
+        _warn(warning)
     settings = Settings()
     settings.ensure_dirs()
     return settings
+
+
+def _warn(message: str) -> None:
+    """Say once what a secret file should have been, without importing the logger early.
+
+    config.py sits under the logging setup, so a module-level logger here would be a cycle.
+    """
+    try:
+        from .logging_setup import get_logger
+
+        get_logger("config").warning(message)
+    except Exception:
+        pass
