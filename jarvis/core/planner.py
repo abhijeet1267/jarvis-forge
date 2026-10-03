@@ -172,6 +172,7 @@ class RulePlanner:
             self._recall,
             self._remember,
             self._explain_failure,
+            self._coding_agent,
             self._project,
             self._list_directory,
             self._compress,
@@ -1164,6 +1165,36 @@ class RulePlanner:
         if app is None:
             return None
         return Intent("close_app", tool="close_app", params={"app": app.key})
+
+    _AGENT_NAMES = r"(?:claude(?:\s+code)?|the\s+coding\s+agent|cursor\s+agent)"
+
+    def _coding_agent(self, text: str, raw: str) -> Optional[Intent]:
+        """Ask the coding agent to do something, in a workspace.
+
+        "continue in claude code" and "ask claude to fix the tests" were both unanswered:
+        the first fell to the project rule, which declines, and the second to nothing at
+        all. The prompt is everything after the verb, because that is what the user typed
+        and rewriting it would hide what the agent was actually told.
+        """
+        resume_only = re.search(
+            rf"\b(?:continue|resume|carry\s+on)\b[\s\w]*?\b(?:in\s+)?{self._AGENT_NAMES}\b",
+            raw, re.I)
+        if resume_only and not re.search(r"\b(?:to|for)\s+\w", raw[resume_only.end():], re.I):
+            return Intent("run_coding_agent", tool="run_coding_agent",
+                          params={"prompt": "Continue where you left off.", "resume": True},
+                          confidence=0.85)
+
+        asked = re.search(
+            rf"\b(?:ask|tell|have|make|get)\s+{self._AGENT_NAMES}\s+(?:to\s+)?(.+)$", raw, re.I)
+        if asked is None:
+            asked = re.search(rf"\bin\s+{self._AGENT_NAMES}\s+(.+)$", raw, re.I)
+        if asked is None:
+            return None
+        prompt = asked.group(1).strip(" .!").strip()
+        if not prompt:
+            return Intent("run_coding_agent", note="What should I ask the coding agent to do?")
+        return Intent("run_coding_agent", tool="run_coding_agent",
+                      params={"prompt": prompt}, confidence=0.85)
 
     def _open_app(self, text: str, raw: str) -> Optional[Intent]:
         # "open folder <path> in vscode" / "open <path> in vscode"

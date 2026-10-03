@@ -470,6 +470,19 @@ class PermissionEngine:
                 str(action.params.get("action") or ""),
                 action.params.get("value"),
             )
+        if spec.name == "run_coding_agent":
+            # What the user is approving is the instruction and where it runs, not a
+            # dict. A coding agent handed a parameter dump to read on a phone screen
+            # is a confirmation nobody can actually make.
+            asked = str(action.params.get("prompt") or "").strip()
+            where = str(action.params.get("path") or "").strip()
+            said = f'ask the coding agent "{asked}"' if asked else "ask the coding agent"
+            if action.params.get("resume"):
+                said += " (continuing its last session)"
+            if where:
+                leaf = where.rstrip("/").split("/")[-1] or where
+                said += f" in {leaf}"
+            return said
         bits = [f"{spec.name} on {action.device}"]
         for key, value in action.params.items():
             bits.append(f"{key}={value}")

@@ -64,7 +64,7 @@ def editor_folder_opened(folder: Path, app_key: str = "vscode", storage_root=Non
     return False
 
 
-def _resolve_folder(value: str, ctx: ToolContext):
+def resolve_folder(value: str, ctx: ToolContext):
     """Turn what the user said into a real directory, or say what went wrong.
 
     Absolute paths are used as given; anything else is looked up among the workspaces
@@ -121,7 +121,7 @@ async def open_app(ctx: ToolContext, app: str = "", path: str = "") -> "object":
 
     folder = None
     if str(path).strip():
-        folder, problem = _resolve_folder(path, ctx)
+        folder, problem = resolve_folder(path, ctx)
         if folder is None:
             return fail("open_app", problem, device=ctx.device_id)
 
