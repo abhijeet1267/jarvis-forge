@@ -64,7 +64,7 @@ and the diagrams read their counts from the live registry.
 | Packaged desktop app | builds, ad-hoc signs, **launches**, and its server answers `/health`; self-test reports **7/9** (the two failures are macOS permissions, not code) | `python build_app.py && JARVIS_SELFTEST=1 "dist/Vantage.app/Contents/MacOS/JarvisForge"` |
 | Audit chain integrity | `verify_chain() → ok=True` over **2 recorded actions** (an empty chain verifies trivially, so run two commands first) | `JARVIS_HOME=$(mktemp -d) python -c "import asyncio;from jarvis.core.models import CommandRequest as R;from jarvis.core.orchestrator import JarvisCore as J;c=J();[asyncio.run(c.handle(R(text=t,source='probe'))) for t in ('Jarvis, what time is it.','Jarvis, what is my laptop battery.')];print(c.audit.verify_chain())"` |
 | Regenerated figures parse as SVG | 7/7 | `python assets/build_charts.py && python assets/build_diagrams.py` |
-| CI on the pushed commit | `suite (3.11)` and `suite (3.12)` both **success** | `gh run list --workflow ci.yml --limit 1` |
+| CI on the pushed commit | **Did not run.** The Phase 39 commit's two jobs were each cancelled 10 s after starting with no runner attached and zero steps executed — GitHub's annotation reads "recent account payments have failed or your spending limit needs to be increased". Re-running once reproduced it exactly. So the suite figure above is measured **locally on `e1fcf7a`**, not on a runner; the last commit the runner did execute (`40c5c89`, Phase 38) was green on both 3.11 and 3.12 | `gh run list --workflow ci.yml --limit 1` · `gh api repos/…/check-runs/<id>/annotations` |
 
 > On the author's own machine `~/.jarvis-forge` still reports `verify_chain()`
 > `ok=False` with **5 breaks** — residue from the pre-verification records and the
@@ -571,7 +571,13 @@ set Kitchen light (kitchen.light) to 40%"*.
   phone client, not audited for WCAG ratios; the token test proves completeness, not legibility.
   **39-E** the laptop's address changed mid-phase (172.20.169.34 → 172.20.169.185) and the URL
   already handed to the user died by itself — 38-B arriving inside a day. The panel address and
-  the scan code absorb it; only mDNS removes it.
+  the scan code absorb it; only mDNS removes it. **39-F** GitHub refused to start this commit's
+  runner jobs — both `suite (3.11)` and `suite (3.12)` died at ten seconds with no runner
+  attached and zero steps executed, annotated "recent account payments have failed or your
+  spending limit needs to be increased". Re-running reproduced it. Every Phase 39 number is
+  therefore measured **locally**, and the last runner-verified commit is still `40c5c89`
+  (Phase 38). Until the account is settled, "CI is red" on this repository means unmeasured,
+  not broken.
 - **A rebrand, and connecting without typing** (Phases 37–38). Reasoned in
   `audit/PHASE37_RENAME_VANTAGE_REPORT.md` and `audit/PHASE38_CONNECT_BY_SCANNING_REPORT.md`.
   **37-A** the project is half-renamed by design — product "Vantage", code `jarvis` — so a reader

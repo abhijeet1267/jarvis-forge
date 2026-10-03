@@ -150,6 +150,9 @@ before being allowed to say 42.
   handed to the user went dead on its own — 38-B arriving within a day. The QR and the panel
   address absorb this; mDNS would remove it.
 * Unchanged: 38-A…D, 37-A…E, 36-A…E, 35-A…C, 34-A…C, and the `-rs` CI change.
+* **39-F** (raised by §7) the runner cannot be used as evidence at all until the account is
+  settled: the jobs for `e1fcf7a` were never started. Nothing in this repository's CI can be
+  claimed green, and nothing can be claimed red either, while that holds.
 
 ## 7. Git
 
@@ -159,4 +162,36 @@ Parent `59fdc11`. Committed: `jarvis/tools/apps.py`, `jarvis/tools/coding_agent.
 `dashboard/index.html`, the three Phase 39 test files, `tests/test_phase25_desktop_truth.py`
 (the route-count guard), `README.md`, `benchmarks/*`, `assets/*.svg`, this report.
 
-**CI verdict:** to be appended once the run exists — not before.
+**CI verdict:** run `37096835264`, commit `e1fcf7a`, **the runner never started the work.**
+Both `suite (3.11)` and `suite (3.12)` report `failure` with `runner_name` empty, **0 steps**,
+and a lifetime of ten seconds (04:31:39 → 04:31:49Z). The check-run annotation is explicit:
+
+> The job was not started because recent account payments have failed or your spending limit
+> needs to be increased. Please check the 'Billing & plans' section in your settings
+
+Re-running the workflow produced the same ten-second, zero-step, no-runner pair 314 s later, so
+this is not a queue timeout or a transient capacity refusal — although the second annotation,
+"jobs targeting macOS arm64 runners may experience longer queue times", is also present and is
+not the operative one. **Nothing in this report's numbers is therefore claimed to be
+runner-verified for this commit.** The distinction matters here more than usual, because CI on
+this project is load-bearing rather than decorative: it is the only place the suite runs on a
+machine with no battery, no ffmpeg and no Spotlight index, and the bundle build step exists to
+catch exactly the drift that killed Phase 37's guard.
+
+What *was* executed is this machine, on the pushed commit with a clean tree:
+
+```
+git rev-parse HEAD   e1fcf7abf25cb40bfc18568c3bfb9695c2fb96e8
+git status --short   (empty)
+JARVIS_HOME=$(mktemp -d) .venv/bin/python -m pytest -q -rs
+                     1775 passed, 1 warning in 50.82s          # 0 failed, 0 skipped
+JARVIS_HOME=$(mktemp -d) .venv/bin/python benchmarks/safety_run.py   6 of 6
+JARVIS_HOME=$(mktemp -d) .venv/bin/python benchmarks/acceptance_run.py 17 of 18 measured
+.venv/bin/python assets/build_charts.py && … build_diagrams.py       7/7 SVG, 129 tools
+```
+
+The last commit a runner actually executed is `40c5c89` (Phase 38's addendum): both suites
+**success** in 12m44s. Until the spending limit is raised or the payment cleared, every push
+will report `failure` without having tested anything, and that verdict should be read as
+*unmeasured*, never as *broken*.
+
