@@ -307,6 +307,13 @@
       "passed": 2065,
       "failed": 0,
       "note": "Finder answered no AppleScript, a detached launch hid 'not installed', and the installed check denied Apple's own apps existed"
+    },
+    {
+      "phase": "53 vantage talks about itself",
+      "collected": 2129,
+      "passed": 2129,
+      "failed": 0,
+      "note": "\"are you running\" was probing for an installed app named \"You\"; self-state now comes from the policy engine, the audit and the task table"
     }
   ]
 }

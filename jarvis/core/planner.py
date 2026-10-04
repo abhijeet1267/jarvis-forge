@@ -159,6 +159,7 @@ class RulePlanner:
         self._rules: List[RuleFn] = [
             self._emergency_stop,
             self._help,
+            self._vantage_self,
             self._list_apps,
             self._frontmost_app,
             self._screenshot,
@@ -1235,6 +1236,60 @@ class RulePlanner:
             return Intent("run_coding_agent", note="What should I ask the coding agent to do?")
         return Intent("run_coding_agent", tool="run_coding_agent",
                       params={"prompt": prompt}, confidence=0.85)
+
+    def _vantage_self(self, text: str, raw: str) -> Optional[Intent]:
+        """Questions about Vantage itself, answered by Vantage rather than by a proxy.
+
+        Measured before this rule existed: "are you running" reached the application probe for
+        an installed app literally named "You", and "what is the current task" reached the
+        general-knowledge question tool. Both produced a confident answer to the wrong
+        question, which is worse than the silence the other four sentences got.
+
+        The boundary kept on purpose: "is Vantage running?" stays with the application probe,
+        because that sentence asks whether the program is up and the probe proves it from the
+        bundle and the process table. "is Vantage healthy" asks for operating state, which only
+        the running process can report.
+        """
+        if re.search(r"\b(stop|cancel|abort|kill)\s+(the\s+|my\s+)?(current|this|running|"
+                     r"active)\s+(task|job|operation)\b", text):
+            return Intent("stop_task", tool="stop_current_task", confidence=0.9)
+        if re.search(r"\b(stop|cancel)\s+what\s+you(?:'?re|\s+are)\s+doing\b", text):
+            return Intent("stop_task", tool="stop_current_task", confidence=0.9)
+
+        if re.search(r"\b(pending|awaiting|waiting|outstanding)\s+"
+                     r"(confirmation|confirmations|approval|approvals|request|requests)\b", text) \
+                or re.search(r"\b(confirmations?|approvals?|requests?)\s+(?:are\s+)?"
+                             r"(waiting|pending)\b",
+                             text) \
+                or re.search(r"\bwhat\s+(needs|actions?\s+need|require[s]?)\s+my\s+"
+                             r"(confirmation|approval)\b", text) \
+                or re.search(r"\bdo\s+i\s+have\s+any\s+(pending|approvals|confirmations)\b",
+                             text):
+            return Intent("pending_confirmations", tool="get_pending_confirmations",
+                          confidence=0.9)
+
+        if re.search(r"\bwhat\s+(is|are)\s+your\s+(status|health|state|condition|mode)\b", text) \
+                or re.search(r"\bwhat\s+mode\s+are\s+you\s+in\b", text) \
+                or re.search(r"\bare\s+you\s+(running|up|alive|ok|okay|healthy|there|"
+                             r"connected|online)\b", text) \
+                or re.search(r"\b(vantage|jarvis)\s+(status|health|state)\b", text) \
+                or re.search(r"\bis\s+(vantage|jarvis)\s+(healthy|up|ok|okay|working)\b", text) \
+                or re.search(r"\bhow\s+is\s+(vantage|jarvis)\s+doing\b", text):
+            return Intent("vantage_status", tool="get_vantage_status", confidence=0.9)
+
+        if re.search(r"\b(current|active|running)\s+(task|job)\b", text) \
+                or re.search(r"\bwhat\s+are\s+you\s+(doing|working\s+on)\b", text) \
+                or re.search(r"\bany\s+task\s+(running|in\s+progress)\b", text):
+            return Intent("current_task", tool="get_current_task", confidence=0.9)
+
+        if re.search(r"\brecent\s+(actions?|activity|history|commands?)\b", text) \
+                or re.search(r"\bwhat\s+did\s+you\s+(just\s+)?(do|last\s+do)\b", text) \
+                or re.search(r"\bwhat\s+happened\s+(recently|lately)\b", text) \
+                or re.search(r"\bwhat\s+was\s+the\s+last\s+(command|action|thing)\b", text) \
+                or re.search(r"\b(show|list)\s+(me\s+)?(the\s+)?(last|recent)\s+"
+                             r"(actions?|commands?|activity)\b", text):
+            return Intent("recent_activity", tool="get_recent_activity", confidence=0.9)
+        return None
 
     def _frontmost_app(self, text: str, raw: str) -> Optional[Intent]:
         """"show the current application" -- one application, not the list of them.

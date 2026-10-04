@@ -31,6 +31,7 @@ from . import (
     research,
     robotics,
     scheduler,
+    self_state,
     storage,
     system,
     vision,
@@ -65,6 +66,7 @@ def _all_specs():
         *robotics.SPECS,
         *car.SPECS,
         *watch.SPECS,
+        *self_state.SPECS,
     ]
 
 

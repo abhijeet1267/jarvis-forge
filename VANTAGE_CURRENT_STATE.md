@@ -1,6 +1,6 @@
-# Vantage — full working report, Phase 52 close-out
+# Vantage — full working report, Phase 53 close-out
 
-Written 2026-10-04. Every number below was produced by a command on this machine during this
+Written 2026-10-04 and refreshed at the Phase 53 close the same day; §2A is Phase 52's record and §2B is Phase 53's. Every number below was produced by a command on this machine during this
 session or the immediately preceding phases, and the command is named next to it. Where a
 capability exists but was **not** re-measured today, it says so rather than implying it was.
 
@@ -10,17 +10,17 @@ capability exists but was **not** re-measured today, it says so rather than impl
 
 | | |
 |---|---|
-| What it is | A personal AI operating system for macOS: one command pipeline, 136 gated capabilities, a laptop panel, a phone client, a signed `.app` delivered as files |
-| Current phase | **Phase 52 — the §6 sentences about the laptop** (closed) |
-| Test suite | **2065 passed · 0 failed · 0 xfailed · 0 skipped** in 67.2 s |
-| Spec §6 coverage | **32 of 37** utterances reach a capability (was 21 of 37 at the start of this phase) |
+| What it is | A personal AI operating system for macOS: one command pipeline, 141 gated capabilities, a laptop panel, a phone client, a signed `.app` delivered as files |
+| Current phase | **Phase 53 — Vantage talking about itself** (closed) |
+| Test suite | **2129 passed · 0 failed · 0 xfailed · 0 skipped** in 66.4 s |
+| Spec §6 coverage | **36 of 37** utterances reach a capability (21 at the start of Phase 52, 32 at its close) |
 | Delivered | `~/Downloads/Vantage/` — `Vantage.app` (running, seal valid), `Vantage.app.zip`, `vantage-source.zip`, `READ ME FIRST.txt` |
-| Commits | `92efc6b` (Ph 52), `f047eb2` (Ph 51), `452e9c0` (Ph 50) — **local only, nothing pushed** |
+| Commits | Phase 53 (hash in §2B), `3708f85` (Ph 52 correction), `92efc6b` (Ph 52), `f047eb2` (Ph 51), `452e9c0` (Ph 50) — **local only, nothing pushed** |
 | Biggest known gap | Vantage cannot yet answer questions about **itself** (pending approvals, its status, its recent actions, stopping the current task), and there is no native mobile app, relay, push or provider adapter |
 
 ---
 
-## 2. The current phase in full (Phase 52)
+## 2A. Phase 52 in full — the §6 sentences about the laptop
 
 ### 2.1 What was asked and what was measured first
 
@@ -127,6 +127,92 @@ is Mail installed (after fix) "Mail is installed (version 16.0)…"             
 
 ---
 
+## 2B. Phase 53 in full — Vantage answering questions about itself
+
+**Measured first.** Four of the six §6 self-state sentences reached nothing, and three reached
+something worse than nothing:
+
+```
+are you running            -> check_agent_status(app="You")
+what is the current task   -> ask_question(topic="current task")
+what are you doing         -> ask_question(topic="you doing right now")
+what is your status        -> ask_question(topic="your status")
+```
+
+A question about Vantage answered by probing for an installed application literally named "You",
+or handed to the general-knowledge tool, is a confident answer to the wrong question — worse than
+a refusal, because a refusal at least tells the user something is missing.
+
+**No new state store.** Five capabilities read what the process already owns:
+
+| tool | risk | source | what it refuses to do |
+|---|---|---|---|
+| `get_pending_confirmations` | READ | `core.policy.pending()` | show a confirmation past its TTL, or synthesize one from audit rows |
+| `get_vantage_status` | READ | the objects `/health` builds from | name a provider that is not configured |
+| `get_recent_activity` | READ | `core.audit.recent()` | smooth `denied` / `blocked` / `unverified` into a success count |
+| `get_current_task` | READ | `core.tasks.list()` + step rollup | claim work is running because a request arrived |
+| `stop_current_task` | LOW | `core.tasks.cancel()` | say it stopped something without reading the status back |
+
+`stop_current_task` is LOW and confirmation-free on purpose: §30 of the build prompt requires a
+stop to be immediately executable, and PHYSICAL stays reserved for the emergency stop.
+`cancel_schedule` was deliberately kept out of this — a schedule is a thing that runs later, a
+task is one execution now, and conflating them cancels the wrong object while reporting a success.
+A test asserts stopping a task leaves `scheduled_jobs` untouched.
+
+**What the live run taught that no test suggested:** a command stopped at the permission gate
+writes **no task row at all**. So "what is the current task" truthfully answered *"nothing is
+running"* while an approval sat waiting — true, and useless. Both facts are now said:
+
+```
+Nothing is executing right now, but 1 action(s) is waiting for your approval --
+ask me for pending approvals to see what they are.
+```
+
+**Also measured rather than assumed:** `LifecycleReport` defines `__bool__`, so `emergency_stop`'s
+`if tasks.cancel(...)` is correct and not a latent bug — checked by building a rejected report and
+testing it, not by reasoning about it.
+
+**Live transcript** (isolated instance, ephemeral port chosen after the first choice turned out to
+be occupied by an unrelated server — a 401 from something you did not start is not a test
+subject):
+
+```
+delete /tmp/p53target/delete-me.txt  -> CONFIRM "This needs your confirmation before I run it."
+what is the current task             -> "Nothing is executing right now, but 1 action(s) is
+                                         waiting for your approval…"                    1 ms
+show pending confirmations           -> "1 action(s) waiting: delete_file (CONF-77a0e54a…).
+                                         Each expires 300 seconds after it was created." 1 ms
+are you running                      -> "Vantage is running in Basic Mode: deterministic rules,
+                                         no model. 141 capabilities across 15 agents,
+                                         1 waiting for approval…"                       1 ms
+what did you just do                 -> "4 most recent action(s): 3 success,
+                                         1 awaiting_confirmation…"                      1 ms
+stop the current task (idle)         -> "Nothing was stopped: no task is running."      1 ms
+
+-- the cancel path, against a job with one finished and one pending step --
+what is the current task -> Current task: "p53 live stop proof" -- running, 1 of 2 step(s) done.
+stop the current task    -> Stopped "p53 live stop proof" -- the job is cancelled. Steps that
+                            already ran are not undone (1 done). Not started or interrupted:
+                            delete_file.                                          verified=True
+sqlite read-back         -> ('JOB-P53LIVE', 'cancelled')      <- independent of the tool
+```
+
+**Browser: not performed, and no UI claim is made.** No page changed this phase.
+
+**Five of this phase's own test assertions were wrong while the product was right** — `verified`
+is a field not an output key; a Basic-Mode check that banned the word "model" and so failed on
+"no model"; an empty-history check expecting "nothing" where the tool says "no recorded actions";
+a no-op stop asserted non-SUCCESS when the real requirement is that it must not *claim* a stop;
+and a helper that lost an import to a bulk edit, producing 16 `NameError`s that looked like
+product failures. Each was fixed in the test, with the reason, and two of them changed what the
+test asserts to the thing that actually matters.
+
+**The suite caught what the module did not:** four self-state tests assumed an empty approval
+queue and no active jobs. Alone they passed; in the full run they failed, because the session
+database is shared. They now clear that state explicitly — the third time this project has been
+bitten by the same leak.
+
+
 ## 3. Working status of the whole product, as measured today
 
 All values from the **delivered app** over HTTP (read-only GETs) unless stated.
@@ -147,19 +233,19 @@ User → Intent → RulePlanner (50 routes) → PermissionEngine → [Confirmati
 
 | thing | value | how measured |
 |---|---|---|
-| Tools | **136** | `/health`, `/tools` |
+| Tools | **141** | `/health`, `/tools` |
 | Agents | **15** — calendar, car, coding, design, email, home, laptop, laptop_center, memory, phone, research, robotics, scheduler, vision, watch | `/health` |
 | Risk spread | READ 72 · LOW 36 · EXTERNAL 13 · DESTRUCTIVE 12 · PHYSICAL 3 | registry |
-| Confirmation-gated | **28** of 136 | registry |
-| RulePlanner routes | **50** | `len(core.planner._rules)` |
+| Confirmation-gated | **28** of 141 — unchanged by Phase 53, which added no gate and loosened none | registry |
+| RulePlanner routes | **51** | `len(core.planner._rules)` |
 | Registered applications | **15** | `AppRegistry` |
 | HTTP surface | 113 route objects / **107 paths** | `len(app.routes)` |
 | Database tables | **32** | schema `CREATE TABLE` count |
 | Memories indexed | 52 / 52, coverage 1.0, hybrid retrieval | `/health` |
 | Scheduler | running, 30 s tick, 67 jobs | `/health` |
-| Test suite | 2065 passed, 0 failed, 0 skipped, 67.2 s | `pytest -q` |
-| Test modules / phase reports | 79 / 54 | `ls` |
-| Code volume | 66,334 lines — 40,506 source · 25,828 tests | `wc -l` |
+| Test suite | 2129 passed, 0 failed, 0 skipped, 66.4 s | `pytest -q` |
+| Test modules / phase reports | 80 / 55 | `ls` |
+| Code volume | 67,266 lines — 40,911 source · 26,355 tests | `wc -l` |
 
 ### 3.3 Permissions, as the OS reports them right now (`/permissions`)
 
@@ -219,7 +305,7 @@ Swift helper and an x86_64 build on an arm64 machine. Not re-driven by ear today
 |---|---|---|
 | **No emergency-stop route** | no route matching `emergency` in `jarvis/api/app.py`; the `emergency_stop` tool is PHYSICAL-tier and reachable only by the sentence "emergency stop" | §30 of the build prompt asks for stop from phone, menu bar and task screen |
 | **No tool-level revoke UI** | `PolicyStore.revoke` exists, no product surface calls it (measured Phase 49a) | the permission engine has one door and no handle |
-| Vantage cannot describe itself | 4 of the §6 gaps above | blocks phone-side approvals and task state |
+| ~~Vantage cannot describe itself~~ | **closed in Phase 53** — approvals, status, recent actions, current task and a verified stop are now answerable | was blocking phone-side approvals and task state |
 | No native mobile app | the phone client is a served web page (`/phone`) | §2B of the build prompt asks for iOS/Android with keychain/keystore, biometrics, push |
 | No relay, no push, no biometrics | none in the tree | remote-away-from-LAN use is not possible today |
 | No provider adapters in use | `llm_enabled: false`; OpenAI/Gemini adapters per §22–24 not built | LLM planning is off; Basic Mode carries everything |
@@ -287,14 +373,13 @@ menu-bar-less `.app` launcher.
 
 ## 5. What is needed, in order, with the reason
 
-1. **Phase 53 — Vantage talking about itself.** Routes to state the process already holds:
-   pending confirmations (`/confirmations`), Vantage status (`/health`), recent actions
-   (`/audit`), and stopping the current task (`/tasks/{id}/{action}`). This is the blocker for
-   §14/§16/§30 of the build prompt — a phone cannot show approvals it cannot ask about.
+1. ~~Vantage talking about itself~~ — **done in Phase 53.** Approvals, status, recent
+   actions, the current task and a verified stop are now answerable, which unblocks the phone-side
+   governance in §14/§16/§30 of the build prompt.
 2. **An emergency-stop route** reachable from the phone, and a **tool-revoke handle** on the
    permission engine. Both are safety surfaces with the logic written and no door.
-3. **A web-search capability** for `search Google for X` — the only §6 gap that needs a new
-   tool rather than a route.
+3. **A web-search capability** for `search Google for X` — §6's only remaining gap, and the only
+   one that needs a new tool rather than a route.
 4. **The §3 first-run wizard** with a deliberate, user-initiated permission **request** path
    (read-only status exists; requesting must never be a side effect of a poll).
 5. **Host persistence** — the `.app` is a launcher that dies with its window; a real login

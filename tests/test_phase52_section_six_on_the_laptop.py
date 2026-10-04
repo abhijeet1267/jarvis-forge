@@ -294,9 +294,23 @@ def test_the_new_tools_declare_their_own_gate(registry, name, risk, confirmation
     assert spec.requires_confirmation is confirmation
 
 
-def test_the_registry_grew_by_exactly_two_tools(registry):
-    assert len(registry.names()) == 136, (
-        f"134 before this phase; {len(registry.names())} now -- name the additions")
+def test_the_two_capabilities_this_phase_added_are_there(registry):
+    """Was `assert len(...) == 136`, a frozen total.
+
+    Phase 53 added five more capabilities and the assertion failed for no defect at all --
+    the same trap that turned Phase 49's `== 134` into an obstacle. What is worth guarding is
+    that this phase's two tools exist and that the number the README publishes is the number
+    the registry reports, because a stale published count is the defect this project keeps
+    finding.
+    """
+    import re
+
+    for name in ("open_user_folder", "get_frontmost_application"):
+        assert registry.get(name) is not None, f"{name} is gone"
+    readme = (REPO / "README.md").read_text()
+    claimed = int(re.search(r"\| Tools registered \| \*\*(\d+)\*\*", readme).group(1))
+    assert claimed == len(registry.names()), (
+        f"the README publishes {claimed} tools; the registry has {len(registry.names())}")
 
 
 @pytest.mark.parametrize("utterance,tool", [
