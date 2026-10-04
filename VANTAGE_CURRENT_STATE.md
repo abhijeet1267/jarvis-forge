@@ -1,7 +1,7 @@
-# Vantage — full working report, Phase 56 close-out
+# Vantage — full working report, Phase 57 close-out
 
-Written 2026-10-04 and refreshed at each phase close the same day. §2A–§2E are Phase 52, 53,
-54, 55 and 56. Every number below was produced by a command on this machine during this
+Written 2026-10-04, refreshed at each phase close; this pass is 2026-10-05. §2A–§2F are Phase 52,
+53, 54, 55, 56 and 57. Every number below was produced by a command on this machine during this
 session or the immediately preceding phases, and the command is named next to it. Where a
 capability exists but was **not** re-measured today, it says so rather than implying it was.
 
@@ -11,13 +11,13 @@ capability exists but was **not** re-measured today, it says so rather than impl
 
 | | |
 |---|---|
-| What it is | A personal AI operating system for macOS: one command pipeline, 142 governed capabilities (28 of them confirmation-gated), a laptop panel, a phone client, a signed `.app` delivered as files |
-| Current phase | **Phase 56 — asking for a permission, on purpose** (closed) |
-| Test suite | **2218 passed · 0 failed · 0 xfailed · 0 skipped** — 62.5 to 65.8 s over three runs at this close |
+| What it is | A personal AI operating system for macOS: one command pipeline, 145 governed capabilities (30 of them confirmation-gated), a laptop panel, a phone client, a signed `.app` delivered as files |
+| Current phase | **Phase 57 — the laptop stays reachable after its window closes** (closed) |
+| Test suite | **2273 passed · 0 failed · 0 xfailed · 0 skipped** — 66.98 to 74.22 s over three runs at this close |
 | Spec §6 coverage | **37 of 37** — every utterance the build prompt lists reaches a capability |
 | Delivered | `~/Downloads/Vantage/` — `Vantage.app` (running, seal valid), `Vantage.app.zip`, `vantage-source.zip`, `READ ME FIRST.txt` |
 | Commits | `0cdc770` (Ph 56), `176bcfb` (Ph 55), `377e79f` (Ph 54 correction), `67d9530` (Ph 54), `35c9abf` (Ph 53), `3708f85` (Ph 52 correction), `92efc6b` (Ph 52), `f047eb2` (Ph 51), `452e9c0` (Ph 50) — **local only, nothing pushed** |
-| Biggest known gap | The Mac process does not persist — the `.app` is a launcher tied to its window, so a closed laptop is unreachable from the phone. That gap now also blocks the permission **ask** (56-A): macOS will not let a helper process raise the dialog, only an app process can. No native mobile app, relay, push or provider adapter either. |
+| Biggest known gap | Off the wifi there is nothing: the phone surface is a served web page, not a native app, with no keychain, biometrics, push or relay. Persistence now exists as a capability but has never been left **installed** on this machine (57-A -- a user decision), and the permission ask still cannot land because it lives in the helper (57-G, carried from 56-A). |
 
 ---
 
@@ -399,6 +399,75 @@ the delivered app — Phase 54's §11a exists precisely because a "read-only" ch
 audit row by POSTing at it.
 
 
+## 2F. Phase 57 in full — the laptop stays reachable after its window closes
+
+Gap F, and the thing Phase 56 needed and did not have: a process that outlives its window. The
+`.app` had been a launcher since the beginning — it starts the server, and its death stops it —
+which was the correct fix for Phase 40's orphan server and the reason a phone in your hand talks
+to a machine that has to be sitting open.
+
+Five decisions, each with a reason that came from measurement:
+
+```text
+user LaunchAgent, not a daemon   ~/Library/LaunchAgents, runs as you, no elevation
+KeepAlive{SuccessfulExit:false}  a crash is retried, a clean stop is respected;
+                                 KeepAlive=true turns a port conflict into a loop
+closed variable list             no token, and no inherited JARVIS_GUARDIAN_PID --
+                                 the watchdog exits in 2 s when its parent is gone,
+                                 and launchd would be the parent
+the path guard did not move      LaunchAgents stays protected for ordinary writes;
+                                 persistence is its own gated capability instead
+EXTERNAL + confirmation          both writes change what runs unattended
+```
+
+Then the machine corrected me four times, and all four are now tests:
+
+1. **`launchctl print gui/<uid> <label>` does not fail.** It dumps the whole domain and exits 0,
+   so my status said "loaded" on a machine that had never been installed, and could read an
+   unrelated service's pid as this job's. The target is now one argument *and* the reply must name
+   this label — an answer that is not about this job is not evidence.
+2. **uvicorn starts the application before it notices the port is taken.** The losing instance
+   logged `scheduler started`, then `[Errno 48] address already in use`, then exited **3** — the
+   double-scheduler the guard exists to prevent, plus a restart loop. The port is probed before the
+   app wakes; re-measured live, the losing run logs zero `scheduler started` and exits 0.
+3. **`bootout` is not synchronous.** One immediate re-read found the job still in the table and
+   reported a refusal about a job that had stopped, leaving the plist behind. Teardown now gets a
+   bounded window (3 s) that bounds the *wait* without deciding the *answer*.
+4. **A polling card erased its own answer.** The press wrote its reply into a note rendered inside
+   the card, and the re-read on the next line rewrote that card — default text back, so on screen
+   nothing had happened. `#permNote` had the same defect from Phase 56. Both notes now live outside
+   the polled container, verified 12 s later in a real browser.
+
+**One design decision changed mid-phase, in the stricter direction of consistency.** The first test
+banned *every* sentence from reaching `enable_host_persistence`. That is not how this registry
+works — 27 other gated capabilities are reachable by sentence precisely because a person approves
+the card. So the ambiguous phrasings ("start vantage on login", "keep running when I close the
+window") get the **state**, and only the unambiguous "install the login item" reaches the gated
+tool, where the gate is the confirmation. The route table asserts the gated-ness from the registry,
+not from prose.
+
+**Three frozen `== 28` gate counts became an invariant** (every EXTERNAL and DESTRUCTIVE capability
+requires confirmation; the only ungated PHYSICAL one is the stop, on purpose). A total can be
+satisfied by removing one gate and adding two elsewhere. The negative control was run rather than
+assumed: loosening `delete_file` is caught, gating `emergency_stop` is caught.
+
+Live against the real launchd, on an isolated home and port, then removed:
+
+```
+enable()  -> state=loaded pid=14049 ; launchctl: state = running
+/health   -> status ok | tools 145 | scheduler running     (no window, no terminal)
+plist     -> token present? False | JARVIS_GUARDIAN_PID present? False
+disable() -> not_installed ; file gone ; port closed ; no residue on the machine
+```
+
+**And what it does *not* claim:** the login item has never been left installed for the real app —
+that is 57-A, a user decision, with the control in place to make it. No reboot was performed
+(57-F). The permission ask still cannot prompt, because it still lives in the helper (57-G).
+
+Measured after: **2273 tests passing**, 145 tools (+3), 30 gated (+2, none removed), 52 routes,
+119 HTTP route objects / 113 paths, 84 test modules, 59 phase reports, 70,190 lines.
+
+
 ## 3. Working status of the whole product, as measured today
 
 All values from the **delivered app** over HTTP (read-only GETs) unless stated.
@@ -419,19 +488,19 @@ User → Intent → RulePlanner (50 routes) → PermissionEngine → [Confirmati
 
 | thing | value | how measured |
 |---|---|---|
-| Tools | **142** | `/health`, `/tools` |
+| Tools | **145** | `/health`, `/tools` |
 | Agents | **15** — calendar, car, coding, design, email, home, laptop, laptop_center, memory, phone, research, robotics, scheduler, vision, watch | `/health` |
-| Risk spread | READ 76 · LOW 38 · EXTERNAL 13 · DESTRUCTIVE 12 · PHYSICAL 3 | registry, counted this close |
-| Confirmation-gated | **28** of 142 — three phases of new capability, no gate moved | registry |
+| Risk spread | READ 77 · LOW 38 · EXTERNAL 15 · DESTRUCTIVE 12 · PHYSICAL 3 | registry, counted this close |
+| Confirmation-gated | **30** of 145 — gates added in Phase 57, none removed (§7 of that report proves the direction) | registry |
 | RulePlanner routes | **52** | `len(core.planner._rules)` |
 | Registered applications | **15** | `AppRegistry` |
-| HTTP surface | 118 route objects / **112 paths** (Phase 54 added the stop and the two policy doors, Phase 56 the request route) | `len(app.routes)` |
-| Database tables | **32** | schema `CREATE TABLE` count |
+| HTTP surface | 119 route objects / **113 paths** (Phase 54 the stop and the policy doors, Phase 56 the permission request, Phase 57 the start-up read) | `len(app.routes)` |
+| Database tables | **32** | read-only `sqlite_master` count on the delivered app's database |
 | Memories indexed | 52 / 52, coverage 1.0, hybrid retrieval | `/health` |
 | Scheduler | running, 30 s tick, 67 jobs | `/health` |
-| Test suite | 2218 passed, 0 failed, 0 skipped; 62.5–65.8 s over three close-out runs | `pytest -q` |
-| Test modules / phase reports | 83 / 58 | `ls` |
-| Code volume | 69,120 lines — 41,726 source · 27,394 tests | `wc -l` |
+| Test suite | 2273 passed, 0 failed, 0 skipped; 66.98–74.22 s over three close-out runs | `pytest -q` |
+| Test modules / phase reports | 84 / 59 | `ls` |
+| Code volume | 70,190 lines — 41,887 source · 28,303 tests | `find jarvis dashboard app … \| xargs wc -l` |
 
 ### 3.3 Permissions, as the OS reports them right now (`/permissions`)
 
@@ -503,8 +572,8 @@ Swift helper and an x86_64 build on an arm64 machine. Not re-driven by ear today
 | No relay, no push, no biometrics | none in the tree | remote-away-from-LAN use is not possible today |
 | No provider adapters in use | `llm_enabled: false`; OpenAI/Gemini adapters per §22–24 not built | LLM planning is off; Basic Mode carries everything |
 | No Computer Use capability | §26 not started | by design — after Basic Mode and pairing are stable |
-| ~~No first-run permission **request** path~~ | **narrowed in Phase 56** — `POST /permissions/{capability}/request` exists, is loopback-only, refuses with a reason, and answers from a re-read. The **ask itself cannot succeed from the helper process** (the Speech framework aborts a non-bundle caller), so no dialog has been observed on this machine — 56-A | §3's wizard still needs a long-running app process to raise the prompt from (Phase 57) |
-| No host persistence | `Vantage.app` runs `launcher.py` and dies with its window; no login item, no launchd plist in the bundle | a Mac sitting closed is unreachable from the phone — and this is what blocks 56-A, because the permission ask needs a long-running app process, not a helper |
+| ~~No first-run permission **request** path~~ | **narrowed in Phase 56** — `POST /permissions/{capability}/request` exists, is loopback-only, refuses with a reason, and answers from a re-read. The **ask itself cannot succeed from the helper process** (the Speech framework aborts a non-bundle caller), so no dialog has been observed on this machine — 56-A | §3's wizard still needs the ask moved *into* the app process, which now exists but does not host it yet — 57-G |
+| ~~No host persistence~~ | **built in Phase 57** — `jarvis/persistence.py` writes a user LaunchAgent with no secret and no inherited watchdog, `GET /persistence` reports what launchd says, and enable/disable are confirmation-gated capabilities. Proven live: launchd started a Vantage answering `/health` with 145 tools and a running scheduler, with no window open — then it was removed and the machine was left as found | never left installed for the real app (57-A, a user decision); "loaded" does not yet read `last exit code` (57-B); no reboot was performed (57-F) |
 | `.app` ships no Python runtime | it uses this machine's interpreter (Phase 40) | "installable on another Mac" is not proven |
 | CI | **not measured this session** — no verdict claimed | |
 
@@ -558,13 +627,16 @@ identify.
 explicit approve/deny, pre-execution revalidation, hash-chained audit, tri-state results,
 memory deletion scopes, redaction of secrets in logs, `POST /emergency_stop` (a panel button since
 Phase 54, which re-reads the job rows before claiming a stop), per-tool revoke/restore on the
-policy engine plus the panel's Policy column (Phase 54), and a user-started macOS permission
-**request** that answers only from a re-read (Phase 56).
+policy engine plus the panel's Policy column (Phase 54), a user-started macOS permission
+**request** that answers only from a re-read (Phase 56), and a login item that is EXTERNAL-tier,
+confirmation-gated and reported from launchd rather than from the request (Phase 57).
 
 **Surfaces** — laptop panel (`/dashboard`, 1440 px, quick actions from the live registry, tool
-filter, devices with Forget, Permissions card, voice state), phone client (`/phone`, 375 px,
-six quick actions, mic, approvals list), manifest + service worker + icons, CLI, and the
-menu-bar-less `.app` launcher.
+filter with a Policy column, devices with Forget, Permissions card with "Grant access" and "Open
+System Settings", Start-up card with "Install the login item", emergency stop, voice state), phone
+client (`/phone`, 375 px, six quick actions, mic, approvals list, emergency stop), manifest +
+service worker + icons, CLI, and the `.app` launcher -- which since Phase 57 no longer has to be
+the only thing keeping the server alive.
 
 ---
 
@@ -578,15 +650,15 @@ menu-bar-less `.app` launcher.
 3. ~~A web-search capability~~ — **done in Phase 55.** `search_web` asks a real search service,
    and an outage is reported as an outage. §6 is 37 of 37. A *ranked* web index still needs a
    keyed provider (55-B).
-4. **Host persistence** — now first for two reasons. The `.app` is a launcher that dies with its
-   window, so a Mac sitting closed is unreachable from the phone; **and** Phase 56 proved the
-   permission ask cannot live in a helper process (macOS aborts a non-bundle caller), so there is
-   no process to put it in until this exists.
+4. ~~Host persistence~~ — **built in Phase 57.** A user LaunchAgent, no secret in the launch
+   config, no inherited watchdog, one server per data directory, and the state read back from
+   launchd. What it deliberately does not do is *stay on*: installing it for real is 57-A, a user
+   decision, and the panel control plus the confirmation card exist to make it.
 5. ~~A deliberate, user-initiated permission **request** path~~ — **built in Phase 56**: route,
    loopback-only guard, per-capability reasons, re-read authority, panel controls, audited.
-   **The §3 first-run wizard is still not built** (56-B), because it would be a guided sequence of
-   asks that cannot land until item 4 is done. Read-only status remains, and asking is still never
-   a side effect of a poll.
+   **The §3 first-run wizard is still not built** (56-B), and Phase 57's host process did not
+   remove the blocker — the ask still runs in the helper, which macOS will not let prompt (57-G).
+   Read-only status remains, and asking is still never a side effect of a poll.
 6. **Native mobile shell** (keychain/keystore, biometrics, push, deep links), then the
    **relay** for off-LAN use, then **provider adapters** (OpenAI, Gemini, local) behind the
    same PermissionEngine, then **Computer Use** last, as §26 orders.
@@ -600,8 +672,8 @@ menu-bar-less `.app` launcher.
    against stubs and one real abort, and **has not been observed prompting this machine.**
 
 Carried open items, all still true: **49a-A…F**, **50-A…F**, **51-A…F**, **52-A…F**,
-**53-A…F**, **54-A…F**, **55-A…E**, **56-A…E** — each written up in its phase report and indexed
-in `README.md`.
+**53-A…F**, **54-A…F**, **55-A…E**, **56-A…F**, **57-A…G** — each written up in its phase report
+and indexed in `README.md`.
 
 ---
 
@@ -637,7 +709,7 @@ edited only additively.
 | question | file |
 |---|---|
 | What the product is and how to use it | `README.md`, `~/Downloads/Vantage/READ ME FIRST.txt` |
-| Why each phase did what it did | `audit/PHASE*.md` (58 reports, newest first in the README table) |
+| Why each phase did what it did | `audit/PHASE*.md` (59 reports, newest first in the README table) |
 | What is still open | the open-items block at the end of `README.md` |
 | Why a permission ask must not be a poll | `audit/PHASE50_*.md` (the read-only rule) and `audit/PHASE56_ASKING_ON_PURPOSE_REPORT.md` (the request path, and why a helper cannot use it) |
 | Suite size over time | `benchmarks/suite_history.json`, `assets/chart-suite-growth.svg` |

@@ -28,6 +28,7 @@ from . import (
     memory_controls,
     memory_tools,
     phone,
+    persistence,
     research,
     robotics,
     scheduler,
@@ -69,6 +70,7 @@ def _all_specs():
         *watch.SPECS,
         *self_state.SPECS,
         *websearch.SPECS,
+        *persistence.SPECS,
     ]
 
 

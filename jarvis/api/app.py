@@ -576,6 +576,19 @@ async def permissions(_: None = Protected) -> Dict[str, Any]:
     return describe_permissions()
 
 
+@app.get("/persistence")
+async def persistence_status(_: None = Protected) -> Dict[str, Any]:
+    """Whether the laptop starts at login and is kept running -- read from launchd, now.
+
+    Read-only for the same reason ``/permissions`` is: the page polls it. Installing or removing
+    the login item goes through the gated capability, so it arrives with a confirmation card
+    rather than as a side effect of a refresh.
+    """
+    from ..persistence import HostPersistenceService
+
+    return HostPersistenceService().status()
+
+
 @app.get("/tools")
 async def tools(_: None = Protected) -> List[Dict[str, Any]]:
     return [

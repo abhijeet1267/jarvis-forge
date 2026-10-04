@@ -135,7 +135,17 @@ def main() -> None:
 
     start_guardian_from_env(on_exit=lambda: os._exit(0))
 
-    uvicorn.run(app, host=settings.host, port=settings.port, log_level="info", **ssl_kwargs)
+    from jarvis.persistence import serve_with_claim
+
+    def bind(*, host, port):
+        uvicorn.run(app, host=host, port=port, log_level="info", **ssl_kwargs)
+
+    # Claim the data directory for the lifetime of this process, so a login item and a panel
+    # window cannot both run schedulers over one database, and so a port that is already taken
+    # ends this process quietly instead of in a traceback launchd would keep retrying.
+    _served, code = serve_with_claim(settings.home, pid=os.getpid(), host=settings.host,
+                                     port=settings.port, serve=bind)
+    raise SystemExit(code)
 
 
 if __name__ == "__main__":

@@ -1291,6 +1291,30 @@ class RulePlanner:
             return Intent("pending_confirmations", tool="get_pending_confirmations",
                           confidence=0.9)
 
+        if re.search(r"\b(install|add|enable|turn\s+on|set\s+up)\s+(the\s+|a\s+)?"
+                     r"login\s+item\b", text) \
+                or re.search(r"\b(install|enable)\s+(vantage|it)\s+at\s+login\b", text):
+            # The unambiguous command. It is confirmation-gated in the registry, so this route
+            # cannot execute anything until a person approves the card -- which is the same
+            # control every other gated capability uses.
+            return Intent("install_persistence", tool="enable_host_persistence", confidence=0.9)
+
+        if re.search(r"\b(remove|uninstall|disable|delete|turn\s+off)\s+(the\s+|a\s+)?"
+                     r"login\s+item\b", text) \
+                or re.search(r"\b(remove|uninstall)\s+(vantage|it)\s+from\s+login\b", text):
+            return Intent("remove_persistence", tool="disable_host_persistence", confidence=0.9)
+
+        if re.search(r"\b(login|log\s+in|boot|startup|start[\s-]+up)\s+item\b", text) \
+                or re.search(r"\b(start|starts|starting|launch|launches|run|runs)\b[^?!.]*\b"
+                             r"(at|on)\s+(login|log\s+in|boot|startup)\b", text) \
+                or re.search(r"\bwhen\s+i\s+(close|quit)\s+(the\s+)?(window|app|laptop)\b", text) \
+                or re.search(r"\bpersist(?:ence|ent)?\b", text):
+            # Only ever the read. "start vantage on login" reads like an instruction and still
+            # gets a state report, because a mis-parsed sentence must not be able to install
+            # something that runs when nobody is watching -- that change needs a person pressing
+            # the control and confirming it.
+            return Intent("host_persistence", tool="get_host_persistence_status", confidence=0.9)
+
         if re.search(r"\bwhat\s+(is|are)\s+your\s+(status|health|state|condition|mode)\b", text) \
                 or re.search(r"\bwhat\s+mode\s+are\s+you\s+in\b", text) \
                 or re.search(r"\bare\s+you\s+(running|up|alive|ok|okay|healthy|there|"

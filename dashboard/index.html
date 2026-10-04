@@ -282,6 +282,18 @@
     <div class="card">
       <h2>Permissions</h2>
       <div id="permissions"><span class="muted loading">asking macOS…</span></div>
+      <!-- Outside the re-rendered container on purpose: the card polls, and a note rendered
+           inside it is replaced by its own default text the instant the answer arrives. -->
+      <p class="note muted" id="permNote">Granting happens on this laptop, and macOS is asked
+        only when you press the button.</p>
+    </div>
+
+    <div class="card">
+      <h2>Start-up</h2>
+      <div id="persistence"><span class="muted loading">asking launchd…</span></div>
+      <p class="note muted" id="persistNote">A login item is what runs when nobody is watching, so
+        pressing it goes through the approval card first. The line above is read back from launchd,
+        never from what the request claimed.</p>
     </div>
 
     <div class="card">
@@ -1014,10 +1026,11 @@ async function loadPermissions() {
     + `${escapeHtml(data.note || "")}</p>`;
   document.getElementById("permissions").innerHTML = rows
     + subject
-    + '<div class="row"><span></span><span><button class="deny" id="permCheck">Check again</button></span></div>'
-    + '<p class="note muted" id="permNote">Granting happens on this laptop, and macOS is asked '
-    + 'only when you press the button.</p>';
-  document.getElementById("permCheck").onclick = () => loadPermissions().catch(() => {});
+    + '<div class="row"><span></span><span><button class="deny" id="permCheck">Check again</button></span></div>';
+  document.getElementById("permCheck").onclick = () => {
+    setPermNote("Re-read from macOS just now.");
+    loadPermissions().catch(() => {});
+  };
   // The reply is the state macOS reports *after* the request, which the server reads back
   // rather than repeating what the request claimed. Then the card re-reads anyway, so what is
   // on screen is never older than the answer about it.
@@ -1040,6 +1053,69 @@ async function loadPermissions() {
 
 function setPermNote(text) {
   const el = document.getElementById("permNote");
+  if (el) el.textContent = text;
+}
+
+// Every state launchd can actually leave us in, in the words the state deserves.
+// "installed_not_loaded" is the one worth naming: the file is there and nothing will
+// start, which is exactly what a message like "installed" would hide.
+const PERSISTENCE_WORD = {
+  loaded: ["starts at login", "good"],
+  running: ["starts at login", "good"],
+  installed_not_loaded: ["file present, launchd has no job for it", "warn"],
+  loaded_without_file: ["running now, gone at the next login", "warn"],
+  not_installed: ["only while the window is open", ""],
+  unsupported: ["no login-item facility on this system", ""],
+};
+
+async function loadPersistence() {
+  const d = await get("/persistence");
+  const pair = PERSISTENCE_WORD[d.state] || [String(d.state || "unknown"), ""];
+  let button = "";
+  if (d.supported) {
+    button = (d.installed || d.loaded)
+      ? '<button class="ghost" id="persistOff">Remove the login item</button>'
+      : '<button class="ghost" id="persistOn">Install the login item</button>';
+  }
+  document.getElementById("persistence").innerHTML =
+      `<div class="row"><span>Vantage on this laptop</span>`
+    + `<span class="${pair[1]}">${escapeHtml(pair[0])}</span></div>`
+    + `<p class="note muted">${escapeHtml(d.detail || "")}</p>`
+    + `<div class="row"><span></span><span>${button}`
+    + ` <button class="ghost" id="persistCheck">Check again</button></span></div>`;
+  document.getElementById("persistCheck").onclick = () => {
+    setPersistNote("Re-read from launchd just now.");
+    loadPersistence().catch(() => {});
+  };
+  const on = document.getElementById("persistOn");
+  const off = document.getElementById("persistOff");
+  if (on) on.onclick = () => changePersistence("install the login item", on);
+  if (off) off.onclick = () => changePersistence("remove the login item", off);
+}
+
+async function changePersistence(sentence, btn) {
+  btn.disabled = true;
+  setPersistNote("asking Vantage…");
+  try {
+    const res = await fetch(API + "/command", {
+      method: "POST",
+      headers: authHeaders(POST_JSON),
+      body: JSON.stringify({ text: sentence, source: "dashboard" }),
+    });
+    const data = await res.json().catch(() => ({}));
+    // A confirmation is not an effect. Saying "done" here would be the exact lie this
+    // project keeps having to design against.
+    setPersistNote(data.confirmation_id
+      ? "It is waiting for you on the Approvals card. Nothing has changed yet."
+      : (data.reply || `the laptop refused (HTTP ${res.status})`));
+  } catch (e) {
+    setPersistNote("the laptop did not answer");
+  }
+  loadPersistence().catch(() => {});
+}
+
+function setPersistNote(text) {
+  const el = document.getElementById("persistNote");
   if (el) el.textContent = text;
 }
 
@@ -1284,6 +1360,9 @@ authenticate().then(() => {
   // Settings, and polling it means spawning a helper every eight seconds for a value
   // that cannot have moved. The card has its own "Check again".
   loadPermissions().catch(() => {});
+  // Same rule for launchd: asked once at load, and again when the user acts or presses
+  // Check again. Polling a service manager every eight seconds buys nothing.
+  loadPersistence().catch(() => {});
   setInterval(refresh, 8000);
 }).catch(e => {
   document.getElementById("reply").textContent = "Not authorised: " + e.message;

@@ -295,8 +295,20 @@ def test_the_provider_is_describable_without_being_called(registry):
 
 
 def test_no_existing_gate_was_touched(registry):
-    specs = registry.all()
-    assert sum(1 for s in specs if s.requires_confirmation) == 28
+    specs = list(registry.all())
+    # A frozen total was here ("== 28"), which is a weak guard with a sharp edge: it can be
+    # satisfied by taking one gate away and adding two somewhere else, and it blocks a phase
+    # that legitimately adds gated capabilities. What actually must not change is which *kind*
+    # of capability needs a person. Measured: every EXTERNAL and DESTRUCTIVE tool is gated, and
+    # the single ungated PHYSICAL one is the emergency stop, deliberately.
+    tiers = {s.name: int(s.risk) for s in specs}
+    loose = sorted(s.name for s in specs
+                   if int(s.risk) in (2, 3) and not s.requires_confirmation)
+    assert loose == [], f"tools that change something outside lost their approval: {loose}"
+    physical_ungated = sorted(s.name for s in specs
+                              if int(s.risk) == 4 and not s.requires_confirmation)
+    assert physical_ungated == ["emergency_stop"], \
+        "the emergency stop is the only ungated physical action, on purpose"
     assert int(registry.get("emergency_stop").risk) == 4
 
 
