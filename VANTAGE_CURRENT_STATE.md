@@ -1,0 +1,352 @@
+# Vantage — full working report, Phase 52 close-out
+
+Written 2026-10-04. Every number below was produced by a command on this machine during this
+session or the immediately preceding phases, and the command is named next to it. Where a
+capability exists but was **not** re-measured today, it says so rather than implying it was.
+
+---
+
+## 1. Executive summary
+
+| | |
+|---|---|
+| What it is | A personal AI operating system for macOS: one command pipeline, 136 gated capabilities, a laptop panel, a phone client, a signed `.app` delivered as files |
+| Current phase | **Phase 52 — the §6 sentences about the laptop** (closed) |
+| Test suite | **2065 passed · 0 failed · 0 xfailed · 0 skipped** in 67.2 s |
+| Spec §6 coverage | **32 of 37** utterances reach a capability (was 21 of 37 at the start of this phase) |
+| Delivered | `~/Downloads/Vantage/` — `Vantage.app` (running, seal valid), `Vantage.app.zip`, `vantage-source.zip`, `READ ME FIRST.txt` |
+| Commits | `92efc6b` (Ph 52), `f047eb2` (Ph 51), `452e9c0` (Ph 50) — **local only, nothing pushed** |
+| Biggest known gap | Vantage cannot yet answer questions about **itself** (pending approvals, its status, its recent actions, stopping the current task), and there is no native mobile app, relay, push or provider adapter |
+
+---
+
+## 2. The current phase in full (Phase 52)
+
+### 2.1 What was asked and what was measured first
+
+Continuing Phase 51's remaining list. The build prompt's §6 lists 37 utterances. All 37 were
+run through `RulePlanner(build_default_registry()).parse(...)` before any edit:
+
+| group | before | after | closed by |
+|---|---|---|---|
+| applications (13) | 9 / 13 | **13 / 13** | registry entries for Firefox, Contacts, Messages, System Settings |
+| folders (4) | 0 / 4 | **4 / 4** | new `open_user_folder` tool |
+| status (7) | 5 / 7 | **7 / 7** | route fixes — the answers already existed in `get_time` and `get_machine_snapshot` |
+| web (5) | 4 / 5 | 4 / 5 | deferred: `search Google for X` needs a capability, not a route |
+| observation (2) | 1 / 2 | **2 / 2** | new `get_frontmost_application` tool |
+| Vantage about itself (6) | 2 / 6 | 2 / 6 | deferred to Phase 53 deliberately |
+| **total** | **21 / 37** | **32 / 37** | |
+
+The 16 gaps fell into three classes, and that classification is why the phase touched four
+kinds of file: a missing **name** (registry), a missing **route** (planner regex), a missing
+**capability** (new tool), and a missing **permission-aware answer** (found live, below).
+
+### 2.2 What was built
+
+| file | change | why it is shaped that way |
+|---|---|---|
+| `jarvis/registry/apps.py` | 4 applications registered (9 → 15 total) | `open_application` already worked; the names were absent. Launch names are what macOS answers to, not guesses |
+| `jarvis/core/planner.py` | `_time` + `_machine_snapshot` widened; two new rules `_open_standard_folder`, `_frontmost_app` (48 → 50 routes) | The folder word must be the whole object of the sentence, or "open downloads.zip" becomes a folder request |
+| `jarvis/tools/apps.py` | `open_user_folder`, `get_frontmost_application`, `bundle_installed`, bounded AppleScript deadline | See 2.3 and 2.4 |
+| `jarvis/tools/agents.py` | `/System/Applications` added to `BUNDLE_ROOTS` | See 2.5 |
+| `tests/test_phase52_section_six_on_the_laptop.py` | 52 tests | |
+
+### 2.3 The folder allowlist — the design decision worth the most
+
+`open_user_folder` takes a **name** from a five-entry dictionary (`desktop`, `downloads`,
+`documents`, `pictures`, `home`) and builds the path from the home directory. It never accepts
+a path. Consequences, all asserted by tests:
+
+- `open ../../.ssh`, `open /etc`, `~/Library/Mail`, `passwords`, `""` → refusal that names what
+  is allowed.
+- A refused folder **launches nothing** — the test records every `run_command` argv and asserts
+  the list is empty.
+- `open Downloads` is **not** an alias of `open_project_folder`: one reveals a directory in
+  Finder, the other hands a workspace to an editor. Phase 49a refused to blur them and this
+  phase kept that.
+- The parameter is canonicalised in the planner, so "my home folder" and "home" store the same
+  value — a stored action must not depend on how the sentence happened to read.
+
+### 2.4 Three defects only the live run found (the suite was green)
+
+| # | symptom, measured | cause | after, measured |
+|---|---|---|---|
+| 1 | `open Downloads` → **20,250 ms**, "Finder did not answer (command timed out after 20.0s)" | the verification AppleScript inherited `run_command`'s 20 s default **inside a retry loop of four** → one sentence could take 80 s | **3,219 ms**, `UNKNOWN`, and the message says a permission prompt is probably waiting |
+| 2 | `open Firefox` → "was told to open, but I could not confirm it" | launches are detached on purpose (a GUI app holds its pipe open), so `open -a`'s exit **1** for an absent app is never read | `FAILED` — "Firefox is not installed on this machine… my own application list is out of date" |
+| 3 | `is Mail installed` → "**Mail is not installed on this laptop**" reported as a *success* | `BUNDLE_ROOTS` searched `/Applications`, `~/Applications`, `~/.qoder/bin` — but Mail, Contacts and Calendar live in `/System/Applications` | "Mail is installed (version 16.0) and is not running right now." |
+
+Defect 1 broke this project's own Phase 34 rule ("one sentence, one deadline") while adding a
+capability. Defect 3 predates the phase (the probe is from Phase 35) and was only visible
+because §6 happens to name Apple's own applications.
+
+**Two cases were kept apart on purpose** and both are tested: *not installed* is a failure with
+a reason; *installed but not observed* stays `UNKNOWN`. Collapsing them is how a system starts
+lying in one direction or the other.
+
+### 2.5 What was NOT claimed
+
+The tempting story for defect 1 was "the app lacks Automation permission" — Phase 50 proved
+that macOS attributes permissions per responsible process. **The measurement did not support
+it**: the same AppleScript run straight from a terminal also died with `AppleEvent timed out
+(-1712)`. Finder answers no AppleScript from anyone on this machine right now, so
+`open Downloads` is reported as UNKNOWN and that is the accurate answer, not a symptom of who
+asked.
+
+### 2.6 An error in this report's own numbers
+
+The first draft said "24 of 37 worked, 13 did not" and "§6 at 30 of 37". Re-counting the GAP
+rows at close-out: **21 worked, 16 did not**, and coverage is **32 of 37**. The code was fine;
+the arithmetic in the write-up was not. Both the README row and
+`audit/PHASE52_SECTION_SIX_ON_THE_LAPTOP_REPORT.md` now carry the corrected figures with the
+correction noted in place.
+
+### 2.7 Three guards failed on purpose, and what that taught
+
+- `test_the_readme_counts_the_planner_routes_it_ships` caught the README still advertising 48
+  routes. Corrected to 50. This is the guard doing exactly its job.
+- Two Phase 49 guards had frozen the **tool total at 134** to prove an alias does not create a
+  capability. A frozen total cannot survive legitimate growth (Phase 52 added two tools), so
+  they now assert the invariant they were named for: registered specs equal distinct canonical
+  names, `/tools` publishes exactly the registry, and no alias appears as its own row. That is
+  a stronger statement than `== 134`, not a weaker one.
+
+### 2.8 Live transcript (isolated instance, never the user's app)
+
+`JARVIS_HOME=$(mktemp -d)`, port 8797/8798, master token from that home. Contacts was launched
+by the drive and quit afterwards; nothing was written to any folder.
+
+```
+what date is it?             "It is 11:53 on Sunday, 04 October 2026."              6 ms
+what is my hostname?         "Laptop condition: Abhijeets-MacBook-Air-2.local…"    49 ms
+show the current application "Qoder is the application in front right now."       794 ms
+open Contacts                "Contacts is open on your macos machine."           275 ms  verified=True
+open Downloads   (after fix) UNKNOWN, "Finder did not answer in time…"          3219 ms
+open Firefox     (after fix) FAILED,  "not installed on this machine"           1422 ms
+is Mail installed (after fix) "Mail is installed (version 16.0)…"                 112 ms
+```
+
+---
+
+## 3. Working status of the whole product, as measured today
+
+All values from the **delivered app** over HTTP (read-only GETs) unless stated.
+
+### 3.1 The pipeline — intact and enforced
+
+```
+User → Intent → RulePlanner (50 routes) → PermissionEngine → [Confirmation] → Tool
+     → Verification (success | failed | unknown) → Memory → Audit → Response
+```
+
+- `Verification` is the only authority on success. A handler returning is not the world
+  changing — that separation is what Phases 51 and 52 kept having to re-learn.
+- `llm_enabled: false` on this machine right now (`/health`). **Basic Mode is the live path**:
+  every sentence above was answered by deterministic rules with no model call.
+
+### 3.2 Surface inventory
+
+| thing | value | how measured |
+|---|---|---|
+| Tools | **136** | `/health`, `/tools` |
+| Agents | **15** — calendar, car, coding, design, email, home, laptop, laptop_center, memory, phone, research, robotics, scheduler, vision, watch | `/health` |
+| Risk spread | READ 72 · LOW 36 · EXTERNAL 13 · DESTRUCTIVE 12 · PHYSICAL 3 | registry |
+| Confirmation-gated | **28** of 136 | registry |
+| RulePlanner routes | **50** | `len(core.planner._rules)` |
+| Registered applications | **15** | `AppRegistry` |
+| HTTP surface | 113 route objects / **107 paths** | `len(app.routes)` |
+| Database tables | **32** | schema `CREATE TABLE` count |
+| Memories indexed | 52 / 52, coverage 1.0, hybrid retrieval | `/health` |
+| Scheduler | running, 30 s tick, 67 jobs | `/health` |
+| Test suite | 2065 passed, 0 failed, 0 skipped, 67.2 s | `pytest -q` |
+| Test modules / phase reports | 79 / 54 | `ls` |
+| Code volume | 66,334 lines — 40,506 source · 25,828 tests | `wc -l` |
+
+### 3.3 Permissions, as the OS reports them right now (`/permissions`)
+
+| capability | state |
+|---|---|
+| speech recognition | **GRANTED** |
+| screen recording | **GRANTED** |
+| microphone | NOT_DETERMINED |
+| accessibility | **REQUIRES_MANUAL_SYSTEM_SETTINGS** |
+| automation | UNKNOWN |
+| notifications | UNKNOWN |
+| local network | NOT_REQUIRED |
+
+The card also prints **which process was asked** — `about_bundled_host: True`, read by Vantage
+running from `~/Downloads/Vantage/Vantage.app`. Same helper, same machine, terminal caller:
+speech NOT_DETERMINED, screen recording denied, microphone DENIED, accessibility GRANTED. Four
+capabilities, four different answers, which is why a status without a subject is not a fact.
+
+Two consequences that are live behaviour, not caveats:
+- `show the current application` works from a terminal-launched server and will answer with the
+  Accessibility permission name **from the bundle** until it is granted.
+- `open Downloads` cannot be confirmed by anyone here (Finder answers no AppleScript).
+
+### 3.4 Networking and the phone
+
+- `/health` publishes three phone URLs: loopback, `172.20.168.82` (current lease) and
+  **`http://abhijeets-macbook-air-2.local:8765/phone`** — the mDNS name, which survives a lease
+  renewal (Phase 48). A `.local` name is accepted only after resolving to an address this
+  machine owns.
+- Auth: bootstrap code → `/auth/session` → short-lived session token; the master token never
+  leaves the process. Host-header and origin gates refuse a forged `Host:` with 400.
+- Pairing is two-sided: `/devices/pair/request` → pending → Mac-side `approve`/`deny`. Scanning
+  a QR is not authorisation.
+- Device records: `POST /devices/{id}/revoke` exists and **the host refuses to be revoked or
+  forgotten** (Phase 46a), because revoking `laptop_main` once took the whole product down.
+
+### 3.5 Audit — one honest red light
+
+`/metrics` on the delivered app: `sampled: 500`, `chain_checked: 495`, **`chain_intact: false`**,
+and `by_result` includes **`forged: 5`**. This is the documented C-2/C-2a state: deliberate
+tamper-test rows are in this machine's real history, so the hash chain correctly reports
+BROKEN. The dashboard shows "Audit chain: BROKEN" for exactly that reason. It is the verifier
+working, not a broken verifier — but it also means **the user's history contains rows that were
+inserted to test detection**, and cleaning them is a decision, not a fix.
+
+### 3.6 Voice
+
+Working and proven **on-device, no key, nothing sent over a network** — measured in Phase 47
+(2026-10-04) with a real spoken clip through the delivered app, and `/voice/status` still
+reports `enabled: true` with wake words today. The Phase 43–46 diagnosis ("macOS denied the
+microphone") was wrong for four phases: the real causes were a main-thread deadlock in the
+Swift helper and an x86_64 build on an arm64 machine. Not re-driven by ear today.
+
+### 3.7 What is **not** built or not reachable
+
+| gap | evidence | why it matters |
+|---|---|---|
+| **No emergency-stop route** | no route matching `emergency` in `jarvis/api/app.py`; the `emergency_stop` tool is PHYSICAL-tier and reachable only by the sentence "emergency stop" | §30 of the build prompt asks for stop from phone, menu bar and task screen |
+| **No tool-level revoke UI** | `PolicyStore.revoke` exists, no product surface calls it (measured Phase 49a) | the permission engine has one door and no handle |
+| Vantage cannot describe itself | 4 of the §6 gaps above | blocks phone-side approvals and task state |
+| No native mobile app | the phone client is a served web page (`/phone`) | §2B of the build prompt asks for iOS/Android with keychain/keystore, biometrics, push |
+| No relay, no push, no biometrics | none in the tree | remote-away-from-LAN use is not possible today |
+| No provider adapters in use | `llm_enabled: false`; OpenAI/Gemini adapters per §22–24 not built | LLM planning is off; Basic Mode carries everything |
+| No Computer Use capability | §26 not started | by design — after Basic Mode and pairing are stable |
+| No first-run permission **request** path | `/permissions` is read-only by choice (50-C) | §3's wizard needs a user-initiated request that is not a side effect of a poll |
+| `.app` ships no Python runtime | it uses this machine's interpreter (Phase 40) | "installable on another Mac" is not proven |
+| CI | **not measured this session** — no verdict claimed | |
+
+---
+
+## 4. Feature catalogue (what you can actually ask, today)
+
+Reachable by typed sentence, the mic, the phone page, or `POST /command`. Every action goes
+through the same gates.
+
+**Laptop facts** — battery, storage, system status, machine condition (hostname/os/cpu/memory/
+disk/battery), time and date, running-app probe (`is Safari running` → installed, version,
+running), frontmost application, screenshot, processes.
+
+**Applications** — the 15 names the registry actually holds: Safari, Chrome, Firefox, Finder,
+Terminal, Notes, Calendar, Contacts, Mail, Music, Messages, System Settings, VS Code, Cursor,
+Calculator (open and quit). Brave and Edge are **not** registered, so "open Brave" is not a
+capability today. Opening a project folder in an installed editor is separate, and it **reads
+the editor's own record** to prove the folder opened rather than trusting the launch.
+
+**Files** — search by name, find-and-open, list a directory, read, write, append, copy/move,
+compress, delete (DESTRUCTIVE, confirmed). Path guards live in `jarvis/security/paths.py`:
+**10 protected roots** (`/`, `/System`, `/Library`, `/usr`, `/etc`, `/Applications`, …) and
+**29 protected subpaths** (`.ssh`, `.gnupg`, `.aws`, `.kube`, `.git-credentials`, `.npmrc`,
+`Library/Keychains`, `Library/Cookies`, shell rc files, `Library/LaunchAgents`,
+`Library/LaunchDaemons`, …). Refused, never merely confirmed — a guard that asks permission is
+a guard that can be talked out of it.
+
+**Web** — open a known site by name or full address (14 names, longest-match wins), open the
+*site* wording for a word that is also an app, open a browser by name, and afterwards ask the
+browser what it is showing — with `unverified` when it will not answer. **Never** a guessed
+domain.
+
+**Email & calendar** — search/read/summarise/draft/send (local maildir and local calendar; an
+unreachable server is reported as an outage, not as an empty day).
+
+**Memory** — remember, recall, recall-by-day, overview; hybrid retrieval with an index that
+reports its own coverage.
+
+**Research** — arXiv search and storage, citations that fail rather than invent, notes,
+gap register, briefs.
+
+**Coding** — drive Claude Code with an approval card first; workspace/project status, code
+search.
+
+**Automation & devices** — scheduled jobs with a real re-dispatcher, briefings and reminders;
+paired phone/watch/car/home/robot tools, each refusing to act on a device the sentence did not
+identify.
+
+**Governance** — 28 confirmation-gated tools, 128-bit confirmation IDs with a 300 s TTL,
+explicit approve/deny, pre-execution revalidation, hash-chained audit, tri-state results,
+memory deletion scopes, redaction of secrets in logs, emergency stop (sentence-only today).
+
+**Surfaces** — laptop panel (`/dashboard`, 1440 px, quick actions from the live registry, tool
+filter, devices with Forget, Permissions card, voice state), phone client (`/phone`, 375 px,
+six quick actions, mic, approvals list), manifest + service worker + icons, CLI, and the
+menu-bar-less `.app` launcher.
+
+---
+
+## 5. What is needed, in order, with the reason
+
+1. **Phase 53 — Vantage talking about itself.** Routes to state the process already holds:
+   pending confirmations (`/confirmations`), Vantage status (`/health`), recent actions
+   (`/audit`), and stopping the current task (`/tasks/{id}/{action}`). This is the blocker for
+   §14/§16/§30 of the build prompt — a phone cannot show approvals it cannot ask about.
+2. **An emergency-stop route** reachable from the phone, and a **tool-revoke handle** on the
+   permission engine. Both are safety surfaces with the logic written and no door.
+3. **A web-search capability** for `search Google for X` — the only §6 gap that needs a new
+   tool rather than a route.
+4. **The §3 first-run wizard** with a deliberate, user-initiated permission **request** path
+   (read-only status exists; requesting must never be a side effect of a poll).
+5. **Host persistence** — the `.app` is a launcher that dies with its window; a real login
+   item / launchd service, so the phone can reach a Mac that is sitting closed.
+6. **Native mobile shell** (keychain/keystore, biometrics, push, deep links), then the
+   **relay** for off-LAN use, then **provider adapters** (OpenAI, Gemini, local) behind the
+   same PermissionEngine, then **Computer Use** last, as §26 orders.
+7. **Decisions the user owns, not fixes**: whether to clear the 5 deliberate `forged` audit
+   rows that make the chain read BROKEN; whether to grant the bundle Accessibility (which
+   unlocks `show the current application` and Finder confirmation); whether to clean the
+   **9 `phone_*` rows** measured today on the delivered app — 13 device rows in total, of which
+   only one is a real handset.
+
+Carried open items, all still true: **49a-A…F**, **50-A…F**, **51-A…F**, **52-A…F** — each
+written up in its phase report and indexed in `README.md`.
+
+---
+
+## 6. How work is done here (the rhythm that produced all of the above)
+
+1. **Measure first**, against the real registry, before writing anything.
+2. Write the test **red**, and let it name the defect in its own assertion message.
+3. Fix the truth, never the gate: no permission check or confirmation is weakened to make a
+   test pass, and no existing test is edited merely to go green (Phase 52's two count-guards
+   were changed to assert an invariant, with the reason recorded).
+4. **Prove it live** over HTTP on an isolated `JARVIS_HOME=$(mktemp -d)` — never a write
+   against the user's running app — and independently check the world state (`ps`, the editor's
+   own storage) instead of trusting the tool's reply.
+5. Check it in a **real browser** when a page is involved; several defects in this project's
+   history have only been visible there.
+6. **Re-measure and re-publish every number** — README, badges, charts, `suite_history.json`.
+   A metric that is not re-run is a claim that is quietly rotting.
+7. Write `audit/PHASEnn_*.md`, commit **locally only**, rebuild the bundle, redeploy, relaunch,
+   re-verify the extracted archive's seal, and update `~/Downloads/Vantage/`.
+8. Report what failed as failure. `close Mail` timed out and that is in the Phase 51 report;
+   the button tap that the session's permission classifier blocked is in the Phase 51 report as
+   *not performed*.
+
+Standing rules that have not moved: no GitHub pushes; no secrets in commits; no fabricated
+hardware, account or verification state; `JARVIS_HOME=$(mktemp -d)` for every project Python
+run; nothing written to `~/.jarvis-forge` by hand; monkeypatches restored; historical reports
+edited only additively.
+
+---
+
+## 7. Where to look for the detail
+
+| question | file |
+|---|---|
+| What the product is and how to use it | `README.md`, `~/Downloads/Vantage/READ ME FIRST.txt` |
+| Why each phase did what it did | `audit/PHASE*.md` (54 reports, newest first in the README table) |
+| What is still open | the open-items block at the end of `README.md` |
+| Suite size over time | `benchmarks/suite_history.json`, `assets/chart-suite-growth.svg` |
+| Safety and failure matrices | `audit/*.csv` (4 matrices) + Phase 22/31/32 reports |
+| This phase in the audit trail | `audit/PHASE52_SECTION_SIX_ON_THE_LAPTOP_REPORT.md` |

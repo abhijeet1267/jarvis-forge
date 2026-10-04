@@ -4,8 +4,11 @@ Opened 2026-10-04 as the continuation of Phase 51's remaining list (51-F): the b
 §6 utterances that still reached nothing. Measured first, all 37 of them, against the real
 registry:
 
-**24 of 37 worked. 13 did not.** They split three ways, and the split decided the work, because
-a route is not a capability and neither is a regex.
+**21 of 37 worked. 16 did not.** (The first draft of this line said 24 and 13; re-measuring the
+list at close-out counted the GAP rows again and found the arithmetic was wrong, not the code.
+The corrected figures are these, and §6 coverage below is the re-measured one.) They split three
+ways, and the split decided the work, because a route is not a capability and neither is a
+regex.
 
 | class | utterances | what was actually wrong |
 |---|---|---|
@@ -13,9 +16,9 @@ a route is not a capability and neither is a regex.
 | the answer existed and the sentence had no route | `what date is it?`, `what is my hostname?` | `get_time` already replies "It is 11:53 on Sunday, 04 October 2026"; `get_machine_snapshot` already returns a `hostname` field |
 | no capability at all | `open Desktop/Downloads/Documents/Pictures`, `show the current application` | needed two tools |
 
-Deliberately left for the next phase: the five self-observation sentences (`show pending
-confirmations`, `show Vantage status`, `show recent actions`, `stop the current task`,
-`search Google for X`). Mixing a new command surface into a routing phase makes it impossible
+Deliberately left for the next phase: `show pending confirmations`, `show Vantage status`,
+`show recent actions`, `stop the current task` (Vantage talking about itself) and
+`search Google for X` (a capability the registry does not have). Mixing a new command surface into a routing phase makes it impossible
 to say which change broke what.
 
 ## 1. What was built
@@ -136,7 +139,7 @@ smoothed over.
 | Tools | 134 | **136** (two new capabilities, both gated) | `len(core.tools.names())` |
 | RulePlanner routes | 48 | **50** | `len(core.planner._rules)` |
 | Registered applications | 9 | **15** | `len(AppRegistry().all())` |
-| §6 coverage | 24 of 37 | **30 of 37** | measured list, §1 |
+| §6 coverage | 21 of 37 | **32 of 37** | re-measured at close-out, group by group |
 
 Three count-guards failed on purpose and were handled honestly. The README's route count was
 stale (48 → 50) and was corrected. Two Phase 49 guards had frozen the *tool total* at 134 to
@@ -159,11 +162,14 @@ That is a stronger statement than `== 134`, not a weaker one.
   so Firefox stays registered on a machine without it, which is the honest-but-noisy outcome.
 * **52-E** `System Settings` launches under that name only; on macOS 12 and earlier the bundle
   is `System Preferences.app`, and the alias resolves to a launch name that will not exist.
-* **52-F** The five self-observation sentences remain: pending confirmations, Vantage status,
-  recent actions, stop the current task, `search Google for X`. That is the next phase.
+* **52-F** Five sentences remain, and they are two different kinds of work: four are Vantage
+  talking about itself (pending confirmations, its status, its recent actions, stopping the
+  current task), which need routes to state the process already holds; one is
+  `search Google for X`, which needs a capability -- no tool in the registry performs a web
+  search at all.
 
 ## 6. Where this leaves the build prompt
 
-§6 is now 30 of 37. The seven that remain are all Vantage talking about itself, which is the
-part §14, §16 and §30 of the same document depend on: a phone cannot show pending approvals,
-task state or recent actions until the laptop answers those questions about itself.
+§6 is now **32 of 37**, group by group: applications 13/13, folders 4/4, status 7/7, observation 2/2, web 4/5, Vantage 2/6.
+
+Four of the five that remain are Vantage talking about itself -- pending confirmations, its own status, its recent actions, and stopping the current task -- which is the part §14, §16 and §30 of the same document depends on: a phone cannot show approvals or task state until the laptop answers those questions about itself. The fifth, "search Google for X", is not a self-observation at all: no tool in the registry performs a web search, so it needs a capability and not a route.
