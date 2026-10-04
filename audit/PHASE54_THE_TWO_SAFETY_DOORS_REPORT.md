@@ -199,6 +199,22 @@ Reported because the point is the truth of the code, not the appearance of it.
   statuses deserves the same re-check; `get_current_task` and `stop_current_task` were the two
   that existed and both are fixed.
 
+## 11a. A correction about the delivered-app checks
+
+The close-out checks against the delivered app were described as read-only. **They were not all
+read-only.** Two were POSTs: the unauthenticated stop (refused at 401, nothing written) and the
+attempt to revoke `emergency_stop`, which is refused at 409 — and the refusal path writes a
+ledger row by design. Measured afterwards on the user's instance:
+
+```
+tool.revoke | revoke_tool | denied | 2026-10-04T13:49:24Z
+```
+
+One audit row, no policy change (`/permissions/policy` still shows only the pre-existing
+September rows). A refused attempt to remove a safety door being recorded is the correct
+behaviour, but calling the check "read-only" was wrong, and whether to keep that row in the
+real history is now a user decision alongside the five `forged` rows already listed.
+
 ## 12. Next
 
 Phase 55 — a real web-search capability for `search Google for X`, which is §6's last gap and
