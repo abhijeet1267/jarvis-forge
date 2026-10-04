@@ -34,6 +34,7 @@ from . import (
     self_state,
     storage,
     system,
+    websearch,
     vision,
     watch,
 )
@@ -67,6 +68,7 @@ def _all_specs():
         *car.SPECS,
         *watch.SPECS,
         *self_state.SPECS,
+        *websearch.SPECS,
     ]
 
 

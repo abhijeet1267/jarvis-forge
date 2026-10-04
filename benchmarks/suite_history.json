@@ -321,6 +321,13 @@
       "passed": 2155,
       "failed": 0,
       "note": "the stop trusted a cancel report until a test rolled the row back; restore deletes the denial instead of granting standing authority"
+    },
+    {
+      "phase": "55 a search that searches",
+      "collected": 2190,
+      "passed": 2190,
+      "failed": 0,
+      "note": "\"search Google for X\" was one route away from being answered by opening a home page; the outage path is 5.01s and says network"
     }
   ]
 }

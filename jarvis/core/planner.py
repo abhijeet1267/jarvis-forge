@@ -192,6 +192,7 @@ class RulePlanner:
             self._research,
             self._vision,
             self._read_file,
+            self._web_search,
             self._search_files,
             self._design,
             self._laptop_center_prompt,
@@ -1064,6 +1065,28 @@ class RulePlanner:
             params = {"project": name.strip()} if name else {}
             return Intent("continue_project", tool="open_project_folder", params=params)
         return None
+
+    def _web_search(self, text: str, raw: str) -> Optional[Intent]:
+        """"search Google for X" -- a search, not a navigation.
+
+        Narrow on purpose. The object of the verb has to be a search service or nothing at all,
+        because "search files for my report" and "search my email for the invoice" already
+        belong to other capabilities, and a new route that swallows them is a regression wearing
+        a feature. It is deliberately *not* aliased onto ``open_url``: opening google.com answers
+        a different question than the one was asked.
+        """
+        # Matched on the sentence as spoken, not the lowercased one: the query is what the
+        # person said, and "FastAPI" and "fastapi" are different strings to search for.
+        m = re.search(r"\bsearch\s+(?:google|the web|the internet|duckduckgo|bing)\s+for\s+"
+                      r"(?P<what>[\w\s,.:'?()\-]+?)\s*$", raw, re.I)
+        if m is None:
+            m = re.search(r"\bsearch\s+for\s+(?P<what>[\w\s,.:'?()\-]+?)\s*$", raw, re.I)
+        if m is None:
+            return None
+        what = m.group("what").strip()
+        if not what:
+            return None
+        return Intent("web_search", tool="search_web", params={"query": what}, confidence=0.9)
 
     def _search_files(self, text: str, raw: str) -> Optional[Intent]:
         # Trigger on a file-type word OR a filename-like token with an

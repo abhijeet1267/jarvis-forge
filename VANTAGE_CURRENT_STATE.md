@@ -1,6 +1,6 @@
-# Vantage — full working report, Phase 54 close-out
+# Vantage — full working report, Phase 55 close-out
 
-Written 2026-10-04 and refreshed at each phase close the same day. §2A is Phase 52's record, §2B Phase 53's, §2C Phase 54's. Every number below was produced by a command on this machine during this
+Written 2026-10-04 and refreshed at each phase close the same day. §2A–§2D are Phase 52, 53, 54 and 55. Every number below was produced by a command on this machine during this
 session or the immediately preceding phases, and the command is named next to it. Where a
 capability exists but was **not** re-measured today, it says so rather than implying it was.
 
@@ -11,9 +11,9 @@ capability exists but was **not** re-measured today, it says so rather than impl
 | | |
 |---|---|
 | What it is | A personal AI operating system for macOS: one command pipeline, 141 gated capabilities, a laptop panel, a phone client, a signed `.app` delivered as files |
-| Current phase | **Phase 54 — the two safety doors** (closed) |
-| Test suite | **2155 passed · 0 failed · 0 xfailed · 0 skipped** in 72.6 s |
-| Spec §6 coverage | **36 of 37** utterances reach a capability (21 at the start of Phase 52, 32 at its close) |
+| Current phase | **Phase 55 — a search that searches** (closed) |
+| Test suite | **2190 passed · 0 failed · 0 xfailed · 0 skipped** in 62.5 s |
+| Spec §6 coverage | **37 of 37** — every utterance the build prompt lists reaches a capability |
 | Delivered | `~/Downloads/Vantage/` — `Vantage.app` (running, seal valid), `Vantage.app.zip`, `vantage-source.zip`, `READ ME FIRST.txt` |
 | Commits | Phase 53 (hash in §2B), `3708f85` (Ph 52 correction), `92efc6b` (Ph 52), `f047eb2` (Ph 51), `452e9c0` (Ph 50) — **local only, nothing pushed** |
 | Biggest known gap | Vantage cannot yet answer questions about **itself** (pending approvals, its status, its recent actions, stopping the current task), and there is no native mobile app, relay, push or provider adapter |
@@ -266,6 +266,49 @@ was respected rather than routed around. So they are proven wired and rendered, 
 pressed.
 
 
+## 2D. Phase 55 in full — a search that searches
+
+`search Google for FastAPI` was §6's last utterance without a capability, and the tempting fix —
+route it at `open_url` with `https://www.google.com` — is a lie that renders perfectly: a browser
+opens, a page loads, nothing was searched, and the reply reads like a success.
+
+The risk tier was measured rather than guessed: **all 13 EXTERNAL tools are confirmation-gated**,
+so EXTERNAL here means "changes something outside". A search changes nothing, and its closest
+precedent is `open_url` — reaches out, reads, LOW, ungated. A search behind a per-query approval
+would be a search nobody uses and would not make anything safer.
+
+Three outcomes, kept distinct (the same rule Phase 15 established for mail and calendar):
+
+```text
+answered with something     -> results, and the source is named
+answered with nothing       -> ok, count 0: "an empty answer from one source,
+                               not a claim that nothing exists"
+could not be reached/read   -> FAILED: "This is the network, not an empty result."
+```
+
+Live, real network, no mocks:
+
+```
+search Google for FastAPI  -> "duckduckgo-instant-answer had no result for 'FastAPI'. That is an
+                               empty answer from one source…"                          281 ms
+search the web for the heat death of the universe
+  -> 2 real results (Wikipedia, DDG) in 143 ms
+outage, against a black-hole address (a real connect attempt)
+  -> FAILED in 5.01 s: "This is the network, not an empty result."
+```
+
+`FastAPI` returning nothing is the interesting result: the Instant Answer API has no article for
+it, and the tool said so rather than inventing a summary or quietly opening a browser. The 5.01 s
+outage is inside the sentence deadline Phase 34 set — the case that used to cost 20 seconds.
+
+The query is confined to its own urlencoded parameter, and the test asserts the parsed contract
+rather than pattern-matching the string. **My first assertion was wrong and the code was right:**
+I checked that `evil.example` did not appear in the URL, when its appearing *inside the encoded
+value* is correct behaviour — the defect would be a second parameter or a changed host.
+
+**§6 is now 37 of 37**, re-run utterance by utterance through the planner.
+
+
 ## 3. Working status of the whole product, as measured today
 
 All values from the **delivered app** over HTTP (read-only GETs) unless stated.
@@ -286,19 +329,19 @@ User → Intent → RulePlanner (50 routes) → PermissionEngine → [Confirmati
 
 | thing | value | how measured |
 |---|---|---|
-| Tools | **141** | `/health`, `/tools` |
+| Tools | **142** | `/health`, `/tools` |
 | Agents | **15** — calendar, car, coding, design, email, home, laptop, laptop_center, memory, phone, research, robotics, scheduler, vision, watch | `/health` |
 | Risk spread | READ 72 · LOW 36 · EXTERNAL 13 · DESTRUCTIVE 12 · PHYSICAL 3 | registry |
-| Confirmation-gated | **28** of 141 — unchanged by Phase 53, which added no gate and loosened none | registry |
-| RulePlanner routes | **51** | `len(core.planner._rules)` |
+| Confirmation-gated | **28** of 142 — three phases of new capability, no gate moved | registry |
+| RulePlanner routes | **52** | `len(core.planner._rules)` |
 | Registered applications | **15** | `AppRegistry` |
 | HTTP surface | 117 route objects / **111 paths** (Phase 54 added the stop and the two policy doors) | `len(app.routes)` |
 | Database tables | **32** | schema `CREATE TABLE` count |
 | Memories indexed | 52 / 52, coverage 1.0, hybrid retrieval | `/health` |
 | Scheduler | running, 30 s tick, 67 jobs | `/health` |
-| Test suite | 2155 passed, 0 failed, 0 skipped, 72.6 s | `pytest -q` |
-| Test modules / phase reports | 81 / 56 | `ls` |
-| Code volume | 67,882 lines — 41,174 source · 26,708 tests | `wc -l` |
+| Test suite | 2190 passed, 0 failed, 0 skipped, 62.5 s | `pytest -q` |
+| Test modules / phase reports | 82 / 57 | `ls` |
+| Code volume | 68,461 lines — 41,430 source · 27,031 tests | `wc -l` |
 
 ### 3.3 Permissions, as the OS reports them right now (`/permissions`)
 
@@ -431,8 +474,9 @@ menu-bar-less `.app` launcher.
    governance in §14/§16/§30 of the build prompt.
 2. ~~An emergency-stop route and a tool-revoke handle~~ — **done in Phase 54**: both doors
    exist, are audited, and re-read the state they claim to have changed.
-3. **A web-search capability** for `search Google for X` — §6's only remaining gap, and the only
-   one that needs a new tool rather than a route.
+3. ~~A web-search capability~~ — **done in Phase 55.** `search_web` asks a real search service,
+   and an outage is reported as an outage. §6 is 37 of 37. A *ranked* web index still needs a
+   keyed provider (55-B).
 4. **The §3 first-run wizard** with a deliberate, user-initiated permission **request** path
    (read-only status exists; requesting must never be a side effect of a poll).
 5. **Host persistence** — the `.app` is a launcher that dies with its window; a real login
