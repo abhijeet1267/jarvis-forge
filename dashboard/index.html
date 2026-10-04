@@ -366,7 +366,7 @@ const QUICK = [
   { label: "Storage", tool: "check_storage", say: "check storage" },
   { label: "Open project", tool: "open_project_folder", say: "open my project" },
   { label: "Find a file", tool: "find_and_open", say: "find {name} and open it" },
-  { label: "Open a site", tool: "open_url", say: "open {site}" },
+  { label: "Open a site", tool: "open_url", say: "open the {site} site" },
   { label: "Explain something", tool: "ask_question", say: "explain {subject}" },
   { label: "What I remember", tool: "memory_overview", say: "what do you remember" },
   { label: "Screenshot", tool: "take_screenshot", say: "take a screenshot" },
@@ -374,7 +374,7 @@ const QUICK = [
 ];
 
 const SLOT_ASK = {
-  site: "Which site?",
+  site: "Which site? (opens in the browser)",
   name: "What should I look for?",
   subject: "Explain what? (one topic, up to 8 words)"
 };

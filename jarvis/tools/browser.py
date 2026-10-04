@@ -34,6 +34,9 @@ NAMED_SITES = {
     "youtube": "https://www.youtube.com",
     "maps": "https://maps.google.com",
     "calendar": "https://calendar.google.com",
+    #: Brand-qualified because the bare word now means the installed application: saying
+    #: "Calendar" opens Calendar.app, so the web product has to be named as itself.
+    "google calendar": "https://calendar.google.com",
     "drive": "https://drive.google.com",
     "reddit": "https://www.reddit.com",
     "wikipedia": "https://www.wikipedia.org",

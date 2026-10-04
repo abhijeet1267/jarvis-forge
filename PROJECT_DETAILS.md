@@ -75,7 +75,7 @@ Real output from a fresh isolated instance. Note that several rows are
 
 | Input | Intent | Decision | Actual response |
 |---|---|---|---|
-| `open VS Code` | `open_app` | EXECUTE | "Opening Visual Studio Code on your macos machine." |
+| `open VS Code` | `open_app` | EXECUTE | "Visual Studio Code is open on your macos machine." — said only when the process is seen; otherwise "Visual Studio Code was told to open, but I could not confirm it from the process table" (Phase 51) |
 | `find my latest project report` | `search_files` | EXECUTE | "I found 198 file(s) matching 'project'. Most recent: projects.data (3 min ago)." |
 | `what is my laptop battery` | `laptop_battery` | EXECUTE | "Your laptop battery is at 100% (fully charged)." |
 | `what time is it` | `time` | EXECUTE | "It is 23:36 on Thursday, 24 September 2026." |

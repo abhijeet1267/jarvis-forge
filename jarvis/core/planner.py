@@ -1255,9 +1255,15 @@ class RulePlanner:
 
         candidates = re.findall(r"(?:[\w-]+\.)+[a-z]{2,}(?:[/?#][\w./?%&=#-]*)?", raw, re.I)
         for token in candidates:
-            suffix = token.split("/")[0].rsplit(".", 1)[-1].lower()
+            head = token.split("/")[0]
+            suffix = head.rsplit(".", 1)[-1].lower()
             if suffix in extensions:
                 continue
+            #: `.app` is a bundle, not a gTLD. `open Mail.app` reached this rule, saw a
+            #: domain-shaped token, and built https://Mail.app -- an address this project's
+            #: own browser module says never to invent. Leave it to the application rule.
+            if suffix == "app":
+                return None
             url, problem = normalise(token)
             if url:
                 params = {"url": url}
@@ -1275,12 +1281,24 @@ class RulePlanner:
                     params["browser"] = browser
                 return Intent("open_url", tool="open_url", params=params)
 
-        for name in NAMED_SITES:
-            if re.search(rf"\b{re.escape(name)}\b", text):
-                params = {"url": NAMED_SITES[name]}
-                if browser:
-                    params["browser"] = browser
-                return Intent("open_url", tool="open_url", params=params)
+        #: Longest name first. Iterating the dict in insertion order let "open Google
+        #: Calendar" match "google" and return https://www.google.com: the brand-qualified
+        #: name lost the half that identified which Google thing was asked for.
+        web_signal = re.search(r"\b(?:web|website|site|online|browser|chrome|safari|firefox|"
+                               r"brave|edge|google|gmail)\b", text)
+        for name in sorted(NAMED_SITES, key=len, reverse=True):
+            if not re.search(rf"\b{re.escape(name)}\b", text):
+                continue
+            #: An installed application wins over a site of the same word, unless the sentence
+            #: asks for the web. "open Calendar" means the app on the laptop; "open the
+            #: calendar site" and "open Google Calendar" mean the page. The lookup is exact --
+            #: a fuzzy one would resolve "gmail" inside the Mail app and take gmail away.
+            if self.apps.get(name) is not None and not web_signal:
+                return None
+            params = {"url": NAMED_SITES[name]}
+            if browser:
+                params["browser"] = browser
+            return Intent("open_url", tool="open_url", params=params)
         return None
 
     def _find_and_open(self, text: str, raw: str) -> Optional[Intent]:

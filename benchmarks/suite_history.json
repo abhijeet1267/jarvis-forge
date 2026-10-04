@@ -293,6 +293,13 @@
       "passed": 1961,
       "failed": 0,
       "note": "the same permission helper gave four different answers from two callers, so the card now names its subject"
+    },
+    {
+      "phase": "51 two routes answered wrong",
+      "collected": 2013,
+      "passed": 2013,
+      "failed": 0,
+      "note": "open Mail was declined and open Calendar opened a website; the launch probe this phase wrote was satisfied by a widget extension"
     }
   ]
 }

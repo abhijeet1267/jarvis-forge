@@ -187,6 +187,32 @@ async def open_project_folder(ctx: ToolContext, project: str = "") -> Any:
               verification=result.verification, **details)
 
 
+async def _process_observed(target: str, platform: str) -> bool:
+    """Has the application actually appeared in the process table?
+
+    ``open -a`` exits 0 when the launch was *requested*. That is the difference this project
+    keeps having to relearn: an exit code is a handler succeeding, not a window on screen.
+    """
+    code, out, _err = await run_command(["ps", "-axo", "pid=,comm="])
+    if code != 0 or not out:
+        return False
+    if platform == "macos":
+        #: The main executable, not anything under the bundle. With Calendar.app closed, the
+        #: process table still held
+        #: ``/System/Applications/Calendar.app/Contents/PlugIns/CalendarWidgetExtension.appex/...``,
+        #: so a probe for "/Calendar.app/" reported the application as open from a widget.
+        return f"/{target}.app/Contents/MacOS/".lower() in (out or "").lower()
+    needle = target.lower()
+    return any(line.strip().rsplit("/", 1)[-1] == needle for line in (out or "").splitlines())
+
+
+#: Short and bounded on purpose. A cold app shows up inside a few hundred milliseconds; if it
+#: has not appeared by now the honest answer is "could not confirm", not a longer wait that
+#: turns one sentence into a stall.
+LAUNCH_OBSERVATION_TRIES = 6
+LAUNCH_OBSERVATION_INTERVAL_S = 0.2
+
+
 async def open_app(ctx: ToolContext, app: str = "", path: str = "") -> "object":
     """Launch an application, optionally aimed at a folder the user named."""
     spec = ctx.apps.resolve(app, platform=ctx.platform)
@@ -242,12 +268,31 @@ async def open_app(ctx: ToolContext, app: str = "", path: str = "") -> "object":
         )
 
     if folder is None:
-        return ok("open_application",
-            f"Opening {spec.display_name} on your {ctx.platform} machine.",
+        #: The launch was requested; now look for the process. "is open" is only said when
+        #: something observed it, and the absence of an observation is reported as such.
+        observed = False
+        for _ in range(LAUNCH_OBSERVATION_TRIES):
+            if await _process_observed(target, ctx.platform):
+                observed = True
+                break
+            await asyncio.sleep(LAUNCH_OBSERVATION_INTERVAL_S)
+
+        if observed:
+            return ok("open_application",
+                f"{spec.display_name} is open on your {ctx.platform} machine.",
+                device=ctx.device_id,
+                app_key=spec.key,
+                display_name=spec.display_name,
+                verified=True,
+                risk=int(RiskLevel.LOW),
+            )
+        return unverified("open_application",
+            f"{spec.display_name} was told to open, but I could not confirm it from the "
+            "process table -- look at the screen before believing me.",
             device=ctx.device_id,
             app_key=spec.key,
             display_name=spec.display_name,
-            risk=int(RiskLevel.LOW),
+            verified=False,
         )
 
     # The editor writes its own record; give it a moment rather than trusting the exit

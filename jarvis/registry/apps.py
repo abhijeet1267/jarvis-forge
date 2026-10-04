@@ -76,6 +76,26 @@ DEFAULT_APPS: List[AppSpec] = [
         aliases=["notes", "notepad"],
         category="productivity",
     ),
+    #: Mail and Calendar are registered because "open Mail" and "open Calendar" are
+    #: application requests, and both sentences were being answered by something else: the
+    #: first by the mail-search agent's help text, the second by a web address. Neither app
+    #: takes a folder, so neither declares a `cli` -- see Cursor above.
+    AppSpec(
+        key="mail",
+        display_name="Mail",
+        platform=["macos"],
+        launch={"macos": "Mail"},
+        aliases=["mail", "mail app", "apple mail"],
+        category="productivity",
+    ),
+    AppSpec(
+        key="calendar",
+        display_name="Calendar",
+        platform=["macos"],
+        launch={"macos": "Calendar"},
+        aliases=["calendar", "calendar app", "apple calendar"],
+        category="productivity",
+    ),
     AppSpec(
         key="music",
         display_name="Music",
