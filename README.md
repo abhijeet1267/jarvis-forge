@@ -51,7 +51,7 @@ and the diagrams read their counts from the live registry.
 
 | Claim | Value | Reproduce |
 |---|---|---|
-| Test suite | **2218 passed · 0 failed · 0 xfailed · 0 skipped** (65.8 s at the Phase 56 close-out run; one test is network-gated — it skipped as "arXiv could not be reached: The read operation timed out" during the Phase 50 build and has passed since, so a run reports either 2218 + 0 or 2217 + 1 skipped) | `python -m pytest -q -rs` |
+| Test suite | **2218 passed · 0 failed · 0 xfailed · 0 skipped** (62.5–65.8 s, the spread over three runs at the Phase 56 close; one test is network-gated — it skipped as "arXiv could not be reached: The read operation timed out" during the Phase 50 build and has passed since, so a run reports either 2218 + 0 or 2217 + 1 skipped) | `python -m pytest -q -rs` |
 | Suite growth, Phase 9 → 56 | 875 passing / **126 failing** → 2218 passing / 0 failing / **0 xfailed** at the Phase 56 close | `cat benchmarks/suite_history.json` |
 | Tools registered | **142** | `python -c "from jarvis.core.orchestrator import JarvisCore as J; print(len(J().tools.names()))"` |
 | Confirmation-gated | **28** of 142 | `python assets/build_diagrams.py` (prints the live counts) |

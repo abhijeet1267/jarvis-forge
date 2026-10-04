@@ -5,7 +5,7 @@
 | Phase | 56 |
 | Date | 2026-10-04 |
 | Starting commit | `176bcfb` (Phase 55) |
-| Ending commit | `0cdc770` — this report ships inside it, so the hash was written after the commit (see §8) |
+| Ending commit | `0cdc770` (implementation) → `08c783d` (report hashes) → `ea68c7d` (close-out: redeploy + delivered-readme fix) — §8, §10 |
 | Tests before | 2190 passed · 0 failed · 0 skipped |
 | Tests after | **2218 passed · 0 failed · 0 skipped** (63.5 s) |
 | Tools before / after | 142 / **142** — no capability was added |
@@ -162,10 +162,12 @@ raising a dialog on this machine.**
 | HTTP surface | 117 / 111 paths | **118 / 112 paths** | `len(app.routes)` |
 | Confirmation-gated | 28 | **28** | no gate moved |
 
-**Ending commit:** `0cdc770`. A report cannot contain its own hash, so this line and the header row
-were added after that commit — the same reason Phase 55's header said "recorded in §8" and then
-never recorded it, which is fixed here rather than repeated. Re-run at the close-out after the doc
-edits: **2218 passed · 0 failed · 0 skipped in 65.8 s**.
+**Ending commits:** `0cdc770` (the work), then the close-out commits named in §10. A report cannot
+contain the hash of the commit that adds it — the same reason Phase 55's header said "recorded in
+§8" and then never recorded it, which is fixed here rather than repeated. Re-run at the close-out
+after the doc edits: **2218 passed · 0 failed · 0 skipped**, timed three times at 65.8 s, 64.2 s and
+62.5 s — the duration is published as a spread because a single figure implies a precision the
+machine does not offer.
 
 ## 9. Open items
 
@@ -194,6 +196,14 @@ edits: **2218 passed · 0 failed · 0 skipped in 65.8 s**.
 The bundle was rebuilt from the committed source (`build_app.py` → `codesign verify: ok`), the old
 copy moved aside, the new one deployed to `~/Downloads/Vantage/Vantage.app`, relaunched, and the
 aside copy removed only after the new one answered.
+
+**Provenance:** the shipped bundle and `Vantage.app.zip` are built from `ea68c7d`. That commit is
+the last one whose shipped *behaviour* differs from `0cdc770`; this sentence is necessarily later
+than the copy of this report inside the bundle, which is the fixed point every close-out reaches —
+a bundle cannot contain the text that names its own commit. `build_app.stage_project()` stages
+`jarvis/`, `dashboard/`, `run.py`, `requirements.txt`, `pyproject.toml` and `.env.example` into
+`Contents/Resources/app/` and skips `tests/`, `audit/`, `dist/` and the caches (re-measured this
+close), so the reports and the suite travel in `vantage-source.zip`, not in the `.app`.
 
 **Every check below is a GET, plus one GET that expects 405.** Phase 54's §11a recorded that a
 "read-only" delivered-app check had actually written one `denied` audit row into the user's real

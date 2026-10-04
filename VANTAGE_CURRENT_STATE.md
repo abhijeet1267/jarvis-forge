@@ -13,7 +13,7 @@ capability exists but was **not** re-measured today, it says so rather than impl
 |---|---|
 | What it is | A personal AI operating system for macOS: one command pipeline, 142 governed capabilities (28 of them confirmation-gated), a laptop panel, a phone client, a signed `.app` delivered as files |
 | Current phase | **Phase 56 — asking for a permission, on purpose** (closed) |
-| Test suite | **2218 passed · 0 failed · 0 xfailed · 0 skipped** in 65.8 s |
+| Test suite | **2218 passed · 0 failed · 0 xfailed · 0 skipped** — 62.5 to 65.8 s over three runs at this close |
 | Spec §6 coverage | **37 of 37** — every utterance the build prompt lists reaches a capability |
 | Delivered | `~/Downloads/Vantage/` — `Vantage.app` (running, seal valid), `Vantage.app.zip`, `vantage-source.zip`, `READ ME FIRST.txt` |
 | Commits | `0cdc770` (Ph 56), `176bcfb` (Ph 55), `377e79f` (Ph 54 correction), `67d9530` (Ph 54), `35c9abf` (Ph 53), `3708f85` (Ph 52 correction), `92efc6b` (Ph 52), `f047eb2` (Ph 51), `452e9c0` (Ph 50) — **local only, nothing pushed** |
@@ -429,7 +429,7 @@ User → Intent → RulePlanner (50 routes) → PermissionEngine → [Confirmati
 | Database tables | **32** | schema `CREATE TABLE` count |
 | Memories indexed | 52 / 52, coverage 1.0, hybrid retrieval | `/health` |
 | Scheduler | running, 30 s tick, 67 jobs | `/health` |
-| Test suite | 2218 passed, 0 failed, 0 skipped, 65.8 s | `pytest -q` |
+| Test suite | 2218 passed, 0 failed, 0 skipped; 62.5–65.8 s over three close-out runs | `pytest -q` |
 | Test modules / phase reports | 83 / 58 | `ls` |
 | Code volume | 69,120 lines — 41,726 source · 27,394 tests | `wc -l` |
 
