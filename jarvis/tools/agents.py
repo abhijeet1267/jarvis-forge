@@ -25,7 +25,10 @@ TOOL = "check_agent_status"
 
 #: Where an app bundle is looked for, in order. No `mdfind`, no Spotlight: a name
 #: typed by a user should resolve the same way twice.
-BUNDLE_ROOTS = ("/Applications", "~/Applications", "~/.qoder/bin")
+#: Every place macOS puts an application on this machine. ``/System/Applications`` has to be
+#: here: Mail, Contacts and Calendar ship there, and without it the installed check answered
+#: "Mail is not installed on this laptop" about an application the user was looking at.
+BUNDLE_ROOTS = ("/Applications", "/System/Applications", "~/Applications", "~/.qoder/bin")
 
 _VERSION = re.compile(r"\d+(?:\.\d+)+")
 #: A name that will not survive being used as a path component or a `ps` needle is

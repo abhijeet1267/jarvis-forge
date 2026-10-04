@@ -96,6 +96,43 @@ DEFAULT_APPS: List[AppSpec] = [
         aliases=["calendar", "calendar app", "apple calendar"],
         category="productivity",
     ),
+    #: The rest of §6's application list. Each launch name is the one macOS reports for the
+    #: bundle, not a guess: `open -a` fails on a name the system does not know.
+    AppSpec(
+        key="firefox",
+        display_name="Firefox",
+        platform=["macos", "linux", "windows"],
+        launch={"macos": "Firefox", "linux": "firefox", "windows": "firefox"},
+        aliases=["firefox"],
+        category="browser",
+    ),
+    AppSpec(
+        key="contacts",
+        display_name="Contacts",
+        platform=["macos"],
+        launch={"macos": "Contacts"},
+        aliases=["contacts", "address book", "contacts app"],
+        category="productivity",
+    ),
+    AppSpec(
+        key="messages",
+        display_name="Messages",
+        platform=["macos"],
+        launch={"macos": "Messages"},
+        aliases=["messages", "messages app", "imessage", "text messages"],
+        category="communication",
+    ),
+    AppSpec(
+        key="system_settings",
+        display_name="System Settings",
+        platform=["macos"],
+        # macOS 13 renamed the app; the old word still opens it, so the alias carries both
+        # and the launch name is the one this machine answers to.
+        launch={"macos": "System Settings"},
+        aliases=["system settings", "system preferences", "settings app",
+                 "preferences app", "control panel"],
+        category="system",
+    ),
     AppSpec(
         key="music",
         display_name="Music",

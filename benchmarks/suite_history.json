@@ -300,6 +300,13 @@
       "passed": 2013,
       "failed": 0,
       "note": "open Mail was declined and open Calendar opened a website; the launch probe this phase wrote was satisfied by a widget extension"
+    },
+    {
+      "phase": "52 section six on the laptop",
+      "collected": 2065,
+      "passed": 2065,
+      "failed": 0,
+      "note": "Finder answered no AppleScript, a detached launch hid 'not installed', and the installed check denied Apple's own apps existed"
     }
   ]
 }

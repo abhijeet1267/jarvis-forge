@@ -74,11 +74,18 @@ def test_the_old_name_still_resolves_to_it(registry, canonical, old):
 
 
 def test_an_alias_is_not_a_second_capability(registry):
-    """134 tools must stay 134. Counting aliases as tools would double the published
-    surface and let the UI offer one capability twice under two names."""
-    before = len(registry.all())
+    """An alias must not add a row: counting one capability twice would double the published
+    surface and let the UI offer the same tool under two names.
+
+    The guard is the invariant, not a frozen total. The registry grows by real capabilities --
+    Phase 52 added ``open_user_folder`` and ``get_frontmost_application`` -- and a hard-coded
+    count would have made this test refuse legitimate work instead of catching the defect it
+    is named for.
+    """
+    specs = registry.all()
+    assert len(specs) == len({s.name for s in specs}), "one name is registered twice"
     listed = registry.names()
-    assert before == 134, f"the tool count moved: {before}"
+    assert len(listed) == len(specs), "a registered capability is not listed"
     for old in RENAMED.values():
         assert old not in listed, f"{old!r} is listed as its own tool"
 
@@ -119,7 +126,12 @@ def test_the_aliases_are_visible_to_a_client(registry):
     by_name = {r["name"]: r for r in rows}
     assert "aliases" in by_name["open_application"], sorted(by_name["open_application"])
     assert by_name["open_application"]["aliases"] == ["open_app"]
-    assert len(rows) == 134, f"the published tool list moved: {len(rows)}"
+    assert len(rows) == len(registry.names()), (
+        f"/tools published {len(rows)} rows against {len(registry.names())} registered tools")
+    published = {r["name"] for r in rows}
+    assert published == set(registry.names()), "the published list and the registry diverged"
+    for old in RENAMED.values():
+        assert old not in published, f"the alias {old!r} was published as its own capability"
 
 
 # ---------------------------------------------------------------------------

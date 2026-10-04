@@ -187,6 +187,25 @@ async def open_project_folder(ctx: ToolContext, project: str = "") -> Any:
               verification=result.verification, **details)
 
 
+def bundle_installed(target: str) -> bool:
+    """Is an application by this name actually on this machine?
+
+    Needed because a launch is detached on purpose (a GUI app holds its pipe open for as long
+    as it runs), so ``open -a``'s exit code is never read -- and ``open -a Firefox`` for an
+    absent Firefox exits 1. Without this check the only answer available was "told, could not
+    confirm", when the truth is that there is nothing to open.
+    """
+    from .agents import BUNDLE_ROOTS
+
+    name = str(target or "").strip()
+    if not name:
+        return False
+    return any(
+        Path(os.path.expanduser(os.path.join(root, f"{name}.app"))).is_dir()
+        for root in BUNDLE_ROOTS
+    )
+
+
 async def _process_observed(target: str, platform: str) -> bool:
     """Has the application actually appeared in the process table?
 
@@ -286,6 +305,12 @@ async def open_app(ctx: ToolContext, app: str = "", path: str = "") -> "object":
                 verified=True,
                 risk=int(RiskLevel.LOW),
             )
+        if not bundle_installed(target):
+            return fail("open_application",
+                f"{spec.display_name} is not installed on this machine, so there is nothing "
+                "for me to open. The name came from my own application list, which means that "
+                "list is out of date.",
+                device=ctx.device_id, app_key=spec.key, display_name=spec.display_name)
         return unverified("open_application",
             f"{spec.display_name} was told to open, but I could not confirm it from the "
             "process table -- look at the screen before believing me.",
@@ -363,6 +388,126 @@ async def list_apps(ctx: ToolContext) -> "object":
     )
 
 
+#: §6's standard folders. The dictionary is the whole authority: the parameter names one of
+#: these, and the path is built from the home directory, never from the words in the sentence.
+#: That is what makes "open ../../.ssh" a refusal instead of a request with a different shape.
+USER_FOLDERS = {
+    "desktop": "Desktop",
+    "downloads": "Downloads",
+    "documents": "Documents",
+    "pictures": "Pictures",
+    "home": "",
+}
+
+#: What Finder is showing. An AppleScript query, so it needs Automation permission; without
+#: it the folder may well have opened and nothing here can prove it, which is UNKNOWN, not a
+#: claim and not a failure.
+_FINDER_WINDOWS = 'tell application "Finder" to get name of every window'
+
+#: Which application macOS considers frontmost. Needs Accessibility on the same grounds.
+_FRONTMOST_PROCESS = ("tell application \"System Events\" to get name of first "
+                      "application process whose frontmost is true")
+
+
+def _standard_folder(name: str) -> Tuple[Optional[Path], str]:
+    """(path, problem) -- exactly one of the two is set. Never a path the caller wrote."""
+    key = str(name or "").strip().lower()
+    for suffix in (" folder", " directory"):
+        if key.endswith(suffix):
+            key = key[: -len(suffix)].strip()
+    if key not in USER_FOLDERS:
+        return None, (
+            f"I only open the standard folders by name: {', '.join(USER_FOLDERS)}. "
+            "Anything else needs its own path, and I do not take a path from a folder name."
+        )
+    path = Path.home() / USER_FOLDERS[key]
+    if not path.is_dir():
+        return None, f"{path} does not exist on this machine, so there is nothing to open."
+    return path, ""
+
+
+#: An unanswered AppleScript is the common case here, not the rare one: the query below took
+#: 20 s on a live run because the Automation prompt had no one in front of it. One sentence
+#: gets one deadline (Phase 34), so the question is asked with a short budget and a timeout is
+#: treated as an answer -- "I cannot ask Finder" -- rather than as a reason to wait again.
+FINDER_QUERY_TIMEOUT_S = 3.0
+
+
+async def _finder_reports(name: str) -> Tuple[bool, str]:
+    """(seen, refusal_reason) -- did Finder list a window for this folder?"""
+    for _ in range(4):
+        code, out, err = await run_command(
+            ["osascript", "-e", _FINDER_WINDOWS], timeout=FINDER_QUERY_TIMEOUT_S)
+        if code != 0:
+            text = (err or out or "").strip()
+            if code == 124 or "-1712" in text:
+                return False, ("Finder did not answer in time, which usually means the "
+                               "Automation permission prompt is still waiting for you")
+            if "-1743" in text or "not authorized" in text.lower() or "not permitted" in text.lower():
+                return False, ("macOS will not let me ask Finder what it is showing "
+                               "(Automation permission)")
+            return False, f"Finder did not answer ({text[:120]})" if text else "Finder did not answer"
+        if name.lower() in (out or "").lower():
+            return True, ""
+        await asyncio.sleep(0.25)
+    return False, ""
+
+
+async def open_user_folder(ctx: ToolContext, folder: str = "") -> "object":
+    """Reveal one of the standard folders in Finder."""
+    path, problem = _standard_folder(folder)
+    if path is None:
+        return fail("open_user_folder", problem, device=ctx.device_id, folder=folder)
+
+    argv = (["open", str(path)] if ctx.platform == "macos" else ["xdg-open", str(path)])
+    code, _out, err = await run_command(argv)
+    if code != 0:
+        return fail("open_user_folder",
+                    f"Could not open {path.name or 'the home folder'}: {(err or '').strip()[:160]}",
+                    device=ctx.device_id, folder=str(path))
+
+    name = path.name or "Home"
+    seen, refusal = await _finder_reports(name)
+    if seen:
+        return ok("open_user_folder", f"{name} is open in Finder.", device=ctx.device_id,
+                  folder=str(path), verified=True)
+    if refusal:
+        return unverified("open_user_folder",
+            f"{name} was told to open, but {refusal} -- look at the screen before believing me.",
+            device=ctx.device_id, folder=str(path), verified=False)
+    return unverified("open_user_folder",
+        f"{name} was told to open, but Finder has not shown a window for it yet.",
+        device=ctx.device_id, folder=str(path), verified=False)
+
+
+async def get_frontmost_application(ctx: ToolContext) -> "object":
+    """Name the application macOS says is in front, or say which permission stopped it."""
+    code, out, err = await run_command(
+        ["osascript", "-e", _FRONTMOST_PROCESS], timeout=FINDER_QUERY_TIMEOUT_S)
+    text = (out or "").strip()
+    name = text.splitlines()[0].strip() if text else ""
+    if code != 0 or not name:
+        detail = (err or out or "").strip()
+        if code == 124 or "-1712" in detail:
+            return fail("get_frontmost_application",
+                "System Events did not answer in time, so I will not guess which application "
+                "is in front. This usually means an Accessibility prompt is waiting for you "
+                "(System Settings -> Privacy & Security -> Accessibility).",
+                device=ctx.device_id)
+        if "-1743" in detail or "not authorized" in detail.lower():
+            return fail("get_frontmost_application",
+                "macOS will not tell me which application is in front: Vantage needs "
+                "Accessibility permission (System Settings -> Privacy & Security -> "
+                "Accessibility). I am not going to guess the name.",
+                device=ctx.device_id)
+        return fail("get_frontmost_application",
+            f"I could not read the frontmost application. {detail[:160]}".strip(),
+            device=ctx.device_id)
+    return ok("get_frontmost_application",
+              f"{name} is the application in front right now.",
+              device=ctx.device_id, application=name, verified=True)
+
+
 SPECS = [
     (
         ToolSpec(
@@ -423,5 +568,36 @@ SPECS = [
             tags=["computer", "app"],
         ),
         list_apps,
+    ),
+    (
+        ToolSpec(
+            name="open_user_folder",
+            description=("Reveal a standard folder (Desktop, Downloads, Documents, Pictures, "
+                         "Home) in Finder. The folder is named, never typed as a path."),
+            agent="laptop",
+            risk=RiskLevel.LOW,
+            requires_confirmation=False,
+            reversible=True,
+            allowed_devices=["laptop_main"],
+            parameters={"folder": "string"},
+            required_parameters=["folder"],
+            tags=["computer", "app", "folder"],
+        ),
+        open_user_folder,
+    ),
+    (
+        ToolSpec(
+            name="get_frontmost_application",
+            description="Name the application macOS reports as being in front right now.",
+            agent="laptop",
+            risk=RiskLevel.READ,
+            requires_confirmation=False,
+            reversible=True,
+            allowed_devices=["laptop_main"],
+            parameters={},
+            required_parameters=[],
+            tags=["computer", "app", "read"],
+        ),
+        get_frontmost_application,
     ),
 ]

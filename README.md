@@ -9,7 +9,7 @@ world afterwards**, and written to a tamper-evident audit chain. It runs with no
 key, no network and no vendor — an LLM is optional and off by default.
 
 What this repository is mostly about is not features. It is about the difference
-between *"the handler returned"* and *"the thing happened"* — and the fifty-one phases of
+between *"the handler returned"* and *"the thing happened"* — and the fifty-two phases of
 measurement spent closing that gap, in the ledger and on the screen.
 
 > **On the name.** The product is **Vantage** — in the README, both web clients, the install
@@ -25,21 +25,21 @@ measurement spent closing that gap, in the ledger and on the screen.
 > too: they are dated evidence of what was true then.
 
 [![ci](https://img.shields.io/github/actions/workflow/status/abhijeet1267/jarvis-forge/ci.yml?label=tests%20%C2%B7%20macos)](https://github.com/abhijeet1267/jarvis-forge/actions/workflows/ci.yml)
-[![suite](https://img.shields.io/badge/tests-2013%20passing%20%C2%B7%201%20network--gated-16a34a)](tests)
-[![tools](https://img.shields.io/badge/tools-134%20across%2015%20agents-2f6df6)](jarvis/tools)
+[![suite](https://img.shields.io/badge/tests-2065%20passing%20%C2%B7%201%20network--gated-16a34a)](tests)
+[![tools](https://img.shields.io/badge/tools-136%20across%2015%20agents-2f6df6)](jarvis/tools)
 [![offline](https://img.shields.io/badge/LLM-off%20by%20default%20%C2%B7%20runs%20fully%20offline-0f172a)](jarvis/config.py)
 [![python](https://img.shields.io/badge/python-3.11%20%C2%B7%203.12%20(CI)-6b7688)](.github/workflows/ci.yml)
 
 | | |
 |---|---|
 | **Runtime** | Python 3.11+ · FastAPI · SQLite (32 tables) · stdlib-first |
-| **Planning** | `RulePlanner` — 48 deterministic routes, no model required |
+| **Planning** | `RulePlanner` — 50 deterministic routes, no model required |
 | **Authority** | `PermissionEngine` · 5 risk tiers · 28 confirmation-gated tools |
 | **Proof** | tri-state `Verification` (success / failed / **unknown**) on every action |
 | **Ledger** | `action_logs` hash-chained + `audit.jsonl` append-only, `verify_chain()` |
 | **Edge** | token file `0600` · constant-time compare · same-origin · Host allowlist · 600/min |
 | **Surface** | web dashboard · phone client page over the LAN · voice (macOS `say` + on-device STT) · watch queue · device pairing · macOS permission status |
-| **Size** | 65.7k lines of versioned Python/HTML/JS/Swift · 40.2k source · 25.4k tests · 78 test modules |
+| **Size** | 66.3k lines of versioned Python/HTML/JS/Swift · 40.5k source · 25.8k tests · 79 test modules |
 
 ---
 
@@ -51,10 +51,10 @@ and the diagrams read their counts from the live registry.
 
 | Claim | Value | Reproduce |
 |---|---|---|
-| Test suite | **2013 passed · 0 failed · 0 xfailed · 0 skipped** (61.5 s; one test is network-gated — it skipped as "arXiv could not be reached: The read operation timed out" during the Phase 50 build and has passed since, so a run reports either 2012 + 1 skipped or 2013 + 0) | `python -m pytest -q -rs` |
-| Suite growth, Phase 9 → 51 | 875 passing / **126 failing** → 2013 passing / 0 failing / **0 xfailed** at the Phase 51 close | `cat benchmarks/suite_history.json` |
-| Tools registered | **134** | `python -c "from jarvis.core.orchestrator import JarvisCore as J; print(len(J().tools.names()))"` |
-| Confirmation-gated | **28** of 134 | `python assets/build_diagrams.py` (prints the live counts) |
+| Test suite | **2065 passed · 0 failed · 0 xfailed · 0 skipped** (65.1 s; one test is network-gated — it skipped as "arXiv could not be reached: The read operation timed out" during the Phase 50 build and has passed since, so a run reports either 2064 + 1 skipped or 2065 + 0) | `python -m pytest -q -rs` |
+| Suite growth, Phase 9 → 52 | 875 passing / **126 failing** → 2065 passing / 0 failing / **0 xfailed** at the Phase 52 close | `cat benchmarks/suite_history.json` |
+| Tools registered | **136** | `python -c "from jarvis.core.orchestrator import JarvisCore as J; print(len(J().tools.names()))"` |
+| Confirmation-gated | **28** of 136 | `python assets/build_diagrams.py` (prints the live counts) |
 | Risk tiers | read 71 · low 35 · external 13 · high 12 · physical 3 | same |
 | API routes | **108** | `python -c "s=open('jarvis/api/app.py').read(); print(sum(s.count(f'@app.{v}(\"') for v in ('get','post','put','patch','delete')))"` |
 | Acceptance commands measured | 17 of 18, live, over HTTP | `python benchmarks/acceptance_run.py` |
@@ -93,7 +93,7 @@ and the diagrams read their counts from the live registry.
 - [Benchmarks](#benchmarks)
 - [Hardware truth](#hardware-truth)
 - [What the system says when something fails](#what-the-system-says-when-something-fails)
-- [The fifty-one phases](#the-fifty-one-phases)
+- [The fifty-two phases](#the-fifty-two-phases)
 - [The plan's safety matrix, run](#the-plans-safety-matrix-run)
 - [Smooth and fast](#smooth-and-fast)
 - [Security model](#security-model)
@@ -131,7 +131,7 @@ and not a quiet success.
 
 ### Suite growth, Phase 9 → Phase 45
 
-<img src="assets/chart-suite-growth.svg" alt="Test suite growth from 875 passing with 126 failing, to 2013 passing with none failing at the close of Phase 51" width="100%"/>
+<img src="assets/chart-suite-growth.svg" alt="Test suite growth from 875 passing with 126 failing, to 2065 passing with none failing at the close of Phase 52" width="100%"/>
 
 Phase 9 inherited **126 failing tests**. The cause was a single import line in
 `jarvis/tools/base.py` that left `Verification` undefined, so every tool result raised
@@ -187,7 +187,7 @@ moved, and the ledger now says exactly that. A simulated *car read* is still a s
 read — reading a labelled simulator is a real read — and that distinction is pinned by a
 test so it stays a decision rather than an accident.
 
-## The fifty-one phases
+## The fifty-two phases
 
 Each closed with a report in [`audit/`](audit), and each report's claims carry the
 command that produced them.
@@ -217,6 +217,7 @@ command that produced them.
 | **29 — A route fills its own action** | flowcharts and architecture diagrams had been dead since they were written: the route sent a title to a tool that also needs `steps` / `components`, so the gate answered the user with *"missing required parameter 'steps'"* -- even when the sentence named them. What a sentence states is now used; what it omits is asked for |
 | **30 — A capability you have is a capability you can ask for** | 46 of 127 tools answered their own name with "I understood the words but not the goal" -- twice the gap the open item had recorded, because that item had been measured by grepping the planner instead of asking the router. A registry-derived route now reaches a tool whose name words a sentence contains, validates the action with the registry before emitting it, and asks in the tool's own description when an argument is missing; three routes that *advertised* capabilities yield to a sentence naming one; and the delete-capable tool that was tiered LOW-and-unconfirmed for as long as it was unreachable was retiered in the same commit |
 | **31 — The device you named is the device that changes** | "turn on the heater" resolved to **Study AC** (the gateway filed heating under cooling) and `control_home_device` was LOW with no confirmation, so the request was approved for execution and only an offline gateway stopped a device changing. The synonym, the resolver and the tier were tightened in one commit, the permission engine grew a device guard beside its path guard, and the plan's §45 matrix has held **6 of 6** since |
+| **52 — the §6 sentences about the laptop** | All 37 utterances the build prompt lists were measured first: 24 worked, 13 did not, and they split three ways, which is why one fix was never going to be one change. Four applications were simply unknown to a nine-entry registry (`open Firefox`, `Contacts`, `Messages`, `System Settings`). Two sentences had an answer sitting in a tool with no route to it -- `get_time` already replies with the date, `get_machine_snapshot` already returns a `hostname`. Two needed capabilities: five standard folders, through a **name allowlist that never takes a path** (so `open ../../.ssh` is a refusal naming what is allowed, and a refused folder launches nothing -- asserted), and the frontmost application. Then the live drive found three defects the 2,013-test suite had not, all of them about this phase's own work or the ground it stood on: the Finder verification query inherited a 20 s default inside a retry loop of four, so **one sentence could take 80 seconds** for a permission prompt no one is watching (Phase 34's rule, broken while adding a capability); a detached launch never sees `open -a`'s exit code, so an uninstalled Firefox could only be answered with "could not confirm" when the truth is "not installed" -- and the two cases are kept distinct and both tested; and `BUNDLE_ROOTS` did not include `/System/Applications`, so the installed check answered *"Mail is not installed on this laptop"* as a confident success about an app the user was looking at. Cross-checked honestly: Finder answers no AppleScript from **any** caller on this machine, so `open Downloads` stays UNKNOWN rather than borrowing Phase 50's subject story. Three count-guards failed on purpose; two of Phase 49's had frozen the tool total at 134 to prove an alias adds no capability, and a frozen total cannot survive real growth -- they now assert the invariant (specs equal distinct names, `/tools` publishes exactly the registry, no alias as its own row), which is stronger, not weaker. Measured after: 2065 passing, 136 tools, 50 routes, 15 applications, §6 at 30 of 37. |
 | **51 — "open Mail" and "open Calendar" reach the applications** | Two sentences the build prompt's §6 lists were answered by the wrong capability, and the mechanisms turned out to be four, not one. `open Mail` was **declined** with a text listing the mail capabilities it had just refused to use, because the application registry knew nine apps and Mail was not one of them. `open Calendar` opened `https://calendar.google.com` because the word is in the known-sites table and the URL rule runs before the application rule. `open Google Calendar` opened `https://www.google.com`, because the table was iterated in dict order and `google` matched before `google calendar` could -- the brand-qualified name lost the half that identified which Google thing was asked for. `open Mail.app` built **`https://Mail.app`**, breaking the first line of the module that owns that rule: *nothing is guessed into a domain*. A registered application now outranks a site of the same word unless the sentence says web/site/browser or names a brand -- with an **exact** lookup, because a fuzzy one resolves "gmail" inside the Mail app and takes gmail away from its own site. Then the machine caught the fix itself: the first launch check grepped the process table for `/Calendar.app/`, passed its tests, agreed live, and was wrong -- with Calendar closed, `Calendar.app/Contents/PlugIns/CalendarWidgetExtension.appex` is still in the table, so a widget the user never opened was enough to say "Calendar is open". The probe now matches the main executable, and the shipped HTML's "Open a site" button types `open the {site} site`, because after this change a bare answer of "calendar" would have opened an application from a button that promises a web page. Live over HTTP on an isolated instance: Mail, Calendar and `Mail.app` all EXECUTE with `verified=True` at 31-402 ms, and `ps` independently shows both main executables. `open Flurbly.app` fails honestly, and `close Mail` **really failed** -- first-run Mail ignores the quit AppleScript and the tool reported its 20 s timeout. Measured after: 2013 passing, 134 tools still 134, 113 routes. |
 | **50 — A permission manager that says who answered** | The second attached prompt set the rule: *never display "Permission Granted" until the operating system actually reports that it is granted*. The repo had no permission status at all, so the first version of this phase looked like a straightforward build -- until the same helper, same binary, same machine was run from two callers and produced **four different answers for four capabilities**: speech recognition GRANTED from the bundle and NOT_DETERMINED from a terminal, screen recording GRANTED and denied, microphone NOT_DETERMINED and DENIED, accessibility denied and GRANTED. macOS attributes a TCC decision to the *responsible process*, so a status read is meaningless unless it names who was asked. The card therefore reports status **and** subject: seven capabilities, each with the OS answer plus the path and bundle of the process the OS answered for. The browser caught three truth defects the suite could not: a bundle test that compared a path *part* for equality instead of a suffix, so the delivered app claimed `inside_bundle: False` while running from inside the bundle; a subject line that printed "read by none", because the helper's own bundle id is nil and the host path is the answer that matters; and the same sentence rendered twice. Nothing prompts and nothing grants -- the endpoint is read-only by design, because a status poll that raises a system dialog would be a consent attack. Measured at the close: 1961 passing (the arXiv test is network-gated -- it skipped during the build and passed on the re-measure), 113 routes / 107 paths, live `/permissions` on the delivered app returning `about_bundled_host: True` with 2 granted / 1 needs-Settings / 1 never-asked / 2 unknown / 1 not-gated. |
 | **49a — The spec's names, without losing what the old ones carried** | A new spec asked for `open_application`, `get_battery_status`, `get_machine_snapshot`, `get_running_applications`; the registry had all four capabilities under other names, and the user chose to adopt the spec's names. In this codebase a tool name is state, not a label: `permissions.tool`, `confirmations.tool`, `action_logs.tool`, `task_steps.name` and `scheduled_jobs.name` all store it, and the policy lookup is `WHERE tool = ?` -- so renaming by substitution would have **silently deleted a revocation**, an escalation wearing a refactor. The rename is therefore an alias: spec names canonical, old names permanently resolvable, stored-name lookups widened, and 134 tools still 134 with the risk spread unchanged. `open_folder` was deliberately not aliased to `open_project_folder` -- "open Downloads" and "open this workspace in the editor" are two capabilities that share a word. Two findings fell out of the safety test and neither is about names. A device-less `revoke(tool)` revoked nothing: it writes `device IS NULL` and the lookup required the action's device, so the natural call answered EXECUTE with the reason "low-risk action" -- and Phase 10 had *documented* leaving it that way, because widening a NULL grant would extend an authority granted against no device. The fix is asymmetric: a NULL grant stays inert, a NULL denial binds everywhere, because one direction can only remove authority. Measured honestly, no product surface calls `PolicyStore.revoke` today, so that is a trap closed ahead of its first caller rather than a live fault -- the first draft of the comment claimed a user click that does not exist, and was corrected. And the renamed `get_machine_snapshot` was reachable by **no sentence at all** -- "how is my laptop", "machine status", "laptop condition" all returned nothing -- a tool renamed once already in the session and still unreachable, which is Phase 28's defect class surviving 21 phases. A route now answers the machine-condition phrasings. `/tools` was also hiding the alias mapping, because the route builds its own dict: `aliases: None` over live HTTP, so an audit row saying `open_app` looked unrelated to today's `open_application`. Measured after: 1939 passing, 1 skipped (arXiv, named), /tools still 134 rows with no old name present, and `what is my battery` -> `get_battery_status` / `success`. |
@@ -484,7 +485,7 @@ curl -s -H "X-JARVIS-Token: $TOKEN" -H 'Content-Type: application/json' \
      -d '{"text":"what is my battery"}' http://127.0.0.1:8765/command
 
 # Prove it to yourself:
-python -m pytest -q                       # 2013 passed, 0 failed (2012 + 1 skip when arXiv refuses; the research test is network-gated)
+python -m pytest -q                       # 2065 passed, 0 failed (2064 + 1 skip when arXiv refuses; the research test is network-gated)
 python benchmarks/acceptance_run.py       # re-measures the README's numbers
 python assets/build_charts.py && python assets/build_diagrams.py
 ```
@@ -500,14 +501,14 @@ jarvis/
   security/    permission engine, audit chain, redaction, privacy, path guard
   api/         FastAPI app: 113 routes (107 distinct paths), auth, origin gate, LAN gate, rate limit
   agents/      15 agents — laptop, phone, home, robotics, car, watch, email, …
-  tools/       134 tools across 5 risk tiers, each declaring its own spec
+  tools/       136 tools across 5 risk tiers, each declaring its own spec
   memory/      hybrid retrieval, lifecycle, forgetting
   scheduler/   recurring jobs, runner with per-run re-authorization
   car/ home/ robotics/ watch/ vision/ research/ design/ coding/
   integrations/ IMAP/SMTP and CalDAV providers with local fallbacks
-tests/         78 modules · 2013 collected · includes the shipped page JS, run by Node
+tests/         79 modules · 2065 collected · includes the shipped page JS, run by Node
 dashboard/     index.html control panel + phone.html, the client a phone uses over the LAN
-audit/         53 phase reports + 4 CSV matrices — the evidence behind this README
+audit/         54 phase reports + 4 CSV matrices — the evidence behind this README
 benchmarks/    acceptance_run.py and the JSON the charts are drawn from
 assets/        generated figures + the two generators that draw them
 app/           PyInstaller spec and bundle sources (the launcher and its wifi switch; see the Phase 36 report)
@@ -570,6 +571,7 @@ adding and removing a synonym at run time. 31-B: the confirmation prompt re-deri
 line from the raw parameters while the dashboard rendered the stored preview — two renderings
 of one consent question, and neither naming the device. One string feeds both now: *"Will do:
 set Kitchen light (kitchen.light) to 40%"*.
+- **The §6 sentences about the laptop** (Phase 52). Reasoned in `audit/PHASE52_SECTION_SIX_ON_THE_LAPTOP_REPORT.md`. Six of the thirteen gaps are closed and two capabilities added. What it left open: **52-A** Finder answers no AppleScript from any caller here, so a folder opening cannot be confirmed at all. **52-B** the frontmost-app answer needs Accessibility, which the delivered app does not have -- from the bundle it names the permission instead of the application. **52-C** five named folders and nothing else; "open my screenshots" is not a route. **52-D** the application list is static -- `bundle_installed` can now admit the list is out of date, but nothing reconciles it at startup. **52-E** `System Settings` will not resolve on macOS 12 or earlier, where the bundle is named System Preferences. **52-F** the five self-observation sentences (pending confirmations, Vantage status, recent actions, stop the current task, `search Google for X`) are untouched and are the next phase.
 - **The two routes that answered the wrong question** (Phase 51 -- narrows 49a-D). Reasoned in `audit/PHASE51_TWO_ROUTES_ANSWERED_WRONG_REPORT.md`. Mail and Calendar open the applications; the web is reached by saying so. What it left open: **51-A** an unknown `.app` name falls through to `read_file` and reports "File not found: <home>/Flurbly.app" instead of "I know no application called Flurbly". **51-B** app-vs-site precedence reads the static registry, not installed facts (deliberate -- parsing must not touch disk), so on a machine without Calendar.app the sentence fails rather than falling back to the page. **51-C** `close_app` has no answer for an app that will not respond, and does not verify that anything quit. **51-D** the launch probe is macOS-path-shaped; on Windows every launch is *unverified*. **51-E** `open the calendar site` can only mean the Google page. **51-F** the other twelve §6 gaps -- folders, Contacts, System Settings, `is Safari open?`, `search Google for X` -- are untouched.
 - **A permission manager that says who answered** (Phase 50). Reasoned in `audit/PHASE50_A_PERMISSION_CARD_THAT_SAYS_WHO_ANSWERED_REPORT.md`. Seven capabilities and their subject are read from the OS and shown on the laptop panel. What it left open: **50-A** `inside_bundle` is an inference from where the server's own code lives, not the responsible-process answer macOS refuses to expose publicly. **50-B** a `GRANTED` row is the OS's state, not proof the feature works -- screen recording has never been exercised from this build. **50-C** nothing can be *granted* from here; the first-run wizard needs a user-initiated request path that is not a side effect of a poll. **50-D** `answered_by.pid` is the helper's transient pid, not the server's. **50-E** notifications read UNKNOWN because the UserNotifications query needs the app's own run loop. **50-F** the helper compiles on first call.
 - **The spec's names** (Phase 49a). Reasoned in `audit/PHASE49A_THE_SPECS_NAMES_REPORT.md`. The spec's tool names are canonical and the 48-phase names are permanent aliases. What it left open: **49a-A** the widening depends on the registry knowing the tool -- a policy row for a capability that was *removed* rather than renamed matches only its own spelling, and nothing detects a stored name that resolves nowhere. **49a-B** `confirmations.tool` and `action_logs.tool` were not widened; an in-place upgrade with an approval still queued would cross that line. **49a-C** no product surface can revoke a tool at all -- the permission engine has one door and no handle. **49a-D** the spec's own §6.1 Basic command set is 14 utterances short, and two of those are not gaps but wrong routes: `open Mail` is *declined* and `open Calendar` opens the Google Calendar *website*. **49a-E** `system_status` and `get_machine_snapshot` overlap; the spec names one. **49a-F** `/api/v1/*` is not built -- deliberately, because a second entry point is the thing the spec's own §5 forbids.

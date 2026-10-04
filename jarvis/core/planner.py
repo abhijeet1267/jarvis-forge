@@ -160,6 +160,7 @@ class RulePlanner:
             self._emergency_stop,
             self._help,
             self._list_apps,
+            self._frontmost_app,
             self._screenshot,
             self._car,
             self._location,
@@ -184,6 +185,7 @@ class RulePlanner:
             self._append_file,
             self._close_app,
             self._find_and_open,
+            self._open_standard_folder,
             self._open_url,
             self._open_app,
             self._research,
@@ -841,7 +843,8 @@ class RulePlanner:
         """
         if re.search(r"\b(how is my (mac|macbook|laptop|computer)|"
                      r"machine (status|snapshot|condition)|"
-                     r"computer (status|snapshot)|laptop (status|snapshot|condition))\b",
+                     r"computer (status|snapshot)|laptop (status|snapshot|condition)|"
+                     r"(host|machine) ?name|what is my computer called)\b",
                      text):
             return Intent("machine_snapshot", tool="get_machine_snapshot")
         return None
@@ -852,7 +855,11 @@ class RulePlanner:
         return None
 
     def _time(self, text: str, raw: str) -> Optional[Intent]:
-        if re.search(r"\b(what time|the time|current time|what.s the date|today.s date)\b", text):
+        #: "what date is it" is §6's wording and was not matched: the tool answers with the
+        #: date, so the sentence had a capability and no route. The date question has to be
+        #: about the calendar day -- "what is the date of my meeting" is a search, not a clock.
+        if re.search(r"\b(what time|the time|current time|what.s the date|today.s date|"
+                     r"what date is it|what.s today|what day is it)\b", text):
             return Intent("time", tool="get_time", confidence=0.9)
         return None
 
@@ -1228,6 +1235,45 @@ class RulePlanner:
             return Intent("run_coding_agent", note="What should I ask the coding agent to do?")
         return Intent("run_coding_agent", tool="run_coding_agent",
                       params={"prompt": prompt}, confidence=0.85)
+
+    def _frontmost_app(self, text: str, raw: str) -> Optional[Intent]:
+        """"show the current application" -- one application, not the list of them.
+
+        ``get_running_applications`` answers "what applications do you know about", which is a
+        different question, and §6 asks this one. Kept apart so a person asking about the
+        window in front does not get a catalogue back.
+        """
+        if re.search(r"\b(current|front|frontmost|active)\s+(application|app|window)\b", text):
+            return Intent("frontmost_app", tool="get_frontmost_application")
+        if re.search(r"\b(which|what)\s+(app|application)\s+(is|’s|')?\s*(in front|frontmost|"
+                     r"active|open now)\b", text):
+            return Intent("frontmost_app", tool="get_frontmost_application")
+        return None
+
+    def _open_standard_folder(self, text: str, raw: str) -> Optional[Intent]:
+        """§6's four folders, through an allowlist rather than a path.
+
+        The folder word has to be the whole object of the sentence: matching ``downloads``
+        anywhere in the text would turn "open downloads.zip" into a folder request. This is
+        also why it is not an alias of ``open_project_folder`` -- one reveals a directory in
+        Finder, the other hands a workspace to an editor, and Phase 49a refused to blur them.
+        """
+        m = re.search(r"\b(?:open|show|go to|reveal)\s+(?:my\s+|the\s+)?"
+                      r"(?P<folder>desktop|downloads?|documents?|pictures?|home folder|home)"
+                      r"\s*(?:folder)?\s*$", text)
+        if not m:
+            return None
+        folder = m.group("folder")
+        #: The parameter space is the tool's allowlist, so the canonical key is built here
+        #: rather than passed through and normalised later -- "my home folder" and "home"
+        #: must not become two different values in a stored action.
+        for filler in (" folder", " directory"):
+            if folder.endswith(filler):
+                folder = folder[: -len(filler)].strip()
+        key = {"download": "downloads", "document": "documents", "picture": "pictures"}.get(
+            folder, folder)
+        return Intent("open_standard_folder", tool="open_user_folder",
+                      params={"folder": key}, confidence=0.9)
 
     def _open_url(self, text: str, raw: str) -> Optional[Intent]:
         """A site to open, as opposed to a file or an app.
