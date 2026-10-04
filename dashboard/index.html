@@ -272,6 +272,11 @@
     </div>
 
     <div class="card">
+      <h2>Permissions</h2>
+      <div id="permissions"><span class="muted loading">asking macOS…</span></div>
+    </div>
+
+    <div class="card">
       <h2>Health &amp; Recovery</h2>
       <div id="health-metrics"><span class="muted loading">loading…</span></div>
     </div>
@@ -946,6 +951,51 @@ async function speakTest() {
   }
 }
 
+// macOS answers a permission question about the process that asked it, so this card names
+// the process as plainly as it names the status. A "granted" read by a helper that a
+// terminal started is a true statement about the wrong application.
+const PERMISSION_TONE = {
+  GRANTED: "ok",
+  DENIED: "bad",
+  REQUIRES_MANUAL_SYSTEM_SETTINGS: "bad",
+  NOT_DETERMINED: "warn",
+  UNKNOWN: "tag",
+  NOT_REQUIRED: "off",
+};
+const PERMISSION_WORD = {
+  GRANTED: "granted",
+  DENIED: "denied",
+  REQUIRES_MANUAL_SYSTEM_SETTINGS: "needs Settings",
+  NOT_DETERMINED: "never asked",
+  UNKNOWN: "unknown",
+  NOT_REQUIRED: "not gated on macOS",
+};
+
+async function loadPermissions() {
+  const data = await get("/permissions");
+  const rows = (data.capabilities || []).map(r => {
+    const tone = PERMISSION_TONE[r.status] || "tag";
+    // "granted" is only ever printed for a GRANTED; every other state gets its own word
+    // rather than a default that reads like good news.
+    const word = r.status === "GRANTED"
+      ? PERMISSION_WORD.GRANTED
+      : (PERMISSION_WORD[r.status] || r.status.toLowerCase());
+    return `<div class="row"><span>${escapeHtml(r.label)}</span>`
+      + `<span class="${tone}">${escapeHtml(word)}</span></div>`;
+  }).join("");
+  // The subject is one line, styled by whether it describes Vantage at all. It is not
+  // rebuilt from the fields here: the server's sentence already names the bundle the
+  // server runs from, and printing a second near-identical line is noise. What the
+  // client owns is the consequence -- a reading about some other process is shown as a
+  // warning, never as a calm grey note.
+  const subject = `<p class="note ${data.about_bundled_host ? "muted" : "bad"}">`
+    + `${escapeHtml(data.note || "")}</p>`;
+  document.getElementById("permissions").innerHTML = rows
+    + subject
+    + '<div class="row"><span></span><span><button class="deny" id="permCheck">Check again</button></span></div>';
+  document.getElementById("permCheck").onclick = () => loadPermissions().catch(() => {});
+}
+
 async function loadMetrics() {
   const m = await get("/metrics");
   const f = m.failures || {};
@@ -1119,6 +1169,10 @@ tick();
 // 401 for a page that is actually fine.
 authenticate().then(() => {
   refresh();
+  // Read once, then on demand: a permission changes when the user changes it in System
+  // Settings, and polling it means spawning a helper every eight seconds for a value
+  // that cannot have moved. The card has its own "Check again".
+  loadPermissions().catch(() => {});
   setInterval(refresh, 8000);
 }).catch(e => {
   document.getElementById("reply").textContent = "Not authorised: " + e.message;

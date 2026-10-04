@@ -36,6 +36,7 @@ from ..security.auth import (
     lan_startup_problems,
 )
 from ..security.privacy import PrivacyManager, describe_privacy
+from ..permissions import describe_permissions
 from ..devices.pairing import HostDeviceError, PairingManager
 from ..registry.devices import HOST_DEVICE_ID
 from ..transport.server import TransferServer
@@ -562,6 +563,17 @@ async def devices(_: None = Protected) -> List[Dict[str, Any]]:
         row["is_host"] = device.device_id == HOST_DEVICE_ID
         rows.append(row)
     return rows
+
+
+@app.get("/permissions")
+async def permissions(_: None = Protected) -> Dict[str, Any]:
+    """macOS permission state, with the process that answered attached to every row.
+
+    Authenticated because it is a description of this machine's security posture; and
+    read-only because a status endpoint that prompts for permissions is not a status
+    endpoint. Granting anything happens in System Settings or on the feature's own path.
+    """
+    return describe_permissions()
 
 
 @app.get("/tools")
