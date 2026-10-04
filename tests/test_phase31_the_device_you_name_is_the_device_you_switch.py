@@ -302,7 +302,7 @@ def test_a_routine_step_with_a_bad_device_id_is_refused_by_the_same_guard(core):
 def test_the_guard_does_not_touch_tools_that_carry_no_home_device(core):
     """A guard that fires on every action is a second permission system, which is not
     what this is for."""
-    for tool, params in (("get_time", {}), ("battery_status", {}),
+    for tool, params in (("get_time", {}), ("get_battery_status", {}),
                          ("list_workspaces", {}), ("read_file", {"path": "README.md"})):
         action = PlannedAction(step_id=1, tool=tool, params=params, device="laptop_main")
         result = core.policy.evaluate(action, session_id="p31-others")

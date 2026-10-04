@@ -26,6 +26,8 @@ class ToolRegistry:
     def __init__(self) -> None:
         self._specs: Dict[str, ToolSpec] = {}
         self._handlers: Dict[str, ToolHandler] = {}
+        #: alias -> canonical name. Built by register(), never edited from outside.
+        self._alias: Dict[str, str] = {}
 
     # -- registration --------------------------------------------------------
     def register(self, spec: ToolSpec, handler: ToolHandler) -> None:
@@ -35,31 +37,53 @@ class ToolRegistry:
             log.info("tool re-registered", extra_fields={"tool": spec.name})
         self._specs[spec.name] = spec
         self._handlers[spec.name] = handler
+        for alias in spec.aliases:
+            # An alias that collides with a real tool would make one of the two
+            # unreachable, and which one loses depends on registration order.
+            if alias in self._specs and self._specs[alias] is not spec:
+                raise ValueError(
+                    f"tool {spec.name!r} claims alias {alias!r}, which is its own tool")
+            self._alias[alias] = spec.name
 
     def register_many(self, items: List[tuple[ToolSpec, ToolHandler]]) -> None:
         for spec, handler in items:
             self.register(spec, handler)
 
     # -- lookup --------------------------------------------------------------
+    def canonical(self, name: str) -> str:
+        """The registered name behind ``name``, which is ``name`` unless it is an alias."""
+        return self._alias.get(name, name)
+
+    def spellings(self, name: str) -> List[str]:
+        """Every name that refers to this capability, canonical first.
+
+        This is what a stored-name lookup must match against: a revocation written before
+        a rename is still the user's most recent statement about that capability.
+        """
+        canonical = self.canonical(name)
+        spec = self._specs.get(canonical)
+        return [canonical, *spec.aliases] if spec else [name]
+
     def get(self, name: str) -> Optional[ToolSpec]:
-        return self._specs.get(name)
+        return self._specs.get(self.canonical(name))
 
     def handler(self, name: str) -> Optional[ToolHandler]:
-        return self._handlers.get(name)
+        return self._handlers.get(self.canonical(name))
 
     def has(self, name: str) -> bool:
-        return name in self._specs
+        return self.canonical(name) in self._specs
 
     def all(self) -> List[ToolSpec]:
         return sorted(self._specs.values(), key=lambda s: (int(s.risk), s.name))
 
     def names(self) -> List[str]:
+        """Canonical names only. An alias is a spelling, not a capability."""
         return sorted(self._specs.keys())
 
     # -- validation ----------------------------------------------------------
     def validate_params(self, name: str, params: Dict[str, Any]) -> List[str]:
         """Return a list of human-readable parameter problems (empty == valid)."""
-        spec = self._specs.get(name)
+        spec = self._specs.get(self.canonical(name))
         if spec is None:
             return [f"unknown tool {name!r}"]
 
@@ -115,6 +139,7 @@ def spec(
     required: Optional[List[str]] = None,
     agent: str = "laptop",
     tags: Optional[List[str]] = None,
+    aliases: Optional[List[str]] = None,
 ) -> ToolSpec:
     """Ergonomic helper for declaring a :class:`ToolSpec`."""
     return ToolSpec(
@@ -127,6 +152,7 @@ def spec(
         allowed_devices=allowed_devices or ["laptop_main"],
         parameters=parameters or {},
         required_parameters=required or [],
+        aliases=tuple(aliases or []),
         tags=tags or [],
     )
 

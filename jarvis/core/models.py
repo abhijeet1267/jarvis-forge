@@ -160,6 +160,18 @@ class ToolSpec(BaseModel):
     #: Only a READ-tier tool that requires nothing may be declared, and a test sweeps it.
     provides_identifiers: Dict[str, Dict[str, str]] = Field(default_factory=dict)
     tags: Tuple[str, ...] = ()
+    #: Other names this tool answers to, oldest first.
+    #:
+    #: A rename in this codebase is not only a label: ``permissions.tool``,
+    #: ``confirmations.tool``, ``action_logs.tool`` and ``task_steps.name`` all store the
+    #: name, and ``PolicyStore._latest_permission`` selects with ``WHERE tool = ?``. A
+    #: substituted name would therefore drop a standing revocation silently -- the tool
+    #: comes back allowed, with no error anywhere. Aliases keep the old spellings alive
+    #: and resolvable, and the policy lookup widens to match them.
+    #:
+    #: A tuple, like every other gate-read field here: a list in a frozen model can still
+    #: be appended to in place.
+    aliases: Tuple[str, ...] = ()
 
     def risk_label(self) -> str:
         return {

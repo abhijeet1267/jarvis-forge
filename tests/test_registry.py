@@ -36,7 +36,7 @@ def test_default_registry_contains_core_tools() -> None:
     from jarvis.tools import build_default_registry
 
     registry = build_default_registry()
-    for name in ("open_app", "search_files", "delete_file", "battery_status", "emergency_stop"):
+    for name in ("open_application", "search_files", "delete_file", "get_battery_status", "emergency_stop"):
         assert registry.has(name), f"{name} should be registered"
 
 

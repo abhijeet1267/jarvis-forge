@@ -367,7 +367,7 @@ def test_a_sentence_that_names_nothing_is_still_answered_honestly(core):
 def test_an_existing_route_still_answers_before_the_fallback(core):
     """The fallback is last in the chain; it must not steal a sentence a specific rule
     already handles, which is where the case-by-case vocabulary does better."""
-    assert [a.tool for a in _parse(core, "what is my battery").actions] == ["battery_status"]
+    assert [a.tool for a in _parse(core, "what is my battery").actions] == ["get_battery_status"]
     assert [a.tool for a in _parse(core, "read the readme").actions] == ["read_file"]
 
 

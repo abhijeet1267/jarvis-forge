@@ -192,7 +192,7 @@ def test_the_refusal_for_an_appliance_that_is_not_here_still_stands(core):
 def test_a_home_word_does_not_steal_a_sentence_another_route_owns(core):
     """Widening one route is only safe if the chain order still holds."""
     for text, tool in (("take a screenshot", "take_screenshot"),
-                       ("what is my battery", "battery_status"),
+                       ("what is my battery", "get_battery_status"),
                        ("open VS Code", None)):
         plan = _parse(core, text)
         if tool:

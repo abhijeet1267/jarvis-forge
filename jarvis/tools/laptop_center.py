@@ -390,7 +390,7 @@ def compose_agent_prompt(goal: str, snap: Dict[str, Any], projects: List[Dict[st
 
 async def laptop_snapshot(ctx: ToolContext) -> Any:
     snap = await collect_snapshot(ctx)
-    return ok("laptop_snapshot", _snapshot_message(snap), device=ctx.device_id, **snap)
+    return ok("get_machine_snapshot", _snapshot_message(snap), device=ctx.device_id, **snap)
 
 
 async def laptop_processes(
@@ -497,7 +497,11 @@ _LCC = "laptop_center"
 SPECS = [
     (
         ToolSpec(
-            name="laptop_snapshot",
+            name="get_machine_snapshot",
+            #: The name this tool shipped under for its first 48 phases. Kept as an
+            #: alias because permissions, confirmations, audit rows and stored job
+            #: steps all reference it -- see ToolSpec.aliases.
+            aliases=("laptop_snapshot",),
             description="Report the laptop's current condition: CPU, memory, disk, battery, uptime.",
             agent=_LCC,
             risk=RiskLevel.READ,

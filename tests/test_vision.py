@@ -200,7 +200,7 @@ def test_the_vision_agent_has_no_action_tools(core) -> None:
 
     forbidden = {
         "click", "type", "press", "keyboard", "mouse", "move_file", "delete_file",
-        "run_allowlisted_command", "open_app", "close_app", "send_email",
+        "run_allowlisted_command", "open_application", "close_app", "send_email",
         "apply_code_change", "commit_workspace",
     }
     assert owned & forbidden == set(), owned & forbidden

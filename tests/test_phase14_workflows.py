@@ -67,7 +67,7 @@ MID_GOAL = (
 def test_composed_goal_produces_multiple_actions(core):
     plan = core.planner.parse(MID_GOAL)
     assert len(plan.actions) == 3, [a.tool for a in plan.actions]
-    assert [a.tool for a in plan.actions] == ["get_time", "write_file", "battery_status"]
+    assert [a.tool for a in plan.actions] == ["get_time", "write_file", "get_battery_status"]
     assert [a.step_id for a in plan.actions] == [1, 2, 3]
     assert plan.intent == "workflow"
 
@@ -241,7 +241,7 @@ def test_command_response_points_at_its_job_and_the_api_serves_its_steps(client,
     assert job.status_code == 200
     steps = job.json()["steps"]
     assert [s["seq"] for s in steps] == [0, 1, 2]
-    assert [s["name"] for s in steps] == ["get_time", "write_file", "battery_status"]
+    assert [s["name"] for s in steps] == ["get_time", "write_file", "get_battery_status"]
 
 
 def test_unknown_job_is_not_reported_as_found(client):

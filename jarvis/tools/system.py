@@ -72,7 +72,7 @@ async def battery_status(ctx: ToolContext) -> Any:
     if ctx.platform == "macos":
         code, out, err = await run_command(["pmset", "-g", "batt"])
         if code != 0:
-            return fail("battery_status", f"Could not read battery: {err}", device=ctx.device_id)
+            return fail("get_battery_status", f"Could not read battery: {err}", device=ctx.device_id)
 
         percent = None
         state = "unknown"
@@ -91,10 +91,9 @@ async def battery_status(ctx: ToolContext) -> Any:
             state = "fully charged"
 
         if percent is None:
-            return fail("battery_status", "Battery percentage unavailable.", device=ctx.device_id)
+            return fail("get_battery_status", "Battery percentage unavailable.", device=ctx.device_id)
 
-        return ok(
-            "battery_status",
+        return ok("get_battery_status",
             f"Your laptop battery is at {percent}% ({state}).",
             device=ctx.device_id,
             percent=percent,
@@ -102,8 +101,7 @@ async def battery_status(ctx: ToolContext) -> Any:
             raw=out,
         )
 
-    return fail(
-        "battery_status",
+    return fail("get_battery_status",
         f"Battery reporting is not implemented for {ctx.platform}.",
         device=ctx.device_id,
     )
@@ -340,7 +338,11 @@ SPECS = [
     ),
     (
         ToolSpec(
-            name="battery_status",
+            name="get_battery_status",
+            #: The name this tool shipped under for its first 48 phases. Kept as an
+            #: alias because permissions, confirmations, audit rows and stored job
+            #: steps all reference it -- see ToolSpec.aliases.
+            aliases=("battery_status",),
             description="Read the laptop battery percentage and charging state.",
             risk=RiskLevel.READ,
             parameters={},

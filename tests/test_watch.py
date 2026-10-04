@@ -772,7 +772,7 @@ def test_planner_routes_watch_phrases(planner: RulePlanner, phrase: str, tool: s
 
 def test_watch_battery_is_not_laptop_battery(planner: RulePlanner) -> None:
     assert planner.parse("what is my watch battery").actions[0].tool == "get_watch_status"
-    assert planner.parse("what is my battery").actions[0].tool == "battery_status"
+    assert planner.parse("what is my battery").actions[0].tool == "get_battery_status"
 
 
 def test_watch_as_a_verb_is_not_the_device(planner: RulePlanner) -> None:

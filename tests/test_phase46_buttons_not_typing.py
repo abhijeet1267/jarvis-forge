@@ -145,7 +145,7 @@ WANTED = {
     "ask_question": "when i ask qns it give ans",
     "open_project_folder": "open my project",
     "find_and_open": "serch my .... file and open it",
-    "battery_status": "what is my battery",
+    "get_battery_status": "what is my battery",
 }
 
 

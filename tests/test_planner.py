@@ -20,10 +20,10 @@ def first_tool(plan) -> str:
 @pytest.mark.parametrize(
     "text,expected_tool",
     [
-        ("open VS Code", "open_app"),
-        ("jarvis, open chrome", "open_app"),
+        ("open VS Code", "open_application"),
+        ("jarvis, open chrome", "open_application"),
         ("close terminal", "close_app"),
-        ("what is my battery", "battery_status"),
+        ("what is my battery", "get_battery_status"),
         ("what time is it", "get_time"),
         ("take a screenshot", "take_screenshot"),
         ("find my report", "search_files"),
@@ -31,7 +31,7 @@ def first_tool(plan) -> str:
         ("give me today's location summary", "get_location_summary"),
         ("stop everything", "emergency_stop"),
         ("emergency stop", "emergency_stop"),
-        ("list apps", "list_apps"),
+        ("list apps", "get_running_applications"),
         ("remember that my supervisor is Dr Rao", "remember_fact"),
         ("what did I work on yesterday", "search_memory"),
         ("compress /tmp/x", "compress_path"),
@@ -44,7 +44,7 @@ def test_intent_mapping(planner: RulePlanner, text: str, expected_tool: str) -> 
 
 def test_wake_word_is_stripped(planner: RulePlanner) -> None:
     plan = planner.parse("Hey Jarvis, open VS Code")
-    assert first_tool(plan) == "open_app"
+    assert first_tool(plan) == "open_application"
 
 
 def test_path_case_is_preserved(planner: RulePlanner) -> None:
@@ -81,7 +81,7 @@ def test_search_treats_only_real_paths_as_directories(planner: RulePlanner) -> N
     "text,expected_tool",
     [
         ("what time is it", "get_time"),
-        ("what is my battery", "battery_status"),
+        ("what is my battery", "get_battery_status"),
         ("take a screenshot", "take_screenshot"),
     ],
 )

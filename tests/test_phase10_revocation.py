@@ -147,14 +147,16 @@ def test_revocation_of_one_device_does_not_leak_to_another(core):
 
 
 def test_device_agnostic_grant_stays_inert(core):
-    """Documented current scope, deliberately NOT broadened in Phase 10.
+    """The half of Phase 10's scope decision that still stands, and the half that did not.
 
-    `grant(tool)` writes device = NULL, while the lookup binds the action's own
-    device and compares with `device IS ? OR device = ?`, so a NULL row never
-    matches a concrete device. Phase 9 recorded this as a second bug in
-    `revoke()`'s direction too. Turning a NULL row into a wildcard would widen
-    the reach of a standing grant to every device, so it is a scope decision, not
-    a tie fix, and is left to be made deliberately.
+    `grant(tool)` writes device = NULL, and a NULL grant stays inert for a concrete
+    device: promoting it to a wildcard would extend a standing grant to every device the
+    user never named. That remains deliberate.
+
+    The revocation direction was reversed in Phase 49, and the asymmetry is why: leaving
+    a NULL *denial* inert meant `revoke(tool)` -- the only form the dashboard and the API
+    can call -- revoked nothing, silently. Widening a denial can only remove authority;
+    widening a grant can add it. Same row shape, opposite risk.
     """
     engine = core.policy
     _clear(engine.db)
@@ -164,8 +166,8 @@ def test_device_agnostic_grant_stays_inert(core):
         assert _evaluate(engine).decision is PolicyDecision.CONFIRM
 
         engine.revoke("delete_file")  # device=None
-        assert engine._is_revoked("delete_file", "laptop_main") is False
-        assert _evaluate(engine).decision is PolicyDecision.CONFIRM
+        assert engine._is_revoked("delete_file", "laptop_main") is True
+        assert _evaluate(engine).decision is PolicyDecision.BLOCK
     finally:
         _clear(engine.db)
 

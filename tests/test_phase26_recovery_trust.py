@@ -239,7 +239,7 @@ def test_the_registry_still_serialises_for_the_api(client):
 # ---------------------------------------------------------------------------
 
 
-def _job(core, steps=("get_time", "battery_status"), last_status=ActionStatus.FAILED,
+def _job(core, steps=("get_time", "get_battery_status"), last_status=ActionStatus.FAILED,
          detail="connection refused by smtp.example"):
     job = core.tasks.create("phase26 lifecycle", list(steps))
     seqs = {s["name"]: s["seq"] for s in core.tasks.get(job.job_id)["steps"]}
@@ -278,7 +278,7 @@ def test_retry_does_not_erase_why_the_step_failed(core):
     job_id = _job(core)
     core.tasks.retry(job_id)
     steps = core.tasks.get(job_id)["steps"]
-    failed_step = [s for s in steps if s["name"] == "battery_status"][0]
+    failed_step = [s for s in steps if s["name"] == "get_battery_status"][0]
     assert "connection refused by smtp.example" in failed_step["detail"], failed_step
     assert "re-attempt requested" in failed_step["detail"], failed_step
 

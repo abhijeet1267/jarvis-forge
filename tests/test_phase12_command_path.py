@@ -200,21 +200,21 @@ def test_scheduler_does_not_record_unverified_work_as_executed(core):
     from jarvis.scheduler.runner import SchedulerRunner
     from jarvis.scheduler.store import ScheduleStore
 
-    original = core.tools._handlers["battery_status"]
-    core.tools._handlers["battery_status"] = (
+    original = core.tools._handlers["get_battery_status"]
+    core.tools._handlers["get_battery_status"] = (
         lambda ctx, **kw: asyncio.sleep(0, result=unverified(
-            "battery_status", "could not read"))
+            "get_battery_status", "could not read"))
     )
     try:
         store = ScheduleStore()
-        job = store.create(name="p12", schedule_text="every day", action="battery_status",
+        job = store.create(name="p12", schedule_text="every day", action="get_battery_status",
                            params={}, max_risk=3)
         outcome = asyncio.run(SchedulerRunner(store).run_job(core, job))
     finally:
         # `core` is session-scoped: leaving this handler in place poisoned every
         # later battery_status test in the run, which is the shared-state defect
         # Phase 9's PERF-4 flagged and Phase 10 pinned in the revocation suite.
-        core.tools._handlers["battery_status"] = original
+        core.tools._handlers["get_battery_status"] = original
 
     assert outcome["outcome"] == "unverified", (
         f"an unobserved action was recorded as {outcome['outcome']!r}")

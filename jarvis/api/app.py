@@ -575,6 +575,10 @@ async def tools(_: None = Protected) -> List[Dict[str, Any]]:
             "requires_confirmation": s.requires_confirmation,
             "reversible": s.reversible,
             "description": s.description,
+            # The older spellings this capability still answers to, so an audit row or a
+            # stored job step naming `open_app` can be read against today's registry
+            # without guessing that the two are the same tool.
+            "aliases": list(s.aliases),
             "parameters": s.parameters,
         }
         for s in get_core().tools.all()

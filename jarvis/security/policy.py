@@ -73,6 +73,9 @@ class PermissionEngine:
 
     # -- explicit grants -----------------------------------------------------
     def grant(self, tool: str, device: Optional[str] = None, subject: str = "user") -> None:
+        # Stored canonically, so new rows use today's name; `_latest_permission` still
+        # matches the older spellings, so a row written before a rename keeps binding.
+        tool = self.tools.canonical(tool)
         self.db.execute(
             """
             INSERT INTO permissions (permission_id, subject, tool, device, granted)
@@ -83,6 +86,7 @@ class PermissionEngine:
 
     def revoke(self, tool: str, device: Optional[str] = None, subject: str = "user") -> None:
         """Revoke a tool. Records an explicit denial even if none existed."""
+        tool = self.tools.canonical(tool)
         self.db.execute(
             """
             INSERT INTO permissions (permission_id, subject, tool, device, granted, revoked_at)
@@ -101,6 +105,11 @@ class PermissionEngine:
     ) -> Optional[Dict[str, Any]]:
         """The permission row that currently speaks for this tool and device.
 
+        Matched over every spelling of the tool, because the name is not the capability:
+        a revocation written as ``open_app`` must still bind once the tool answers to
+        ``open_application``. Matching the requested name alone would silently lift a
+        standing block during a rename, which is a privilege escalation with no error.
+
         Ordered by ``rowid``, never by ``granted_at``. That column defaults to
         ``datetime('now')``, which has one-second granularity, so a grant and
         its revocation issued in the same second tie; ``ORDER BY granted_at DESC
@@ -109,13 +118,27 @@ class PermissionEngine:
         nothing, permanently. Insertion order is monotonic and is the order the
         user acted in, so the newest statement always wins.
         """
+        spellings = self.tools.spellings(tool)
+        # A row that names no device is read differently in each direction, and the
+        # asymmetry is the point. A NULL *grant* stays inert: promoting it to a wildcard
+        # would hand every device an authority the user granted against no device at all,
+        # which is exactly the scope decision Phase 10 declined to make silently.
+        #
+        # A NULL *denial* binds everywhere. `revoke(tool)` with no device is the only form
+        # most callers would write, and under the old lookup it revoked nothing for any
+        # real action -- measured: `revoke("open_app")` then evaluating `open_app` on
+        # laptop_main answered EXECUTE, reason "low-risk action". No product surface calls
+        # this method today (measured: no route, tool or dashboard control reaches
+        # PolicyStore.revoke; only device revocation is wired), so this is a latent trap
+        # being closed, not a live bug being reported.
         rows = self.db.query(
-            """
+            f"""
             SELECT granted, device, granted_at, revoked_at FROM permissions
-            WHERE subject = ? AND tool = ? AND (device IS ? OR device = ?)
+            WHERE subject = ? AND tool IN ({", ".join("?" * len(spellings))})
+              AND (device = ? OR (device IS NULL AND granted = 0))
             ORDER BY rowid DESC LIMIT 1
             """,
-            (subject, tool, device, device),
+            (subject, *spellings, device),
         )
         return rows[0] if rows else None
 

@@ -166,6 +166,7 @@ class RulePlanner:
             self._watch,
             self._battery,
             self._storage,
+            self._machine_snapshot,
             self._system_status,
             self._agent_status,
             self._time,
@@ -534,7 +535,7 @@ class RulePlanner:
 
     def _list_apps(self, text: str, raw: str) -> Optional[Intent]:
         if re.search(r"\b(list|show|what)\b.*\bapps?\b", text) or "available apps" in text:
-            return Intent("list_apps", tool="list_apps")
+            return Intent("list_apps", tool="get_running_applications")
         return None
 
     def _screenshot(self, text: str, raw: str) -> Optional[Intent]:
@@ -796,7 +797,7 @@ class RulePlanner:
         # A robot's battery is read via robot telemetry, never laptop battery.
         if re.search(r"\b(amr|amrs|robot|robots|robot arm|\barm\b)\b", text):
             return None
-        return Intent("laptop_battery", tool="battery_status", confidence=0.95)
+        return Intent("laptop_battery", tool="get_battery_status", confidence=0.95)
 
     #: App names a person is likely to ask about, and the words that make the question
     #: a status check rather than a launch request. The probe itself takes any name;
@@ -828,6 +829,22 @@ class RulePlanner:
             params={"app": name[0].upper() + name[1:]},
             confidence=0.85,
         )
+
+    def _machine_snapshot(self, text: str, raw: str) -> Optional[Intent]:
+        """The laptop's overall condition, asked about as a whole machine.
+
+        Kept apart from ``_system_status`` deliberately: that one answers a question about
+        a resource (cpu, memory, disk, load), this one answers "how is the machine". The
+        registry had no sentence that reached the snapshot at all before this -- a tool
+        that exists and cannot be asked for is the Phase 28 defect, and renaming it did
+        not make it reachable.
+        """
+        if re.search(r"\b(how is my (mac|macbook|laptop|computer)|"
+                     r"machine (status|snapshot|condition)|"
+                     r"computer (status|snapshot)|laptop (status|snapshot|condition))\b",
+                     text):
+            return Intent("machine_snapshot", tool="get_machine_snapshot")
+        return None
 
     def _system_status(self, text: str, raw: str) -> Optional[Intent]:
         if re.search(r"\b(system status|system health|cpu|memory usage|disk usage|load average)\b", text):
@@ -1293,7 +1310,7 @@ class RulePlanner:
         if m and m.group("path").strip():
             app = self.apps.resolve(self._arg(m.group("app")))
             if app is not None and self._folder_worth_passing(app, m.group("path")):
-                return Intent("open_app", tool="open_app",
+                return Intent("open_app", tool="open_application",
                               params={"app": app.key, "path": m.group("path").strip()},
                               confidence=0.9)
 
@@ -1304,7 +1321,7 @@ class RulePlanner:
         if m:
             app = self.apps.resolve(self._arg(m.group("app")))
             if app is not None and self._folder_worth_passing(app, m.group("path")):
-                return Intent("open_app", tool="open_app",
+                return Intent("open_app", tool="open_application",
                               params={"app": app.key, "path": m.group("path").strip()},
                               confidence=0.9)
 
@@ -1325,7 +1342,7 @@ class RulePlanner:
         app = self.apps.resolve(self._arg(captured))
         if app is None:
             return None
-        return Intent("open_app", tool="open_app", params={"app": app.key}, confidence=0.9)
+        return Intent("open_app", tool="open_application", params={"app": app.key}, confidence=0.9)
 
     @staticmethod
     def _folder_worth_passing(app, candidate: str) -> bool:
@@ -2555,7 +2572,7 @@ class RulePlanner:
                 "laptop_center_snapshot",
                 {},
                 confidence=0.8,
-                tool="laptop_snapshot",
+                tool="get_machine_snapshot",
             )
 
         return None

@@ -167,7 +167,7 @@ localStorage.setItem("jarvis.device", DEVICE);
 // cannot know. Each is checked in the test suite against the real planner, because a
 // button whose sentence routes to another tool is a button that does the wrong thing.
 const QUICK = [
-  { label: "Battery", tool: "battery_status", say: "what is my battery" },
+  { label: "Battery", tool: "get_battery_status", say: "what is my battery" },
   { label: "Storage", tool: "check_storage", say: "check storage" },
   { label: "Open project", tool: "open_project_folder", say: "open my project" },
   { label: "Find a file", tool: "find_and_open", say: "find {name} and open it" },

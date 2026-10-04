@@ -207,7 +207,7 @@ async def test_audit_records_every_action(core: JarvisCore, make_request) -> Non
 
     rows = [r for r in core.audit.recent(limit=500) if r.get("session_id") == session]
     assert rows, "the command produced no ledger row at all"
-    assert any(row["tool"] == "battery_status" for row in rows)
+    assert any(row["tool"] == "get_battery_status" for row in rows)
 
 
 @pytest.mark.skipif(not HAS_BATTERY, reason="needs a real battery reading to audit")
@@ -217,7 +217,7 @@ async def test_audit_result_is_a_status_token_not_a_message(core: JarvisCore, ma
     await core.handle(make_request("what is my battery", session_id=session))
 
     rows = [r for r in core.audit.recent(limit=500) if r.get("session_id") == session]
-    battery_rows = [r for r in rows if r["tool"] == "battery_status"]
+    battery_rows = [r for r in rows if r["tool"] == "get_battery_status"]
     assert battery_rows
     assert battery_rows[0]["result"] == "success"
 
@@ -225,7 +225,7 @@ async def test_audit_result_is_a_status_token_not_a_message(core: JarvisCore, ma
         r["tool"] for r in core.audit.failures(limit=500)
         if r.get("session_id") == session
     }
-    assert "battery_status" not in failure_tools
+    assert "get_battery_status" not in failure_tools
 
 
 async def test_session_memory_is_written(core: JarvisCore, make_request) -> None:

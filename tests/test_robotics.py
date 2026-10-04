@@ -298,7 +298,7 @@ def test_planner_emergency_stop_beats_robotics(core: JarvisCore) -> None:
 
 def test_planner_does_not_steal_plain_laptop_battery(core: JarvisCore) -> None:
     plan = core.planner.parse("what is my battery")
-    assert plan.actions[0].tool == "battery_status"
+    assert plan.actions[0].tool == "get_battery_status"
 
 
 # ---------------------------------------------------------------------------

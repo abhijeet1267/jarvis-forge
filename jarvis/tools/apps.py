@@ -191,8 +191,7 @@ async def open_app(ctx: ToolContext, app: str = "", path: str = "") -> "object":
     """Launch an application, optionally aimed at a folder the user named."""
     spec = ctx.apps.resolve(app, platform=ctx.platform)
     if spec is None:
-        return fail(
-            "open_app",
+        return fail("open_application",
             f"I could not find an application matching {app!r}.",
             device=ctx.device_id,
             query=app,
@@ -200,8 +199,7 @@ async def open_app(ctx: ToolContext, app: str = "", path: str = "") -> "object":
 
     target = ctx.apps.launch_target(spec, platform=ctx.platform)
     if not target:
-        return fail(
-            "open_app",
+        return fail("open_application",
             f"{spec.display_name} is not available on {ctx.platform}.",
             device=ctx.device_id,
         )
@@ -210,7 +208,7 @@ async def open_app(ctx: ToolContext, app: str = "", path: str = "") -> "object":
     if str(path).strip():
         folder, problem = resolve_folder(path, ctx)
         if folder is None:
-            return fail("open_app", problem, device=ctx.device_id)
+            return fail("open_application", problem, device=ctx.device_id)
 
     if folder is None:
         if ctx.platform == "macos":
@@ -227,8 +225,7 @@ async def open_app(ctx: ToolContext, app: str = "", path: str = "") -> "object":
             # `--args` is the only way `open` forwards anything to the app.
             argv = ["open", "-a", target, "--args", str(folder)]
         else:
-            return fail(
-                "open_app",
+            return fail("open_application",
                 f"I can start {spec.display_name} on {ctx.platform}, but not with a folder: "
                 "it has no command line here that accepts one.",
                 device=ctx.device_id,
@@ -239,15 +236,13 @@ async def open_app(ctx: ToolContext, app: str = "", path: str = "") -> "object":
     code, _out, err = await run_command(argv, detach=True)
 
     if code != 0:
-        return fail(
-            "open_app",
+        return fail("open_application",
             f"Could not open {spec.display_name}: {err or 'launch failed'}",
             device=ctx.device_id,
         )
 
     if folder is None:
-        return ok(
-            "open_app",
+        return ok("open_application",
             f"Opening {spec.display_name} on your {ctx.platform} machine.",
             device=ctx.device_id,
             app_key=spec.key,
@@ -268,13 +263,11 @@ async def open_app(ctx: ToolContext, app: str = "", path: str = "") -> "object":
         f"{spec.display_name} was told to open {folder}, but I could not confirm it from the "
         "editor's own record -- look at the window before believing me.")
     if observed:
-        return ok(
-            "open_app", said, device=ctx.device_id, app_key=spec.key,
+        return ok("open_application", said, device=ctx.device_id, app_key=spec.key,
             display_name=spec.display_name, folder=str(folder), verified=True,
             risk=int(RiskLevel.LOW),
         )
-    return unverified(
-        "open_app", said, device=ctx.device_id, app_key=spec.key,
+    return unverified("open_application", said, device=ctx.device_id, app_key=spec.key,
         display_name=spec.display_name, folder=str(folder), verified=False,
     )
 
@@ -318,8 +311,7 @@ async def list_apps(ctx: ToolContext) -> "object":
         for a in ctx.apps.all()
         if ctx.platform in a.platform
     ]
-    return ok(
-        "list_apps",
+    return ok("get_running_applications",
         f"I know {len(apps)} applications on this {ctx.platform} machine.",
         device=ctx.device_id,
         apps=apps,
@@ -329,7 +321,11 @@ async def list_apps(ctx: ToolContext) -> "object":
 SPECS = [
     (
         ToolSpec(
-            name="open_app",
+            name="open_application",
+            #: The name this tool shipped under for its first 48 phases. Kept as an
+            #: alias because permissions, confirmations, audit rows and stored job
+            #: steps all reference it -- see ToolSpec.aliases.
+            aliases=("open_app",),
             description=("Launch an application (e.g. VS Code, Chrome, Terminal), optionally "
                          "opening a folder in it."),
             risk=RiskLevel.LOW,
@@ -370,7 +366,11 @@ SPECS = [
     ),
     (
         ToolSpec(
-            name="list_apps",
+            name="get_running_applications",
+            #: The name this tool shipped under for its first 48 phases. Kept as an
+            #: alias because permissions, confirmations, audit rows and stored job
+            #: steps all reference it -- see ToolSpec.aliases.
+            aliases=("list_apps",),
             description="List applications available to launch on this machine.",
             risk=RiskLevel.READ,
             parameters={},

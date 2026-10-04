@@ -196,14 +196,14 @@ def test_a_sentence_that_names_a_folder_reaches_the_tool(core, tmp_path, phrase)
     workspace = tmp_path / "named-project"
     workspace.mkdir()
     plan = core.planner.parse(phrase.format(path=str(workspace)))
-    actions = [a for a in plan.actions if a.tool == "open_app"]
+    actions = [a for a in plan.actions if a.tool == "open_application"]
     assert actions, f"{phrase!r} planned {[(a.tool, a.params) for a in plan.actions]}"
     assert actions[0].params.get("path") == str(workspace), actions[0].params
 
 
 def test_a_sentence_naming_only_an_app_still_just_opens_the_app(core):
     plan = core.planner.parse("open vscode")
-    actions = [a for a in plan.actions if a.tool == "open_app"]
+    actions = [a for a in plan.actions if a.tool == "open_application"]
     assert actions, [(a.tool, a.params) for a in plan.actions]
     assert not actions[0].params.get("path"), "no folder was named; none may be invented"
 
@@ -215,7 +215,7 @@ def test_a_sentence_naming_only_an_app_still_just_opens_the_app(core):
 
 def test_a_protected_folder_is_refused_before_it_is_launched(core):
     verdict = core.policy.evaluate(PlannedAction(
-        tool="open_app", params={"app": "vscode", "path": "/System/Volumes"},
+        tool="open_application", params={"app": "vscode", "path": "/System/Volumes"},
         device="laptop_main"))
     assert verdict.decision is PolicyDecision.BLOCK, verdict.reason
 
@@ -231,7 +231,7 @@ def test_a_folder_whose_name_contains_project_is_not_a_declined_thing(core, tmp_
     folder.mkdir()
     plan = core.planner.parse(f"open vscode with {folder}")
     assert plan.reply_kind != "declined", plan.direct_reply
-    actions = [a for a in plan.actions if a.tool == "open_app"]
+    actions = [a for a in plan.actions if a.tool == "open_application"]
     assert actions and actions[0].params.get("path") == str(folder), plan.model_dump()
 
 

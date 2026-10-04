@@ -169,7 +169,7 @@ def test_command_stream_emits_staged_events(client: TestClient) -> None:
 def test_command_stream_reports_actions(client: TestClient) -> None:
     response = client.get("/command/stream", params={"text": "what is my battery"})
     assert "event: action" in response.text
-    assert "battery_status" in response.text
+    assert "get_battery_status" in response.text
 
 
 # ---------------------------------------------------------------------------

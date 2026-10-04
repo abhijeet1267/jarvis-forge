@@ -8,7 +8,7 @@ at the start of this phase:
 
     step columns: ['step_id', 'job_id', 'name', 'status', 'detail', 'seq', 'confirmation_id']
     params recoverable from the row? False | device? False
-    invocations after tasks.retry(): {'get_time': 0, 'battery_status': 0}
+    invocations after tasks.retry(): {'get_time': 0, 'get_battery_status': 0}
 
 So a step could not be re-issued from its own record at all: the row kept the
 tool's *name* and nothing of what it had been asked to do. This phase adds the
@@ -88,12 +88,12 @@ def _handlers(core, tools, failing):
 
 def _run_two_step(core, second_params=None):
     """A real 2-action plan whose second step fails; returns its job id."""
-    calls = _handlers(core, ["get_time", "battery_status"], failing={"battery_status"})
+    calls = _handlers(core, ["get_time", "get_battery_status"], failing={"get_battery_status"})
     original_parse = core.planner.parse
     core.planner.parse = lambda *a, **k: Plan(
         goal="time then battery", intent="workflow", planner="rules", actions=[
             PlannedAction(step_id=1, tool="get_time", params={}, device="laptop_main"),
-            PlannedAction(step_id=2, tool="battery_status",
+            PlannedAction(step_id=2, tool="get_battery_status",
                           params=second_params if second_params is not None else {"verbose": "true"},
                           device="laptop_main"),
         ])
@@ -118,7 +118,7 @@ def test_a_stored_step_carries_what_it_needs_to_run_again(core):
     """The measurement that opened this phase: the row held a name and nothing else."""
     job_id, _ = _run_two_step(core)
     step = _steps(core, job_id)[1]
-    assert step["name"] == "battery_status"
+    assert step["name"] == "get_battery_status"
     assert json.loads(step["params"]) == {"verbose": "true"}, step
     assert step["device"] == "laptop_main", step
 
@@ -138,14 +138,14 @@ def test_a_step_that_never_ran_keeps_its_plan_too(core):
 
 def test_retry_reruns_the_failed_step_and_not_the_one_that_succeeded(core):
     job_id, calls = _run_two_step(core)
-    calls["get_time"] = calls["battery_status"] = 0
+    calls["get_time"] = calls["get_battery_status"] = 0
 
     outcome = asyncio.run(core.retry_job(job_id))
 
     assert outcome.executed == 1, outcome.as_dict()
     assert calls["get_time"] == 0, (
         f"a re-run replayed the step that already landed: {calls}")
-    assert calls["battery_status"] >= 1, calls
+    assert calls["get_battery_status"] >= 1, calls
 
 
 def test_a_successful_retry_leaves_the_job_done(core):
@@ -154,7 +154,7 @@ def test_a_successful_retry_leaves_the_job_done(core):
     assert step["status"] == ActionStatus.FAILED.value
 
     # The cause is gone: the second attempt answers honestly.
-    _handlers(core, ["battery_status"], failing=set())
+    _handlers(core, ["get_battery_status"], failing=set())
     outcome = asyncio.run(core.retry_job(job_id))
 
     assert outcome.report.status == "done", outcome.as_dict()
@@ -318,14 +318,14 @@ def test_the_retry_endpoint_reports_the_actions_it_ran(client):
 
     app_core = get_core()
     job_id, calls = _run_two_step(app_core)
-    calls["get_time"] = calls["battery_status"] = 0
+    calls["get_time"] = calls["get_battery_status"] = 0
     # The cause of the failure is gone, so this retry should genuinely finish.
-    second = _handlers(app_core, ["battery_status"], failing=set())
+    second = _handlers(app_core, ["get_battery_status"], failing=set())
     body = client.post(f"/tasks/{job_id}/retry").json()
     assert body["executed"] == 1, body
     assert body["job"]["status"] == "done", body["job"]
     assert "ran" in body["note"].lower(), body
-    assert second["battery_status"] >= 1, second
+    assert second["get_battery_status"] >= 1, second
     assert calls["get_time"] == 0, calls
 
 
@@ -346,7 +346,7 @@ def test_a_re_run_is_distinguishable_in_the_ledger(core):
     """The chain has to show that this happened twice, and why the second time."""
     job_id, calls = _run_two_step(core)
     before = core.audit.recent(200)
-    _handlers(core, ["battery_status"], failing=set())
+    _handlers(core, ["get_battery_status"], failing=set())
     asyncio.run(core.retry_job(job_id))
     after = core.audit.recent(200)
     new = [r for r in after if r not in before]

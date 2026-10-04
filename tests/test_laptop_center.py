@@ -30,7 +30,7 @@ from jarvis.tools.laptop_center import (
 )
 
 LCC_TOOLS = {
-    "laptop_snapshot",
+    "get_machine_snapshot",
     "laptop_processes",
     "laptop_project_status",
     "build_agent_prompt",
@@ -83,13 +83,13 @@ def test_the_cockpit_tools_are_registered_and_owned() -> None:
         assert registry.has(tool), f"{tool} should be registered"
         assert agent.owns(tool), f"{tool} should be owned by the laptop-center agent"
     # A foreign tool must stay out of the cockpit.
-    assert not agent.owns("open_app")
+    assert not agent.owns("open_application")
     assert "laptop_center" in build_agents(registry)
 
 
 def test_cockpit_specs_are_read_only_except_the_prompt_builder() -> None:
     registry = build_default_registry()
-    assert registry.get("laptop_snapshot").risk.value == 0
+    assert registry.get("get_machine_snapshot").risk.value == 0
     assert registry.get("laptop_processes").risk.value == 0
     assert registry.get("laptop_project_status").risk.value == 0
     assert registry.get("build_agent_prompt").requires_confirmation is False
@@ -246,9 +246,9 @@ def first_tool(plan) -> str:
 @pytest.mark.parametrize(
     "text,expected_tool",
     [
-        ("how's my laptop", "laptop_snapshot"),
-        ("check my laptop", "laptop_snapshot"),
-        ("laptop condition", "laptop_snapshot"),
+        ("how's my laptop", "get_machine_snapshot"),
+        ("check my laptop", "get_machine_snapshot"),
+        ("laptop condition", "get_machine_snapshot"),
         ("what's running", "laptop_processes"),
         ("top processes", "laptop_processes"),
         ("status of my open projects", "laptop_project_status"),

@@ -713,7 +713,7 @@ def test_fuel_routes_to_a_fuel_reading(planner: RulePlanner) -> None:
 
 
 def test_the_car_rule_does_not_steal_other_devices(planner: RulePlanner) -> None:
-    assert planner.parse("what is my battery").actions[0].tool == "battery_status"
+    assert planner.parse("what is my battery").actions[0].tool == "get_battery_status"
     assert planner.parse("what is the status of my robots").actions[0].tool in {
         "get_robot_status",
         "list_robots",
