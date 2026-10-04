@@ -5,7 +5,7 @@
 | Phase | 56 |
 | Date | 2026-10-04 |
 | Starting commit | `176bcfb` (Phase 55) |
-| Ending commit | recorded in §8 |
+| Ending commit | `0cdc770` — this report ships inside it, so the hash was written after the commit (see §8) |
 | Tests before | 2190 passed · 0 failed · 0 skipped |
 | Tests after | **2218 passed · 0 failed · 0 skipped** (63.5 s) |
 | Tools before / after | 142 / **142** — no capability was added |
@@ -161,6 +161,11 @@ raising a dialog on this machine.**
 | Tools / planner routes | 142 / 52 | **142 / 52** | unchanged — this phase adds no capability |
 | HTTP surface | 117 / 111 paths | **118 / 112 paths** | `len(app.routes)` |
 | Confirmation-gated | 28 | **28** | no gate moved |
+
+**Ending commit:** `0cdc770`. A report cannot contain its own hash, so this line and the header row
+were added after that commit — the same reason Phase 55's header said "recorded in §8" and then
+never recorded it, which is fixed here rather than repeated. Re-run at the close-out after the doc
+edits: **2218 passed · 0 failed · 0 skipped in 65.8 s**.
 
 ## 9. Open items
 

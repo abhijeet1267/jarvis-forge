@@ -16,7 +16,7 @@ capability exists but was **not** re-measured today, it says so rather than impl
 | Test suite | **2218 passed · 0 failed · 0 xfailed · 0 skipped** in 65.8 s |
 | Spec §6 coverage | **37 of 37** — every utterance the build prompt lists reaches a capability |
 | Delivered | `~/Downloads/Vantage/` — `Vantage.app` (running, seal valid), `Vantage.app.zip`, `vantage-source.zip`, `READ ME FIRST.txt` |
-| Commits | `176bcfb` (Ph 55), `377e79f` (Ph 54 correction), `67d9530` (Ph 54), `35c9abf` (Ph 53), `3708f85` (Ph 52 correction), `92efc6b` (Ph 52), `f047eb2` (Ph 51), `452e9c0` (Ph 50) — **local only, nothing pushed** |
+| Commits | `0cdc770` (Ph 56), `176bcfb` (Ph 55), `377e79f` (Ph 54 correction), `67d9530` (Ph 54), `35c9abf` (Ph 53), `3708f85` (Ph 52 correction), `92efc6b` (Ph 52), `f047eb2` (Ph 51), `452e9c0` (Ph 50) — **local only, nothing pushed** |
 | Biggest known gap | The Mac process does not persist — the `.app` is a launcher tied to its window, so a closed laptop is unreachable from the phone. That gap now also blocks the permission **ask** (56-A): macOS will not let a helper process raise the dialog, only an app process can. No native mobile app, relay, push or provider adapter either. |
 
 ---

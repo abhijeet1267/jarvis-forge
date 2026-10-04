@@ -5,7 +5,7 @@
 | Phase | 54 |
 | Date | 2026-10-04 |
 | Starting commit | `35c9abf` (Phase 53) |
-| Ending commit | recorded in §9 |
+| Ending commit | `67d9530`, then `377e79f` (§11a correction) — filled in at the Phase 56 close-out; §9 promised it and did not record it |
 | Tests before | 2129 passed · 0 failed · 0 skipped |
 | Tests after | **2155 passed · 0 failed · 0 skipped** (72.6 s) |
 | Tools before / after | 141 / **141** — this phase added no capability |

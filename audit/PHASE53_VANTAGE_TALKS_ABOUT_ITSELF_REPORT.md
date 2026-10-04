@@ -5,7 +5,7 @@
 | Phase | 53 |
 | Date | 2026-10-04 |
 | Starting commit | `3708f85` (Phase 52 close-out + coverage correction) |
-| Ending commit | recorded below (§10) |
+| Ending commit | `35c9abf` — filled in at the Phase 56 close-out; §10 promised it and did not record it |
 | Tests before | 2065 passed · 0 failed · 0 skipped |
 | Tests after | **2129 passed · 0 failed · 0 skipped** (§10) |
 | Tools before | 136 |

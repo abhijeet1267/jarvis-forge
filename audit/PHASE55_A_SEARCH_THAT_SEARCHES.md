@@ -5,7 +5,7 @@
 | Phase | 55 |
 | Date | 2026-10-04 |
 | Starting commit | `377e79f` (Phase 54 close-out) |
-| Ending commit | recorded in §8 |
+| Ending commit | `176bcfb` — filled in at the Phase 56 close-out; the header promised "recorded in §8" and §8 never recorded it |
 | Tests before | 2155 passed · 0 failed · 0 skipped |
 | Tests after | **2190 passed · 0 failed · 0 skipped** |
 | Tools before / after | 141 / **142** |
