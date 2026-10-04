@@ -391,6 +391,13 @@ remote until the fixture set the peer explicitly.
 
 142 tools and 52 routes unchanged — **this phase adds no capability**; 28 gated, **no gate moved**.
 
+Rebuilt, re-signed and re-delivered at the close, then checked on the running `~/Downloads/Vantage/Vantage.app`
+with **GETs only** plus one GET expecting 405 (route present, not invoked): `/health` 142 tools /
+Basic Mode, `/permissions` carrying the three new fields with the same seven states as before, and
+the panel HTML containing every control the user-facing readme now describes. No POST was sent to
+the delivered app — Phase 54's §11a exists precisely because a "read-only" check once wrote an
+audit row by POSTing at it.
+
 
 ## 3. Working status of the whole product, as measured today
 
