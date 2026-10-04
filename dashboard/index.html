@@ -127,6 +127,8 @@
   .quick .muted { font-size: 12px; }
   /* A device row that is not this machine can be dismissed. Deliberately quiet: it is
      cleanup, not a call to action. */
+  .stopbtn { background: var(--bad); color: var(--on-accent); font-weight: 600; }
+  .revoked { color: var(--bad-ink); font-weight: 600; }
   .forget { background: var(--ghost-bg); color: var(--bad-ink); border: 1px solid var(--line);
             border-radius: 6px; padding: 3px 9px; cursor: pointer; font-size: 11px;
             margin-left: 8px; }
@@ -229,6 +231,12 @@
     <button id="send" aria-label="Send command">Send</button>
   </div>
   <!-- Rendered against GET /tools: a button exists only while the capability does. -->
+  <!-- §30: a stop reachable without typing, from the screen that shows the work. Its label is
+       the laptop's own report, including the part it cannot stop. -->
+  <div class="row" style="margin-bottom:8px">
+    <button id="stopAll" class="stopbtn" aria-label="Emergency stop">Emergency stop</button>
+    <span class="muted" id="stopNote">stops what is running now; asks nothing first</span>
+  </div>
   <div class="quick" id="quick" role="group" aria-label="Quick actions">
     <span class="muted">checking what this laptop can do…</span>
   </div>
@@ -1092,7 +1100,7 @@ function renderTools() {
   // keystroke would detach the input the caret is sitting in.
   box.innerHTML = `
     <table>
-      <thead><tr><th>Tool</th><th>Agent</th><th>Risk</th><th>Confirm</th><th>Description</th></tr></thead>
+      <thead><tr><th>Tool</th><th>Agent</th><th>Risk</th><th>Confirm</th><th>Policy</th><th>Description</th></tr></thead>
       <tbody>
         ${rows.map(t => `
           <tr>
@@ -1100,11 +1108,74 @@ function renderTools() {
             <td class="muted">${escapeHtml(t.agent)}</td>
             <td class="risk-${t.risk}">${t.risk} · ${escapeHtml(t.risk_label)}</td>
             <td>${t.requires_confirmation ? "yes" : "no"}</td>
+            <td>${policyCell(t.name)}</td>
             <td class="muted">${escapeHtml(t.description)}</td>
           </tr>`).join("")}
       </tbody>
     </table>`;
+  box.querySelectorAll("[data-revoke]").forEach(b =>
+    b.onclick = () => changePolicy(b.dataset.revoke, "revoke"));
+  box.querySelectorAll("[data-restore]").forEach(b =>
+    b.onclick = () => changePolicy(b.dataset.restore, "restore"));
 }
+
+const stopNote = () => document.getElementById("stopNote");
+function setNote(text) { if (stopNote()) stopNote().textContent = text; }
+
+let _policy = {};
+const POST_JSON = { "Content-Type": "application/json" };
+
+function policyCell(name) {
+  if (name === "emergency_stop") {
+    return '<span class="muted">safety interlock</span>';
+  }
+  const row = _policy[name];
+  if (row) {
+    return `<span class="revoked">REVOKED</span> `
+         + `<button class="forget" data-restore="${escapeHtml(name)}">Restore</button>`;
+  }
+  return `<button class="forget" data-revoke="${escapeHtml(name)}">Revoke</button>`;
+}
+
+async function loadPolicy() {
+  try {
+    const res = await fetch("/permissions/policy", { headers: authHeaders() });
+    if (!res.ok) return;
+    const rows = await res.json();
+    _policy = {};
+    // The engine honours one row per tool and device; a grant row is not a denial, and only a
+    // denial makes the tool read REVOKED here.
+    rows.forEach(r => { if (r.granted === 0) _policy[r.tool] = r; });
+  } catch (e) { /* the card keeps its last real reading rather than showing a guess */ }
+  if (typeof renderTools === "function" && _tools.length) renderTools();
+}
+
+async function changePolicy(name, action) {
+  const res = await fetch(`/permissions/${encodeURIComponent(name)}/${action}`, {
+    method: "POST", headers: authHeaders(POST_JSON), body: JSON.stringify({})
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    setNote(`refused: ${body.detail || "HTTP " + res.status}`);
+    return;
+  }
+  await loadPolicy();
+  setNote(action === "revoke"
+    ? `${body.tool} revoked${body.state && body.state.blocked ? " and now blocked" : ""}`
+    : (body.restored ? `${body.tool} follows its declared policy again` : body.reason));
+}
+
+async function emergencyStop() {
+  setNote("stopping…");
+  const res = await fetch("/emergency_stop", { method: "POST", headers: authHeaders(POST_JSON) });
+  if (!res.ok) { setNote(`the stop was refused (HTTP ${res.status})`); return; }
+  const body = await res.json();
+  const r = body.result || {};
+  setNote(r.verified === false ? `stopped, but not everything: ${(r.message || "").slice(0, 120)}`
+                               : (r.message || "stop carried out"));
+}
+
+document.getElementById("stopAll").onclick = emergencyStop;
 
 async function send() {
   const input = document.getElementById("cmd");
@@ -1157,6 +1228,7 @@ function refresh() {
   loadMetrics().catch(() => {});
   loadPrivacy().catch(() => {});
   loadTools().catch(() => {});
+  loadPolicy().catch(() => {});
 }
 
 document.getElementById("send").onclick = send;

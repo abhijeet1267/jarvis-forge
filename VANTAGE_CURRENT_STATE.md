@@ -1,6 +1,6 @@
-# Vantage — full working report, Phase 53 close-out
+# Vantage — full working report, Phase 54 close-out
 
-Written 2026-10-04 and refreshed at the Phase 53 close the same day; §2A is Phase 52's record and §2B is Phase 53's. Every number below was produced by a command on this machine during this
+Written 2026-10-04 and refreshed at each phase close the same day. §2A is Phase 52's record, §2B Phase 53's, §2C Phase 54's. Every number below was produced by a command on this machine during this
 session or the immediately preceding phases, and the command is named next to it. Where a
 capability exists but was **not** re-measured today, it says so rather than implying it was.
 
@@ -11,8 +11,8 @@ capability exists but was **not** re-measured today, it says so rather than impl
 | | |
 |---|---|
 | What it is | A personal AI operating system for macOS: one command pipeline, 141 gated capabilities, a laptop panel, a phone client, a signed `.app` delivered as files |
-| Current phase | **Phase 53 — Vantage talking about itself** (closed) |
-| Test suite | **2129 passed · 0 failed · 0 xfailed · 0 skipped** in 66.4 s |
+| Current phase | **Phase 54 — the two safety doors** (closed) |
+| Test suite | **2155 passed · 0 failed · 0 xfailed · 0 skipped** in 72.6 s |
 | Spec §6 coverage | **36 of 37** utterances reach a capability (21 at the start of Phase 52, 32 at its close) |
 | Delivered | `~/Downloads/Vantage/` — `Vantage.app` (running, seal valid), `Vantage.app.zip`, `vantage-source.zip`, `READ ME FIRST.txt` |
 | Commits | Phase 53 (hash in §2B), `3708f85` (Ph 52 correction), `92efc6b` (Ph 52), `f047eb2` (Ph 51), `452e9c0` (Ph 50) — **local only, nothing pushed** |
@@ -213,6 +213,59 @@ database is shared. They now clear that state explicitly — the third time this
 bitten by the same leak.
 
 
+## 2C. Phase 54 in full — the two safety doors
+
+`emergency_stop` was a real PHYSICAL-tier tool reachable only by typing a sentence; the phone,
+which the build prompt names first for a stop, could not pull it. `PermissionEngine.revoke`
+wrote an explicit denial that **no product surface ever called** — the permission engine had one
+door and no handle. This phase added no capability and no route: 141 tools and 51 routes before
+and after, HTTP surface 107 → 111 paths.
+
+Two decisions carry it.
+
+**A report is not a result.** The stop counted a job as stopped when `cancel()` returned an
+accepted report. It now re-reads the row and sorts on that, and the test forces the failure by
+patching a cancel that accepts *and rolls the row back* — under the old code that claimed
+success.
+
+**Restore is not grant.** The obvious `grant(tool)` writes `granted=1`, and Phase 49a's rule is
+that a standing grant downgrades CONFIRM to EXECUTE for reversible tools — so un-revoking would
+have left the capability *more* trusted than before it was revoked. Restore deletes the denial
+rows instead; proven live, where `delete …` came back as **CONFIRM**, not EXECUTE.
+
+And `emergency_stop` itself cannot be revoked (409, no row written, a `denied` ledger entry): a
+door lockable from outside is not a safety door.
+
+Live, on an isolated instance, with SQLite read back independently of the tool:
+
+```
+POST /emergency_stop (no token)        -> 401
+POST /permissions/not_a_tool/revoke    -> 404
+POST /permissions/emergency_stop/revoke-> 409 "revoking it would remove a safety door"
+"delete /tmp/p54t/victim.txt"          -> CONFIRM            (before)
+POST /permissions/delete_file/revoke   -> {"revoked":true,"state":{"blocked":true,"standing_grant":false}}
+"delete /tmp/p54t/victim.txt"          -> BLOCK  "permission for delete_file has been revoked."
+POST /permissions/delete_file/restore  -> {"restored":true,"denials_removed":1,"state":{"revoked":false,"standing_grant":false}}
+"delete /tmp/p54t/victim.txt"          -> CONFIRM again      (declared policy, not a grant)
+POST /emergency_stop                   -> verified: True, cancelled: 1, stuck: []
+sqlite                                 -> ('JOB-P54LIVE', 'cancelled')
+audit                                  -> emergency.stop: success; tool.revoke: denied, success; restore_tool: success
+/tmp/p54t/victim.txt still on disk     -> nothing was deleted
+```
+
+**A Phase 53 defect fell out of a Phase 54 test:** `self_state.py` counted finished steps with
+`("success", "done")`, but the enum value is **`succeeded`** — so every task report said "0 of N
+step(s) done". Phase 53's own live proof had hand-written the wrong status string, which is why
+both the suite and the live run agreed with the bug. Fixed against the real vocabulary.
+
+**Browser:** both pages were driven at 375 and 1440 against the isolated instance — the stop
+control present and wired on both, the panel's new Policy column showing 140 Revoke controls
+with `emergency_stop` rendered as *safety interlock*, 0 console errors on either page. The two
+buttons were **not clicked**: the session's permission classifier blocked both, and the refusal
+was respected rather than routed around. So they are proven wired and rendered, not proven
+pressed.
+
+
 ## 3. Working status of the whole product, as measured today
 
 All values from the **delivered app** over HTTP (read-only GETs) unless stated.
@@ -239,13 +292,13 @@ User → Intent → RulePlanner (50 routes) → PermissionEngine → [Confirmati
 | Confirmation-gated | **28** of 141 — unchanged by Phase 53, which added no gate and loosened none | registry |
 | RulePlanner routes | **51** | `len(core.planner._rules)` |
 | Registered applications | **15** | `AppRegistry` |
-| HTTP surface | 113 route objects / **107 paths** | `len(app.routes)` |
+| HTTP surface | 117 route objects / **111 paths** (Phase 54 added the stop and the two policy doors) | `len(app.routes)` |
 | Database tables | **32** | schema `CREATE TABLE` count |
 | Memories indexed | 52 / 52, coverage 1.0, hybrid retrieval | `/health` |
 | Scheduler | running, 30 s tick, 67 jobs | `/health` |
-| Test suite | 2129 passed, 0 failed, 0 skipped, 66.4 s | `pytest -q` |
-| Test modules / phase reports | 80 / 55 | `ls` |
-| Code volume | 67,266 lines — 40,911 source · 26,355 tests | `wc -l` |
+| Test suite | 2155 passed, 0 failed, 0 skipped, 72.6 s | `pytest -q` |
+| Test modules / phase reports | 81 / 56 | `ls` |
+| Code volume | 67,882 lines — 41,174 source · 26,708 tests | `wc -l` |
 
 ### 3.3 Permissions, as the OS reports them right now (`/permissions`)
 
@@ -303,8 +356,8 @@ Swift helper and an x86_64 build on an arm64 machine. Not re-driven by ear today
 
 | gap | evidence | why it matters |
 |---|---|---|
-| **No emergency-stop route** | no route matching `emergency` in `jarvis/api/app.py`; the `emergency_stop` tool is PHYSICAL-tier and reachable only by the sentence "emergency stop" | §30 of the build prompt asks for stop from phone, menu bar and task screen |
-| **No tool-level revoke UI** | `PolicyStore.revoke` exists, no product surface calls it (measured Phase 49a) | the permission engine has one door and no handle |
+| ~~No emergency-stop route~~ | **closed in Phase 54** — `POST /emergency_stop` calls the registered tool, needs no confirmation, and re-reads the job rows before claiming a stop | menu-bar and lock-screen surfaces still need the native shell |
+| ~~No tool-level revoke surface~~ | **closed in Phase 54** — `POST /permissions/{tool}/revoke` and `/restore`, with the denial re-read after the write and `emergency_stop` itself refused | no expiry and no bulk form (54-C) |
 | ~~Vantage cannot describe itself~~ | **closed in Phase 53** — approvals, status, recent actions, current task and a verified stop are now answerable | was blocking phone-side approvals and task state |
 | No native mobile app | the phone client is a served web page (`/phone`) | §2B of the build prompt asks for iOS/Android with keychain/keystore, biometrics, push |
 | No relay, no push, no biometrics | none in the tree | remote-away-from-LAN use is not possible today |
@@ -376,8 +429,8 @@ menu-bar-less `.app` launcher.
 1. ~~Vantage talking about itself~~ — **done in Phase 53.** Approvals, status, recent
    actions, the current task and a verified stop are now answerable, which unblocks the phone-side
    governance in §14/§16/§30 of the build prompt.
-2. **An emergency-stop route** reachable from the phone, and a **tool-revoke handle** on the
-   permission engine. Both are safety surfaces with the logic written and no door.
+2. ~~An emergency-stop route and a tool-revoke handle~~ — **done in Phase 54**: both doors
+   exist, are audited, and re-read the state they claim to have changed.
 3. **A web-search capability** for `search Google for X` — §6's only remaining gap, and the only
    one that needs a new tool rather than a route.
 4. **The §3 first-run wizard** with a deliberate, user-initiated permission **request** path

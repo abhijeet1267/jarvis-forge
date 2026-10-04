@@ -78,6 +78,7 @@
            font-weight: 600; transition: filter .12s ease, transform .06s ease; }
   button.deny { background: var(--deny-bg); }
   button.ghost { background: var(--ghost-bg); color: var(--ghost-ink); font-weight: 500; }
+  button.stop { background: var(--bad); color: var(--on-go); font-weight: 600; }
   button:hover { filter: brightness(1.14); }
   button:active { transform: translateY(1px); }
   button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
@@ -140,6 +141,13 @@
       <input id="cmd" placeholder="what is my battery?" autocomplete="off" />
       <button id="send">Send</button>
     </div>
+    <div class="row">
+      <!-- §30: the stop has to be reachable from the phone without typing a sentence, and it
+           must not ask first. The text below is the laptop's own report, including the part
+           it cannot stop. -->
+      <button id="stop" class="stop" aria-label="Emergency stop">Emergency stop</button>
+      <div class="sub micline" id="stopline">stops what is running now; asks nothing first</div>
+    </div>
     <div class="row microw">
       <button id="mic" class="ghost" aria-label="Speak a command to the laptop" disabled>Mic</button>
       <div class="sub micline" id="micline">checking the laptop&rsquo;s microphone…</div>
@@ -201,6 +209,28 @@ function set(id, text, cls) {
 function esc(s) { return String(s == null ? "" : s).replace(/[&<>"]/g, c =>
   ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
 function line(html) { document.getElementById("log").insertAdjacentHTML("afterbegin", html); }
+
+async function stopEverything() {
+  const note = document.getElementById("stopline");
+  note.textContent = "stopping…";
+  let res;
+  try {
+    res = await fetch("/emergency_stop", { method: "POST", headers: headers() });
+  } catch (e) {
+    note.textContent = "the laptop did not answer";
+    return;
+  }
+  if (!res.ok) {
+    note.textContent = "the stop was refused (HTTP " + res.status + ")";
+    return;
+  }
+  const body = await res.json();
+  const r = body.result || {};
+  const words = (r.message || "no report").trim();
+  note.textContent = r.verified === false ? "stopped, but not everything" : "stop carried out";
+  line(`<li><strong>Emergency stop</strong> &middot; ${esc(words)}</li>`);
+}
+document.getElementById("stop").onclick = stopEverything;
 
 async function call(path, method, body) {
   const res = await fetch(API + path, {

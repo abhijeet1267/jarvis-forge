@@ -146,6 +146,16 @@ class PermissionEngine:
         row = self._latest_permission(tool, device, "user")
         return bool(row and not row["granted"])
 
+    def is_revoked(self, tool: str, device: Optional[str] = None,
+                   subject: str = "user") -> bool:
+        """Public read of the same rule, for the surface that has to show it.
+
+        Phase 54 exposed revocation as a product action, and an action with no readable result
+        is one a user cannot check. This is a read of ``_latest_permission``, not a second
+        opinion about what a denial means.
+        """
+        return self._is_revoked(tool, device)
+
     # -- evaluation ----------------------------------------------------------
     def evaluate(self, action: PlannedAction, session_id: str = "", request_id: str = "") -> PolicyResult:
         """Evaluate a single planned action."""

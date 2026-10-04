@@ -175,6 +175,13 @@ async def get_recent_activity(ctx: ToolContext, limit: int = 8) -> Any:
 # the current task, and stopping it
 # ---------------------------------------------------------------------------
 
+#: The vocabulary is ``jarvis/core/models.ActionStatus``. "success" and "done" are not step
+#: statuses in this codebase -- the first version of this module counted finished steps with
+#: them, so every task report said "0 of N step(s) done" no matter what had finished.
+SUCCEEDED_STATES = ("succeeded",)
+UNFINISHED_STATES = ("pending", "running", "awaiting_confirmation")
+
+
 def _active_job(core: Any) -> Optional[Dict[str, Any]]:
     """The newest job whose steps are still in front of Vantage."""
     for job in core.tasks.list(limit=25):
@@ -212,7 +219,7 @@ async def get_current_task(ctx: ToolContext) -> Any:
 
     job_id = str(job.get("job_id") or "")
     steps = _step_summary(core, job_id)
-    done = sum(1 for s in steps if s["status"] in ("success", "done"))
+    done = sum(1 for s in steps if s["status"] in SUCCEEDED_STATES)
     waiting = [s for s in steps if s["status"] == "awaiting_confirmation"]
     line = (f"Current task: \"{job.get('goal') or job_id}\" -- {job.get('status')}, "
             f"{done} of {len(steps)} step(s) done.")
@@ -245,9 +252,8 @@ async def stop_current_task(ctx: ToolContext) -> Any:
     after = core.tasks.get(job_id)
     status = str((after or {}).get("status") or "")
     steps = _step_summary(core, job_id)
-    ran = [s["name"] for s in steps if s["status"] in ("success", "done")]
-    not_run = [s["name"] for s in steps
-               if s["status"] in ("pending", "running", "awaiting_confirmation")]
+    ran = [s["name"] for s in steps if s["status"] in SUCCEEDED_STATES]
+    not_run = [s["name"] for s in steps if s["status"] in UNFINISHED_STATES]
 
     if status == "cancelled":
         detail = f"Steps that already ran are not undone ({len(ran)} done)."

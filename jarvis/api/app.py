@@ -24,7 +24,7 @@ from pydantic import BaseModel, field_validator
 
 from .. import __version__
 from ..config import get_settings, llm_source
-from ..core.models import CommandRequest, CommandResponse
+from ..core.models import CommandRequest, CommandResponse, PlannedAction, PolicyDecision
 from ..core.orchestrator import JarvisCore
 from ..logging_setup import get_logger
 from ..security.auth import (
@@ -1094,6 +1094,145 @@ async def device_revoke(device_id: str, _: None = Protected) -> Dict[str, Any]:
         result="success",
     )
     return result
+
+
+@app.post("/emergency_stop")
+async def emergency_stop(_: None = Protected) -> Dict[str, Any]:
+    """Pull the existing emergency stop from a client, without typing its sentence.
+
+    §30 of the build prompt names the phone, the menu bar and the task screen as places a stop
+    must be reachable from. There is no second stop implementation here: the route calls the
+    registered PHYSICAL-tier tool and returns what it measured, including the part it cannot
+    stop. It asks for no confirmation -- a stop that needs approval first is not an emergency
+    stop -- and it is written to the ledger like any other action.
+    """
+    core = get_core()
+    handler = core.tools.handler("emergency_stop")
+    if handler is None:
+        raise HTTPException(status_code=503, detail="the emergency stop is not available")
+
+    result = await handler(_tool_context())
+    detail = {
+        "message": result.message,
+        # Carried inside the result, not only at the top: the caller must be able to see that
+        # "verified" here means the job rows were re-read, and not infer it from HTTP 200.
+        "verified": result.verified,
+        "jobs_cancelled": result.output.get("jobs_cancelled", 0),
+        "cancelled_job_ids": result.output.get("cancelled_job_ids", []),
+        "jobs_stuck": result.output.get("jobs_stuck", []),
+        "physical_stop": result.output.get("physical_stop", ""),
+    }
+    core.audit.record(
+        intent="emergency.stop",
+        tool="emergency_stop",
+        target="laptop_main",
+        risk="critical",
+        confirmation=False,
+        result="success" if result.verified else "unverified",
+        detail=detail,
+    )
+    return {"ok": result.ok, "verified": result.verified, "result": detail}
+
+
+class RevokeBody(BaseModel):
+    """A button posts no body at all, so the whole thing is optional -- a scope is a detail
+    the caller may name, not a form the caller must fill to be refused."""
+    device: Optional[str] = None
+
+
+@app.get("/permissions/policy")
+async def permission_policy(_: None = Protected) -> List[Dict[str, Any]]:
+    """The explicit grants and denials the engine currently honours."""
+    rows = get_core().db.query(
+        "SELECT tool, device, granted, granted_at, revoked_at FROM permissions "
+        "ORDER BY rowid DESC LIMIT 200")
+    return [dict(r) for r in rows]
+
+
+@app.post("/permissions/{tool}/revoke")
+async def permission_revoke(
+    tool: str, body: RevokeBody = RevokeBody(), _: None = Protected
+) -> Dict[str, Any]:
+    """Take a capability away. The logic existed; the handle did not."""
+    core = get_core()
+    spec = core.tools.get(tool)
+    if spec is None:
+        raise HTTPException(status_code=404, detail=f"no capability named {tool!r}")
+
+    canonical = core.tools.canonical(tool)
+    if canonical == "emergency_stop":
+        core.audit.record(
+            intent="tool.revoke", tool="revoke_tool", target=canonical, risk="high",
+            confirmation=False, result="denied",
+            detail={"reason": "the emergency stop is a safety interlock and cannot be revoked"},
+        )
+        raise HTTPException(
+            status_code=409,
+            detail="emergency_stop is the stop itself; revoking it would remove a safety door.",
+        )
+
+    core.policy.revoke(canonical, device=body.device)
+    blocked = core.policy.evaluate(PlannedAction(
+        step_id=0, tool=canonical, params={}, device=body.device or "laptop_main",
+    )).decision is PolicyDecision.BLOCK
+    core.audit.record(
+        intent="tool.revoke", tool="revoke_tool", target=canonical, risk="high",
+        confirmation=False, result="success",
+        detail={"device": body.device, "blocked_after": blocked},
+    )
+    return {
+        "revoked": True,
+        "tool": canonical,
+        "device": body.device,
+        "aliases": list(spec.aliases),
+        "state": {"blocked": blocked, "standing_grant": core.policy.is_granted(canonical)},
+    }
+
+
+@app.post("/permissions/{tool}/restore")
+async def permission_restore(
+    tool: str, body: RevokeBody = RevokeBody(), _: None = Protected
+) -> Dict[str, Any]:
+    """Lift an explicit denial, and nothing more.
+
+    ``grant`` would write granted=1, which also downgrades a CONFIRM-tier tool to EXECUTE for
+    reversible actions. Un-revoking must return a capability to its *declared* policy, not hand
+    it authority the user never offered -- so this removes the denial rows instead.
+    """
+    core = get_core()
+    spec = core.tools.get(tool)
+    if spec is None:
+        raise HTTPException(status_code=404, detail=f"no capability named {tool!r}")
+
+    canonical = core.tools.canonical(tool)
+    spellings = core.tools.spellings(canonical)
+    placeholders = ", ".join("?" for _ in spellings)
+    rows = core.db.query(
+        f"SELECT rowid FROM permissions WHERE tool IN ({placeholders}) AND granted = 0",
+        tuple(spellings))
+    if not rows:
+        return {"restored": False, "tool": canonical,
+                "reason": "there was no denial to remove; the tool already follows its "
+                          "declared policy"}
+
+    core.db.execute(
+        f"DELETE FROM permissions WHERE tool IN ({placeholders}) AND granted = 0",
+        tuple(spellings))
+    core.audit.record(
+        intent="tool.revoke", tool="restore_tool", target=canonical, risk="high",
+        confirmation=False, result="success",
+        detail={"denials_removed": len(rows),
+                "standing_grant": core.policy.is_granted(canonical)},
+    )
+    return {
+        "restored": True,
+        "tool": canonical,
+        "denials_removed": len(rows),
+        "state": {
+            "revoked": core.policy.is_revoked(canonical),
+            "standing_grant": core.policy.is_granted(canonical),
+        },
+    }
 
 
 @app.post("/devices/{device_id}/endpoint")

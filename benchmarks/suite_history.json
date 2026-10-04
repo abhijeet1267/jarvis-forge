@@ -314,6 +314,13 @@
       "passed": 2129,
       "failed": 0,
       "note": "\"are you running\" was probing for an installed app named \"You\"; self-state now comes from the policy engine, the audit and the task table"
+    },
+    {
+      "phase": "54 the two safety doors",
+      "collected": 2155,
+      "passed": 2155,
+      "failed": 0,
+      "note": "the stop trusted a cancel report until a test rolled the row back; restore deletes the denial instead of granting standing authority"
     }
   ]
 }

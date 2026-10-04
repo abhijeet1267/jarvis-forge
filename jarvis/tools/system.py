@@ -255,10 +255,16 @@ async def emergency_stop(ctx: ToolContext) -> Any:
             for job in tasks.list(limit=100):
                 status = str(job.get("status") or "")
                 if status in ("running", "pending", "queued", "paused"):
-                    if tasks.cancel(str(job.get("job_id") or "")):
-                        stopped.append(str(job.get("job_id")))
+                    job_id = str(job.get("job_id") or "")
+                    tasks.cancel(job_id)
+                    # The cancel report says the request was accepted. Only the row says the
+                    # job will not run, and this is the one action where the difference is the
+                    # whole point -- a stop that reports its own intention is not a stop.
+                    after = str((tasks.get(job_id) or {}).get("status") or "")
+                    if after == "cancelled":
+                        stopped.append(job_id)
                     else:
-                        still_running.append(str(job.get("job_id")))
+                        still_running.append(job_id)
         except Exception as exc:  # a stop request must never fail silently
             log.info("emergency stop: task cancellation failed",
                     extra_fields={"error": str(exc)})
