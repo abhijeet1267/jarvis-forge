@@ -16,7 +16,7 @@ capability exists but was **not** re-measured today, it says so rather than impl
 | Test suite | **2273 passed · 0 failed · 0 xfailed · 0 skipped** — 66.98 to 74.22 s over three runs at this close |
 | Spec §6 coverage | **37 of 37** — every utterance the build prompt lists reaches a capability |
 | Delivered | `~/Downloads/Vantage/` — `Vantage.app` (running, seal valid), `Vantage.app.zip`, `vantage-source.zip`, `READ ME FIRST.txt` |
-| Commits | `0cdc770` (Ph 56), `176bcfb` (Ph 55), `377e79f` (Ph 54 correction), `67d9530` (Ph 54), `35c9abf` (Ph 53), `3708f85` (Ph 52 correction), `92efc6b` (Ph 52), `f047eb2` (Ph 51), `452e9c0` (Ph 50) — **local only, nothing pushed** |
+| Commits | `a20e39c` (Ph 57), `7c828fa` (Ph 56 close), `ea68c7d` (Ph 56 close), `0cdc770` (Ph 56), `176bcfb` (Ph 55), `377e79f` (Ph 54 correction), `67d9530` (Ph 54), `35c9abf` (Ph 53), `3708f85` (Ph 52 correction), `92efc6b` (Ph 52), `f047eb2` (Ph 51), `452e9c0` (Ph 50) — **local only, nothing pushed** |
 | Biggest known gap | Off the wifi there is nothing: the phone surface is a served web page, not a native app, with no keychain, biometrics, push or relay. Persistence now exists as a capability but has never been left **installed** on this machine (57-A -- a user decision), and the permission ask still cannot land because it lives in the helper (57-G, carried from 56-A). |
 
 ---

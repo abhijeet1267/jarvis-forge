@@ -5,7 +5,7 @@
 | Phase | 57 |
 | Date | 2026-10-05 |
 | Starting commit | `7c828fa` (Phase 56 close-out) |
-| Ending commit | recorded in §10 |
+| Ending commit | `a20e39c` (the work) → the close-out commit named in §13 |
 | Tests before | 2218 passed · 0 failed · 0 skipped |
 | Tests after | **2273 passed · 0 failed · 0 skipped** (§10) |
 | Tools before / after | 142 / **145** (one READ, two EXTERNAL, both confirmation-gated) |
@@ -216,8 +216,8 @@ is recorded below rather than claimed here.
 | Planner routes | 52 | **52** | three branches inside one existing rule |
 | HTTP surface | 118 / 112 paths | **119 / 113 paths** | `len(app.routes)` |
 
-**Ending commit:** recorded by `git log --oneline -1` immediately after the commit that contains
-this report; the close-out commits after it are named in §12.
+**Ending commit:** `a20e39c`, then the close-out commit described in §13. Full suite at this close:
+**2273 passed · 0 failed · 0 skipped**, timed 66.98 s, 71.43 s, 71.47 s and 74.22 s.
 
 ## 11. Open items
 
@@ -252,3 +252,23 @@ Phase 58 — native mobile. Two things this phase changes about its prerequisite
 process that can outlive the window (so a native shell has something to talk to), and
 `READ ME FIRST.txt` still has to be regenerated rather than hand-maintained (56-F), which Phase 58
 should fix rather than deepen.
+
+## 13. Redeployed and re-verified at the close
+
+The bundle was rebuilt from `a20e39c` (`codesign verify: ok`), the old copy moved aside, the new one
+deployed, relaunched, and the aside copy removed only after the new one answered. Checks on the
+delivered app were **GETs only** — the Phase 54 §11a rule — and no POST reached the user's real
+data directory.
+
+| check | result |
+|---|---|
+| `codesign --verify --deep --strict` on the deployed bundle | valid, satisfies its Designated Requirement |
+| same after extracting `Vantage.app.zip` into a temp dir | valid — the archive, not just the folder |
+| `GET /health` | `status ok`, **145 tools**, scheduler running with 67 jobs, `llm_enabled: false` |
+| `GET /persistence` | `not_installed`, `supported: true`, path `~/Library/LaunchAgents/com.jarvisforge.vantage.plist`, `answered_by: /bin/launchctl print gui/501/com.jarvisforge.vantage` — a state with its subject named, per Phase 50's rule |
+| the claim, written by the shipped build itself | `{"pid": 47936, "host": "0.0.0.0", "port": 8765, …}` with 47936 matching the process lsof reports on 8765 |
+| machine left as found | no Vantage plist in `~/Library/LaunchAgents`, nothing listening on the test ports, `/tmp` aside copies removed |
+
+`READ ME FIRST.txt` was updated in the same pass (145 capabilities, and a Start-up section that says
+what the card reports and what will never appear in the launch config) — and 56-F still stands: that
+file is hand-maintained in the delivery folder rather than generated from the repo.
