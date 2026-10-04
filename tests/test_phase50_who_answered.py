@@ -73,13 +73,30 @@ HELPER = {
 def test_the_helper_source_is_a_real_macos_query():
     """The statuses are only as honest as the API behind them. These four calls are the
     non-prompting ones Apple provides; a check built on `request*` would pop a dialog on
-    every dashboard poll, which is not a status read."""
+    every dashboard poll, which is not a status read.
+
+    Phase 56 added a request mode to this same binary, so the ban can no longer be
+    file-wide -- and the thing worth protecting was never "no requesting code exists", it
+    was "the path a status read takes does not prompt". So the assertion is now scoped to
+    the status path: everything before the request dispatch must be non-prompting, and the
+    prompting calls must live after it.
+    """
     source = SWIFT.read_text()
+    marker = "// STATUS READ PATH"
+    assert marker in source, "the helper no longer separates its request mode from its reads"
+    request_region, _, status_region = source.partition(marker)
+
     for call in ("CGPreflightScreenCaptureAccess", "AXIsProcessTrusted",
                  "authorizationStatus(for: .audio)", "SFSpeechRecognizer.authorizationStatus"):
-        assert call in source, f"the helper no longer queries {call}"
-    assert "requestAccess" not in source, (
-        "the helper requests access; a status read must never prompt")
+        assert call in status_region, f"the status path no longer queries {call}"
+
+    for prompting in ("requestAccess", "requestAuthorization", "CGRequestScreenCaptureAccess",
+                      "kAXTrustedCheckOptionPrompt"):
+        assert prompting not in status_region, (
+            f"{prompting} is on the status path; a status read must never prompt")
+        assert prompting in request_region, (
+            f"{prompting} never arrived in the request path -- Phase 56's request mode is "
+            "not actually implemented")
 
 
 def test_every_capability_reports_one_of_the_six_states(service):

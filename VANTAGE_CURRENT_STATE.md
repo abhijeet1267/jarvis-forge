@@ -1,6 +1,7 @@
-# Vantage — full working report, Phase 55 close-out
+# Vantage — full working report, Phase 56 close-out
 
-Written 2026-10-04 and refreshed at each phase close the same day. §2A–§2D are Phase 52, 53, 54 and 55. Every number below was produced by a command on this machine during this
+Written 2026-10-04 and refreshed at each phase close the same day. §2A–§2E are Phase 52, 53,
+54, 55 and 56. Every number below was produced by a command on this machine during this
 session or the immediately preceding phases, and the command is named next to it. Where a
 capability exists but was **not** re-measured today, it says so rather than implying it was.
 
@@ -10,13 +11,13 @@ capability exists but was **not** re-measured today, it says so rather than impl
 
 | | |
 |---|---|
-| What it is | A personal AI operating system for macOS: one command pipeline, 141 gated capabilities, a laptop panel, a phone client, a signed `.app` delivered as files |
-| Current phase | **Phase 55 — a search that searches** (closed) |
-| Test suite | **2190 passed · 0 failed · 0 xfailed · 0 skipped** in 62.5 s |
+| What it is | A personal AI operating system for macOS: one command pipeline, 142 governed capabilities (28 of them confirmation-gated), a laptop panel, a phone client, a signed `.app` delivered as files |
+| Current phase | **Phase 56 — asking for a permission, on purpose** (closed) |
+| Test suite | **2218 passed · 0 failed · 0 xfailed · 0 skipped** in 65.8 s |
 | Spec §6 coverage | **37 of 37** — every utterance the build prompt lists reaches a capability |
 | Delivered | `~/Downloads/Vantage/` — `Vantage.app` (running, seal valid), `Vantage.app.zip`, `vantage-source.zip`, `READ ME FIRST.txt` |
-| Commits | Phase 53 (hash in §2B), `3708f85` (Ph 52 correction), `92efc6b` (Ph 52), `f047eb2` (Ph 51), `452e9c0` (Ph 50) — **local only, nothing pushed** |
-| Biggest known gap | Vantage cannot yet answer questions about **itself** (pending approvals, its status, its recent actions, stopping the current task), and there is no native mobile app, relay, push or provider adapter |
+| Commits | `176bcfb` (Ph 55), `377e79f` (Ph 54 correction), `67d9530` (Ph 54), `35c9abf` (Ph 53), `3708f85` (Ph 52 correction), `92efc6b` (Ph 52), `f047eb2` (Ph 51), `452e9c0` (Ph 50) — **local only, nothing pushed** |
+| Biggest known gap | The Mac process does not persist — the `.app` is a launcher tied to its window, so a closed laptop is unreachable from the phone. That gap now also blocks the permission **ask** (56-A): macOS will not let a helper process raise the dialog, only an app process can. No native mobile app, relay, push or provider adapter either. |
 
 ---
 
@@ -309,6 +310,88 @@ value* is correct behaviour — the defect would be a second parameter or a chan
 **§6 is now 37 of 37**, re-run utterance by utterance through the planner.
 
 
+## 2E. Phase 56 in full — asking for a permission, on purpose
+
+Gap E. Phase 50 built the permission card and deliberately made it **read-only**, because the
+dashboard polls it and a status check that pops a system dialog every poll is not a status check.
+This phase adds the other half: a request a person starts.
+
+The whole phase rests on one rule — **the answer comes from re-reading the state, never from what
+the request reported.** That rule was forced by macOS's own inconsistency, measured rather than
+assumed:
+
+```text
+AVCaptureDevice.requestAccess / SFSpeechRecognizer.requestAuthorization
+    -> give back a bool for "the user decided yes"; the status query is still the authority
+AXIsProcessTrustedWithOptions(prompt)
+    -> grants NOTHING. Opens System Settings and returns the trust flag as it was
+       BEFORE the user acted. Reporting it would print "granted" about an unfinished dialog.
+CGRequestScreenCaptureAccess
+    -> can return true while the running process still needs a relaunch to be covered
+```
+
+So `request()` ends in `_read_state(cap)`, and the test that pins the rule patches a request
+claiming `granted` against a re-read saying `DENIED` and requires the answer to be `DENIED`.
+
+**Four capabilities can be asked** (microphone, speech recognition, screen recording,
+accessibility — the last `prompt_only`); **three refuse with a reason that reaches the user**:
+automation ("the only probe is sending an event, which is the action itself, not a settings
+page"), notifications (the framework needs the app's own bundle and run loop), local network
+(macOS does not gate a server for it).
+
+**Loopback-only, and that is a separate gate from the host check.** A phone on the wifi passes the
+host gate because its `Host` *is* an address this machine owns — which is correct for reading a
+dashboard and wrong for raising a dialog. A system prompt appears over the whole screen in front
+of the laptop, so only someone sitting there may raise it. Tested from a LAN-shaped peer address,
+not argued.
+
+Then the real binary said something no test could. The suite patches the helper seam, so it cannot
+see whether the helper *works*:
+
+```
+status mode  -> speech=not_determined  microphone=denied   (works)
+request mode -> exit -6 (SIGABRT), no stdout               (does not work)
+```
+
+The Speech framework aborts a process that is not an app bundle — Phase 50's
+`UNUserNotificationCenter` finding, met again on the request side. **A helper binary cannot raise
+these prompts; only the app process can.** The implementation was changed to carry that rather
+than hide it:
+
+```
+ok: False | state: UNKNOWN | granted: False
+"I could not ask macOS about speech recognition, so nothing about it has changed
+ (the helper could not ask (exit code -6)). Set it yourself in System Settings →
+ Privacy & Security → Speech Recognition, then check again."
+```
+
+`UNKNOWN`, not `DENIED` — a failure to ask and a refusal are different facts, and reporting the
+first as the second would send someone to System Settings to undo a decision that was never made.
+
+**So this phase ships the door and not the room behind it.** The route, the guard, the reasons,
+the re-read rule and the panel controls are real and tested; the ask itself cannot succeed until it
+runs inside `Vantage.app`, which is Phase 57. Driving the microphone / screen-recording / speech
+prompts was **not done** and is recorded as `BLOCKED_BY_USER_DECISION` — doing it unattended would
+be the exact un-consented prompt this phase exists to prevent.
+
+One safety assertion was deliberately **narrowed**, and it is stated here rather than left in the
+diff: Phase 50's guard banned a prompting call anywhere in the Swift file. Phase 56 legitimately
+adds a request mode to the same binary, so the file-wide ban would have blocked real work. The
+guard now protects what it was always protecting — *the status read must not prompt* — enforced by
+explicit `// REQUEST PATH` / `// STATUS READ PATH` markers, with the prompting calls still required
+to exist and now required to be **only** on the request side.
+
+Three of my own defects, all found by the suite or by running things:
+a test stub indexed the helper's arguments wrongly (`cmd[2]` where the call is
+`[binary, "request", key]`) so the first version of the abort test **executed the real helper**;
+a guard asserted `AXIsProcessTrusted` must not appear in the request path, which is unsatisfiable
+because `AXIsProcessTrustedWithOptions` contains it; and `TestClient`'s default socket peer is
+`"testclient"`, neither loopback nor real, so a loopback-only rule read every test caller as
+remote until the fixture set the peer explicitly.
+
+142 tools and 52 routes unchanged — **this phase adds no capability**; 28 gated, **no gate moved**.
+
+
 ## 3. Working status of the whole product, as measured today
 
 All values from the **delivered app** over HTTP (read-only GETs) unless stated.
@@ -331,17 +414,17 @@ User → Intent → RulePlanner (50 routes) → PermissionEngine → [Confirmati
 |---|---|---|
 | Tools | **142** | `/health`, `/tools` |
 | Agents | **15** — calendar, car, coding, design, email, home, laptop, laptop_center, memory, phone, research, robotics, scheduler, vision, watch | `/health` |
-| Risk spread | READ 72 · LOW 36 · EXTERNAL 13 · DESTRUCTIVE 12 · PHYSICAL 3 | registry |
+| Risk spread | READ 76 · LOW 38 · EXTERNAL 13 · DESTRUCTIVE 12 · PHYSICAL 3 | registry, counted this close |
 | Confirmation-gated | **28** of 142 — three phases of new capability, no gate moved | registry |
 | RulePlanner routes | **52** | `len(core.planner._rules)` |
 | Registered applications | **15** | `AppRegistry` |
-| HTTP surface | 117 route objects / **111 paths** (Phase 54 added the stop and the two policy doors) | `len(app.routes)` |
+| HTTP surface | 118 route objects / **112 paths** (Phase 54 added the stop and the two policy doors, Phase 56 the request route) | `len(app.routes)` |
 | Database tables | **32** | schema `CREATE TABLE` count |
 | Memories indexed | 52 / 52, coverage 1.0, hybrid retrieval | `/health` |
 | Scheduler | running, 30 s tick, 67 jobs | `/health` |
-| Test suite | 2190 passed, 0 failed, 0 skipped, 62.5 s | `pytest -q` |
-| Test modules / phase reports | 82 / 57 | `ls` |
-| Code volume | 68,461 lines — 41,430 source · 27,031 tests | `wc -l` |
+| Test suite | 2218 passed, 0 failed, 0 skipped, 65.8 s | `pytest -q` |
+| Test modules / phase reports | 83 / 58 | `ls` |
+| Code volume | 69,120 lines — 41,726 source · 27,394 tests | `wc -l` |
 
 ### 3.3 Permissions, as the OS reports them right now (`/permissions`)
 
@@ -359,6 +442,13 @@ The card also prints **which process was asked** — `about_bundled_host: True`,
 running from `~/Downloads/Vantage/Vantage.app`. Same helper, same machine, terminal caller:
 speech NOT_DETERMINED, screen recording denied, microphone DENIED, accessibility GRANTED. Four
 capabilities, four different answers, which is why a status without a subject is not a fact.
+
+Since Phase 56 each row also carries `requestable`, `prompt_only` and `no_request_reason`, so a
+client can tell "you may ask macOS" from "only System Settings can change this" from "there is no
+ask to make". The ask is a **separate, deliberately-pressed action** (`POST /permissions/{name}/request`,
+loopback-only) and is still not a side effect of the poll that fills this table. **It has not been
+observed raising a dialog on this machine** — the helper aborts before prompting (56-A), and the
+prompt itself was left to the person sitting at the laptop.
 
 Two consequences that are live behaviour, not caveats:
 - `show the current application` works from a terminal-launched server and will answer with the
@@ -406,7 +496,8 @@ Swift helper and an x86_64 build on an arm64 machine. Not re-driven by ear today
 | No relay, no push, no biometrics | none in the tree | remote-away-from-LAN use is not possible today |
 | No provider adapters in use | `llm_enabled: false`; OpenAI/Gemini adapters per §22–24 not built | LLM planning is off; Basic Mode carries everything |
 | No Computer Use capability | §26 not started | by design — after Basic Mode and pairing are stable |
-| No first-run permission **request** path | `/permissions` is read-only by choice (50-C) | §3's wizard needs a user-initiated request that is not a side effect of a poll |
+| ~~No first-run permission **request** path~~ | **narrowed in Phase 56** — `POST /permissions/{capability}/request` exists, is loopback-only, refuses with a reason, and answers from a re-read. The **ask itself cannot succeed from the helper process** (the Speech framework aborts a non-bundle caller), so no dialog has been observed on this machine — 56-A | §3's wizard still needs a long-running app process to raise the prompt from (Phase 57) |
+| No host persistence | `Vantage.app` runs `launcher.py` and dies with its window; no login item, no launchd plist in the bundle | a Mac sitting closed is unreachable from the phone — and this is what blocks 56-A, because the permission ask needs a long-running app process, not a helper |
 | `.app` ships no Python runtime | it uses this machine's interpreter (Phase 40) | "installable on another Mac" is not proven |
 | CI | **not measured this session** — no verdict claimed | |
 
@@ -458,7 +549,10 @@ identify.
 
 **Governance** — 28 confirmation-gated tools, 128-bit confirmation IDs with a 300 s TTL,
 explicit approve/deny, pre-execution revalidation, hash-chained audit, tri-state results,
-memory deletion scopes, redaction of secrets in logs, emergency stop (sentence-only today).
+memory deletion scopes, redaction of secrets in logs, `POST /emergency_stop` (a panel button since
+Phase 54, which re-reads the job rows before claiming a stop), per-tool revoke/restore on the
+policy engine plus the panel's Policy column (Phase 54), and a user-started macOS permission
+**request** that answers only from a re-read (Phase 56).
 
 **Surfaces** — laptop panel (`/dashboard`, 1440 px, quick actions from the live registry, tool
 filter, devices with Forget, Permissions card, voice state), phone client (`/phone`, 375 px,
@@ -477,10 +571,15 @@ menu-bar-less `.app` launcher.
 3. ~~A web-search capability~~ — **done in Phase 55.** `search_web` asks a real search service,
    and an outage is reported as an outage. §6 is 37 of 37. A *ranked* web index still needs a
    keyed provider (55-B).
-4. **The §3 first-run wizard** with a deliberate, user-initiated permission **request** path
-   (read-only status exists; requesting must never be a side effect of a poll).
-5. **Host persistence** — the `.app` is a launcher that dies with its window; a real login
-   item / launchd service, so the phone can reach a Mac that is sitting closed.
+4. **Host persistence** — now first for two reasons. The `.app` is a launcher that dies with its
+   window, so a Mac sitting closed is unreachable from the phone; **and** Phase 56 proved the
+   permission ask cannot live in a helper process (macOS aborts a non-bundle caller), so there is
+   no process to put it in until this exists.
+5. ~~A deliberate, user-initiated permission **request** path~~ — **built in Phase 56**: route,
+   loopback-only guard, per-capability reasons, re-read authority, panel controls, audited.
+   **The §3 first-run wizard is still not built** (56-B), because it would be a guided sequence of
+   asks that cannot land until item 4 is done. Read-only status remains, and asking is still never
+   a side effect of a poll.
 6. **Native mobile shell** (keychain/keystore, biometrics, push, deep links), then the
    **relay** for off-LAN use, then **provider adapters** (OpenAI, Gemini, local) behind the
    same PermissionEngine, then **Computer Use** last, as §26 orders.
@@ -488,10 +587,14 @@ menu-bar-less `.app` launcher.
    rows that make the chain read BROKEN; whether to grant the bundle Accessibility (which
    unlocks `show the current application` and Finder confirmation); whether to clean the
    **9 `phone_*` rows** measured today on the delivered app — 13 device rows in total, of which
-   only one is a real handset.
+   only one is a real handset. **New in Phase 56:** whether to press **Grant access** on the panel
+   while sitting at the laptop, which is the only way to observe the request path raising a real
+   dialog. Until that is done the honest statement is that the ask is implemented and tested
+   against stubs and one real abort, and **has not been observed prompting this machine.**
 
-Carried open items, all still true: **49a-A…F**, **50-A…F**, **51-A…F**, **52-A…F** — each
-written up in its phase report and indexed in `README.md`.
+Carried open items, all still true: **49a-A…F**, **50-A…F**, **51-A…F**, **52-A…F**,
+**53-A…F**, **54-A…F**, **55-A…E**, **56-A…E** — each written up in its phase report and indexed
+in `README.md`.
 
 ---
 
@@ -527,8 +630,9 @@ edited only additively.
 | question | file |
 |---|---|
 | What the product is and how to use it | `README.md`, `~/Downloads/Vantage/READ ME FIRST.txt` |
-| Why each phase did what it did | `audit/PHASE*.md` (54 reports, newest first in the README table) |
+| Why each phase did what it did | `audit/PHASE*.md` (58 reports, newest first in the README table) |
 | What is still open | the open-items block at the end of `README.md` |
+| Why a permission ask must not be a poll | `audit/PHASE50_*.md` (the read-only rule) and `audit/PHASE56_ASKING_ON_PURPOSE_REPORT.md` (the request path, and why a helper cannot use it) |
 | Suite size over time | `benchmarks/suite_history.json`, `assets/chart-suite-growth.svg` |
 | Safety and failure matrices | `audit/*.csv` (4 matrices) + Phase 22/31/32 reports |
 | This phase in the audit trail | `audit/PHASE52_SECTION_SIX_ON_THE_LAPTOP_REPORT.md` |

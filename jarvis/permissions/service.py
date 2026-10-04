@@ -60,6 +60,17 @@ class Capability:
     manual_only: bool = False
     #: A capability macOS does not gate for this process at all.
     not_gated: bool = False
+    #: True when a helper can ask macOS for this on the user's deliberate instruction. The
+    #: status read must never do it -- a poll that raises a dialog is a consent attack -- so
+    #: this flag is only ever honoured behind a button someone pressed on the laptop.
+    requestable: bool = False
+    #: True when asking can only ever open System Settings. The Accessibility prompt returns
+    #: the trust flag as it was *before* the user did anything, so treating its return value
+    #: as the outcome would report "granted" about a dialog nobody has finished.
+    prompt_only: bool = False
+    #: Why asking is impossible, for the capabilities that say so. An empty string here means
+    #: the refusal has no explanation, which is the same defect as a bare "not allowed".
+    no_request_reason: str = ""
 
 
 CAPABILITIES: List[Capability] = [
@@ -74,6 +85,7 @@ CAPABILITIES: List[Capability] = [
         recovery="If it was denied, enable Microphone for Vantage in System Settings, "
                  "then check again.",
         helper_key="microphone",
+        requestable=True,
     ),
     Capability(
         name="speech_recognition",
@@ -88,6 +100,7 @@ CAPABILITIES: List[Capability] = [
         recovery="If it was denied, enable Speech Recognition for Vantage in System "
                  "Settings and check again.",
         helper_key="speech_recognition",
+        requestable=True,
     ),
     Capability(
         name="screen_recording",
@@ -103,6 +116,7 @@ CAPABILITIES: List[Capability] = [
                  "applies this to a process at launch.",
         helper_key="screen_recording",
         manual_only=True,
+        requestable=True,
     ),
     Capability(
         name="accessibility",
@@ -116,6 +130,8 @@ CAPABILITIES: List[Capability] = [
         recovery="Add Vantage to the Accessibility list and check again.",
         helper_key="accessibility",
         manual_only=True,
+        requestable=True,
+        prompt_only=True,
     ),
     Capability(
         name="automation",
@@ -129,6 +145,8 @@ CAPABILITIES: List[Capability] = [
         settings_pane="System Settings → Privacy & Security → Automation",
         test_method="Ask the front browser what it is showing, and read the verdict.",
         recovery="If it was denied, enable Automation for Vantage in System Settings.",
+        no_request_reason="There is no query for Apple Events. The only probe is sending an "
+                          "event, which is the action itself, not a settings page.",
     ),
     Capability(
         name="notifications",
@@ -141,6 +159,8 @@ CAPABILITIES: List[Capability] = [
         settings_pane="System Settings → Notifications → Vantage",
         test_method="Post one notification and ask whether the system accepted it.",
         recovery="Allow notifications for Vantage in System Settings.",
+        no_request_reason="The notification framework needs the app's own bundle and run "
+                          "loop; a helper process gets no answer worth reporting.",
     ),
     Capability(
         name="local_network",
@@ -154,6 +174,8 @@ CAPABILITIES: List[Capability] = [
         test_method="Reach the laptop's address from the other device.",
         recovery="Nothing to grant on the Mac. Check the phone's local-network permission.",
         not_gated=True,
+        no_request_reason="macOS does not gate this for a server process, so there is nothing "
+                          "to ask for.",
     ),
 ]
 
@@ -286,6 +308,9 @@ class PermissionStatusService:
                 "settings_pane": cap.settings_pane,
                 "test_method": cap.test_method,
                 "recovery": cap.recovery,
+                "requestable": cap.requestable,
+                "prompt_only": cap.prompt_only,
+                "no_request_reason": cap.no_request_reason,
                 "answered_by": subject,
                 "host": host,
                 "about_bundled_host": about_bundle,
@@ -318,6 +343,104 @@ class PermissionStatusService:
             if row["capability"] == name:
                 return row
         raise KeyError(name)
+
+    # -- requesting ----------------------------------------------------------
+    def capabilities(self) -> List[Capability]:
+        """The declared capability list, for a caller that needs the model, not a read."""
+        return list(CAPABILITIES)
+
+    def _run_request(self, key: str) -> Optional[Dict[str, object]]:
+        """Ask macOS for one capability. Returns what the helper said, or None with a reason.
+
+        None is not a refusal. Measured on 2026-10-04: the helper aborts (SIGABRT, no stdout)
+        when the Speech framework is asked for authorisation from a process that is not an app
+        bundle -- the same constraint Phase 50 recorded for notifications. A caller that read
+        that as "denied" would send the user to System Settings to undo a decision nobody made,
+        so the reason travels with the failure.
+        """
+        binary = self._ensure_binary()
+        if binary is None:
+            return {"ok": False, "reason": "the permission helper could not be built on this machine"}
+        try:
+            proc = subprocess.run([str(binary), "request", key],
+                                  capture_output=True, text=True, timeout=90)
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            log.info("permission request did not run",
+                     extra_fields={"capability": key, "error": str(exc)})
+            return {"ok": False, "reason": f"the helper did not run ({exc})"}
+        try:
+            payload = json.loads(proc.stdout)
+        except (json.JSONDecodeError, ValueError):
+            detail = (proc.stderr or "").strip().splitlines()
+            why = detail[0][:160] if detail else f"exit code {proc.returncode}"
+            log.info("permission request produced no answer",
+                     extra_fields={"capability": key, "stderr": why})
+            return {"ok": False, "reason": f"the helper could not ask ({why})"}
+        if not isinstance(payload, dict) or payload.get("error"):
+            return {"ok": False, "reason": "the helper reported its own failure"}
+        return {**payload, "ok": True}
+
+    def _read_state(self, cap: Capability) -> str:
+        """The authoritative answer: a fresh status read, after the request has returned."""
+        return self._status_for(cap, self.read_helper())
+
+    def request(self, name: str) -> Dict[str, object]:
+        """Ask for one permission, then report the state that was *read*, not what was asked.
+
+        Every branch of the return value comes from the re-read except the failure to ask at
+        all, which is UNKNOWN rather than DENIED: "the helper did not run" and "you were
+        refused" are different facts, and confusing them sends someone to System Settings to
+        fix a problem that is not there.
+        """
+        cap = next((c for c in CAPABILITIES if c.name == name), None)
+        if cap is None:
+            raise ValueError(f"no such capability: {name!r}")
+        if not cap.requestable:
+            raise ValueError(cap.no_request_reason or
+                             f"{name!r} cannot be requested from here")
+
+        asked = self._run_request(cap.helper_key or name)
+        subject = self.host_identity()
+        if not asked or not asked.get("ok"):
+            reason = (asked or {}).get("reason", "the helper gave no answer")
+            return {
+                "ok": False,
+                "capability": name,
+                "requested": False,
+                "state": UNKNOWN,
+                "granted": False,
+                "subject": subject,
+                "reason": reason,
+                "message": f"I could not ask macOS about {cap.label.lower()}, so nothing about "
+                           f"it has changed ({reason}). Set it yourself in {cap.settings_pane}, "
+                           "then check again.",
+            }
+
+        state = self._read_state(cap)
+        granted = state == GRANTED
+        if cap.prompt_only:
+            message = (f"System Settings was opened for {cap.label.lower()}. The prompt cannot "
+                       f"grant it -- macOS reports the state as {state} until you turn it on "
+                       "there and, for some capabilities, relaunch Vantage.")
+        elif granted:
+            message = f"{cap.label} is granted for this process."
+        elif state == NOT_DETERMINED:
+            message = (f"{cap.label} is still unanswered. The dialog may be waiting for you, "
+                       "or macOS may not have shown it to this process.")
+        else:
+            message = (f"{cap.label} was refused and macOS reports it as {state}. Asking again "
+                       f"will not prompt: change it in {cap.settings_pane}.")
+        return {
+            "ok": True,
+            "capability": name,
+            "requested": bool(asked.get("requested")),
+            "request_reported": asked.get("state_after_request", ""),
+            "state": state,
+            "granted": granted,
+            "subject": subject,
+            "settings_pane": cap.settings_pane,
+            "message": message,
+        }
 
 
 def describe_permissions() -> Dict[str, object]:

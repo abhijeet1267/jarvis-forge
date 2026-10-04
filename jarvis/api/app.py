@@ -1140,6 +1140,50 @@ class RevokeBody(BaseModel):
     device: Optional[str] = None
 
 
+def _loopback_only_or_refuse(request: Request) -> None:
+    """Refuse a permission request that did not come from the laptop itself.
+
+    A system dialog appears in front of the machine, over the whole screen, and only someone
+    sitting there can answer it honestly. A handset on the wifi -- or anything that has a
+    stolen session token -- must not be able to raise prompts on the owner's display, so this
+    action is limited to the loopback interface regardless of authorisation.
+    """
+    client = (request.client.host if request.client else "") or ""
+    if client not in ("127.0.0.1", "::1", "localhost"):
+        raise HTTPException(
+            status_code=403,
+            detail="permissions are granted on the laptop itself; a remote device cannot ask "
+                   "for them on your behalf.",
+        )
+
+
+@app.post("/permissions/{capability}/request")
+async def permission_request(capability: str, request: Request,
+                             _: None = Protected) -> Dict[str, Any]:
+    """Ask macOS for one permission, because a person at the laptop pressed the button.
+
+    The status endpoint stays read-only -- it is polled, and a poll that raises a dialog is a
+    consent attack. This is the deliberate half: one capability, one click, on this machine.
+    """
+    _loopback_only_or_refuse(request)
+    from ..permissions.service import PermissionStatusService
+
+    service = PermissionStatusService(settings=get_settings())
+    try:
+        return service.request(capability)
+    except ValueError as exc:
+        # An unknown capability is a 404; a known one that cannot be asked about is a refusal
+        # with the reason, which is a different answer to a different question.
+        known = any(c.name == capability for c in service.capabilities())
+        status = 409 if known else 404
+        get_core().audit.record(
+            intent="permission.request", tool="request_permission", target=capability,
+            risk="high", confirmation=False, result="denied",
+            detail={"reason": str(exc), "known_capability": known},
+        )
+        raise HTTPException(status_code=status, detail=str(exc))
+
+
 @app.get("/permissions/policy")
 async def permission_policy(_: None = Protected) -> List[Dict[str, Any]]:
     """The explicit grants and denials the engine currently honours."""

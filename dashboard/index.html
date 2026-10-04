@@ -988,8 +988,22 @@ async function loadPermissions() {
     const word = r.status === "GRANTED"
       ? PERMISSION_WORD.GRANTED
       : (PERMISSION_WORD[r.status] || r.status.toLowerCase());
+    // A button only where macOS can actually be asked, and the label never promises more
+    // than the action can do: the Accessibility prompt opens System Settings and grants
+    // nothing by itself, so it must not be labelled "Grant access".
+    let action = "";
+    if (r.requestable && r.status !== "GRANTED") {
+      action = r.prompt_only
+        ? `<button class="ghost" data-perm="${escapeHtml(r.capability)}">`
+          + `Open System Settings</button>`
+        : `<button class="ghost" data-perm="${escapeHtml(r.capability)}">`
+          + `Grant access</button>`;
+    } else if (!r.requestable && r.status !== "GRANTED" && r.no_request_reason) {
+      action = `<span class="muted" title="${escapeHtml(r.no_request_reason)}">`
+             + `cannot be asked here</span>`;
+    }
     return `<div class="row"><span>${escapeHtml(r.label)}</span>`
-      + `<span class="${tone}">${escapeHtml(word)}</span></div>`;
+      + `<span class="${tone}">${escapeHtml(word)} ${action}</span></div>`;
   }).join("");
   // The subject is one line, styled by whether it describes Vantage at all. It is not
   // rebuilt from the fields here: the server's sentence already names the bundle the
@@ -1000,8 +1014,33 @@ async function loadPermissions() {
     + `${escapeHtml(data.note || "")}</p>`;
   document.getElementById("permissions").innerHTML = rows
     + subject
-    + '<div class="row"><span></span><span><button class="deny" id="permCheck">Check again</button></span></div>';
+    + '<div class="row"><span></span><span><button class="deny" id="permCheck">Check again</button></span></div>'
+    + '<p class="note muted" id="permNote">Granting happens on this laptop, and macOS is asked '
+    + 'only when you press the button.</p>';
   document.getElementById("permCheck").onclick = () => loadPermissions().catch(() => {});
+  // The reply is the state macOS reports *after* the request, which the server reads back
+  // rather than repeating what the request claimed. Then the card re-reads anyway, so what is
+  // on screen is never older than the answer about it.
+  document.querySelectorAll("[data-perm]").forEach(btn => btn.onclick = async () => {
+    const cap = btn.dataset.perm;
+    btn.disabled = true;
+    setPermNote(`asking macOS about ${cap}…`);
+    try {
+      const res = await fetch(`/permissions/${encodeURIComponent(cap)}/request`,
+                              { method: "POST", headers: authHeaders(POST_JSON) });
+      const body = await res.json().catch(() => ({}));
+      setPermNote(res.ok ? (body.message || `reported ${body.state}`)
+                         : (body.detail || `refused (HTTP ${res.status})`));
+    } catch (e) {
+      setPermNote("the laptop did not answer");
+    }
+    loadPermissions().catch(() => {});
+  });
+}
+
+function setPermNote(text) {
+  const el = document.getElementById("permNote");
+  if (el) el.textContent = text;
 }
 
 async function loadMetrics() {
