@@ -517,7 +517,7 @@ jarvis/
                host's answer returned unchanged — proven on loopback, never claimed off-LAN
 tests/         86 modules · 2332 collected · includes the shipped page JS, run by Node
 dashboard/     index.html control panel + phone.html, the client a phone uses over the LAN
-audit/         60 phase reports + 4 CSV matrices — the evidence behind this README
+audit/         61 phase reports + 4 CSV matrices — the evidence behind this README
 benchmarks/    acceptance_run.py and the JSON the charts are drawn from
 assets/        generated figures + the two generators that draw them
 app/           PyInstaller spec and bundle sources (the launcher and its wifi switch; see the Phase 36 report)

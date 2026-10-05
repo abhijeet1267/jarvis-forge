@@ -5,7 +5,7 @@
 | Phase | 59 (the roadmap's authenticated relay, built and verified to the limit of what this machine can prove — see §11) |
 | Date | 2026-10-05 |
 | Starting commit | `d0f24f8` (Phase 58 close-out) |
-| Ending commit | `—` (not written yet; filled in §15 after the commit exists) |
+| Ending commit | `a71852d` (the work) → the close-out commit named in §15 |
 | Tests before | 2305 passed · 0 failed · 0 skipped |
 | Tests after | **2332 passed · 0 failed · 0 skipped** (76.9 s) |
 | Tools / gated | 145 / 30 → **145 / 30** — no capability added, no gate loosened |
@@ -297,13 +297,51 @@ would have been a screenshot of an unchanged page, so it was not performed and i
 
 ## 15. Delivery
 
-Commit: `—` — recorded below once it exists, with the reason it was not written in advance: an
-earlier phase put a hash in a report before the commit did, and that is a fabrication with a good
-intention behind it.
+Work commit `a71852d` — *Forward through a door that keeps every decision inside the laptop*.
+Close-out commit: this report is *in* that commit, so its own hash is written here by the next
+edit rather than guessed now — an earlier phase put a hash in a report before the commit existed,
+and that is a fabrication with a good intention behind it.
 
-Delivered files: the app bundle in `~/Downloads/Vantage/` and both archives are rebuilt from this
-tree at close-out, so `jarvis/relay.py` ships inside the bundle's source copy. The relay is not
-started by the app, the login item, or any client — it is a separate process an operator runs on
-purpose, which is the point of §2.
+Rebuilt from this tree and re-deployed at the close, the old copy moved aside and removed only
+after the new one answered:
+
+| check | result |
+|---|---|
+| `codesign --verify --deep --strict` on the deployed bundle | valid on disk, satisfies its Designated Requirement |
+| same, after extracting `Vantage.app.zip` into a temp dir | valid — the archive, not just the folder — and `Contents/Resources/app/jarvis/relay.py` present inside it |
+| `GET /health` on the delivered app | `status ok`, **145 tools**, 15 agents, `llm_enabled: false` |
+| `GET /tools` | 145 entries |
+| `GET /persistence` | `supported: true`, `installed: false`, `loaded: false`, `pid: 0` — the machine left as found, 57-A still a user decision |
+| `GET /devices` | 13 rows, unchanged by this phase |
+| `GET /health` with no token | **401** — the shipped gate is the shipped gate |
+| archives | `Vantage.app.zip` 1,158,613 B and `vantage-source.zip` 2,489,043 B, both rebuilt; the source archive contains `jarvis/relay.py` and this report, and no `.env`, token, key file or database |
+| the relay against the **user's real** host | **not run, deliberately.** Pointing a forward-door process at `~/.jarvis-forge` would open a path into the real device key store to test something already proven on an isolated home (§8). |
+
+`READ ME FIRST.txt` gained an "Off the wifi" section that says what the relay is, what was proved,
+and what it does not do — including that no phone button points at it yet. It is still
+hand-maintained in the delivery folder rather than generated from the repo (56-F).
+
+One thing found while redeploying, reported rather than tidied: an orphaned `run.py serve` from an
+earlier session (`JARVIS_HOME=/tmp/p44home`, port 8796, started 2026-10-03, parented to init) was
+still listening. It was a Phase 44 test server, not the user's instance, so it was stopped and its
+scratch home removed. It is named here because a stray host sharing nobody's data directory is
+still a stray host, and the next person to look at `pgrep -fl run.py` deserves to know why the
+answer changed.
 
 Nothing was pushed.
+
+## 16. Exit criteria, checked one by one
+
+| the phase had to show | state |
+|---|---|
+| a relay that authenticates before forwarding | **IMPLEMENTED and VERIFIED live** (§3, §8) |
+| identity taken from what the client can sign, not from what it types | **IMPLEMENTED and VERIFIED live** — a body claiming `laptop_main` was forwarded as `p59_demo` and the ledger agreed |
+| the host's permission, confirmation, verification and audit rules unchanged and still authoritative | **VERIFIED** — 145 tools / 30 gated / 52 rules unchanged; a refusal through the relay is the host's own refusal with the host's own words |
+| the master token never given to the relay by a client | **VERIFIED** — the relay refuses to forward rather than substitute a credential; a test greps the relay's whole conversation for it |
+| an outage that never masquerades as an empty Vantage state | **IMPLEMENTED and VERIFIED live** — `502 host_unavailable` with the connect error quoted, GET and POST alike |
+| bounded timeouts, one attempt per request | **IMPLEMENTED and tested** (12 s default; `test_one_request_is_one_attempt`) |
+| audit rows that say who asked | **IMPLEMENTED and VERIFIED live** — additive, with the device column left alone (§6) |
+| replay and stale-timestamp protection | **IMPLEMENTED and VERIFIED live** (§3, §8) |
+| no local test presented as off-LAN proof | **HONORED** — §11 is labelled `BLOCKED_EXTERNAL_DEPENDENCY` and names the missing dependency |
+| browser verification | **NOT APPLICABLE** — no page changed (§12) |
+| commit locally, nothing pushed | **DONE** — `a71852d` plus this close-out commit |
