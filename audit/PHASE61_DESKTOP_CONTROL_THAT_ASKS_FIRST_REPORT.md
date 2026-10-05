@@ -5,7 +5,7 @@
 | Phase | 61 (Computer Use — the last item in the build prompt's §26 order) |
 | Date | 2026-10-05 |
 | Starting commit | `c922a26` (Phase 60 close-out) |
-| Ending commit | `ddb52df` (the work) → the close-out commit named in §12 |
+| Ending commit | `ddb52df` (the work) → `e0dd12f` (the close-out, whose own hash is written by the next commit to touch this file) |
 | Tests before | 2355 passed · 0 failed · 0 skipped |
 | Tests after | **2380 passed · 0 failed** (76.5 s; one arXiv-gated test skipped on one of four runs) |
 | Tools / gated | 145 / 30 → **148 / 32** — three added, none loosened |
@@ -207,8 +207,9 @@ measured, not attributed to this phase's code and not hidden.
 ## 12. Delivery
 
 Work commit `ddb52df` — *Give the laptop hands, and keep them behind the confirmation card*.
-Close-out commit `—`: this file is inside that commit, so its hash is written by the next edit to
-this line rather than guessed now.
+Close-out commit `e0dd12f` — *Record the Phase 61 redeploy, and what the shipped server now
+publishes*. Its own hash lands in the file it commits, which is why it was left blank until it
+existed.
 
 Rebuilt from this tree, redeployed, verified with **GETs only** — no POST and no actuation reached
 the user's real data directory, and no click was ever sent:
