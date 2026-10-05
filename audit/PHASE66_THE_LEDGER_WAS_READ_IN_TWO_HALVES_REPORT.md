@@ -131,6 +131,26 @@ Then the live host, no token:
 
 The hole the "check all is working" sweep found is now closed on the machine that had it open.
 
+**The archive was verified by launching it, not by listing it.** `Vantage.app.zip` was re-made with
+`ditto -c -k --keepParent` (1,176,964 B) and `vantage-source.zip` with the project's usual exclusions
+(2,614,391 B). Extracting the app archive with `unzip` and running `codesign --verify` reported
+*a sealed resource is missing or invalid* -- which was the extraction tool, not the artifact: with
+`ditto -x -k` the same archive verifies silently. The proof that mattered came next: the
+**ditto-extracted copy in `/tmp`**, launched with its own recorded interpreter against a fresh
+`JARVIS_HOME` on port 8918, answered
+
+```
+GET /health       (no token)      401
+GET /openapi.json (no token)      404, 22 bytes
+GET /health       (master token)  200, tools 148
+```
+
+so a copy of the delivered archive carries the closed door and still requires a credential, in a home
+that touches nothing. That instance was stopped and both temp directories removed.
+
+One loose end to name rather than hide: a dashboard tab was left open in the running Chrome because
+the browser tool refuses to close the last page. Nothing in it was clicked.
+
 ## 6. The ledger repair was prepared, then stopped — and that is the right outcome
 
 Everything was staged: the app stopped cleanly, `jarvis.db` + `-wal` + `-shm` copied to
