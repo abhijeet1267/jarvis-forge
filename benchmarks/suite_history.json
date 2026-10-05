@@ -363,6 +363,13 @@
    "passed": 2355,
    "failed": 0,
    "note": "the badge was the bug: one OpenAI-shaped POST at four call sites and no selection, so a second vendor would configure and then be called at the wrong address -- and a refused provider name still credited `model_used` with a model that never answered -- and reading the shipped readme corrected this phase's own claim about itself"
+  },
+  {
+   "phase": "61 hands behind a card",
+   "collected": 2380,
+   "passed": 2380,
+   "failed": 0,
+   "note": "Computer Use built and never demonstrated: accessibility is granted to a terminal-launched process while the app is not, so the gate that matters is the confirmation card -- and the recorder that kept the user's cursor still exposed the after-read trusting any string as an application name"
   }
  ]
 }

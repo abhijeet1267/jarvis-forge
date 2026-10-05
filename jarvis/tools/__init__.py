@@ -20,6 +20,7 @@ from . import (
     car,
     coding,
     design,
+    desktop,
     email,
     files,
     home,
@@ -71,6 +72,7 @@ def _all_specs():
         *self_state.SPECS,
         *websearch.SPECS,
         *persistence.SPECS,
+        *desktop.SPECS,
     ]
 
 

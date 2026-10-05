@@ -249,9 +249,21 @@ def test_the_sweep_is_measured_not_improvised(core):
     Pinning the count is deliberate: it is the debt ledger for this defect
     family, and it only moves when someone actually routes another capability (in
     which case they should update it on purpose, not watch it drift).
+
+    Phase 61 moved it upward, and that is the on-purpose case rather than the drift:
+    `click_desktop` and `type_desktop_text` are unreachable *by design*. A sentence must not be
+    able to move a cursor on the user's screen -- spec 26.2 makes model output data, not
+    authority -- so they carry no examples, no route, and a confirmation card instead. The read
+    half, `get_desktop_control_state`, *is* routed, because "can you control my computer" is a
+    question that deserves an answer. The ledger is therefore the old 28 plus those two, and the
+    assertion names them so a future reader cannot mistake the additions for the same hole.
     """
     unreachable = _unreachable_tools(core)
-    assert len(unreachable) == 28, unreachable
+    assert {"click_desktop", "type_desktop_text"} <= set(unreachable), \
+        "the actuations are unreachable on purpose; if they stopped being so, that is a design change"
+    assert "get_desktop_control_state" not in unreachable, \
+        "the read must be reachable by a sentence -- that is the part Phase 28 was about"
+    assert len(unreachable) == 30, unreachable
     assert "read_file" not in unreachable
 
 

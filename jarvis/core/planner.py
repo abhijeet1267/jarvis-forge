@@ -1315,6 +1315,21 @@ class RulePlanner:
             # the control and confirming it.
             return Intent("host_persistence", tool="get_host_persistence_status", confidence=0.9)
 
+        if re.search(r"\b(can\s+you|are\s+you\s+able\s+to|do\s+you)\b[^?!.]*"
+                     r"\b(control|drive|operate|click|use|reach)\b[^?!.]*"
+                     r"\b(computer|desktop|screen|laptop|mouse|trackpad|keyboard)\b", text) \
+                or re.search(r"\b(can\s+you|are\s+you\s+able\s+to)\b[^?!.]*"
+                     r"\b(type|click)\b[^?!.]*\b(screen|desktop|computer|laptop|for\s+me)\b", text) \
+                or re.search(r"\b(desktop|accessibility)\s+(control|access|permission|state)\b", text) \
+                or re.search(r"\b(is|are)\s+desktop\s+control\b[^?!.]*"
+                     r"\b(available|enabled|on|working|granted)\b", text):
+            # Only ever the read. "Can you click my save button" is a question about whether this
+            # is possible, and the answer is a permission state -- the click itself needs a person
+            # approving a card, because its target is whatever happens to be focused on their
+            # screen. Spec 26.2: model and sentence output is data, never authority.
+            return Intent("desktop_control_state", tool="get_desktop_control_state",
+                          confidence=0.9)
+
         if re.search(r"\bwhat\s+(is|are)\s+your\s+(status|health|state|condition|mode)\b", text) \
                 or re.search(r"\bwhat\s+mode\s+are\s+you\s+in\b", text) \
                 or re.search(r"\bare\s+you\s+(running|up|alive|ok|okay|healthy|there|"
