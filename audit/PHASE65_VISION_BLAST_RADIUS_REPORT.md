@@ -168,3 +168,70 @@ None of this changes what the phase concluded: the four causes were genuinely fa
 5 → 1 blast-radius result genuinely reproduced. What it changes is that the numbers in this report
 now come from files, not from what a tool appeared to print -- which is the only reason a reader can
 repeat them.
+
+## 9. The reproduction, in full
+
+The `/tmp/...` paths cited above are this session's, and `/tmp` is not durable. The plugin is
+reproduced here so anyone can re-run the 5 → 1 result:
+
+```python
+"""Force the observed red condition on demand, so the blast radius can be measured twice.
+
+One exhausted budget on the backend the tool path uses is what the red runs had; the 45 s cooldown
+then refuses every later real read in the session. This stalls at the `subprocess.run` boundary --
+inside `read_text`'s own try -- so the product records the stall exactly as it would in the wild,
+and only for calls made on the module singleton (the first version stalled the warm-up's throwaway
+instance instead, and nothing else failed: Phase 63's isolation, working).
+
+Run:  PYTHONPATH=/tmp .venv/bin/python -m pytest -q -p p65force tests/test_vision.py
+"""
+from __future__ import annotations
+
+STALL_NOW = {"armed": False, "done": False}
+
+
+def pytest_configure(config):
+    from jarvis.vision import ocr
+
+    real_run = ocr.subprocess.run
+    real_read = ocr.OCRBackend.read_text
+
+    def run(args, **kwargs):
+        if STALL_NOW["armed"] and not STALL_NOW["done"]:
+            STALL_NOW["done"] = True
+            STALL_NOW["armed"] = False
+            import subprocess as sp
+            raise sp.TimeoutExpired(list(args), timeout=kwargs.get("timeout") or 0)
+        return real_run(args, **kwargs)
+
+    def read_text(self, path):
+        if self is ocr.get_ocr_backend() and not STALL_NOW["done"]:
+            STALL_NOW["armed"] = True
+        try:
+            return real_read(self, path)
+        finally:
+            STALL_NOW["armed"] = False
+
+    ocr.subprocess.run = run
+    ocr.OCRBackend.read_text = read_text
+
+
+def pytest_unconfigure(config):
+    import importlib
+    importlib.reload(importlib.import_module("jarvis.vision.ocr"))
+```
+
+```sh
+# after the change (1 failed, 48 passed):
+PYTHONPATH=/tmp .venv/bin/python -m pytest -q -p p65force tests/test_vision.py
+
+# before the change (5 failed, 44 passed) -- and put the file back straight after:
+git checkout HEAD~1 -- tests/test_vision.py
+PYTHONPATH=/tmp .venv/bin/python -m pytest -q -p p65force tests/test_vision.py
+git checkout HEAD -- tests/test_vision.py
+```
+
+The load measurements (§2 rows 1–3) are equally short to redo: time `OCRBackend().read_text()` on a
+drawn PNG while `pytest -q` runs in another shell, and repeat with `n` busy-loop processes and with a
+brand-new `JARVIS_HOME` so the helper is compiled and executed for the first time. Every number in
+this report came from a run whose output was written to a file and read back.
