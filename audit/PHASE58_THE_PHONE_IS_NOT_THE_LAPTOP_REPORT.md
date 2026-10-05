@@ -5,7 +5,7 @@
 | Phase | 58 (the roadmap's "native mobile shell", re-scoped by a measured blocker — see §1) |
 | Date | 2026-10-05 |
 | Starting commit | `16468e6` (Phase 57 close-out) |
-| Ending commit | recorded after the commit exists, in §7 — this file cannot contain its own hash |
+| Ending commit | `dd63bf2` (the work) → the close-out commit named in §9 |
 | Tests before | 2273 passed · 0 failed · 0 skipped |
 | Tests after | **2305 passed · 0 failed · 0 skipped** (70.2 s) |
 | Tools / gated | 145 / 30 → **145 / 30** — no capability added, one gate narrowed |
@@ -152,14 +152,36 @@ panel claim is made here.
 * **58-F — the session list shows a reference and a countdown, not an origin.** No device id, no
   IP, no created-at, because the session store never learned which device spent which code. Telling
   two handsets apart today means guessing from `expires_in`.
+* **58-H — the laptop can manage sessions through the API and not through the panel.** There is no
+  Devices-card row for "three dashboard sessions and one phone, signed in at 09:12, ending in
+  4 hours". Revoke exists; the surface to reach it calmly does not, and `READ ME FIRST.txt` now says
+  so rather than implying a button.
 * **58-G — sessions are in-memory, so a server restart signs everyone out** and the page re-mints a
   bootstrap on reload. It self-heals, but "the laptop restarted at 3am and my phone quietly lost
   its session" is a state nobody is told about.
 
 ## 9. Delivered
 
-**To be filled at the close-out**, after the commit exists and the bundle has been rebuilt from it:
-the build hash, the re-signed seal check, the extracted-archive verification, the GETs run against
-the relaunched app, and confirmation that no login item was installed and the user's own instance
-was left running. Writing a commit hash or a verification result before it happens is the exact
-failure this project keeps designing against, so the slot is left empty rather than guessed.
+Rebuilt from `dd63bf2` (`codesign verify: ok`), the previous copy moved aside and removed only
+after the new one answered, deployed to `~/Downloads/Vantage/Vantage.app`, relaunched, and both
+archives rebuilt — `Vantage.app.zip` re-verified **after extraction** ("valid on disk, satisfies its
+Designated Requirement"), which is the check Phase 40 established.
+
+Verified on the delivered app, and **with GETs only**:
+
+```
+GET /health          -> status ok | tools 145 | llm_enabled false
+GET /auth/sessions   -> [{"session_ref":"H7b...","surface":"dashboard","expires_in":28763}]
+GET /phone           -> ships id="signout"
+GET /sw.js           -> serves jarvis-phone-shell-v2 (3 sites)
+bundle source        -> PHONE_ALLOWED present in the staged jarvis/api/app.py
+audit rows before/after these checks -> 525 / 525   nothing was written
+```
+
+The session line is the useful proof: the panel's own browser session is published as
+`surface: dashboard` by the shipped build, so the tagging works outside the test suite. A refusal
+was deliberately **not** exercised against the delivered app — a scope refusal writes a `denied`
+audit row into the user's real history, which is the mistake Phase 54's §11a records; the refusal
+path was proven on the isolated instance instead (§5).
+
+No login item was installed, and the user's own instance was left running.
