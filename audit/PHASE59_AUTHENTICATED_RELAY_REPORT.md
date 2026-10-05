@@ -298,9 +298,10 @@ would have been a screenshot of an unchanged page, so it was not performed and i
 ## 15. Delivery
 
 Work commit `a71852d` — *Forward through a door that keeps every decision inside the laptop*.
-Close-out commit: this report is *in* that commit, so its own hash is written here by the next
-edit rather than guessed now — an earlier phase put a hash in a report before the commit existed,
-and that is a fabrication with a good intention behind it.
+Close-out commit `cdadab7` — *Record the Phase 59 redeploy, and stop a two-day-old stray host*.
+The hash was filled in after that commit existed, not before: an earlier phase wrote a hash into a
+report before the commit did, and that is a fabrication with a good intention behind it. The edit
+that fills it is committed by the next phase's close, so the tree is never left dirty for it.
 
 Rebuilt from this tree and re-deployed at the close, the old copy moved aside and removed only
 after the new one answered:
