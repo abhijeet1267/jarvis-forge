@@ -13,7 +13,7 @@ import secrets
 import threading
 import time
 from pathlib import Path
-from typing import Any, AsyncIterator, Dict, List, Optional
+from typing import Any, AsyncIterator, Dict, List, Optional, Tuple
 
 from contextlib import asynccontextmanager
 
@@ -186,6 +186,14 @@ async def security_middleware(request: Request, call_next):
 #
 # Both tables are in-memory and bounded: they die with the process and can be
 # revoked wholesale, which is more than can be said for the master token.
+#
+# A session also carries the **surface** that minted the code it was exchanged
+# for (Phase 58). Until then a phone that completed ``/auth/session`` held a
+# token reaching every protected route -- ``/privacy/delete``, ``/audit``,
+# memory -- although the phone page calls ten paths and nothing else. The
+# surface is fixed by the route that issues the code, not by the redeem request
+# body, so a handset cannot ask for a wider one: it decides what it is allowed
+# to do before it holds anything.
 # ---------------------------------------------------------------------------
 BOOTSTRAP_TTL_SECONDS = 60
 SESSION_TTL_SECONDS = 8 * 60 * 60
@@ -193,41 +201,148 @@ SESSION_TTL_SECONDS = 8 * 60 * 60
 #: Hard ceiling on live credentials, so nothing here grows without bound.
 MAX_DASHBOARD_CREDENTIALS = 512
 
-_bootstraps: Dict[str, float] = {}
-_sessions: Dict[str, float] = {}
+#: ``bootstrap code -> (expiry, surface)`` and ``session token -> (expiry, surface, ref)``.
+# The ref is what a laptop uses to end one session; the token itself is never listed,
+# echoed in an error, or written to the audit log (Phase 10's finding, applied to sessions).
+_bootstraps: Dict[str, Tuple[float, str]] = {}
+_sessions: Dict[str, Tuple[float, str, str]] = {}
 _credential_lock = threading.Lock()
 
+#: What a phone session may reach: every path ``dashboard/phone.html`` actually
+#: calls, read out of that file rather than remembered. Anything else on the API
+#: is refused before its handler runs. ``/confirm/{id}`` is a prefix because the
+#: id is part of the path.
+PHONE_ALLOWED = frozenset({
+    "/command",
+    "/confirmations",
+    "/devices",
+    "/devices/pair/request",
+    "/emergency_stop",
+    "/tools",
+    "/voice/status",
+    "/voice/transcribe",
+})
+PHONE_ALLOWED_PREFIXES = ("/confirm/",)
 
-def _issue_credential(table: Dict[str, float], ttl: float) -> str:
+#: Only the phone surface is narrowed. The dashboard is the operator's console on
+#: the machine itself, and widening or narrowing it is a decision with a reason
+#: attached, not a detail to tidy away -- recorded as 58-A.
+NARROW_SURFACES = frozenset({"phone"})
+
+
+#: Reachable from any surface, because neither act can widen one. Exchanging a
+#: bootstrap for a session, and ending the session you already hold, must stay
+#: usable by the narrowest token: a phone that cannot sign out is a phone whose
+#: owner has no way to stop it being authorised.
+SURFACE_INDEPENDENT = frozenset({"/auth/session", "/auth/token"})
+
+
+def _path_allowed(surface: str, path: str) -> bool:
+    if surface not in NARROW_SURFACES:
+        return True
+    if path in SURFACE_INDEPENDENT:
+        return True
+    if path in PHONE_ALLOWED:
+        return True
+    return any(path.startswith(prefix) for prefix in PHONE_ALLOWED_PREFIXES)
+
+
+def _issue_credential(table: Dict[str, Any], ttl: float, surface: str = "") -> str:
     """Create an unguessable credential that expires in ``ttl`` seconds."""
     code = secrets.token_urlsafe(32)
     now = time.monotonic()
     with _credential_lock:
-        for stale in [key for key, exp in table.items() if exp <= now]:
+        for stale in [key for key, record in table.items() if _expiry_of(record) <= now]:
             table.pop(stale, None)
         while len(table) >= MAX_DASHBOARD_CREDENTIALS:
             # Dicts keep insertion order, so this drops the oldest live entry.
             table.pop(next(iter(table)))
-        table[code] = now + ttl
+        if table is _sessions:
+            table[code] = (now + ttl, surface, secrets.token_urlsafe(8))
+        else:
+            table[code] = (now + ttl, surface)
     return code
 
 
-def _redeem_credential(table: Dict[str, float], code: Optional[str]) -> bool:
+def _expiry_of(record: Any) -> float:
+    """Accept either a bare expiry or a ``(expiry, ...)`` record."""
+    return record[0] if isinstance(record, tuple) else record
+
+
+def _redeem_credential(table: Dict[str, Any], code: Optional[str]) -> bool:
     """True when ``code`` is live. It is removed either way: single use."""
+    return _redeem_with_surface(table, code) is not None
+
+
+def _redeem_with_surface(table: Dict[str, Any], code: Optional[str]) -> Optional[str]:
+    """The surface the code was minted for, or None. Removed either way: single use."""
     if not code:
-        return False
+        return None
     with _credential_lock:
-        expiry = table.pop(code, None)
-    return expiry is not None and expiry > time.monotonic()
+        record = table.pop(code, None)
+    if record is None or _expiry_of(record) <= time.monotonic():
+        return None
+    return record[1] if isinstance(record, tuple) and len(record) > 1 else ""
 
 
 def _session_is_live(code: Optional[str]) -> bool:
     """True for a session token that has not expired. Leaves it in place."""
+    return _session_record(code) is not None
+
+
+def _session_record(code: Optional[str]) -> Optional[Tuple[float, str, str]]:
     if not code:
+        return None
+    with _credential_lock:
+        record = _sessions.get(code)
+    if record is None or _expiry_of(record) <= time.monotonic():
+        return None
+    return record
+
+
+def _surface_of(token: Optional[str]) -> Optional[str]:
+    """Which surface a live session belongs to. None when there is no such session."""
+    record = _session_record(token)
+    return record[1] if record else None
+
+
+def _revoke_session(token: Optional[str]) -> bool:
+    if not token:
         return False
     with _credential_lock:
-        expiry = _sessions.get(code)
-    return expiry is not None and expiry > time.monotonic()
+        return _sessions.pop(token, None) is not None
+
+
+def _revoke_session_by_ref(ref: str) -> bool:
+    """End one session by the reference a laptop was given -- never by its token."""
+    with _credential_lock:
+        for token, record in list(_sessions.items()):
+            if len(record) > 2 and record[2] == ref:
+                _sessions.pop(token, None)
+                return True
+    return False
+
+
+def _session_list() -> list:
+    """Live sessions, identified without disclosing anything usable.
+
+    A person deciding which handset to cut off needs the surface, the age and a
+    reference they can act on. The token would let the list itself be a
+    credential, so it is not in here.
+    """
+    now = time.monotonic()
+    rows = []
+    with _credential_lock:
+        for token, record in _sessions.items():
+            expiry = _expiry_of(record)
+            if expiry <= now:
+                continue
+            rows.append({
+                "session_ref": record[2] if len(record) > 2 else "",
+                "surface": record[1] if len(record) > 1 else "",
+                "expires_in": max(0, int(expiry - now)),
+            })
+    return rows
 
 
 def clear_dashboard_credentials() -> None:
@@ -237,26 +352,79 @@ def clear_dashboard_credentials() -> None:
         _sessions.clear()
 
 
+def _presented_credential(request: Request) -> str:
+    presented = request.headers.get(TOKEN_HEADER)
+    if not presented:
+        authorization = request.headers.get("authorization", "")
+        if authorization.lower().startswith("bearer "):
+            presented = authorization[7:]
+    return presented or ""
+
+
+def require_master_token(request: Request) -> None:
+    """Laptop-only routes: the master token, and never a session.
+
+    Managing sessions is a console act. A phone session is refused here rather
+    than by remembering to add this path to a table, so the two rules cannot
+    drift apart. Defined before the routes that use it, because Python evaluates
+    a default argument when the ``def`` runs.
+    """
+    settings = get_settings()
+    if not settings.auth_enabled:
+        return
+    presented = _presented_credential(request)
+    if _session_record(presented) is not None:
+        raise HTTPException(status_code=403, detail="A session cannot manage sessions.")
+    if not get_token_store().verify(presented):
+        raise HTTPException(status_code=401, detail="Missing or invalid API token.")
+
+
 async def require_auth(request: Request) -> None:
     """Dependency that enforces the API token on protected routes."""
     settings = get_settings()
     if not settings.auth_enabled:
         return
 
-    presented = request.headers.get(TOKEN_HEADER)
-    if not presented:
-        authorization = request.headers.get("authorization", "")
-        if authorization.lower().startswith("bearer "):
-            presented = authorization[7:]
+    presented = _presented_credential(request)
 
     # A dashboard session token is as good as the master token here -- it is
-    # shorter-lived, revocable, and never touches disk.
-    if _session_is_live(presented):
+    # shorter-lived, revocable, and never touches disk. Good for the surface it
+    # was issued to, which is the part Phase 58 adds: a phone's token is not a
+    # laptop's token, and the difference is enforced at this one gate rather than
+    # remembered by every route behind it.
+    record = _session_record(presented)
+    if record is not None:
+        surface = record[1] if len(record) > 1 else ""
+        if not _path_allowed(surface, request.url.path):
+            _refuse_outside_surface(surface, request.url.path, presented)
         return
 
     if not get_token_store().verify(presented):
         log.info("rejected unauthenticated request", extra_fields={"path": request.url.path})
         raise HTTPException(status_code=401, detail="Missing or invalid API token.")
+
+
+def _refuse_outside_surface(surface: str, path: str, token: str) -> None:
+    """Refuse, record, and name the surface -- without repeating the credential."""
+    log.info("rejected out-of-surface call",
+            extra_fields={"path": path, "surface": surface})
+    try:
+        get_core().audit.record(
+            intent="scope refusal",
+            tool="",
+            target=path,
+            risk="read",
+            result="denied",
+            detail={"surface": surface,
+                    "reason": "outside what this surface can reach"},
+        )
+    except Exception:  # a refusal is never made less safe by a failing ledger
+        log.warning("scope refusal could not be audited", extra_fields={"path": path})
+    raise HTTPException(
+        status_code=403,
+        detail=(f"This {surface} is not allowed to reach {path}. The laptop can; "
+                f"this session cannot."),
+    )
 
 
 #: Shorthand used on every route that can read state or cause an action.
@@ -468,8 +636,8 @@ async def health(_: None = Protected) -> Dict[str, Any]:
 
 
 @app.get("/auth/token")
-async def auth_token(_: None = SameOriginProtected) -> Dict[str, Any]:
-    """Issue a fresh dashboard session to an already-authenticated client.
+async def auth_token(request: Request, _: None = SameOriginProtected) -> Dict[str, Any]:
+    """Issue a fresh session to an already-authenticated client.
 
     This route used to hand the **master API token** to any caller: its
     ``Origin`` check was conditional, so a header-less ``curl`` -- no
@@ -480,13 +648,19 @@ async def auth_token(_: None = SameOriginProtected) -> Dict[str, Any]:
     It now refuses a foreign or header-less caller *before* it will even say
     whether a credential is good, and what it returns is a session token. The
     master token never leaves the process.
+
+    A re-issued session inherits the surface of the one that asked. Without that
+    rule a phone could launder a wider token through its own narrow one, and the
+    scoping would be a speed bump rather than a gate.
     """
     settings = get_settings()
     if not settings.auth_enabled:
         return {"auth_enabled": False, "token": None, "expires_in": 0}
+    record = _session_record(_presented_credential(request))
+    surface = record[1] if record and len(record) > 1 else "console"
     return {
         "auth_enabled": True,
-        "token": _issue_credential(_sessions, SESSION_TTL_SECONDS),
+        "token": _issue_credential(_sessions, SESSION_TTL_SECONDS, surface),
         "expires_in": SESSION_TTL_SECONDS,
     }
 
@@ -507,7 +681,12 @@ async def auth_session(request: Request, body: BootstrapBody) -> Dict[str, Any]:
     if not settings.auth_enabled:
         return {"auth_enabled": False, "session_token": None, "expires_in": 0}
 
-    if not _redeem_credential(_bootstraps, body.bootstrap.strip()):
+    # The surface was chosen when the code was minted, by the route that minted
+    # it. Whatever the body asks for is ignored, which is the point: a handset
+    # decides what it is allowed to reach before it holds a credential, not
+    # after. See the module's ``PHONE_ALLOWED``.
+    surface = _redeem_with_surface(_bootstraps, body.bootstrap.strip())
+    if surface is None:
         # Expired, already spent, or invented. The response deliberately says
         # nothing about which, so it cannot be used to probe live codes.
         log.info("rejected dashboard bootstrap", extra_fields={"path": request.url.path})
@@ -515,9 +694,47 @@ async def auth_session(request: Request, body: BootstrapBody) -> Dict[str, Any]:
 
     return {
         "auth_enabled": True,
-        "session_token": _issue_credential(_sessions, SESSION_TTL_SECONDS),
+        "session_token": _issue_credential(_sessions, SESSION_TTL_SECONDS, surface),
         "expires_in": SESSION_TTL_SECONDS,
+        "surface": surface,
     }
+
+
+@app.delete("/auth/session")
+async def auth_signout(request: Request, _: None = Protected) -> Dict[str, Any]:
+    """End this caller's own session.
+
+    A phone being wiped, sold or handed to a child should stop being authorised,
+    and doing that should not require revoking every credential on the laptop.
+    The answer is the store re-read after the call rather than the call's own
+    report, because that is the rule this project keeps having to enforce.
+    """
+    token = _presented_credential(request)
+    if _session_record(token) is None:
+        raise HTTPException(status_code=401,
+                            detail="No live session to end. The master token is not a session.")
+    _revoke_session(token)
+    return {"revoked": _session_record(token) is None}
+
+
+@app.get("/auth/sessions")
+async def auth_sessions(_: None = Depends(require_master_token)) -> list:
+    """Live sessions with their surface and remaining time -- and no token.
+
+    ``/auth/token`` is this file's cautionary tale: a route that returned the
+    credential itself. A list handed to a person so they can decide which handset
+    to cut off must identify sessions without becoming a credential store.
+    """
+    return _session_list()
+
+
+@app.delete("/auth/sessions/{session_ref}")
+async def auth_revoke_one(session_ref: str,
+                          _: None = Depends(require_master_token)) -> Dict[str, Any]:
+    """End exactly one session, by the reference the list publishes."""
+    if not _revoke_session_by_ref(session_ref):
+        raise HTTPException(status_code=404, detail="No such session reference.")
+    return {"revoked": session_ref not in [row["session_ref"] for row in _session_list()]}
 
 
 @app.post("/command", response_model=CommandResponse)
@@ -2605,7 +2822,11 @@ async def phone_client() -> Any:
     if not PHONE_PAGE.exists():
         raise HTTPException(status_code=404, detail="phone client not found")
     settings = get_settings()
-    bootstrap = _issue_credential(_bootstraps, BOOTSTRAP_TTL_SECONDS) if settings.auth_enabled else ""
+    # Minted as a *phone* code: the session it later buys can only reach what the
+    # phone page calls. The page cannot ask for more, because it is this route,
+    # not the request body, that decides.
+    bootstrap = (_issue_credential(_bootstraps, BOOTSTRAP_TTL_SECONDS, "phone")
+                 if settings.auth_enabled else "")
     return HTMLResponse(content=PHONE_PAGE.read_text(encoding="utf-8").replace(
         "__JARVIS_BOOTSTRAP__", bootstrap))
 
@@ -2665,7 +2886,8 @@ async def dashboard() -> Any:
         raise HTTPException(status_code=404, detail="dashboard not found")
 
     settings = get_settings()
-    bootstrap = _issue_credential(_bootstraps, BOOTSTRAP_TTL_SECONDS) if settings.auth_enabled else ""
+    bootstrap = (_issue_credential(_bootstraps, BOOTSTRAP_TTL_SECONDS, "dashboard")
+                 if settings.auth_enabled else "")
     html = DASHBOARD.read_text(encoding="utf-8").replace("__JARVIS_BOOTSTRAP__", bootstrap)
     return HTMLResponse(content=html)
 

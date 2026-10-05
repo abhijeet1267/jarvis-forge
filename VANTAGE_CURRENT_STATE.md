@@ -1,7 +1,7 @@
-# Vantage — full working report, Phase 57 close-out
+# Vantage — full working report, Phase 58 close-out
 
-Written 2026-10-04, refreshed at each phase close; this pass is 2026-10-05. §2A–§2F are Phase 52,
-53, 54, 55, 56 and 57. Every number below was produced by a command on this machine during this
+Written 2026-10-04, refreshed at each phase close; this pass is 2026-10-05. §2A–§2G are Phase 52,
+53, 54, 55, 56, 57 and 58. Every number below was produced by a command on this machine during this
 session or the immediately preceding phases, and the command is named next to it. Where a
 capability exists but was **not** re-measured today, it says so rather than implying it was.
 
@@ -11,13 +11,13 @@ capability exists but was **not** re-measured today, it says so rather than impl
 
 | | |
 |---|---|
-| What it is | A personal AI operating system for macOS: one command pipeline, 145 governed capabilities (30 of them confirmation-gated), a laptop panel, a phone client, a signed `.app` delivered as files |
-| Current phase | **Phase 57 — the laptop stays reachable after its window closes** (closed) |
-| Test suite | **2273 passed · 0 failed · 0 xfailed · 0 skipped** — 66.98 to 74.22 s over three runs at this close |
+| What it is | A personal AI operating system for macOS: one command pipeline, 145 governed capabilities (30 of them confirmation-gated), a laptop panel, a scoped phone client, a signed `.app` delivered as files |
+| Current phase | **Phase 58 — the phone is a surface, not a second copy of the laptop** (closed) |
+| Test suite | **2305 passed · 0 failed · 0 xfailed · 0 skipped** — 70.2 s at the Phase 58 close |
 | Spec §6 coverage | **37 of 37** — every utterance the build prompt lists reaches a capability |
 | Delivered | `~/Downloads/Vantage/` — `Vantage.app` (running, seal valid), `Vantage.app.zip`, `vantage-source.zip`, `READ ME FIRST.txt` |
 | Commits | `a20e39c` (Ph 57), `7c828fa` (Ph 56 close), `ea68c7d` (Ph 56 close), `0cdc770` (Ph 56), `176bcfb` (Ph 55), `377e79f` (Ph 54 correction), `67d9530` (Ph 54), `35c9abf` (Ph 53), `3708f85` (Ph 52 correction), `92efc6b` (Ph 52), `f047eb2` (Ph 51), `452e9c0` (Ph 50) — **local only, nothing pushed** |
-| Biggest known gap | Off the wifi there is nothing: the phone surface is a served web page, not a native app, with no keychain, biometrics, push or relay. Persistence now exists as a capability but has never been left **installed** on this machine (57-A -- a user decision), and the permission ask still cannot land because it lives in the helper (57-G, carried from 56-A). |
+| Biggest known gap | Off the wifi there is nothing: no relay and no push, and the phone surface is a served web page rather than a store app — a native build is blocked on this machine's toolchain (58-D, measured). Phone sessions are now scoped, but the credential is still readable by page script (58-C) and a phone can approve its own gated actions (58-B). Persistence exists but has never been left **installed** on this machine (57-A — a user decision), and the permission ask still cannot land because it lives in the helper (57-G). |
 
 ---
 
@@ -468,6 +468,76 @@ Measured after: **2273 tests passing**, 145 tools (+3), 30 gated (+2, none remov
 119 HTTP route objects / 113 paths, 84 test modules, 59 phase reports, 70,190 lines.
 
 
+## 2G. Phase 58 in full — the phone is a surface, not a second copy of the laptop
+
+The roadmap called this "native mobile shell". The machine was asked before anything was planned:
+
+```text
+xcodebuild                    -> requires Xcode; active dir is /Library/Developer/CommandLineTools
+xcrun --sdk iphoneos          -> SDK "iphoneos" cannot be located
+security find-identity -v -p codesigning -> 0 valid identities found
+which adb / ~/Library/Android/sdk -> not found / absent
+handset to verify on          -> none
+```
+
+**`BLOCKED_EXTERNAL_DEPENDENCY`.** No store app could be compiled, signed *or verified* here. The
+alternative the user chose was to harden the web client and never relabel it as native — and a guard
+now fails if `phone.html`, `sw.js` or `manifest.webmanifest` contains "native app". It caught my own
+comment inside minutes.
+
+**What measuring the phone actually found:** the page calls **ten** endpoints, and a session minted
+by `POST /auth/session` reached every protected route in the API — `/privacy/delete`, `/audit`,
+`/health`, memory. `source: "phone"` was metadata, not authority. `clear_dashboard_credentials()`
+existed with no production caller; no session could be ended without ending all of them.
+
+**The rule that fixes it: the surface is decided when the code is minted, not when it is spent.**
+`/phone` issues a phone-scoped bootstrap, `/dashboard` a dashboard-scoped one; the session inherits
+that and the redeem body's `surface` field is ignored — a test redeems a phone code claiming
+`"dashboard"` and still gets a refused `/health`. `/auth/token` re-issues into the caller's own
+surface, so a phone cannot launder a wider token through its narrow one. Enforcement sits in
+`require_auth` in one place, before any handler; the refusal names the surface and never the
+credential, and writes a `denied` audit row. `/auth/session` and `/auth/token` are exempt because
+neither can widen a surface — a phone that cannot sign itself out has no escape hatch.
+
+**The dashboard was left unrestricted, and that is recorded as 58-A rather than quietly narrowed.**
+The panel is the operator's console on the machine; the phone is remote, small and losable.
+Asymmetry with a reason is better than a tidy rule nobody chose.
+
+Three defects, all caught by pressing things rather than by the suite:
+
+1. `/phone?focus=approvals` scrolled at parse time, before `/tools` rendered the quick actions
+   above the card. At 320×568: `scrollY` 31, card top **590** — off screen, while the DOM reported
+   it had focused the element. Now the landing re-applies once the render settles, and only the
+   settled call sets the one-shot flag. Re-measured: `scrollY` 179 (the page's maximum), card on
+   screen. Negative control: the same page without the parameter sits at `scrollY` 0, unfocused.
+2. The first "stop polling when the credential is refused" guard was put in `refresh()`'s `catch` —
+   but the two awaited calls are `call("/devices").catch(() => [])`: they swallow their own
+   rejections, so the catch never ran. **Dead code that passed its own source-level test.**
+   Measured after a sign-out: console errors climbed **12 → 129** while the page said "not paired".
+   Moved above the awaits: **3** errors in 22 s and one honest line — "signed out or expired on this
+   phone — reload to use it again". The test now asserts the guard's *position* relative to
+   `Promise.all`.
+3. `sw.js` had one cache name and no upgrade path; the shell changed, so the name is now
+   `jarvis-phone-shell-v2` and a test fails if a future shell change skips the bump. A phone holding
+   v1 gets it deleted on activate rather than serving an old page forever.
+
+Live on an isolated home and port (never `~/.jarvis-forge`, and no token printed): phone session
+200 on its four data routes, 200 on `/command` and `/emergency_stop`; **403** on `/health`, `/audit`
+and `/privacy/delete` — with the memory row count read **before and after** the refusal (1 / 1,
+unchanged, because a gate that half-runs the action is no gate at all); three `denied` audit rows
+carrying no credential; `GET /auth/sessions` publishing `{session_ref, surface, expires_in}` and
+nothing usable; sign-out ending exactly one session while another stayed live.
+
+**What this phase does not claim:** no native app, no signature, no handset, no push. The credential
+is still readable by page script — scoping limits what it can *do*, not how it can be *read* (58-C) —
+and a phone can still approve its own gated actions, because the approvals list lives on the phone
+(58-B).
+
+Measured after: **2305 tests passing**, 145 tools and 30 gated **unchanged — no capability was
+added, one gate was narrowed**, 52 routes, 122 HTTP route objects / 115 paths, 85 test modules, 60
+phase reports, 70,880 lines.
+
+
 ## 3. Working status of the whole product, as measured today
 
 All values from the **delivered app** over HTTP (read-only GETs) unless stated.
@@ -488,19 +558,19 @@ User → Intent → RulePlanner (50 routes) → PermissionEngine → [Confirmati
 
 | thing | value | how measured |
 |---|---|---|
-| Tools | **145** | `/health`, `/tools` |
+| Tools | **145** (no capability added in Phase 58) | `/health`, `/tools` |
 | Agents | **15** — calendar, car, coding, design, email, home, laptop, laptop_center, memory, phone, research, robotics, scheduler, vision, watch | `/health` |
 | Risk spread | READ 77 · LOW 38 · EXTERNAL 15 · DESTRUCTIVE 12 · PHYSICAL 3 | registry, counted this close |
 | Confirmation-gated | **30** of 145 — gates added in Phase 57, none removed (§7 of that report proves the direction) | registry |
 | RulePlanner routes | **52** | `len(core.planner._rules)` |
 | Registered applications | **15** | `AppRegistry` |
-| HTTP surface | 119 route objects / **113 paths** (Phase 54 the stop and the policy doors, Phase 56 the permission request, Phase 57 the start-up read) | `len(app.routes)` |
+| HTTP surface | 122 route objects / **115 paths** (Phase 54 the stop and the policy doors, Phase 56 the permission request, Phase 57 the start-up read, Phase 58 sign-out, the session list and revoke-one) | `len(app.routes)` |
 | Database tables | **32** | read-only `sqlite_master` count on the delivered app's database |
 | Memories indexed | 52 / 52, coverage 1.0, hybrid retrieval | `/health` |
 | Scheduler | running, 30 s tick, 67 jobs | `/health` |
-| Test suite | 2273 passed, 0 failed, 0 skipped; 66.98–74.22 s over three close-out runs | `pytest -q` |
-| Test modules / phase reports | 84 / 59 | `ls` |
-| Code volume | 70,190 lines — 41,887 source · 28,303 tests | `find jarvis dashboard app … \| xargs wc -l` |
+| Test suite | 2305 passed, 0 failed, 0 skipped; 70.2 s at the Phase 58 close | `pytest -q` |
+| Test modules / phase reports | 85 / 60 | `ls` |
+| Code volume | 70,880 lines — 42,191 source · 28,689 tests | `find jarvis dashboard app … \| xargs wc -l` |
 
 ### 3.3 Permissions, as the OS reports them right now (`/permissions`)
 
@@ -568,8 +638,8 @@ Swift helper and an x86_64 build on an arm64 machine. Not re-driven by ear today
 | ~~No emergency-stop route~~ | **closed in Phase 54** — `POST /emergency_stop` calls the registered tool, needs no confirmation, and re-reads the job rows before claiming a stop | menu-bar and lock-screen surfaces still need the native shell |
 | ~~No tool-level revoke surface~~ | **closed in Phase 54** — `POST /permissions/{tool}/revoke` and `/restore`, with the denial re-read after the write and `emergency_stop` itself refused | no expiry and no bulk form (54-C) |
 | ~~Vantage cannot describe itself~~ | **closed in Phase 53** — approvals, status, recent actions, current task and a verified stop are now answerable | was blocking phone-side approvals and task state |
-| No native mobile app | the phone client is a served web page (`/phone`) | §2B of the build prompt asks for iOS/Android with keychain/keystore, biometrics, push |
-| No relay, no push, no biometrics | none in the tree | remote-away-from-LAN use is not possible today |
+| No native mobile app | the phone client is a served web page (`/phone`). **Phase 58 could not change that and says so**: no Xcode, `iphoneos` SDK not locatable, **0 valid code-signing identities**, no `adb`, no Android SDK, no handset — `BLOCKED_EXTERNAL_DEPENDENCY`. What Phase 58 did instead: phone sessions are scoped at the moment the bootstrap is minted, sign-out exists, a session can be revoked one at a time, and a guard fails if any shipped phone file says "native app" | keychain/keystore, biometrics, push and a store build still need a toolchain and an identity that are not on this machine (58-D) |
+| No relay, no push, no biometrics | none in the tree. Phase 58 added the receiving half of a notification (`/phone?focus=approvals`) and no way to send one | remote-away-from-LAN use is not possible today; and a phone can still approve its own gated actions (58-B) |
 | No provider adapters in use | `llm_enabled: false`; OpenAI/Gemini adapters per §22–24 not built | LLM planning is off; Basic Mode carries everything |
 | No Computer Use capability | §26 not started | by design — after Basic Mode and pairing are stable |
 | ~~No first-run permission **request** path~~ | **narrowed in Phase 56** — `POST /permissions/{capability}/request` exists, is loopback-only, refuses with a reason, and answers from a re-read. The **ask itself cannot succeed from the helper process** (the Speech framework aborts a non-bundle caller), so no dialog has been observed on this machine — 56-A | §3's wizard still needs the ask moved *into* the app process, which now exists but does not host it yet — 57-G |
@@ -628,15 +698,19 @@ explicit approve/deny, pre-execution revalidation, hash-chained audit, tri-state
 memory deletion scopes, redaction of secrets in logs, `POST /emergency_stop` (a panel button since
 Phase 54, which re-reads the job rows before claiming a stop), per-tool revoke/restore on the
 policy engine plus the panel's Policy column (Phase 54), a user-started macOS permission
-**request** that answers only from a re-read (Phase 56), and a login item that is EXTERNAL-tier,
-confirmation-gated and reported from launchd rather than from the request (Phase 57).
+**request** that answers only from a re-read (Phase 56), a login item that is EXTERNAL-tier,
+confirmation-gated and reported from launchd rather than from the request (Phase 57), and
+**session surfaces** -- a handset's token is minted for a phone and cannot reach the laptop's
+console routes, can sign itself out, and can be revoked one at a time from the laptop (Phase 58).
 
 **Surfaces** — laptop panel (`/dashboard`, 1440 px, quick actions from the live registry, tool
 filter with a Policy column, devices with Forget, Permissions card with "Grant access" and "Open
 System Settings", Start-up card with "Install the login item", emergency stop, voice state), phone
-client (`/phone`, 375 px, six quick actions, mic, approvals list, emergency stop), manifest +
-service worker + icons, CLI, and the `.app` launcher -- which since Phase 57 no longer has to be
-the only thing keeping the server alive.
+client (`/phone`, 375 px and 320 px verified, six quick actions from the live registry, mic,
+approvals list, emergency stop, sign-out, and `/phone?focus=approvals` to land on the decision),
+manifest + service worker + icons, CLI, and the `.app` launcher -- which since Phase 57 no longer
+has to be the only thing keeping the server alive. It is an installable web client, and nothing
+shipped calls it a native app, because no toolchain on this machine could build one (58-D).
 
 ---
 
@@ -659,9 +733,16 @@ the only thing keeping the server alive.
    **The §3 first-run wizard is still not built** (56-B), and Phase 57's host process did not
    remove the blocker — the ask still runs in the helper, which macOS will not let prompt (57-G).
    Read-only status remains, and asking is still never a side effect of a poll.
-6. **Native mobile shell** (keychain/keystore, biometrics, push, deep links), then the
-   **relay** for off-LAN use, then **provider adapters** (OpenAI, Gemini, local) behind the
-   same PermissionEngine, then **Computer Use** last, as §26 orders.
+6. **Native mobile shell** — **blocked on the toolchain, not on the code** (58-D): no Xcode, no
+   iOS SDK, zero signing identities, no Android SDK, no handset. Phase 58 delivered the phone work
+   that *is* verifiable here: session surfaces fixed at issue time, sign-out, revoke-one, a working
+   deep link, a cache version that upgrades. Still open on the phone: the credential is readable by
+   page script (58-C), a phone can approve its own gated actions (58-B), no push (58-E).
+   Then the **relay** for off-LAN use. **Provider adapters are further along than the roadmap
+   thought**: an OpenAI-shaped adapter already ships and is wired into the pipeline
+   (`jarvis/gateway/router.py:111`, used only when `llm_enabled`), plus a vision provider and
+   embeddings — what is missing is a key, which is a user decision, not missing code. **Computer
+   Use** stays last, as §26 orders.
 7. **Decisions the user owns, not fixes**: whether to clear the 5 deliberate `forged` audit
    rows that make the chain read BROKEN; whether to grant the bundle Accessibility (which
    unlocks `show the current application` and Finder confirmation); whether to clean the
@@ -672,8 +753,8 @@ the only thing keeping the server alive.
    against stubs and one real abort, and **has not been observed prompting this machine.**
 
 Carried open items, all still true: **49a-A…F**, **50-A…F**, **51-A…F**, **52-A…F**,
-**53-A…F**, **54-A…F**, **55-A…E**, **56-A…F**, **57-A…G** — each written up in its phase report
-and indexed in `README.md`.
+**53-A…F**, **54-A…F**, **55-A…E**, **56-A…F**, **57-A…G**, **58-A…G** — each written up in its
+phase report and indexed in `README.md`.
 
 ---
 
@@ -709,7 +790,7 @@ edited only additively.
 | question | file |
 |---|---|
 | What the product is and how to use it | `README.md`, `~/Downloads/Vantage/READ ME FIRST.txt` |
-| Why each phase did what it did | `audit/PHASE*.md` (59 reports, newest first in the README table) |
+| Why each phase did what it did | `audit/PHASE*.md` (60 reports, newest first in the README table) |
 | What is still open | the open-items block at the end of `README.md` |
 | Why a permission ask must not be a poll | `audit/PHASE50_*.md` (the read-only rule) and `audit/PHASE56_ASKING_ON_PURPOSE_REPORT.md` (the request path, and why a helper cannot use it) |
 | Suite size over time | `benchmarks/suite_history.json`, `assets/chart-suite-growth.svg` |

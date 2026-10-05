@@ -129,6 +129,12 @@
       <button id="pair">Pair with this laptop</button>
       <button id="refresh" class="ghost">Refresh</button>
     </div>
+    <!-- Signing out ends this handset's session and nothing else. A phone gets lost;
+         "stop being authorised from this device" should not require revoking every
+         credential on the laptop. -->
+    <div class="row">
+      <button id="signout" class="ghost">Sign out on this phone</button>
+    </div>
     <div id="pairline" class="sub" style="margin:10px 0 0"></div>
   </div>
 
@@ -155,7 +161,7 @@
     <ul id="log"></ul>
   </div>
 
-  <div class="card">
+  <div class="card" id="approvals">
     <strong style="font-size:14px">Waiting for you</strong>
     <ul id="conf"><li class="sub">nothing pending</li></ul>
   </div>
@@ -166,6 +172,9 @@ const BOOTSTRAP = (document.querySelector('meta[name="jarvis-bootstrap"]') || {}
 let token = "";
 let lastConf = null;
 let lastQuick = null;
+// Set once when the laptop refuses this page's own credential. The poll ends on it.
+let authLost = false;
+let pollTimer = null;
 // Stable per device: pairing a phone twice should not create two devices.
 const DEVICE = localStorage.getItem("jarvis.device") || ("phone_" + Math.random().toString(36).slice(2, 8));
 localStorage.setItem("jarvis.device", DEVICE);
@@ -239,9 +248,11 @@ async function call(path, method, body) {
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    // A 401 here means this page's own credential was refused (expired, or the page
-    // was opened from a stale copy). Saying "not paired yet" would point the user at
-    // the wrong door: pairing is a separate thing that has already succeeded.
+    // A 401 here means this page's own credential was refused (expired, or signed out
+    // on this phone). Remember it: the next poll will fail for exactly the same reason,
+    // and a console full of identical 401s is noise that hides the one line the person
+    // holding the phone needs.
+    if (res.status === 401) authLost = true;
     throw new Error((res.status === 401 ? "credential refused — reload this page "
                                         : "") +
                     (data.detail || ("HTTP " + res.status)));
@@ -457,6 +468,15 @@ function rowsOf(data, key) {
 }
 
 async function refresh() {
+  // Checked before anything is awaited, because the two calls below swallow their own
+  // rejections (`catch(() => [])`) and a guard parked in the catch below is therefore
+  // unreachable -- measured: the console went from 12 refused calls to 129 while that
+  // version sat in place.
+  if (authLost) {
+    if (pollTimer) clearInterval(pollTimer);
+    set("status", "signed out or expired on this phone — reload to use it again", "bad");
+    return;
+  }
   try {
     const [devices, pending] = await Promise.all([
       call("/devices").catch(() => []),
@@ -489,8 +509,12 @@ async function refresh() {
       box.querySelectorAll("button").forEach(btn => btn.onclick = () =>
         resolve(btn.dataset.id, btn.dataset.approve === "1"));
     }
-  } catch (err) { set("status", err.message, "bad"); }
-  loadQuick().catch(() => {});
+  } catch (err) {
+    set("status", err.message, "bad");
+  }
+  // After the quick actions land, because that render is what moves the rest of
+  // the page -- this is where a deep link's landing has to be re-applied.
+  loadQuick().catch(() => {}).then(() => applyFocus(true));
 }
 
 document.getElementById("pair").onclick = pair;
@@ -499,8 +523,60 @@ document.getElementById("send").onclick = send;
 document.getElementById("mic").onclick = () => (recording ? stopMic() : startMic());
 document.getElementById("cmd").addEventListener("keydown", e => { if (e.key === "Enter") send(); });
 
+// Signing out is the one action that must survive every other failure here: if the
+// laptop is unreachable the session is still live on this handset, so the button
+// reports what it could not establish rather than pretending the token is gone.
+document.getElementById("signout").onclick = async () => {
+  const line = document.getElementById("pairline");
+  line.textContent = "signing out…";
+  try {
+    const res = await fetch(API + "/auth/session", {
+      method: "DELETE", headers: headers(),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (res.ok && body.revoked) {
+      token = "";
+      line.textContent = "signed out on this phone. Pair again to use it.";
+    } else {
+      line.textContent = body.detail || `the laptop refused (HTTP ${res.status})`;
+    }
+  } catch (e) {
+    line.textContent = "the laptop did not answer, so this phone is still signed in";
+  }
+};
+
+// A link can name the card to land on (`/phone?focus=approvals`) -- the useful half
+// of what a store-installed app would call a deep link: a notification about a
+// pending approval should open the approval, not the top of a page you then hunt
+// through. Scroll, then focus, so a keyboard or screen reader arrives with it.
+//
+// Measured in a 320x568 viewport, the one-shot version of this failed: the scroll
+// ran before /tools had rendered the quick actions above the card, so by the time
+// the page settled the card was below the fold again. The landing is therefore
+// re-applied once, after the first refresh resolves -- and only once, because
+// hijacking the scroll position every 4 seconds would be worse than the bug.
+const FOCUS_CARDS = { approvals: "approvals" };
+const focusCard = FOCUS_CARDS[(new URLSearchParams(location.search).get("focus") || "")];
+let focusApplied = false;
+
+// Only the settled call is allowed to mark the landing as done. The first version of
+// this marked it at parse time, so the correction after the render returned early and
+// the card stayed below the fold -- the flag has to mean "applied with the layout
+// finished", not "attempted".
+function applyFocus(settled) {
+  if (!focusCard || focusApplied) return;
+  const el = document.getElementById(focusCard);
+  if (!el) return;
+  el.scrollIntoView({ block: "start" });
+  el.setAttribute("tabindex", "-1");
+  el.focus({ preventScroll: true });
+  if (settled) focusApplied = true;
+}
+
+applyFocus(false);
+
 login().then(() => { loadEars(); refresh(); });
-setInterval(refresh, 4000);
+pollTimer = setInterval(refresh, 4000);
 
 // The install path: a worker plus the manifest above is what makes the browser offer
 // "Add to Home Screen". It caches the shell only, so a command never reads back a

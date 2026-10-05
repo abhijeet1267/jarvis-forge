@@ -342,6 +342,13 @@
    "passed": 2273,
    "failed": 0,
    "note": "a user LaunchAgent with no secret and no inherited watchdog; uvicorn starts the app before it notices the port is taken, so the port is probed first"
+  },
+  {
+   "phase": "58 the phone is not the laptop",
+   "collected": 2305,
+   "passed": 2305,
+   "failed": 0,
+   "note": "phone sessions scoped at the moment the bootstrap is minted; the stop-polling guard was dead code until the browser proved it"
   }
  ]
 }

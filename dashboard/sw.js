@@ -4,7 +4,13 @@
    a round trip. It deliberately never caches an answer from the laptop: a stored battery
    level, device list or pending confirmation would be indistinguishable from a live one,
    and this project's whole discipline is that a claim must be observed to be reported.
-   Anything that is not the shell goes straight to the network. */
+   Anything that is not the shell goes straight to the network.
+
+   The cache name is versioned on purpose. Phones that installed the old shell keep
+   that cache under the old name, and activate() deletes anything that is not the
+   current name -- so a change to the shell has to change the version here as well,
+   or every installed phone keeps serving the previous shell. Bumped to v2 in Phase 58
+   when the page learned to open on a named card. */
 
 const PRECACHE = ["/phone", "/manifest.webmanifest", "/icons/icon-192.png", "/icons/icon-512.png"];
 
@@ -12,7 +18,7 @@ const SHELL = PRECACHE.join("|");
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open("jarvis-phone-shell-v1")
+    caches.open("jarvis-phone-shell-v2")
       .then((cache) => cache.addAll(PRECACHE))
       .then(() => self.skipWaiting())
   );
@@ -21,7 +27,7 @@ self.addEventListener("install", (event) => {
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches.keys()
-      .then((keys) => Promise.all(keys.filter((k) => k !== "jarvis-phone-shell-v1")
+      .then((keys) => Promise.all(keys.filter((k) => k !== "jarvis-phone-shell-v2")
         .map((k) => caches.delete(k))))
       .then(() => self.clients.claim())
   );
@@ -41,7 +47,7 @@ self.addEventListener("fetch", (event) => {
     event.respondWith(
       fetch(request).then((response) => {
         const copy = response.clone();
-        caches.open("jarvis-phone-shell-v1").then((cache) => cache.put(request, copy));
+        caches.open("jarvis-phone-shell-v2").then((cache) => cache.put(request, copy));
         return response;
       }).catch(() => caches.match(request))
     );
