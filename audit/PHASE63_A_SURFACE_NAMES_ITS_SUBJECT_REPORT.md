@@ -5,7 +5,7 @@
 | Phase | 63 (post-final-audit follow-up: open items 60-C and 61-A, plus the flake the final audit had not finished) |
 | Date | 2026-10-05 |
 | Starting commit | `02870f8` (cold-start addendum close) |
-| Ending commit | `149412d` (the work) → the close-out commit named in §9 |
+| Ending commit | `149412d` (the work) → `8b93485` (the close-out; its own hash is written by the next commit to touch this file) |
 | Tests before | 2387 passed · 0 failed |
 | Tests after | **2396 passed · 0 failed**, verified on **8 consecutive full-suite runs** including two slow ones (125 s, 167 s) |
 | Tools / gated | 148 / 32 → **148 / 32** — no capability added |
@@ -136,8 +136,8 @@ says a vendor answered — the same line Phase 60 held itself to.
 ## 9. Delivery
 
 Work commit `149412d` — *Say who a status answer is about, and finish the flake fix properly*.
-Close-out commit `—`: filled in by the next edit to this line, since a file cannot carry the hash of
-its own commit.
+Close-out commit `8b93485` — *Record the Phase 63 redeploy and the browser check of the delivered
+badge* (its own hash was written by the commit after it).
 
 `dashboard/index.html` ships inside the bundle, so the app was rebuilt, re-deployed over the old
 copy (kept aside until the new one answered, then removed), and verified:
