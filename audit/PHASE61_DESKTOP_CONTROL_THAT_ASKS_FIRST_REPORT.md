@@ -5,7 +5,7 @@
 | Phase | 61 (Computer Use — the last item in the build prompt's §26 order) |
 | Date | 2026-10-05 |
 | Starting commit | `c922a26` (Phase 60 close-out) |
-| Ending commit | `—` (filled by the next edit to this line, once it exists) |
+| Ending commit | `ddb52df` (the work) → the close-out commit named in §12 |
 | Tests before | 2355 passed · 0 failed · 0 skipped |
 | Tests after | **2380 passed · 0 failed** (76.5 s; one arXiv-gated test skipped on one of four runs) |
 | Tools / gated | 145 / 30 → **148 / 32** — three added, none loosened |
@@ -206,9 +206,27 @@ measured, not attributed to this phase's code and not hidden.
 
 ## 12. Delivery
 
-Work commit `—`, close-out commit `—`, filled in by the next edit to these lines. Delivery is the
-usual pass — rebuild, redeploy, verify with GETs only, rebuild both archives, refresh the delivered
-docs. The three tools ship inside the bundle; two of them cannot be reached by typing, which is the
-part a reader should not have to infer.
+Work commit `ddb52df` — *Give the laptop hands, and keep them behind the confirmation card*.
+Close-out commit `—`: this file is inside that commit, so its hash is written by the next edit to
+this line rather than guessed now.
+
+Rebuilt from this tree, redeployed, verified with **GETs only** — no POST and no actuation reached
+the user's real data directory, and no click was ever sent:
+
+| check | result |
+|---|---|
+| `codesign --verify --deep --strict` on the deployed bundle | valid on disk, satisfies its Designated Requirement |
+| `jarvis/tools/desktop.py` present inside the bundle and inside `Vantage.app.zip` after extraction | both, and the extracted copy re-verifies |
+| `GET /health` on the delivered app | `status ok`, **148 tools**, 15 agents, scheduler running with a 30 s tick, `llm_enabled: false`, `ai_provider: openai` |
+| `GET /tools` | **148** entries; `get_desktop_control_state` read/ungated, `click_desktop` and `type_desktop_text` destructive + `confirmation=True` — the gate is visible in what the shipped server publishes, not only in the source |
+| `GET /tools` and `GET /health` with no token | **401** |
+| the claim the shipped build wrote | `{"pid": 89131, "host": "0.0.0.0", "port": 8765, …}` |
+| archives | `Vantage.app.zip` 1,172,479 B and `vantage-source.zip` 2,540,639 B, both rebuilt; the source archive scans clean for `.env`, tokens, key files and databases |
+| suite | **2380 passed · 0 failed**, measured twice clean (83.1 s and 76.4 s). Earlier runs in the same phase showed the documented Vision-OCR load flake (5 and 6 failures) and one arXiv network-gated skip; both are reported as what they measured, not folded into the headline |
+
+`READ ME FIRST.txt` gained section 8, which says what the hands are, that no sentence reaches them,
+that the permission answer belongs to a process rather than to the product (and that this machine
+grants one and refuses the other), and that **no click or keystroke has ever been executed by this
+code**. Still hand-maintained in the delivery folder rather than generated (56-F).
 
 Nothing was pushed.
