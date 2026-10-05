@@ -5,7 +5,7 @@
 | Phase | 60 (the roadmap's provider adapters, spec §10 OpenAI / §11 Gemini / §12 the neutral contract) |
 | Date | 2026-10-05 |
 | Starting commit | `73a87cc` (Phase 59 close-out) |
-| Ending commit | `—` (recorded in §11 once it exists) |
+| Ending commit | `1bec583` (the work) → `b004a2b` (the close-out, whose own hash is written by the next commit to touch this file) |
 | Tests before | 2332 passed · 0 failed · 0 skipped |
 | Tests after | **2355 passed · 0 failed · 0 skipped** (94.9 s) |
 | Tools / gated | 145 / 30 → **145 / 30** — no capability added, no gate moved |
@@ -309,10 +309,11 @@ because a ratchet that misses a conversion is a ratchet with a hole in it.
 ## 14. Delivery
 
 Work commit `1bec583` — *Put two vendors behind one door, and take the badge's word for nothing*.
-Close-out commit `—` (recorded by the next edit to this line, once it exists): the correction in §1
-and the `root()` fix that came out of it are in that commit, not hidden under the first one. An
-earlier phase wrote a hash into a report before the commit existed, and that is a fabrication with
-a good intention behind it.
+Close-out commit `b004a2b` — *Correct what Phase 60 claimed about itself, and take the second
+base URL*: the correction in §1 and the `root()` fix that came out of it, recorded as their own
+commit rather than folded under the first one. The hash was filled in after that commit existed;
+an earlier phase wrote a hash into a report before the commit did, and that is a fabrication with a
+good intention behind it.
 
 Rebuilt from this tree, re-deployed, and re-verified with **GETs only** — no POST reached the user's
 real data directory:
