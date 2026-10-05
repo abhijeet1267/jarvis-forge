@@ -398,6 +398,14 @@ class JarvisCore:
             # rather than only spoken, so a later reader of the chain can see the
             # request was answered in part.
             detail["unhandled"] = list(unhandled)
+        # Who asked, next to what was asked to change. The ``device`` column below is
+        # the *target* device, which Phase 31 made deliberate and must stay deliberate;
+        # before this, a command that arrived from a phone in another room was written
+        # identically to one typed on the laptop, and nothing was faked but nothing was
+        # traceable either. Found by running the Phase 59 relay and reading the ledger.
+        detail["requested_by"] = request.device_id
+        if getattr(request, "source", ""):
+            detail["surface"] = request.source
         self.audit.record(
             intent=request.text,
             tool=action.tool,

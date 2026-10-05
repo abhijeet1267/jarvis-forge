@@ -1,7 +1,7 @@
-# Vantage — full working report, Phase 58 close-out
+# Vantage — full working report, Phase 59 close-out
 
-Written 2026-10-04, refreshed at each phase close; this pass is 2026-10-05. §2A–§2G are Phase 52,
-53, 54, 55, 56, 57 and 58. Every number below was produced by a command on this machine during this
+Written 2026-10-04, refreshed at each phase close; this pass is 2026-10-05. §2A–§2H are Phase 52,
+53, 54, 55, 56, 57, 58 and 59. Every number below was produced by a command on this machine during this
 session or the immediately preceding phases, and the command is named next to it. Where a
 capability exists but was **not** re-measured today, it says so rather than implying it was.
 
@@ -11,13 +11,13 @@ capability exists but was **not** re-measured today, it says so rather than impl
 
 | | |
 |---|---|
-| What it is | A personal AI operating system for macOS: one command pipeline, 145 governed capabilities (30 of them confirmation-gated), a laptop panel, a scoped phone client, a signed `.app` delivered as files |
-| Current phase | **Phase 58 — the phone is a surface, not a second copy of the laptop** (closed) |
-| Test suite | **2305 passed · 0 failed · 0 xfailed · 0 skipped** — 70.2 s at the Phase 58 close |
+| What it is | A personal AI operating system for macOS: one command pipeline, 145 governed capabilities (30 of them confirmation-gated), a laptop panel, a scoped phone client, an optional forward-only relay (locally proven, off-LAN blocked), a signed `.app` delivered as files |
+| Current phase | **Phase 59 — an authenticated relay, proven locally and no further** (closed) |
+| Test suite | **2332 passed · 0 failed · 0 xfailed · 0 skipped** — 76.9 s at the Phase 59 close |
 | Spec §6 coverage | **37 of 37** — every utterance the build prompt lists reaches a capability |
 | Delivered | `~/Downloads/Vantage/` — `Vantage.app` (running, seal valid), `Vantage.app.zip`, `vantage-source.zip`, `READ ME FIRST.txt` |
 | Commits | `a20e39c` (Ph 57), `7c828fa` (Ph 56 close), `ea68c7d` (Ph 56 close), `0cdc770` (Ph 56), `176bcfb` (Ph 55), `377e79f` (Ph 54 correction), `67d9530` (Ph 54), `35c9abf` (Ph 53), `3708f85` (Ph 52 correction), `92efc6b` (Ph 52), `f047eb2` (Ph 51), `452e9c0` (Ph 50) — **local only, nothing pushed** |
-| Biggest known gap | Off the wifi there is nothing: no relay and no push, and the phone surface is a served web page rather than a store app — a native build is blocked on this machine's toolchain (58-D, measured). Phone sessions are now scoped, but the credential is still readable by page script (58-C) and a phone can approve its own gated actions (58-B). Persistence exists but has never been left **installed** on this machine (57-A — a user decision), and the permission ask still cannot land because it lives in the helper (57-G). |
+| Biggest known gap | Off the wifi there is still nothing you can use: the relay protocol exists and works on loopback, but there is no relay host outside this network to run it on and no client is wired to it (59-A, 59-B) — and there is no push. The phone surface is a served web page rather than a store app — a native build is blocked on this machine's toolchain (58-D, measured). Phone sessions are now scoped, but the credential is still readable by page script (58-C) and a phone can approve its own gated actions (58-B). Persistence exists but has never been left **installed** on this machine (57-A — a user decision), and the permission ask still cannot land because it lives in the helper (57-G). |
 
 ---
 
@@ -538,6 +538,99 @@ added, one gate was narrowed**, 52 routes, 122 HTTP route objects / 115 paths, 8
 phase reports, 70,880 lines.
 
 
+## 2H. Phase 59 in full — an authenticated relay: a door with a bouncer
+
+### 2H.1 What was measured before anything was written
+
+The register said "no relay, no push" and the tree agreed, but "no relay" needed qualifying: two
+relay-shaped things already exist, both pointing the wrong way for this purpose.
+`jarvis/transport/` authenticates a device over TLS by HMAC-SHA256 of a challenge, receives files
+into an inbox, and is loopback-only and deliberately outside the orchestrator.
+`jarvis/watch/gateway.py` has a `BridgeTransport` that POSTs notifications to `JARVIS_WATCH_BRIDGE`
+and refuses to let anything it delivered decide a confirmation. Neither is a path **into** the
+laptop from elsewhere, and no `JARVIS_RELAY_*` setting exists.
+
+### 2H.2 The shape, and the four properties that carry tests
+
+`jarvis/relay.py` (462 lines) forwards, authenticates and nothing else:
+
+```
+client ──(PSK handshake)──> relay ──(the client's own credential, unchanged)──> host
+                            device_id from what signed, not from what was typed
+              PermissionEngine · confirmation · tool · verification · audit ── all the host's
+```
+
+1. **The relay never holds the master token.** It carries the client's `X-JARVIS-Token` and answers
+   `401 no_host_credential` rather than substituting one. A relay with a laptop-wide token turns one
+   stolen relay session into total control of the machine.
+2. **Identity comes from what you can sign.** `CommandBody.device_id` is a string the caller types;
+   the forwarded body's is overwritten with the device that passed the handshake.
+3. **Revocation is re-read per request,** from the device key, so `revoke` bites mid-TTL.
+4. **Down is down, never empty:** `502 host_unavailable` / `504 host_timeout`. This project has
+   already fixed that lie twice — mail and calendar — and a relay that answered `[]` during an
+   outage would be the same bug with a bigger blast radius.
+
+Freshness needed more than the existing primitive: `pairing.verify_proof` signs the challenge alone,
+which is fine bound to one live TLS connection and not fine for a capturable session envelope. So
+the payload is `HMAC(secret, "<challenge>\n<device_id>\n<unix_time>")`, challenges are single-use
+with a 60 s TTL, the window is ±120 s, and a wrong proof **burns the challenge** — `redeem` pops the
+record before it verifies, so probing gets one guess, not a window. Same PSK, same HMAC, no new
+cryptography.
+
+### 2H.3 Two allowlists, and the hop that launders nothing
+
+The relay forwards a named list (`/health`, `/command`, `/confirmations`, `/confirm/*`, `/devices`,
+`/tools`, `/emergency_stop`, `/voice/status`) and refuses the rest with `path_not_allowed`; the path
+is stripped **before** the decision, so `/relay//` answers `404 no_path` instead of the relay
+guessing at meaning. The host's Phase 58 surface rules apply on top of that. Live: `/relay/config`
+refused by the relay, `/relay/health` refused by the **host** for a phone-minted session — "This
+phone is not allowed to reach /health. The laptop can; this session cannot." — while a
+dashboard-minted credential got 200 on the same path. Inserting a hop between a phone and the
+laptop widens the phone not at all.
+
+### 2H.4 The defect this phase found in its own running code
+
+The relay was run for real and the ledger read back: a command that arrived from a handset was
+written **identically to one typed on the laptop**, because every executed action records
+`device=action.device` — the *target* device Phase 31 made deliberate. Nothing was faked; nothing
+was traceable. Fixed additively at `jarvis/core/orchestrator.py:406` with
+`detail["requested_by"]` and `detail["surface"]`, and the test asserts the device column has **not**
+moved, because repurposing it would corrupt device targeting.
+
+### 2H.5 What the live run proved, and what two things it corrected
+
+`JARVIS_HOME=$(mktemp -d)`, host on 127.0.0.1:8916, relay on 8917, real `/phone` bootstrap, real
+key files, real SQLite. Single-use replay refused; forged and missing sessions refused before
+reaching the host; the device's own id carried into the ledger while a body claiming `laptop_main`
+was overruled; a stale timestamp refused; a wrong proof then a right proof on the same challenge
+both refused; revoking the device dropped a live session on the next request and `403`-refused its
+next challenge, with the key file gone; the host stopped under a **live** session answered
+`502 host_unavailable` on both GET and POST; `/openapi.json`, `/docs`, `/redoc` all 404.
+
+Two mistakes only a live process could catch: `FastAPI` imported inside `build_relay_app` made
+`request: Request` resolve as a required query parameter, so **every** proxied call answered 422 —
+unit-level instrumentation had already proved the body rewrite, which is why the wire test is what
+isolated the layer. And listing the running relay's routes found an OpenAPI document being served;
+the surface test exists now and the process answers 404. An earlier outage check reused a session
+whose device had been revoked, so it proved nothing and was thrown out rather than quoted.
+
+**What this phase does not claim, and it is the headline:** every hop above is loopback.
+`OFF_LAN_REACHABILITY: BLOCKED_EXTERNAL_DEPENDENCY` — there is no public relay host to point at, and
+router configuration, port forwarding and third-party tunnels are the user's network and the user's
+machine. A local relay test is not evidence of reachability from outside the wifi and is not
+presented as if it were. Also not claimed: no client is wired to the relay (59-B), sessions are
+in-memory so a relay restart signs everyone out (59-C), and the relay authenticates against the
+host's own key directory, which a machine in another country does not have (59-A — the device-auth
+shape has to change before remote deployment, and that is a decision with a security cost).
+
+Browser verification: **NOT APPLICABLE** — no page changed; the phase touched `jarvis/relay.py`,
+its test module, and 8 lines of the orchestrator.
+
+Measured after: **2332 tests passing**, 145 tools / 30 gated / 52 planner rules / 122 route objects
+and 115 paths **unchanged** — the relay is a separate ASGI app with 4 endpoints, not a widening of
+the host — 86 test modules, 61 phase reports, 72,227 versioned lines.
+
+
 ## 3. Working status of the whole product, as measured today
 
 All values from the **delivered app** over HTTP (read-only GETs) unless stated.
@@ -558,19 +651,19 @@ User → Intent → RulePlanner (50 routes) → PermissionEngine → [Confirmati
 
 | thing | value | how measured |
 |---|---|---|
-| Tools | **145** (no capability added in Phase 58) | `/health`, `/tools` |
+| Tools | **145** (no capability added in Phase 58 or 59) | `/health`, `/tools` |
 | Agents | **15** — calendar, car, coding, design, email, home, laptop, laptop_center, memory, phone, research, robotics, scheduler, vision, watch | `/health` |
 | Risk spread | READ 77 · LOW 38 · EXTERNAL 15 · DESTRUCTIVE 12 · PHYSICAL 3 | registry, counted this close |
-| Confirmation-gated | **30** of 145 — gates added in Phase 57, none removed (§7 of that report proves the direction) | registry |
+| Confirmation-gated | **30** of 145 — gates added in Phase 57, none removed since (§7 of that report proves the direction) | registry |
 | RulePlanner routes | **52** | `len(core.planner._rules)` |
 | Registered applications | **15** | `AppRegistry` |
-| HTTP surface | 122 route objects / **115 paths** (Phase 54 the stop and the policy doors, Phase 56 the permission request, Phase 57 the start-up read, Phase 58 sign-out, the session list and revoke-one) | `len(app.routes)` |
+| HTTP surface | 122 route objects / **115 paths** — unchanged by Phase 59, because the relay is a **separate ASGI app** (`jarvis/relay.py`, 4 endpoints) that a host route does not mount | `len(app.routes)` |
 | Database tables | **32** | read-only `sqlite_master` count on the delivered app's database |
 | Memories indexed | 52 / 52, coverage 1.0, hybrid retrieval | `/health` |
 | Scheduler | running, 30 s tick, 67 jobs | `/health` |
-| Test suite | 2305 passed, 0 failed, 0 skipped; 70.2 s at the Phase 58 close | `pytest -q` |
-| Test modules / phase reports | 85 / 60 | `ls` |
-| Code volume | 70,880 lines — 42,191 source · 28,689 tests | `find jarvis dashboard app … \| xargs wc -l` |
+| Test suite | 2332 passed, 0 failed, 0 skipped; 76.9 s at the Phase 59 close | `pytest -q` |
+| Test modules / phase reports | 86 / 61 | `ls` |
+| Code volume | 72,227 versioned lines — 42,937 shipped code (`jarvis/` + `dashboard/` + `app/` + `assets/` + `run.py`) · 28,689 tests | `git ls-files '*.py' '*.html' '*.js' '*.swift' \| xargs grep -c ''` |
 
 ### 3.3 Permissions, as the OS reports them right now (`/permissions`)
 
@@ -613,6 +706,10 @@ Two consequences that are live behaviour, not caveats:
   a QR is not authorisation.
 - Device records: `POST /devices/{id}/revoke` exists and **the host refuses to be revoked or
   forgotten** (Phase 46a), because revoking `laptop_main` once took the whole product down.
+- Relay (`python -m jarvis.relay --host <base> --port <n>`): forwards a named path list for a
+  device that passed a PSK handshake, carries **the client's own** host credential, and returns the
+  host's answer unchanged or a `502`/`504`. Not started by the app, the login item or any page;
+  proven on loopback only (§2H).
 
 ### 3.5 Audit — one honest red light
 
@@ -639,7 +736,7 @@ Swift helper and an x86_64 build on an arm64 machine. Not re-driven by ear today
 | ~~No tool-level revoke surface~~ | **closed in Phase 54** — `POST /permissions/{tool}/revoke` and `/restore`, with the denial re-read after the write and `emergency_stop` itself refused | no expiry and no bulk form (54-C) |
 | ~~Vantage cannot describe itself~~ | **closed in Phase 53** — approvals, status, recent actions, current task and a verified stop are now answerable | was blocking phone-side approvals and task state |
 | No native mobile app | the phone client is a served web page (`/phone`). **Phase 58 could not change that and says so**: no Xcode, `iphoneos` SDK not locatable, **0 valid code-signing identities**, no `adb`, no Android SDK, no handset — `BLOCKED_EXTERNAL_DEPENDENCY`. What Phase 58 did instead: phone sessions are scoped at the moment the bootstrap is minted, sign-out exists, a session can be revoked one at a time, and a guard fails if any shipped phone file says "native app" | keychain/keystore, biometrics, push and a store build still need a toolchain and an identity that are not on this machine (58-D) |
-| No relay, no push, no biometrics | none in the tree. Phase 58 added the receiving half of a notification (`/phone?focus=approvals`) and no way to send one | remote-away-from-LAN use is not possible today; and a phone can still approve its own gated actions (58-B) |
+| No relay, no push, no biometrics | **Phase 59 built the relay, and only what this machine can prove of it**: `jarvis/relay.py` authenticates a paired device by PSK, forwards a named path list, overwrites typed identity with the device that signed, re-reads revocation per request, and returns the host's answer byte-for-byte or a `502`/`504` outage — 27 tests and a live end-to-end run, **every hop loopback**. Push still does not exist; Phase 58 added the receiving half of a notification (`/phone?focus=approvals`) and no way to send one | `OFF_LAN_REACHABILITY: BLOCKED_EXTERNAL_DEPENDENCY` — there is no relay host reachable from outside this network, no client is wired to it (59-B), sessions are in-memory (59-C), and a remote relay needs a different device-auth shape than the one that reads the host's own key directory (59-A). Remote-away-from-LAN use is still not possible today; and a phone can still approve its own gated actions (58-B) |
 | No provider adapters in use | `llm_enabled: false`; OpenAI/Gemini adapters per §22–24 not built | LLM planning is off; Basic Mode carries everything |
 | No Computer Use capability | §26 not started | by design — after Basic Mode and pairing are stable |
 | ~~No first-run permission **request** path~~ | **narrowed in Phase 56** — `POST /permissions/{capability}/request` exists, is loopback-only, refuses with a reason, and answers from a re-read. The **ask itself cannot succeed from the helper process** (the Speech framework aborts a non-bundle caller), so no dialog has been observed on this machine — 56-A | §3's wizard still needs the ask moved *into* the app process, which now exists but does not host it yet — 57-G |
@@ -738,7 +835,9 @@ shipped calls it a native app, because no toolchain on this machine could build 
    that *is* verifiable here: session surfaces fixed at issue time, sign-out, revoke-one, a working
    deep link, a cache version that upgrades. Still open on the phone: the credential is readable by
    page script (58-C), a phone can approve its own gated actions (58-B), no push (58-E).
-   Then the **relay** for off-LAN use. **Provider adapters are further along than the roadmap
+   The **relay** landed in Phase 59 as a local proof, and what is left of it is not code: no
+   relay host exists outside this network to run it on, and no client points at one (59-A, 59-B).
+   **Provider adapters are further along than the roadmap
    thought**: an OpenAI-shaped adapter already ships and is wired into the pipeline
    (`jarvis/gateway/router.py:111`, used only when `llm_enabled`), plus a vision provider and
    embeddings — what is missing is a key, which is a user decision, not missing code. **Computer
@@ -753,7 +852,7 @@ shipped calls it a native app, because no toolchain on this machine could build 
    against stubs and one real abort, and **has not been observed prompting this machine.**
 
 Carried open items, all still true: **49a-A…F**, **50-A…F**, **51-A…F**, **52-A…F**,
-**53-A…F**, **54-A…F**, **55-A…E**, **56-A…F**, **57-A…G**, **58-A…H** — each written up in its
+**53-A…F**, **54-A…F**, **55-A…E**, **56-A…F**, **57-A…G**, **58-A…H**, **59-A…E** — each written up in its
 phase report and indexed in `README.md`.
 
 ---
@@ -790,7 +889,7 @@ edited only additively.
 | question | file |
 |---|---|
 | What the product is and how to use it | `README.md`, `~/Downloads/Vantage/READ ME FIRST.txt` |
-| Why each phase did what it did | `audit/PHASE*.md` (60 reports, newest first in the README table) |
+| Why each phase did what it did | `audit/PHASE*.md` (61 reports, newest first in the README table) |
 | What is still open | the open-items block at the end of `README.md` |
 | Why a permission ask must not be a poll | `audit/PHASE50_*.md` (the read-only rule) and `audit/PHASE56_ASKING_ON_PURPOSE_REPORT.md` (the request path, and why a helper cannot use it) |
 | Suite size over time | `benchmarks/suite_history.json`, `assets/chart-suite-growth.svg` |

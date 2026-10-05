@@ -349,6 +349,13 @@
    "passed": 2305,
    "failed": 0,
    "note": "phone sessions scoped at the moment the bootstrap is minted; the stop-polling guard was dead code until the browser proved it"
+  },
+  {
+   "phase": "59 a door with a bouncer",
+   "collected": 2332,
+   "passed": 2332,
+   "failed": 0,
+   "note": "relay proven on loopback only; a dead host answers 502, never an empty list -- and off-LAN reachability stays BLOCKED_EXTERNAL_DEPENDENCY"
   }
  ]
 }
