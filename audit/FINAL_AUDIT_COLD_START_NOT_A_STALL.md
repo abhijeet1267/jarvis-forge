@@ -5,7 +5,7 @@
 | Follows | `VANTAGE_FINAL_ACCEPTANCE_REPORT.md` §7, which recorded this as "cause not established" |
 | Date | 2026-10-05 |
 | Starting commit | `455a64c` (final audit close-out) |
-| Ending commit | `—` (filled by the next edit to this line) |
+| Ending commit | `5e90b81` (the fix) → the redeploy commit named below |
 | Tests before | 2383 passed · 0 failed |
 | Tests after | **2387 passed · 0 failed** (77.2 s), verified on **6 consecutive full-suite runs, 0 failures** |
 | Before, measured today | five `test_vision.py` OCR tests failed on **4 of ~12** full-suite runs, always as a group of exactly five, and passed on an immediate re-run |
@@ -154,3 +154,23 @@ Browser verification: **NOT APPLICABLE** — no page changed. Nothing here is vi
   cannot hang a turn, but the number itself is not portable and is not claimed to be.
 
 Nothing was pushed.
+
+## 8. Delivery
+
+Work commit `5e90b81` — *Measure a cold Vision start as what it is, not as a stall*. The close-out
+commit that contains this line is the one recorded by the next edit to it, since a file cannot
+carry the hash of its own commit.
+
+`jarvis/vision/ocr.py` is shipped code, so the bundle was rebuilt and re-deployed:
+
+| check | result |
+|---|---|
+| `codesign --verify --deep --strict` on the deployed bundle | valid, satisfies its Designated Requirement |
+| the fix present in the staged source, twice over (`_COLD_START_SECONDS`) | in `~/Downloads/Vantage/Vantage.app`, and again after extracting `Vantage.app.zip` into a temp dir |
+| `GET /health` | `status ok`, **148 tools** |
+| `GET /tools` | **148** entries |
+| archives | `Vantage.app.zip` 1,173,369 B and `vantage-source.zip` 2,561,327 B, both rebuilt from this tree; the source archive carries this addendum |
+| suite after the fix | **2387 passed · 0 failed** — eight consecutive clean full-suite runs (76.8–98.9 s) |
+
+Nothing was pushed, and no user-visible behaviour changed beyond OCR being given a truthful budget on
+its first call.
