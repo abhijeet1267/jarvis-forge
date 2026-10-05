@@ -356,6 +356,13 @@
    "passed": 2332,
    "failed": 0,
    "note": "relay proven on loopback only; a dead host answers 502, never an empty list -- and off-LAN reachability stays BLOCKED_EXTERNAL_DEPENDENCY"
+  },
+  {
+   "phase": "60 a second vendor",
+   "collected": 2354,
+   "passed": 2354,
+   "failed": 0,
+   "note": "the badge was the bug: one OpenAI-shaped POST at four call sites and no selection, so a second vendor would configure and then be called at the wrong address -- and a refused provider name still credited `model_used` with a model that never answered"
   }
  ]
 }

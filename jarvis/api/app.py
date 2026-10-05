@@ -24,6 +24,7 @@ from pydantic import BaseModel, field_validator
 
 from .. import __version__
 from ..config import get_settings, llm_source
+from ..gateway.providers import provider_capabilities
 from ..core.models import CommandRequest, CommandResponse, PlannedAction, PolicyDecision
 from ..core.orchestrator import JarvisCore
 from ..logging_setup import get_logger
@@ -603,6 +604,7 @@ def describe_peripherals() -> Dict[str, Any]:
 @app.get("/health")
 async def health(_: None = Protected) -> Dict[str, Any]:
     core = get_core()
+    paths = provider_capabilities(core.settings)
     return {
         "status": "ok",
         "tools": len(core.tools.names()),
@@ -611,6 +613,11 @@ async def health(_: None = Protected) -> Dict[str, Any]:
         # "configured" and "reachable" are not the same claim, and neither is
         # "set in the shell" and "set in a file that failed to load".
         "llm_source": llm_source(),
+        # Which vendor the gateway will actually call, and which model-shaped reads go through
+        # it. A badge that says "a model is configured" without naming the door would repeat
+        # exactly the mistake Phase 60 found: the status page being the thing that is wrong.
+        "ai_provider": paths["chat"],
+        "provider_paths": paths,
         "pending_confirmations": len(core.policy.pending()),
         # The addresses another device can actually reach. The desktop panel asks the
         # server rather than deriving them itself, so "what to type" and "what the Host

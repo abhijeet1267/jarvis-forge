@@ -125,6 +125,10 @@ class Settings(BaseSettings):
     redact_audit: bool = True
 
     # --- Model gateway ------------------------------------------------------
+    #: Which vendor the gateway talks to. `openai` is the shape this build has always
+    #: used, so an install that never sets this keeps the same bytes on the wire.
+    #: An unrecognised name is refused by `select_provider`, not defaulted.
+    ai_provider: str = "openai"
     llm_base_url: str = ""
     llm_api_key: str = ""
     llm_model: str = "gpt-4o-mini"

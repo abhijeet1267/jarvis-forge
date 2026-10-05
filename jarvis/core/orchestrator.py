@@ -21,6 +21,7 @@ from ..agents.base import Agent, build_agents, find_agent
 from ..config import get_settings
 from ..db.database import get_db
 from ..gateway.router import ModelRouter
+from ..gateway.providers import ProviderUnknown, select_provider
 from ..logging_setup import get_logger
 from ..memory.graph import ProjectGraph
 from ..memory.store import MemoryStore
@@ -218,7 +219,27 @@ class JarvisCore:
         would be a claim about the pipeline that is not true.
         """
         model = self.settings.llm_model or "the configured model"
-        note: Dict[str, Any] = {"model": model}
+        # Named because "the model answered" is not the same fact as "gemini answered", and
+        # since Phase 60 more than one vendor can be the one standing behind that word.
+        try:
+            # Resolved from the settings rather than from `self.router.provider`, so that a
+            # double standing where the router stands (Phase 42's tests) does not read as an
+            # unusable configuration. The name is only a label; the call still goes through
+            # the router.
+            provider = select_provider(self.settings).name
+            refusal = ""
+        except ProviderUnknown as exc:  # an unusable provider name is its own answer, told below
+            provider, refusal = "", str(exc)
+        label = f"{provider}:{model}" if provider else model
+        note: Dict[str, Any] = {"model": model, "provider": provider, "label": label}
+        if refusal:
+            # Nothing was sent anywhere: the name could not be turned into a vendor. Saying
+            # "I asked the model and it was unavailable" would describe a call that never
+            # happened, and `model_used` would name a model that never answered.
+            note["stage"] = "provider_refused"
+            note["error"] = refusal[:200]
+            return (f"{rules_reply}\n\nI did not ask a model about that: {refusal}. So that "
+                    "answer is the rule router's own.", note)
         system = (
             "You are advising a local assistant on the user's own Mac. Its rule router did "
             "not recognise the sentence, so answer in at most two short sentences of plain "
@@ -238,7 +259,7 @@ class JarvisCore:
 
         if not answer:
             note["stage"] = "model_unavailable"
-            return (f"{rules_reply}\n\nI also asked the model you configured ({model}), and "
+            return (f"{rules_reply}\n\nI also asked the model you configured ({label}), and "
                     "it was unavailable, so that answer is the rule router's own.", note)
 
         text = " ".join(str(answer).split())[:600]
@@ -251,7 +272,7 @@ class JarvisCore:
                       "for it yourself and it goes through the usual approval.")
         else:
             closer = "I did not run anything on its answer."
-        return f"{rules_reply}\n\n{model} said: {text}\n\n{closer}", note
+        return f"{rules_reply}\n\n{label} said: {text}\n\n{closer}", note
 
     async def _offer_identifiers(self, request: CommandRequest, plan: Plan) -> None:
         """Fill in the identifiers a question asks for, from the registry's own reads.
@@ -489,7 +510,8 @@ class JarvisCore:
             if plan.reply_kind == "not_understood" and self.settings.llm_enabled:
                 response.reply, model_note = await self._advise_from_model(
                     request, plan.direct_reply)
-                response.model_used = model_note.get("model") or "rules"
+                response.model_used = (model_note.get("label") or "rules") \
+                    if model_note.get("stage") == "model" else "rules"
                 stage = model_note.get("stage", "planner")
             # ``decision`` is the permission outcome. Nothing was permitted to run
             # here -- the ledger row written just below says ``no_action`` -- so it

@@ -1,7 +1,7 @@
-# Vantage — full working report, Phase 59 close-out
+# Vantage — full working report, Phase 60 close-out
 
-Written 2026-10-04, refreshed at each phase close; this pass is 2026-10-05. §2A–§2H are Phase 52,
-53, 54, 55, 56, 57, 58 and 59. Every number below was produced by a command on this machine during this
+Written 2026-10-04, refreshed at each phase close; this pass is 2026-10-05. §2A–§2I are Phase 52,
+53, 54, 55, 56, 57, 58, 59 and 60. Every number below was produced by a command on this machine during this
 session or the immediately preceding phases, and the command is named next to it. Where a
 capability exists but was **not** re-measured today, it says so rather than implying it was.
 
@@ -12,12 +12,13 @@ capability exists but was **not** re-measured today, it says so rather than impl
 | | |
 |---|---|
 | What it is | A personal AI operating system for macOS: one command pipeline, 145 governed capabilities (30 of them confirmation-gated), a laptop panel, a scoped phone client, an optional forward-only relay (locally proven, off-LAN blocked), a signed `.app` delivered as files |
-| Current phase | **Phase 59 — an authenticated relay, proven locally and no further** (closed) |
-| Test suite | **2332 passed · 0 failed · 0 xfailed · 0 skipped** — 76.9 s at the Phase 59 close |
+| Current phase | **Phase 60 — a second vendor behind one selection point, with no vendor call made** (closed) |
+| Previous phase | **Phase 59 — an authenticated relay, proven locally and no further** (closed; its off-LAN verdict still stands) |
+| Test suite | **2354 passed · 0 failed · 0 xfailed · 0 skipped** — 84.8 s at the Phase 60 close |
 | Spec §6 coverage | **37 of 37** — every utterance the build prompt lists reaches a capability |
 | Delivered | `~/Downloads/Vantage/` — `Vantage.app` (running, seal valid), `Vantage.app.zip`, `vantage-source.zip`, `READ ME FIRST.txt` |
 | Commits | `a20e39c` (Ph 57), `7c828fa` (Ph 56 close), `ea68c7d` (Ph 56 close), `0cdc770` (Ph 56), `176bcfb` (Ph 55), `377e79f` (Ph 54 correction), `67d9530` (Ph 54), `35c9abf` (Ph 53), `3708f85` (Ph 52 correction), `92efc6b` (Ph 52), `f047eb2` (Ph 51), `452e9c0` (Ph 50) — **local only, nothing pushed** |
-| Biggest known gap | Off the wifi there is still nothing you can use: the relay protocol exists and works on loopback, but there is no relay host outside this network to run it on and no client is wired to it (59-A, 59-B) — and there is no push. The phone surface is a served web page rather than a store app — a native build is blocked on this machine's toolchain (58-D, measured). Phone sessions are now scoped, but the credential is still readable by page script (58-C) and a phone can approve its own gated actions (58-B). Persistence exists but has never been left **installed** on this machine (57-A — a user decision), and the permission ask still cannot land because it lives in the helper (57-G). |
+| Biggest known gap | Off the wifi there is still nothing you can use: the relay protocol exists and works on loopback, but there is no relay host outside this network to run it on and no client is wired to it (59-A, 59-B) — and there is no push. The phone surface is a served web page rather than a store app — a native build is blocked on this machine's toolchain (58-D, measured). Phone sessions are now scoped, but the credential is still readable by page script (58-C) and a phone can approve its own gated actions (58-B). Persistence exists but has never been left **installed** on this machine (57-A — a user decision), and the permission ask still cannot land because it lives in the helper (57-G). There is also no model key on this machine, so the gateway built in Phase 60 has never spoken to a vendor — `PROVIDER_LIVE_VENDOR_CALL: NOT MEASURED`. |
 
 ---
 
@@ -631,6 +632,144 @@ and 115 paths **unchanged** — the relay is a separate ASGI app with 4 endpoint
 the host — 86 test modules, 61 phase reports, 72,227 versioned lines.
 
 
+
+## 2I. Phase 60 in full — a second vendor, without a second authority
+
+### 2I.1 What the register said, and what the code said
+
+The gap row read *"No provider adapters in use — OpenAI/Gemini adapters per §22–24 not built"*.
+Measured: an adapter **did** exist — one OpenAI-shaped POST in `jarvis/gateway/router.py` (149
+lines, `provider="openai-compatible"` hard-coded in the choice it reports), rebuilt by hand at
+three more call sites (`memory/embeddings.py:231`, `vision/providers.py:128`,
+`voice/stt.py:393`) — and there was no selection at all, no `ai_provider` field anywhere in
+`config.py`. And `ModelRouter.complete()` **is** called: `orchestrator.py:233`, for a sentence the
+rules did not recognise, which is what Phase 42 built.
+
+Put those two facts together and you get the defect this phase existed to remove: a Gemini key
+would have configured cleanly, set `llm_enabled: true` on `/health`, and then been asked for a chat
+completion at an address that vendor does not serve. **The status page would have been the thing
+that was wrong** — the one place a person looks to decide whether to trust everything else.
+
+### 2I.2 The shape of the layer
+
+`jarvis/gateway/providers.py` (418 lines) holds two adapters behind one selection point:
+
+| | OpenAI | Gemini |
+|---|---|---|
+| chat | `POST {base}/chat/completions` | `POST {base}/v1beta/models/<model>:generateContent` |
+| auth | `Authorization: Bearer` | `x-goog-api-key` |
+| system | `messages[0].role=system` | `systemInstruction.parts[0].text` |
+| JSON mode | `response_format` | `generationConfig.responseMimeType` |
+| answer | `choices[0].message.content` | `candidates[0].content.parts[*].text` |
+| embeddings | `POST {base}/embeddings` | `POST {base}/v1beta/models/<model>:embedContent` |
+
+`JARVIS_AI_PROVIDER` defaults to `openai`, so an existing install's bytes do not move — and an
+unknown name **raises with the list of known ones** instead of defaulting, because a typo that
+silently meant "we used the other vendor" would make every later sentence naming a model false. The
+`/v1` at the end of `JARVIS_LLM_BASE_URL` is *replaced* by Gemini's own version segment, not nested
+under it: `…/v1/v1beta/…` is a URL that answers nothing. Model names come from configuration on
+both sides, checked by moving the setting and reading the wire.
+
+The spec named the `google-genai` SDK. It is not installed on this machine
+(`find_spec('google.genai')` → no module named `google`), and adding a dependency to a stdlib-first
+bundle is a decision rather than a detail, so the adapter speaks the REST API that SDK wraps. The
+deviation is stated in the report, not left implicit.
+
+### 2I.3 Two boundaries stated instead of implied
+
+Spec §12's `AIPlan` / `ProposedToolCall` was **not** adopted, deliberately. Building it means
+asking a model to propose tool calls — a permission-engine change wearing a schema — and Phase 42
+settled that the model may speak and nowhere else. What was taken from §12 is its attribution half:
+every answer carries the vendor and model that produced it.
+
+Spec §10/§11's `realtime_session` was not built either, and a test fails if the word appears in
+`providers.py` without proof beside it.
+
+Vision and transcription still build their own OpenAI-shaped URLs. Rather than pretend the gateway
+covers them, `/health` now answers `provider_paths`, which names them as
+`"openai-shaped, not provider-routed"`, and `transcribe()` on a provider **raises** instead of
+returning an empty transcript — the offline-as-empty bug this project has already fixed twice, for
+mail and for calendar, in a new place.
+
+### 2I.4 The memory write path, and the invariant that did not move
+
+Phase 42 measured that both outbound calls a configured key makes are `/v1/embeddings`, so the
+embedder was the path that mattered. The *shape* (URL, headers, body, parse) now comes from the
+provider; the *read* stays at the call site where Phase 34 pinned its total budget:
+
+```python
+provider = select_provider(self.settings)   # which vendor, therefore which URL and headers
+shape    = provider.embedding_request(text, model)
+body     = http_read(request, total=REQUEST_TIMEOUT, what="the embedding model")   # unchanged
+vector   = provider.parse_vector(body)      # vendor-specific parse, vendor-neutral caller
+```
+
+Moving the POST into the provider would have relocated an invariant another phase measured and
+pinned, to make this phase's code tidier. That trade was declined, and the reason is written next
+to the line.
+
+### 2I.5 The defect the live run found
+
+The proof set `JARVIS_AI_PROVIDER=mixtral` — an unusable name — and read the response:
+
+```
+model_used -> "gemini-2.5-flash"
+```
+
+Nothing had been sent anywhere. A field whose only job is attribution named a model for a call that
+never happened, and the prose said *"I also asked the model you configured, and it was
+unavailable"* about a question nobody had asked. The same lie sat in the ordinary case: a vendor
+that does not answer left `model_used` crediting it. Red-first tests for both, then the rule —
+**`model_used` names a model only when a model answered.** A refusal names the refusal; an
+unanswered question stays `rules`. Live, afterwards:
+
+```
+ai_provider      -> "refused: JARVIS_AI_PROVIDER='mixtral' is not a provider this build can talk
+                     to. Known: gemini, openai"
+reply            -> "I did not ask a model about that: … So that answer is the rule router's own."
+model_used       -> "rules"
+```
+
+And for the vendor that *is* configured:
+
+```
+POST /command "wobbleth and glintar please"  -> model_used='gemini:gemini-2.5-flash'
+  vendor received                              /v1beta/models/gemini-2.5-flash:generateContent
+                                                x-goog-api-key set, systemInstruction arrived
+  reply a person reads                         "… gemini:gemini-2.5-flash said: I do not know
+                                                wobbleth. … I did not run anything on its answer."
+POST /command "remember that the heater coil…" -> 2 embedding calls received,
+                                                   /v1beta/models/gemini-embedding:embedContent,
+                                                   body {"model":"models/gemini-embedding",
+                                                        "content":{"parts":[{"text":"the heater
+                                                        coil arrived on tuesday"}]}}
+outbound addresses used -> 127.0.0.1:8918 and 127.0.0.1:8919 only
+```
+
+**`PROVIDER_LIVE_VENDOR_CALL: NOT MEASURED`.** The vendor in that run is a local stand-in that
+records bytes. There is no API key on this machine (`/health` → `llm_enabled: false`,
+`~/.jarvis-forge/llm.env` absent, `JARVIS_LLM_API_KEY` unset), nothing contacted a real endpoint,
+and spending someone's credit is not a verification step an agent takes by default. What is proven
+is that the bytes a Gemini endpoint would receive are the right ones, and what would close the gap
+is one key and the same checks pointed at the real base URL.
+
+Browser verification: **NOT APPLICABLE** — no page changed. The panel still says Basic Mode from
+`llm_enabled` and does not yet name the vendor (60-C).
+
+Found on the way and not caused here (60-F): running
+`pytest tests/test_phase34_one_sentence_one_deadline.py tests/test_memory_advanced.py::test_index_and_search`
+fails with `ValueError: unknown url type: '/embeddings'` — a pair of Phase 34's tests leaves the
+process-global embedder as a `RemoteEmbedder` with an empty base URL, which the next file's
+`VectorIndex()` inherits. Reproduced on `73a87cc` with this phase's work stashed, so it is recorded
+instead of quietly fixed under this commit; a normal full-suite run does not hit it, which is
+precisely how a leak like this survives.
+
+Measured after: **2354 tests passing**, 145 tools / 30 gated / 52 planner rules / 122 route objects
+and 115 paths **unchanged** (`/health` gained three fields, not a route), 87 test modules, 62 phase
+reports, 74,233 versioned lines. One silence-bounded `httpx` site became a total-budget read; the
+Phase 34 ratchet that counts them did not notice, because it counts numeric literals (60-E).
+
+
 ## 3. Working status of the whole product, as measured today
 
 All values from the **delivered app** over HTTP (read-only GETs) unless stated.
@@ -661,9 +800,9 @@ User → Intent → RulePlanner (50 routes) → PermissionEngine → [Confirmati
 | Database tables | **32** | read-only `sqlite_master` count on the delivered app's database |
 | Memories indexed | 52 / 52, coverage 1.0, hybrid retrieval | `/health` |
 | Scheduler | running, 30 s tick, 67 jobs | `/health` |
-| Test suite | 2332 passed, 0 failed, 0 skipped; 76.9 s at the Phase 59 close | `pytest -q` |
-| Test modules / phase reports | 86 / 61 | `ls` |
-| Code volume | 72,227 versioned lines — 42,937 shipped code (`jarvis/` + `dashboard/` + `app/` + `assets/` + `run.py`) · 28,689 tests | `git ls-files '*.py' '*.html' '*.js' '*.swift' \| xargs grep -c ''` |
+| Test suite | 2354 passed, 0 failed, 0 skipped; 84.8 s at the Phase 60 close | `pytest -q` |
+| Test modules / phase reports | 87 / 62 | `ls` |
+| Code volume | 74,233 versioned lines — 43,871 shipped code (`jarvis/` + `dashboard/` + `app/` + `assets/` + `run.py`) · 29,761 tests | `git ls-files -co --exclude-standard '*.py' '*.html' '*.js' '*.swift' \| xargs grep -c ''` |
 
 ### 3.3 Permissions, as the OS reports them right now (`/permissions`)
 
@@ -737,7 +876,7 @@ Swift helper and an x86_64 build on an arm64 machine. Not re-driven by ear today
 | ~~Vantage cannot describe itself~~ | **closed in Phase 53** — approvals, status, recent actions, current task and a verified stop are now answerable | was blocking phone-side approvals and task state |
 | No native mobile app | the phone client is a served web page (`/phone`). **Phase 58 could not change that and says so**: no Xcode, `iphoneos` SDK not locatable, **0 valid code-signing identities**, no `adb`, no Android SDK, no handset — `BLOCKED_EXTERNAL_DEPENDENCY`. What Phase 58 did instead: phone sessions are scoped at the moment the bootstrap is minted, sign-out exists, a session can be revoked one at a time, and a guard fails if any shipped phone file says "native app" | keychain/keystore, biometrics, push and a store build still need a toolchain and an identity that are not on this machine (58-D) |
 | No relay, no push, no biometrics | **Phase 59 built the relay, and only what this machine can prove of it**: `jarvis/relay.py` authenticates a paired device by PSK, forwards a named path list, overwrites typed identity with the device that signed, re-reads revocation per request, and returns the host's answer byte-for-byte or a `502`/`504` outage — 27 tests and a live end-to-end run, **every hop loopback**. Push still does not exist; Phase 58 added the receiving half of a notification (`/phone?focus=approvals`) and no way to send one | `OFF_LAN_REACHABILITY: BLOCKED_EXTERNAL_DEPENDENCY` — there is no relay host reachable from outside this network, no client is wired to it (59-B), sessions are in-memory (59-C), and a remote relay needs a different device-auth shape than the one that reads the host's own key directory (59-A). Remote-away-from-LAN use is still not possible today; and a phone can still approve its own gated actions (58-B) |
-| No provider adapters in use | `llm_enabled: false`; OpenAI/Gemini adapters per §22–24 not built | LLM planning is off; Basic Mode carries everything |
+| No provider adapters in use | **the row was wrong, and Phase 60 measured it**: an OpenAI-shaped adapter *did* exist (one POST, rebuilt by hand at four call sites) with no selection between vendors. `jarvis/gateway/providers.py` now holds both shapes behind `JARVIS_AI_PROVIDER` (`openai`, `gemini`), with each answer naming its vendor and model. `llm_enabled: false` on this machine still, because there is no key | `PROVIDER_LIVE_VENDOR_CALL: NOT MEASURED` — nothing has contacted a real vendor; vision and STT are still OpenAI-shaped (60-A); the panel still does not name the vendor (60-C) |
 | No Computer Use capability | §26 not started | by design — after Basic Mode and pairing are stable |
 | ~~No first-run permission **request** path~~ | **narrowed in Phase 56** — `POST /permissions/{capability}/request` exists, is loopback-only, refuses with a reason, and answers from a re-read. The **ask itself cannot succeed from the helper process** (the Speech framework aborts a non-bundle caller), so no dialog has been observed on this machine — 56-A | §3's wizard still needs the ask moved *into* the app process, which now exists but does not host it yet — 57-G |
 | ~~No host persistence~~ | **built in Phase 57** — `jarvis/persistence.py` writes a user LaunchAgent with no secret and no inherited watchdog, `GET /persistence` reports what launchd says, and enable/disable are confirmation-gated capabilities. Proven live: launchd started a Vantage answering `/health` with 145 tools and a running scheduler, with no window open — then it was removed and the machine was left as found | never left installed for the real app (57-A, a user decision); "loaded" does not yet read `last exit code` (57-B); no reboot was performed (57-F) |
@@ -837,11 +976,14 @@ shipped calls it a native app, because no toolchain on this machine could build 
    page script (58-C), a phone can approve its own gated actions (58-B), no push (58-E).
    The **relay** landed in Phase 59 as a local proof, and what is left of it is not code: no
    relay host exists outside this network to run it on, and no client points at one (59-A, 59-B).
-   **Provider adapters are further along than the roadmap
-   thought**: an OpenAI-shaped adapter already ships and is wired into the pipeline
-   (`jarvis/gateway/router.py:111`, used only when `llm_enabled`), plus a vision provider and
-   embeddings — what is missing is a key, which is a user decision, not missing code. **Computer
-   Use** stays last, as §26 orders.
+   **Provider adapters landed in Phase 60**, and the roadmap's own row about them was wrong in
+   both directions: an OpenAI-shaped adapter *did* already ship and *was* wired into the pipeline
+   (`orchestrator.py` asks it about a sentence the rules miss, since Phase 42), but there was no
+   selection between vendors at all. `jarvis/gateway/providers.py` now holds the OpenAI and Gemini
+   shapes behind `JARVIS_AI_PROVIDER`, and the memory write path takes its URL from that provider.
+   **What is missing is a key** — `PROVIDER_LIVE_VENDOR_CALL: NOT MEASURED` on this machine, which
+   is a user decision, not missing code. Vision and transcription are still OpenAI-shaped (60-A).
+   **Computer Use** stays last, as §26 orders.
 7. **Decisions the user owns, not fixes**: whether to clear the 5 deliberate `forged` audit
    rows that make the chain read BROKEN; whether to grant the bundle Accessibility (which
    unlocks `show the current application` and Finder confirmation); whether to clean the
@@ -852,7 +994,7 @@ shipped calls it a native app, because no toolchain on this machine could build 
    against stubs and one real abort, and **has not been observed prompting this machine.**
 
 Carried open items, all still true: **49a-A…F**, **50-A…F**, **51-A…F**, **52-A…F**,
-**53-A…F**, **54-A…F**, **55-A…E**, **56-A…F**, **57-A…G**, **58-A…H**, **59-A…E** — each written up in its
+**53-A…F**, **54-A…F**, **55-A…E**, **56-A…F**, **57-A…G**, **58-A…H**, **59-A…E**, **60-A…F** — each written up in its
 phase report and indexed in `README.md`.
 
 ---
@@ -889,7 +1031,7 @@ edited only additively.
 | question | file |
 |---|---|
 | What the product is and how to use it | `README.md`, `~/Downloads/Vantage/READ ME FIRST.txt` |
-| Why each phase did what it did | `audit/PHASE*.md` (61 reports, newest first in the README table) |
+| Why each phase did what it did | `audit/PHASE*.md` (62 reports, newest first in the README table) |
 | What is still open | the open-items block at the end of `README.md` |
 | Why a permission ask must not be a poll | `audit/PHASE50_*.md` (the read-only rule) and `audit/PHASE56_ASKING_ON_PURPOSE_REPORT.md` (the request path, and why a helper cannot use it) |
 | Suite size over time | `benchmarks/suite_history.json`, `assets/chart-suite-growth.svg` |

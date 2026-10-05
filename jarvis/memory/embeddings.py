@@ -224,23 +224,24 @@ class RemoteEmbedder(Embedder):
         import json
         import urllib.request
 
-        payload = json.dumps(
-            {"model": self.settings.llm_embed_model or "text-embedding-3-small", "input": text}
-        ).encode()
-        request = urllib.request.Request(
-            f"{self.settings.llm_base_url.rstrip('/')}/embeddings",
-            data=payload,
-            headers={
-                "Content-Type": "application/json",
-                "Authorization": f"Bearer {self.settings.llm_api_key}",
-            },
-        )
-        # Total budget, not silence budget -- this runs inside the write path of
-        # "remember that …", where an unbounded wait is an unbounded turn.
-        body = json.loads(http_read(request, total=REQUEST_TIMEOUT,
-                                    what="the embedding model").decode())
+        from ..gateway.providers import ProviderUnknown, select_provider
 
-        vector = [float(v) for v in body["data"][0]["embedding"]]
+        model = self.settings.llm_embed_model or "text-embedding-3-small"
+        try:
+            # Which vendor, and therefore which URL and which headers, is the provider's answer.
+            # The read itself stays here: this call sits inside the write path of "remember
+            # that …", and the total budget Phase 34 pinned at this line is the reason an
+            # unbounded wait cannot become an unbounded turn.
+            provider = select_provider(self.settings)
+        except ProviderUnknown as exc:
+            raise ValueError(f"the configured model provider cannot be used: {exc}") from exc
+
+        shape = provider.embedding_request(text, model)
+        request = urllib.request.Request(shape["url"], data=json.dumps(shape["payload"]).encode(),
+                                         headers=shape["headers"])
+        # Total budget, not silence budget -- see jarvis/net.py.
+        body = http_read(request, total=REQUEST_TIMEOUT, what="the embedding model")
+        vector = provider.parse_vector(body)
         self.dim = len(vector)
         self._cache[text] = vector
         return vector
