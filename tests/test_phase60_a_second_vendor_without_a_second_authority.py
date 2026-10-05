@@ -4,9 +4,12 @@ Measured before writing anything. `jarvis/gateway/router.py` was 149 lines that 
 wire format -- `{llm_base_url}/chat/completions` with a `Bearer` header, model names from config,
 `provider="openai-compatible"` hard-coded in the choice it reports. Memory's embedder, the vision
 provider and the voice transcriber each build their own OpenAI-shaped URL from the same two
-settings. So a Gemini key on this machine would have configured successfully, lit up the
-`llm_enabled` badge on `/health`, and then been called at the wrong address in the wrong shape by
-every one of those four paths.
+settings, and nothing offered a choice between vendors at all. A second vendor was therefore
+reachable only through its OpenAI-compatibility address -- which is exactly what the shipped
+`READ ME FIRST.txt` tells a Gemini user to type, and which did work. What could not be said, by the
+badge or by the router, was *which* door a sentence would go out of; and no vendor's native shape
+was reachable at all. Test 7 in this file is the case where assuming that instead of reading the
+readme produced a URL with two version segments in it.
 
 That is the thing this module pins down: the *contract* is provider-neutral, the *authority* is not
 a provider's. No model, from any vendor, plans or executes here -- the pipeline's gate stays the
@@ -515,3 +518,27 @@ def test_an_unreachable_vendor_still_leaves_the_answer_attributed_to_the_rules(c
 
     assert response.model_used == "rules", response.model_used
     assert "unavailable" in response.reply, response.reply
+
+
+# ---------------------------------------------------------------------------
+# 7. the base URL a person is actually told to type
+# ---------------------------------------------------------------------------
+
+
+def test_the_base_url_in_the_shipped_readme_produces_the_native_request(vendor):
+    """`READ ME FIRST.txt` in the delivery folder tells the user to set
+    `JARVIS_LLM_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/` -- the
+    OpenAI-compatibility surface -- and that instruction *worked* before this phase existed,
+    because there was only one shape to speak.
+
+    Choosing `ai_provider=gemini` against the same URL must not produce
+    `…/v1beta/openai/v1beta/models/…`. Two version segments in a path is how a documented setup
+    ends up answering nothing, and the only reason this is a test rather than a paragraph is that
+    reading the delivered readme contradicted a claim this phase had already made about itself.
+    """
+    readmem_style = vendor.base_url.replace("/v1", "/v1beta/openai/")
+    provider = GeminiProvider(_Settings(readmem_style))
+    reply = asyncio.run(provider.chat("s", "u", model="gemini-2.5-flash"))
+    assert reply.ok, reply.error
+    assert vendor.last["path"] == "/v1beta/models/gemini-2.5-flash:generateContent", \
+        vendor.last["path"]

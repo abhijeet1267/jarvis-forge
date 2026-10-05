@@ -1,11 +1,18 @@
 """Provider-neutral model gateway (spec §10, §11, §12) — the contract is shared, the authority is not.
 
 Measured before this file existed: `jarvis/gateway/router.py` spoke exactly one wire format —
-`{llm_base_url}/chat/completions` with a `Bearer` header — and reported `provider="openai-compatible"`
-whatever the configuration said. Memory's embedder built a second OpenAI URL for itself. So a
-Gemini key would have configured cleanly, switched the `llm_enabled` badge on `/health` to true,
-and then been asked for a chat completion at an address that vendor does not serve. The badge would
-have been the thing that was wrong, which is the worst place for a bug.
+`{llm_base_url}/chat/completions` with a `Bearer` header — and reported
+`provider="openai-compatible"` whatever the configuration said, with memory's embedder, the vision
+provider and the voice transcriber each building their own copy of that shape. There was no
+selection at all: no `JARVIS_AI_PROVIDER`, nothing that could ask a vendor in its own native form.
+A second vendor was reachable only by pointing the OpenAI-shaped URL at its compatibility endpoint,
+which is what `READ ME FIRST.txt` has always told Gemini users to do.
+
+So the accurate complaint is narrower than "the other vendor would have failed", and worth stating
+exactly: `/health` could say a model was configured without ever naming which door it would use,
+the router's own `provider` field was a constant, and asking for the native shapes by name was not
+possible. The first draft of this file then got the native path wrong in a way only the shipped
+readme could expose — see `GeminiProvider.root`.
 
 What is decided here:
 
@@ -320,14 +327,21 @@ class GeminiProvider(AIProvider):
     API_VERSION = "v1beta"
 
     def root(self) -> str:
-        """`JARVIS_LLM_BASE_URL` is written for the OpenAI shape, so it ends in `/v1`.
+        """One version segment, whichever spelling of the base URL the user typed.
 
-        Gemini versions its own surface; that segment replaces the other one rather than nesting
-        under it, because `…/v1/v1beta/models/…:generateContent` is a URL that answers nothing.
+        `JARVIS_LLM_BASE_URL` is written for the OpenAI shape, so it usually ends in `/v1` -- and
+        `READ ME FIRST.txt` in the delivery folder has always told Gemini users the compatibility
+        address, `…/v1beta/openai/`. Both arrive here. What neither can be is a second version
+        segment appended to them: `…/v1beta/openai/v1beta/models/…` is how a documented setup ends
+        up answering nothing, and it is the case this method was wrong about until the shipped
+        readme was read instead of assumed.
         """
         base = self.base_url.rstrip("/")
-        if base.endswith("/v1"):
-            base = base[: -len("/v1")]
+        for tail in ("/v1", "/openai"):
+            if base.endswith(tail):
+                base = base[: -len(tail)]
+        if base.endswith(f"/{self.API_VERSION}"):
+            return base
         return f"{base}/{self.API_VERSION}"
 
     def headers(self) -> Dict[str, str]:

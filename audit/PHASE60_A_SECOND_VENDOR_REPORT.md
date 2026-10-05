@@ -7,7 +7,7 @@
 | Starting commit | `73a87cc` (Phase 59 close-out) |
 | Ending commit | `—` (recorded in §11 once it exists) |
 | Tests before | 2332 passed · 0 failed · 0 skipped |
-| Tests after | **2354 passed · 0 failed · 0 skipped** (84.8 s) |
+| Tests after | **2355 passed · 0 failed · 0 skipped** (94.9 s) |
 | Tools / gated | 145 / 30 → **145 / 30** — no capability added, no gate moved |
 | Planner rules | 52 → **52** |
 | Host HTTP surface | 122 route objects / 115 paths → **unchanged** (`/health` gained three fields, not a route) |
@@ -35,11 +35,23 @@ config.py                           llm_base_url / llm_api_key / llm_model / llm
                                     and no `ai_provider` field at all.
 ```
 
-So an adapter half-existed: one vendor, four call sites, no selection. **A Gemini key on this
-machine would have configured successfully, lit up `llm_enabled: true` on `/health`, and then been
-asked for a chat completion at an address that vendor does not serve.** The status page would have
-been the thing that was wrong — which is the worst place for a bug, because it is where a person
-looks to find out whether to trust the rest.
+So an adapter half-existed: one vendor, four call sites, no selection.
+
+Stated exactly, because the first draft of this paragraph overstated it and the shipped
+`READ ME FIRST.txt` disproved the overstatement: **a second vendor was reachable, but only by
+pointing the OpenAI-shaped URL at its compatibility endpoint** —
+`https://generativelanguage.googleapis.com/v1beta/openai/`, which is what the delivery readme has
+always told a Gemini user to type, and which did work. What did not exist was any way to ask a
+vendor in its own native shape, or any way to *say which door a sentence would go out of*:
+`/health` reported `llm_enabled` and `llm_source` and never a vendor, and `ModelChoice.provider`
+was the constant `"openai-compatible"` whatever the settings said. That is still a status page
+being the unreliable part, which is worth fixing; it is just not the same claim as "it would have
+failed", and the weaker true one is the one to print.
+
+And the stronger false one had a cost. Assuming it is what made this phase's own first
+`GeminiProvider.root()` append a version segment to a URL that already carried one —
+`…/v1beta/openai/v1beta/models/…` — which is a documented setup broken by the thing written to fix
+it. Caught by reading the delivered readme and writing test 7 against it, not by reasoning.
 
 And an unconfigured machine reported `llm_enabled: false` honestly:
 
@@ -87,9 +99,10 @@ naming a model false, and the refusal is what makes the status page tell the tru
 | embeddings | `POST {base}/embeddings` | `POST {base}/v1beta/models/<model>:embedContent` |
 | model name | in the body | in the path |
 
-`{base}` ends in `/v1` because that is how `JARVIS_LLM_BASE_URL` has always been written; Gemini's
-version segment **replaces** it rather than nesting under it, because `…/v1/v1beta/models/…` is a
-URL that answers nothing. Model names come from configuration on both sides (spec §10's rule) — the
+`root()` accepts the two spellings a person actually has: `…/v1` (the shape this build assumed)
+and `…/v1beta/openai/` (the one the delivered readme tells Gemini users to type). Either way exactly
+one version segment ends up in the path; the first version of this method stripped only `/v1` and so
+broke the second spelling (§1). Model names come from configuration on both sides (spec §10's rule) — the
 check is that the wire moves when the setting does, not that a string is absent from a source file.
 
 ## 5. Failure has a shape, and it is never an empty success
@@ -219,7 +232,7 @@ UI change worth doing with a screenshot behind it rather than folded in here (60
 
 ## 11. Tests
 
-`tests/test_phase60_a_second_vendor_without_a_second_authority.py`, **22 tests**, red-first, against
+`tests/test_phase60_a_second_vendor_without_a_second_authority.py`, **23 tests**, red-first, against
 a recording HTTP server on a real socket rather than a mock:
 
 selection — default is the shape that already worked · a second vendor chosen by configuration ·
@@ -244,7 +257,7 @@ Two of these were written after the live run, in §7.
 
 | | before (Phase 59 close) | after (measured now) |
 |---|---|---|
-| Tests | 2332 · 0 failed · 0 skipped | **2354 · 0 failed · 0 skipped** (84.8 s) |
+| Tests | 2332 · 0 failed · 0 skipped | **2355 · 0 failed · 0 skipped** (94.9 s) |
 | Test modules | 86 | **87** |
 | Tools / confirmation-gated | 145 / 30 | **145 / 30** |
 | Risk split (read/low/external/destructive/physical) | 77 / 38 / 15 / 12 / 3 | unchanged |
@@ -295,14 +308,32 @@ because a ratchet that misses a conversion is a ratchet with a hole in it.
 
 ## 14. Delivery
 
-Work commit `—`, close-out commit `—`: filled in below this line once they exist, because an
-earlier phase wrote a hash into a report before the commit did and that is a fabrication with a
-good intention behind it.
+Work commit `1bec583` — *Put two vendors behind one door, and take the badge's word for nothing*.
+Close-out commit `—` (recorded by the next edit to this line, once it exists): the correction in §1
+and the `root()` fix that came out of it are in that commit, not hidden under the first one. An
+earlier phase wrote a hash into a report before the commit existed, and that is a fabrication with
+a good intention behind it.
 
-Delivery is the usual pass: rebuild `Vantage.app` from this tree, re-deploy to
-`~/Downloads/Vantage/`, verify with GETs only, rebuild both archives, refresh the delivered docs.
-The provider layer ships inside the bundle's staged source and is inert without a key — which is
-the honest state of this whole phase: **the door is built and labelled; nothing has walked through
-it to a real vendor yet.**
+Rebuilt from this tree, re-deployed, and re-verified with **GETs only** — no POST reached the user's
+real data directory:
+
+| check | result |
+|---|---|
+| `codesign --verify --deep --strict` on the deployed bundle | valid on disk, satisfies its Designated Requirement |
+| `jarvis/gateway/providers.py` inside the bundle, with the corrected `root()` | present (`v1beta/openai` appears twice in the staged file) |
+| same checks after extracting `Vantage.app.zip` into a temp dir | valid — the archive, not just the folder |
+| `GET /health` on the delivered app | `tools: 145`, `llm_enabled: false`, `llm_source: none`, `ai_provider: "openai"`, `provider_paths` naming vision and stt as not provider-routed |
+| `GET /tools` | 145 entries |
+| `GET /persistence` | `supported: true`, `installed: false`, `loaded: false` — the machine still left as found (57-A is a user decision) |
+| `GET /health` with no token | **401** |
+| the claim the shipped build wrote | `{"pid": 76145, "host": "0.0.0.0", "port": 8765, …}` |
+| archives | `Vantage.app.zip` 1,166,912 B and `vantage-source.zip` 2,519,732 B, both rebuilt; the source archive holds this report and scans clean for `.env`, tokens, key files and databases |
+| suite | **2355 passed · 0 failed · 0 skipped**, measured twice clean (94.9 s and 82.4 s); one earlier run showed the five documented 27-D Vision-OCR load failures, which passed on a quiet re-run and are reported as what they are |
+
+`READ ME FIRST.txt` gained a section 7, "Which vendor the key belongs to", which says what the
+choice does, that an unusable name is refused out loud, that `provider_paths` names the two shapes
+still OpenAI-bound, and that **no model call has been made from this build to any real vendor**. It
+is still hand-maintained in the delivery folder rather than generated from the repo (56-F) — and
+this phase is the second time that gap has caught a claim of mine that the shipped text contradicted.
 
 Nothing was pushed.

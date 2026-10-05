@@ -14,7 +14,7 @@ capability exists but was **not** re-measured today, it says so rather than impl
 | What it is | A personal AI operating system for macOS: one command pipeline, 145 governed capabilities (30 of them confirmation-gated), a laptop panel, a scoped phone client, an optional forward-only relay (locally proven, off-LAN blocked), a signed `.app` delivered as files |
 | Current phase | **Phase 60 — a second vendor behind one selection point, with no vendor call made** (closed) |
 | Previous phase | **Phase 59 — an authenticated relay, proven locally and no further** (closed; its off-LAN verdict still stands) |
-| Test suite | **2354 passed · 0 failed · 0 xfailed · 0 skipped** — 84.8 s at the Phase 60 close |
+| Test suite | **2355 passed · 0 failed · 0 xfailed · 0 skipped** — 94.9 s at the Phase 60 close |
 | Spec §6 coverage | **37 of 37** — every utterance the build prompt lists reaches a capability |
 | Delivered | `~/Downloads/Vantage/` — `Vantage.app` (running, seal valid), `Vantage.app.zip`, `vantage-source.zip`, `READ ME FIRST.txt` |
 | Commits | `a20e39c` (Ph 57), `7c828fa` (Ph 56 close), `ea68c7d` (Ph 56 close), `0cdc770` (Ph 56), `176bcfb` (Ph 55), `377e79f` (Ph 54 correction), `67d9530` (Ph 54), `35c9abf` (Ph 53), `3708f85` (Ph 52 correction), `92efc6b` (Ph 52), `f047eb2` (Ph 51), `452e9c0` (Ph 50) — **local only, nothing pushed** |
@@ -645,10 +645,16 @@ three more call sites (`memory/embeddings.py:231`, `vision/providers.py:128`,
 `config.py`. And `ModelRouter.complete()` **is** called: `orchestrator.py:233`, for a sentence the
 rules did not recognise, which is what Phase 42 built.
 
-Put those two facts together and you get the defect this phase existed to remove: a Gemini key
-would have configured cleanly, set `llm_enabled: true` on `/health`, and then been asked for a chat
-completion at an address that vendor does not serve. **The status page would have been the thing
-that was wrong** — the one place a person looks to decide whether to trust everything else.
+Put those two facts together and you get what this phase existed to remove. The precise claim
+matters, because an earlier draft of it said "a Gemini key would have been called at an address
+that vendor does not serve" and the shipped `READ ME FIRST.txt` proved that wrong: a second vendor
+*was* reachable, by pointing the OpenAI-shaped URL at its compatibility endpoint
+(`…/v1beta/openai/`), and that instruction did work. What did not exist was any way to speak a
+vendor's own native shape, or any way to say **which door a sentence went out of** — `/health`
+named no vendor, and `ModelChoice.provider` was the constant `"openai-compatible"`. That is still a
+status page being the unreliable part. Assuming the stronger claim cost this phase a bug of its own:
+the first `root()` appended a version segment to a URL that already had one, so the readme's own
+base URL produced `…/v1beta/openai/v1beta/models/…`. Test 7 exists because the readme was read.
 
 ### 2I.2 The shape of the layer
 
@@ -665,9 +671,9 @@ that was wrong** — the one place a person looks to decide whether to trust eve
 
 `JARVIS_AI_PROVIDER` defaults to `openai`, so an existing install's bytes do not move — and an
 unknown name **raises with the list of known ones** instead of defaulting, because a typo that
-silently meant "we used the other vendor" would make every later sentence naming a model false. The
-`/v1` at the end of `JARVIS_LLM_BASE_URL` is *replaced* by Gemini's own version segment, not nested
-under it: `…/v1/v1beta/…` is a URL that answers nothing. Model names come from configuration on
+silently meant "we used the other vendor" would make every later sentence naming a model false. `root()`
+accepts both spellings a person has — `…/v1` and the readme's `…/v1beta/openai/` — and leaves
+exactly one version segment in the path either way. Model names come from configuration on
 both sides, checked by moving the setting and reading the wire.
 
 The spec named the `google-genai` SDK. It is not installed on this machine
@@ -764,7 +770,7 @@ process-global embedder as a `RemoteEmbedder` with an empty base URL, which the 
 instead of quietly fixed under this commit; a normal full-suite run does not hit it, which is
 precisely how a leak like this survives.
 
-Measured after: **2354 tests passing**, 145 tools / 30 gated / 52 planner rules / 122 route objects
+Measured after: **2355 tests passing**, 145 tools / 30 gated / 52 planner rules / 122 route objects
 and 115 paths **unchanged** (`/health` gained three fields, not a route), 87 test modules, 62 phase
 reports, 74,233 versioned lines. One silence-bounded `httpx` site became a total-budget read; the
 Phase 34 ratchet that counts them did not notice, because it counts numeric literals (60-E).
@@ -800,7 +806,7 @@ User → Intent → RulePlanner (50 routes) → PermissionEngine → [Confirmati
 | Database tables | **32** | read-only `sqlite_master` count on the delivered app's database |
 | Memories indexed | 52 / 52, coverage 1.0, hybrid retrieval | `/health` |
 | Scheduler | running, 30 s tick, 67 jobs | `/health` |
-| Test suite | 2354 passed, 0 failed, 0 skipped; 84.8 s at the Phase 60 close | `pytest -q` |
+| Test suite | 2355 passed, 0 failed, 0 skipped; 94.9 s at the Phase 60 close | `pytest -q` |
 | Test modules / phase reports | 87 / 62 | `ls` |
 | Code volume | 74,233 versioned lines — 43,871 shipped code (`jarvis/` + `dashboard/` + `app/` + `assets/` + `run.py`) · 29,761 tests | `git ls-files -co --exclude-standard '*.py' '*.html' '*.js' '*.swift' \| xargs grep -c ''` |
 
