@@ -398,6 +398,13 @@
    "passed": 2408,
    "failed": 0,
    "note": "phase 9 found the unauthenticated openapi.json and filed it P2; phase 59 closed the same three routes on the relay; the host was measured again today at 82,556 bytes readable from its own Wi-Fi address with no token, and is off by default behind JARVIS_API_DOCS"
+  },
+  {
+   "phase": "65 one stall five failures",
+   "collected": 2408,
+   "passed": 2408,
+   "failed": 0,
+   "note": "four causes of the Vision cluster measured and falsified; the blast radius reproduced on demand (5 failed -> 1 failed at the same injected stall); the trigger is still NOT ESTABLISHED and two published figures were re-measured because they had been copied from tool output that did not match the disk"
   }
  ]
 }

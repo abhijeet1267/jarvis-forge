@@ -182,3 +182,22 @@ that contains it).
 
 Nothing was pushed, and no user-visible behaviour changed beyond OCR being given a truthful budget on
 its first call.
+
+---
+
+## 9. Corrected by Phase 65 — this fix did not hold
+
+Everything above is left exactly as written on 2026-10-05, including the eight clean suites, which
+were real. What did not survive is the conclusion. The cluster returned the same day:
+`5 failed, 2403 passed in 168.72s`, the same five tests.
+
+Four causes were then measured and falsified, including two numbers this report published as
+measurements ("over 20 s for the first call when the suite is running", "Vision exceeds any bound
+while other work is running"). None reproduced: 60 helper calls under a live full-suite load came
+back in 0.5 s each, and cold starts cost 7.4–10.7 s at every load this machine would generate.
+
+What the diagnosis had right is the cascade, and Phase 65 made it deterministic: forcing one
+`TimeoutExpired` on the shared backend failed five tests before the change and one after, with the
+assertions untouched. The trigger of the slow call is still **NOT ESTABLISHED**.
+
+See `audit/PHASE65_VISION_BLAST_RADIUS_REPORT.md` and §2M of `VANTAGE_CURRENT_STATE.md`.

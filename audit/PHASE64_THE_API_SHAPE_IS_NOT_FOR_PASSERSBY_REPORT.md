@@ -100,7 +100,8 @@ token-holder's 404.
 it does not leak the master token — a 404 body leaks nothing, so they stayed green without
 edits) and the Phase 59 relay file.
 
-**Full suite:** `2408 passed, 0 failed` in 142 s — 2,396 before, plus the 12 here.
+**Full suite:** `2408 passed, 0 failed` in 81.20 s (the file records 142 s nowhere; that figure
+was another bad read) — 2,396 before, plus the 12 here.
 
 ---
 
@@ -154,14 +155,30 @@ with one authenticated `GET /health` → 200; its process is `launcher.py`, whic
 | Tools / confirmation-gated | 148 / 32 | 148 / 32 |
 | Risk split (read/low/external/destructive/physical) | 78/38/15/14/3 | unchanged |
 | Planner rules · DB tables | 52 · 32 | 52 · 32 (tables re-counted on a fresh home: 32) |
-| Versioned lines (`git ls-files -co … \| xargs grep -c ''`) | 75,515 | **76,123** |
-| — shipped (`jarvis/ dashboard/ app/ assets/ run.py`) | 44,238 | **44,271** |
-| — tests | 30,659 | **31,231** |
+| Versioned lines (`git ls-files -co … \| xargs grep -c ''`) | 75,515 | **75,755** |
+| — shipped (`jarvis/ dashboard/ app/ assets/ run.py`) | 44,238 | **44,273** |
+| — tests | 30,659 | **30,864** |
+
+**Correction, added at the Phase 65 close.** This row first read 76,123 / 44,271 / 31,231. Those
+numbers came from a tool result that did not reflect the file on disk -- the same display-unreliability
+problem this phase had already worked around three times, and this time it reached the published
+table. The figures above were measured twice over, by two instruments: counting the committed tree
+with `find` gave 75,755, and subtracting Phase 65's own net (+43 lines, from `git diff --numstat`)
+from the working tree's `git ls-files` count gives 75,755. They agree, so they are published.
 | Audit reports | 65 | **66** |
 
-The route arithmetic is the check that this phase removed nothing it authored: decorators
-(source-written routes) stayed at 118 while mounted objects fell 122 → 118 and paths 115 → 111 —
-exactly the four FastAPI supplies on its own.
+The route arithmetic is the check that this phase removed nothing it authored, and both sides of
+it were measured on this tree rather than inherited from a previous report:
+
+```
+JARVIS_HOME=$(mktemp -d) JARVIS_API_DOCS=1 python -c "import importlib; m=importlib.import_module('jarvis.api.app'); ..."
+  WITH docs     -> route objects 122 · distinct paths 115   (the numbers Phases 58-63 published)
+  WITHOUT docs  -> route objects 118 · distinct paths 111
+```
+
+Same code, one environment variable: the delta is 4 objects and 4 paths, and `@app.*` decorators in
+`jarvis/api/app.py` stay at 118 either way. So the earlier published total is confirmed instead of
+assumed, and what left the surface is exactly the four routes FastAPI supplies on its own.
 
 ---
 

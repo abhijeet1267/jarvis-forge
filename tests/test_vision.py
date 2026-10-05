@@ -187,13 +187,46 @@ def test_a_stall_on_one_backend_cannot_silence_another(tmp_path):
 
 
 
-def test_ocr_reads_real_text(sample_image: Path) -> None:
+@pytest.fixture()
+def reader(monkeypatch):
+    """A recogniser of the test's own, so one exhausted budget cannot silence four assertions.
+
+    Measured 2026-10-05 with the red condition forced on demand (one stall on the module
+    singleton, every later call allowed to succeed): **five tests fail**, and four of them never
+    asked the recogniser anything at all -- they were refused by the 45 s cooldown the first stall
+    installed. The refusal is right for a person (do not queue more work on something that just
+    stopped answering) and wrong as a test arrangement, because a test that was never executed is
+    not a measurement of anything and a suite that reports five failures from one event describes
+    the harness, not the machine.
+
+    So each content test below reads through its own instance -- the same real helper binary, the
+    same real image file, the same real Vision framework, the same budgets -- and only the guard's
+    *scope* changes. No assertion is altered, nothing is skipped, and the instance-isolation fact
+    this relies on is itself under test in
+    `test_a_stall_on_one_backend_cannot_silence_another`.
+
+    The tool path resolves the backend through `get_ocr_backend()`, so patching the module's
+    `_backend` puts the same instance under `read_image_text` and `find_image_text` too;
+    monkeypatch hands the real singleton back at teardown.
+
+    What this does **not** do is explain why a call occasionally exhausts its budget. That trigger
+    is still unidentified: four candidate causes were measured and falsified today, and the
+    remaining honest statement is in `audit/PHASE65_VISION_BLAST_RADIUS_REPORT.md`.
+    """
+    backend = ocr_module.OCRBackend()
+    if not backend.available():
+        pytest.skip("OCR helper unavailable")
+    monkeypatch.setattr(ocr_module, "_backend", backend)
+    return backend
+
+
+def test_ocr_reads_real_text(sample_image: Path, reader) -> None:
     """The recognised text must match what was actually drawn."""
     if not ocr_available():
         pytest.skip("OCR helper unavailable")
 
     result = read_text(str(sample_image))
-    assert result["ok"]
+    assert result["ok"], result.get("error") or result
     assert result["backend"] == "macos_vision"
 
     combined = " ".join(line["text"] for line in result["lines"]).lower()
@@ -202,11 +235,12 @@ def test_ocr_reads_real_text(sample_image: Path) -> None:
 
 
 @pytest.mark.slow
-def test_ocr_returns_bounding_boxes(sample_image: Path) -> None:
+def test_ocr_returns_bounding_boxes(sample_image: Path, reader) -> None:
     if not ocr_available():
         pytest.skip("OCR helper unavailable")
 
     result = read_text(str(sample_image))
+    assert result["ok"], result.get("error") or result
     for line in result["lines"]:
         assert 0.0 <= line["x"] <= 1.0
         assert 0.0 <= line["y"] <= 1.0
@@ -214,12 +248,12 @@ def test_ocr_returns_bounding_boxes(sample_image: Path) -> None:
 
 
 @pytest.mark.slow
-def test_find_text_locates_a_word(sample_image: Path) -> None:
+def test_find_text_locates_a_word(sample_image: Path, reader) -> None:
     if not ocr_available():
         pytest.skip("OCR helper unavailable")
 
     result = find_text(str(sample_image), "battery")
-    assert result["ok"]
+    assert result["ok"], result.get("error") or result
     assert result["match_count"] >= 1
     assert "battery" in result["matches"][0]["text"].lower()
 
@@ -347,12 +381,12 @@ async def test_inspect_image_needs_a_path(ctx: ToolContext) -> None:
 
 
 @pytest.mark.asyncio
-async def test_read_image_text_tool(ctx: ToolContext, sample_image: Path) -> None:
+async def test_read_image_text_tool(ctx: ToolContext, sample_image: Path, reader) -> None:
     if not ocr_available():
         pytest.skip("OCR helper unavailable")
 
     result = await read_image_text(ctx, path=str(sample_image))
-    assert result.ok
+    assert result.ok, result.error or result.message
     assert "amr" in result.output["text"].lower()
 
 
@@ -362,12 +396,12 @@ async def test_read_image_text_needs_a_path(ctx: ToolContext) -> None:
 
 
 @pytest.mark.asyncio
-async def test_find_image_text_tool(ctx: ToolContext, sample_image: Path) -> None:
+async def test_find_image_text_tool(ctx: ToolContext, sample_image: Path, reader) -> None:
     if not ocr_available():
         pytest.skip("OCR helper unavailable")
 
     result = await find_image_text(ctx, path=str(sample_image), query="battery")
-    assert result.ok
+    assert result.ok, result.error or result.message
     assert result.output["match_count"] >= 1
 
 

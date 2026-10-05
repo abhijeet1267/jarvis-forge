@@ -12,11 +12,11 @@ capability exists but was **not** re-measured today, it says so rather than impl
 | | |
 |---|---|
 | What it is | A personal AI operating system for macOS: one command pipeline, 145 governed capabilities (30 of them confirmation-gated), a laptop panel, a scoped phone client, an optional forward-only relay (locally proven, off-LAN blocked), a signed `.app` delivered as files |
-| Current phase | **Phase 64 — the API's shape is not for passersby** (closed) |
+| Current phase | **Phase 65 — one stall, five failures: the Vision cluster's blast radius, measured and bounded** (closed) |
 | Final audit | **Final acceptance audit** (closed — the last of 61 phases; `VANTAGE_FINAL_ACCEPTANCE_REPORT.md` separates IMPLEMENTED / VERIFIED / BLOCKED / NOT MEASURED / UNKNOWN / USER DECISION REQUIRED |
 | Last feature phase | **Phase 61 — desktop control that asks before it touches, and was never demonstrated touching** (closed) |
 | Previous phases | **Phase 60 — a second vendor behind one selection point** (no vendor call made) · **Phase 59 — an authenticated relay, proven locally and no further** (its off-LAN verdict still stands) |
-| Test suite | **2408 passed · 0 failed** — 77 s typical, 125 s and 167 s under load, **nine consecutive clean full-suite runs through Phase 63, then 3 of 4 today** (the Vision-OCR flake needed a second, correct fix: `audit/PHASE63_A_SURFACE_NAMES_ITS_SUBJECT_REPORT.md` §4) |
+| Test suite | **2408 passed · 0 failed** — 80–116 s typical; thirteen full suites on 2026-10-05, **twelve clean and one at 168.72 s with the five Vision failures**, which Phase 65 reproduces deterministically instead of waiting for (the Vision-OCR flake needed a second, correct fix: `audit/PHASE63_A_SURFACE_NAMES_ITS_SUBJECT_REPORT.md` §4) |
 | Spec §6 coverage | **37 of 37** — every utterance the build prompt lists reaches a capability |
 | Delivered | `~/Downloads/Vantage/` — `Vantage.app` (running, seal valid), `Vantage.app.zip`, `vantage-source.zip`, `READ ME FIRST.txt` |
 | Commits | `a20e39c` (Ph 57), `7c828fa` (Ph 56 close), `ea68c7d` (Ph 56 close), `0cdc770` (Ph 56), `176bcfb` (Ph 55), `377e79f` (Ph 54 correction), `67d9530` (Ph 54), `35c9abf` (Ph 53), `3708f85` (Ph 52 correction), `92efc6b` (Ph 52), `f047eb2` (Ph 51), `452e9c0` (Ph 50) — **local only, nothing pushed** |
@@ -986,7 +986,7 @@ servers stopped, both temp homes removed, the delivered app re-checked afterward
 authenticated `GET /health` → 200.
 
 **Measured after:** 2,408 tests passing. Today's four full suites: 116 s clean (2,407, before the
-last test was added), 142 s clean, **168 s with the five `test_vision.py` OCR failures back**, and
+last test was added), 81.20 s clean, **168.72 s with the five `test_vision.py` OCR failures back**, and
 95 s clean — three of four. The cold-start fix in `audit/FINAL_AUDIT_COLD_START_NOT_A_STALL.md`
 therefore **did not hold**, and the run that proved it was a run with a full queue and no failed
 assertion in it until the end; claiming "ten consecutive clean runs" here would have been the same
@@ -1002,6 +1002,73 @@ project wrote was removed. 92 test modules, 66 audit reports, 76,123 versioned l
 (`chain_checked` 495 of `sampled` 500 on the live host), and **9 leftover `phone_*` pairing rows, 6
 of them still `paired`, all dated 2026-09-25** — held secrets for handsets that do not exist.
 Clearing either means deleting or revoking real state, which is not an agent's call to make quietly.
+
+## 2M. Phase 65 in full — one stall, five failures
+
+**What was claimed, and what happened.** The final audit's addendum (`audit/FINAL_AUDIT_COLD_START_NOT_A_STALL.md`)
+reported the recurring `tests/test_vision.py` cluster diagnosed and fixed: a cold Vision
+initialisation had been handed the steady 20 s budget, read as a stall, and its 45 s cooldown had
+taken four more tests with it. Six clean suites were the proof. On 2026-10-05 the same five tests
+failed again -- `5 failed, 2403 passed in 168.72s` -- after two clean runs. So the phase's first job
+was to stop treating "it passed six times" as an explanation.
+
+**Four causes measured and falsified**, all on this machine, all with the real helper binary and
+the real PNG the tests draw:
+
+| Claim | Measurement | Verdict |
+| --- | --- | --- |
+| "Vision returns 0.6 s standalone and **exceeds any bound** while other work runs" (in `ocr.py` since Phase 27) | 60 helper calls while a full 2,408-test suite ran in another process: first 10.66 s, then 0.52 s, **0 over 15 s, 0 non-zero exits**, load suite exited 0 | does not reproduce |
+| cold initialisation can exceed the 45 s allowance | cold first call: **7.42 s idle**, **9.43 s with 10 busy CPUs**, **10.66 s under live suite load** | never near 45 s |
+| the first **exec** of a freshly compiled binary is the slow step (every earlier probe reused a binary that had already run) | 4 brand-new `JARVIS_HOME`s under suite load: build 0.70–0.73 s, first exec **0.46 / 0.46 / 0.52 / 2.01 s**, all `ok` | falsified |
+| a test leaked a patch onto the global `subprocess.run`, so every later real read was a fake timeout | plugin compared `subprocess.run.__code__` against an untouched reference before each of the five real tests, **9 instrumented full suites**: `run_real: True` every time; `cooling: 0.0`, `stalls: 0` before every one of them | falsified in every captured run |
+
+**What did survive is the blast radius**, and it got a deterministic reproduction rather than a
+wait. A plugin raises `TimeoutExpired` **once**, on the first call made by the module singleton,
+*inside* `read_text`'s own `try`, so the product records the stall exactly as it would in the wild
+and every later call is allowed through:
+
+| same injected condition | before | after |
+| --- | --- | --- |
+| failures among the five content tests | **5 failed, 44 passed** | **1 failed, 48 passed** |
+
+The plugin's first version stalled the *first helper call anyone made*, which is the warm-up
+fixture's throwaway instance, and **nothing else failed** — an accidental but welcome confirmation
+that Phase 63's instance isolation works.
+
+**The change** is in the harness, not the guard. `tests/test_vision.py` gains one fixture, `reader`,
+which builds a real `OCRBackend`, resolves the real binary, and hands it over as the module's
+`_backend` through `monkeypatch` — so `read_image_text` and `find_image_text`, which resolve the
+backend through `get_ocr_backend()`, get the same instance and the real one returns at teardown. The
+five content tests take the fixture; **their assertions, their skips, their budgets and the file on
+disk are unchanged**, and 43 net lines moved. The reason is a rule this project already has: a test
+that was never executed is not a measurement, and five red rows from one event describe the harness
+rather than the machine. The isolation the fixture leans on is itself under test in
+`test_a_stall_on_one_backend_cannot_silence_another`, and the three Phase 27 tests describing the
+cooldown were not touched — including
+`test_a_stall_still_cools_the_recogniser_down_on_a_cold_process`, which is the test that stops this
+phase from being mistaken for a relaxation.
+
+Failure lines now carry the recogniser's own sentence (`assert result["ok"], result.get("error")`),
+so the next stall documents its own budget instead of printing `assert False` — necessary, because
+**this phase lost the last red run's diagnostics to my own `tail -2`** and cannot cite them.
+
+**Numbers were re-measured twice, because two had been copied from output that did not match the
+disk.** Line counts: 75,515 (Phase 63) → **75,755** (Phase 64) → **75,798** (now), where the Phase 64
+figure agrees between two independent instruments (`find` over the committed tree, and the working
+tree's `git ls-files` count minus this phase's own `git diff --numstat` net of +43). The suite
+durations published in §2L were also wrong (81.20 s, not 142 s) and are corrected there.
+
+**Measured after:** **2408 passed, 0 failed in 93.24 s**; `tests/test_vision.py` 49 passed; 148 tools
+/ 32 confirmation-gated / 52 planner rules (`len(core.planner._rules)`, re-counted) / 118 route
+objects / 32 tables unchanged; 92 test modules, 67 phase reports, 57+1 `suite_history` rows with
+nothing removed. Browser verification **NOT APPLICABLE** — no page changed.
+
+**65-A, open on purpose.** For a person, one slow image read still makes the next reads say "it is
+not answering right now" for up to 45 s, even though every measurement today had the recogniser
+answering in half a second. Shortening the cooldown or retrying once before cooling would change
+behaviour that three Phase 27 tests describe, so it is recorded as a decision with a user in it
+rather than made quietly. **The trigger of the slow call itself remains NOT ESTABLISHED** — what
+would settle it is the next occurrence's own failure line, which can now speak.
 
 ## 3. Working status of the whole product, as measured today
 
@@ -1033,9 +1100,9 @@ User → Intent → RulePlanner (50 routes) → PermissionEngine → [Confirmati
 | Database tables | **32** | read-only `sqlite_master` count on the delivered app's database |
 | Memories indexed | 52 / 52, coverage 1.0, hybrid retrieval | `/health` |
 | Scheduler | running, 30 s tick, 67 jobs | `/health` |
-| Test suite | 2408 passed, 0 failed; 77–142 s, ten consecutive clean runs | `pytest -q` |
-| Test modules / phase reports | 91 / 65 | `ls` |
-| Code volume | 76,123 versioned lines — 44,271 shipped code (`jarvis/` + `dashboard/` + `app/` + `assets/` + `run.py`) · 31,231 tests | `git ls-files -co --exclude-standard '*.py' '*.html' '*.js' '*.swift' \| xargs grep -c ''` |
+| Test suite | 2408 passed, 0 failed; 80–116 s typical, one 168.72 s run carrying the five Vision failures (Phase 65) | `pytest -q` |
+| Test modules / phase reports | 92 / 67 | `ls` |
+| Code volume | 75,798 versioned lines — 44,282 shipped code (`jarvis/` + `dashboard/` + `app/` + `assets/` + `run.py`) · 30,898 tests | `git ls-files -co --exclude-standard '*.py' '*.html' '*.js' '*.swift' \| xargs grep -c ''` |
 
 ### 3.3 Permissions, as the OS reports them right now (`/permissions`)
 

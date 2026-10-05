@@ -82,24 +82,33 @@ _TIMEOUT = 20.0
 
 #: How long a timed-out recogniser is left alone before another attempt.
 #:
-#: macOS Vision is intermittently unresponsive under load (measured: the same
-#: image returns in 0.6 s standalone and exceeds any bound while other work is
-#: running). Retrying every call would then make each question take the full
-#: timeout, which is a worse user experience than saying "it is not answering
-#: right now" once and moving on. The binary still exists and still works -- this
-#: is a latency guard, not a claim that OCR is missing.
+#: A recogniser that has just exhausted its budget is not going to answer the next question
+#: quickly, and making every following call wait the full timeout is worse than saying "it is not
+#: answering right now" once. The binary still exists and still works -- this is a latency guard,
+#: not a claim that OCR is missing.
+#:
+#: The claim this comment used to carry -- "measured: the same image returns in 0.6 s standalone
+#: and exceeds any bound while other work is running" -- was re-measured on 2026-10-05 and does
+#: not hold: 60 calls made while a full test suite was running on the same machine came back in
+#: 0.5-3.5 s, none over 15 s. What is still true is the shape this guard exists for: a call does
+#: occasionally exhaust its budget, and the cause of those calls is NOT ESTABLISHED. The blast
+#: radius of one such call -- every later read on the same backend refused for 45 s -- is recorded
+#: and measured in audit/PHASE65_VISION_BLAST_RADIUS_REPORT.md.
 _COOLDOWN_SECONDS = 45.0
 
 #: The budget for a process's *first* recogniser call.
 #:
-#: Measured on this machine, same image, same helper binary: 0.28 s per call once a process has
-#: completed one (25 calls), and 7.4 s for its very first on an idle machine -- and over 20 s for
-#: that first call when the rest of a test suite was running. So a steady-state ceiling applied to
-#: cold Vision initialisation reads as a stall, and because a stall cools the shared backend down
-#: for 45 s, one slow start failed five tests at once (the traced evidence is in
-#: tests/test_final_audit_the_cold_start_was_called_a_stall.py). This is the allowance for
-#: initialisation, not a licence to wait forever: it is capped, and it ends the moment one read
-#: succeeds.
+#: Measured on this machine, same image, same helper binary: 0.28-0.5 s per call once a process
+#: has completed one, and 7.4 s for its very first on an idle machine (9.3 s with ten busy CPUs).
+#: A steady-state ceiling applied to that initialisation reads as a stall, so the first call gets
+#: allowance; it is capped, and it ends the moment one read succeeds.
+#:
+#: Recorded honestly: this allowance was written on 2026-10-05 as the fix for the five-test
+#: cluster, and the cluster came back the same day. The allowance is not what was wrong -- one
+#: exhausted budget still cools this backend down and still takes four more tests with it, whatever
+#: made the call slow. The allowance stays because a person's first read after launch is genuinely
+#: the 7 s call; the number that was missing was that a *test* should not inherit a stranger's
+#: cooldown, which is what `tests/test_vision.py::reader` now arranges.
 _COLD_START_SECONDS = 45.0
 _MAX_BUDGET_SECONDS = 120.0
 
