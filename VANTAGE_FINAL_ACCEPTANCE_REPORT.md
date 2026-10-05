@@ -182,7 +182,7 @@ And the numbers this repository publishes, re-measured for the record:
 | Database tables | 32 |
 | Reports | 63 in `audit/` + this file |
 | Code | 75,024 versioned lines — 44,181 shipped, 30,225 tests |
-| Commits | local only — `…c138807` → this audit's commit. **Nothing pushed.** |
+| Commits | local only — `c138807` (Phase 61 close) → `f08b999` (this audit) → the commit that fills in this hash. **Nothing pushed.** |
 
 ## 10. Verdict, in one paragraph each
 
@@ -200,3 +200,8 @@ reads BROKEN because this machine's history deliberately contains forged rows; f
 flaky on this machine and nobody has proven why. The audit's own finding — that the harness which
 publishes every score deleted 16 phases of history when run — is in §7 with its before/after
 numbers, found while measuring, not while reviewing.
+
+---
+
+*This audit's own commit is `f08b999`; the hash was written into §9 by the commit that
+follows it, because a number cannot be quoted before it exists.*
