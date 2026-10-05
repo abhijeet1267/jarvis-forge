@@ -405,6 +405,13 @@
    "passed": 2408,
    "failed": 0,
    "note": "four causes of the Vision cluster measured and falsified; the blast radius reproduced on demand (5 failed -> 1 failed at the same injected stall); the trigger is still NOT ESTABLISHED and two published figures were re-measured because they had been copied from tool output that did not match the disk"
+  },
+  {
+   "phase": "66 the ledger read in two halves",
+   "collected": 2419,
+   "passed": 2419,
+   "failed": 0,
+   "note": "/metrics counted the newest 500 rows while verify_chain walked the oldest 500 of the same 525-row ledger; both now cover everything and say what they covered, the panel names the break, and the rebuilt bundle finally shipped Phase 64 after a 200/82,556-byte measurement proved the staged copy wins"
   }
  ]
 }

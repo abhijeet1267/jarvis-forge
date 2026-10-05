@@ -12,11 +12,11 @@ capability exists but was **not** re-measured today, it says so rather than impl
 | | |
 |---|---|
 | What it is | A personal AI operating system for macOS: one command pipeline, 145 governed capabilities (30 of them confirmation-gated), a laptop panel, a scoped phone client, an optional forward-only relay (locally proven, off-LAN blocked), a signed `.app` delivered as files |
-| Current phase | **Phase 65 — one stall, five failures: the Vision cluster's blast radius, measured and bounded** (closed) |
+| Current phase | **Phase 66 — the ledger was being read in two different halves** (closed) |
 | Final audit | **Final acceptance audit** (closed — the last of 61 phases; `VANTAGE_FINAL_ACCEPTANCE_REPORT.md` separates IMPLEMENTED / VERIFIED / BLOCKED / NOT MEASURED / UNKNOWN / USER DECISION REQUIRED |
 | Last feature phase | **Phase 61 — desktop control that asks before it touches, and was never demonstrated touching** (closed) |
 | Previous phases | **Phase 60 — a second vendor behind one selection point** (no vendor call made) · **Phase 59 — an authenticated relay, proven locally and no further** (its off-LAN verdict still stands) |
-| Test suite | **2408 passed · 0 failed** — 80–116 s typical; thirteen full suites on 2026-10-05, **twelve clean and one at 168.72 s with the five Vision failures**, which Phase 65 reproduces deterministically instead of waiting for (the Vision-OCR flake needed a second, correct fix: `audit/PHASE63_A_SURFACE_NAMES_ITS_SUBJECT_REPORT.md` §4) |
+| Test suite | **2419 passed · 0 failed** — 80–116 s typical; thirteen full suites on 2026-10-05, **twelve clean and one at 168.72 s with the five Vision failures**, which Phase 65 reproduces deterministically instead of waiting for (the Vision-OCR flake needed a second, correct fix: `audit/PHASE63_A_SURFACE_NAMES_ITS_SUBJECT_REPORT.md` §4) |
 | Spec §6 coverage | **37 of 37** — every utterance the build prompt lists reaches a capability |
 | Delivered | `~/Downloads/Vantage/` — `Vantage.app` (running, seal valid), `Vantage.app.zip`, `vantage-source.zip`, `READ ME FIRST.txt` |
 | Commits | `a20e39c` (Ph 57), `7c828fa` (Ph 56 close), `ea68c7d` (Ph 56 close), `0cdc770` (Ph 56), `176bcfb` (Ph 55), `377e79f` (Ph 54 correction), `67d9530` (Ph 54), `35c9abf` (Ph 53), `3708f85` (Ph 52 correction), `92efc6b` (Ph 52), `f047eb2` (Ph 51), `452e9c0` (Ph 50) — **local only, nothing pushed** |
@@ -1070,6 +1070,54 @@ behaviour that three Phase 27 tests describe, so it is recorded as a decision wi
 rather than made quietly. **The trigger of the slow call itself remains NOT ESTABLISHED** — what
 would settle it is the next occurrence's own failure line, which can now speak.
 
+## 2N. Phase 66 in full — the ledger was being read in two different halves
+
+`/metrics` published `sampled: 500`, taken with `ORDER BY created_at DESC LIMIT 500` -- the newest
+500 rows. `verify_chain()` walked `ORDER BY created_at ASC LIMIT 500` -- the **oldest** 500 of the
+same 525-row table. Two surfaces, one ledger, different halves: 25 rows were never chain-checked, 25
+were never counted, and neither fact appeared anywhere. The consequence that matters is directional:
+the unverified tail is where a tamper performed *later* lives, so the word "intact" was being produced
+by a walk that had not read the part an attacker would edit. Separately, two rows from an early build
+store a whole response sentence in the `result` column ("Your laptop battery is at 82% (charging)."),
+and because they are older than the newest-500 window, **no published number had ever shown them**.
+
+`verify_chain(limit=None)` now walks the whole ledger and reports what it covered: `verified_of` (the
+size of the table), `unverified` (what a bounded walk did not reach) and `break_details` (per-break
+reason, `log_id`, position). `result_value_counts()` asks the table for every distinct `result`, so
+`legacy_message` counts the sentence rows honestly instead of inventing a status that was never
+recorded, and `unexpected_result_values` is published as a number. `seal_chain(force=True)` exists for
+repairs, keeps the plain call's contract (`test_security.py::test_seal_chain_is_idempotent` still
+passes) and **writes its own event row**, because a re-sealed chain proves only that nothing changed
+after it -- a reader who cannot see that date would over-trust a green light.
+
+The panel's chain line became a function, `auditChainLine(a)`, and says
+`BROKEN · 5 records · 520 of 525 verified · record hash mismatch (a record was edited)`, or
+`intact · 100 of 525 verified · 425 not verified` when a walk stops early. 11 tests, red first as 7
+failures and 3 errors; the important one tampers with the **newest** record, which was invisible
+before, and three run the shipped function under node against the exact keys `/metrics` publishes.
+Browser verification **done**: real Chrome at 1440x900 against the delivered app, chain text read from
+the live DOM, `scrollWidth` 1425 of 1440 (no overflow), card box ending at 1294 px, 0 console messages.
+
+**A wrong claim of mine, and how it was caught.** I told you a restart alone would ship Phase 64
+"because the bundle loads the repo source". It does not: `launcher.resolve_project_dir()` prefers the
+staged copy at `Contents/Resources/app` and only then falls back to `project_path.txt` -- which the
+launcher's own comment explains, and which an older entry in this project's memory already recorded.
+The restarted app answered `GET /openapi.json` with **200, 82,556 bytes**, and that measurement is the
+only reason I found out. The fix was therefore rebuilt, re-signed, deployed, and verified from inside
+the deployed bundle before it was verified over HTTP: all four blueprint paths now **404 at 22 bytes**
+including when addressed at the Wi-Fi IP, and `GET /` no longer advertises `/docs`.
+
+**Measured after:** 2419 passing, 93 test modules, 68 reports, 76,144 versioned lines; 148 tools /
+32 gated / 52 planner rules / 118 route objects / 111 paths / 32 tables unchanged -- `/metrics` gained
+fields, not a route.
+
+**Not done, by design:** the 6 `forged` rows are still in the ledger. The app was stopped, the database
+and WAL were copied to `~/.jarvis-forge/repair-2026-10-05/`, and the eight affected rows exported --
+then the deletion itself was blocked, and I did not route around a block on deleting audit history.
+The row list, the effect (525 to 519 rows plus a forced re-seal) and the reason the 2 `legacy_message`
+rows should *not* be rewritten are all in `audit/PHASE66_THE_LEDGER_WAS_READ_IN_TWO_HALVES_REPORT.md`
+§6, waiting on your explicit yes. Device rows untouched, as instructed.
+
 ## 3. Working status of the whole product, as measured today
 
 All values from the **delivered app** over HTTP (read-only GETs) unless stated.
@@ -1100,9 +1148,9 @@ User → Intent → RulePlanner (50 routes) → PermissionEngine → [Confirmati
 | Database tables | **32** | read-only `sqlite_master` count on the delivered app's database |
 | Memories indexed | 52 / 52, coverage 1.0, hybrid retrieval | `/health` |
 | Scheduler | running, 30 s tick, 67 jobs | `/health` |
-| Test suite | 2408 passed, 0 failed; 80–116 s typical, one 168.72 s run carrying the five Vision failures (Phase 65) | `pytest -q` |
-| Test modules / phase reports | 92 / 67 | `ls` |
-| Code volume | 75,798 versioned lines — 44,282 shipped code (`jarvis/` + `dashboard/` + `app/` + `assets/` + `run.py`) · 30,898 tests | `git ls-files -co --exclude-standard '*.py' '*.html' '*.js' '*.swift' \| xargs grep -c ''` |
+| Test suite | 2419 passed, 0 failed; 80–116 s typical, one 168.72 s run carrying the five Vision failures (Phase 65) | `pytest -q` |
+| Test modules / phase reports | 93 / 68 | `ls` |
+| Code volume | 76,144 versioned lines — 44,379 shipped code (`jarvis/` + `dashboard/` + `app/` + `assets/` + `run.py`) · 31,147 tests | `git ls-files -co --exclude-standard '*.py' '*.html' '*.js' '*.swift' \| xargs grep -c ''` |
 
 ### 3.3 Permissions, as the OS reports them right now (`/permissions`)
 

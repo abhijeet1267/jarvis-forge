@@ -8,7 +8,7 @@
   {
    "command": "Jarvis, find my latest project report.",
    "http_status": 200,
-   "ms": 1194,
+   "ms": 1333,
    "intent": "search_files",
    "tools": [
     "search_files"
@@ -23,7 +23,7 @@
   {
    "command": "Jarvis, show me my laptop battery.",
    "http_status": 200,
-   "ms": 16,
+   "ms": 18,
    "intent": "laptop_battery",
    "tools": [
     "get_battery_status"
@@ -112,7 +112,7 @@
   {
    "command": "Jarvis, remember that this is my AMR project.",
    "http_status": 200,
-   "ms": 4,
+   "ms": 5,
    "intent": "remember",
    "tools": [
     "remember_fact"
@@ -127,7 +127,7 @@
   {
    "command": "Jarvis, what did I work on yesterday?",
    "http_status": 200,
-   "ms": 4,
+   "ms": 6,
    "intent": "recall",
    "tools": [
     "search_memory"
@@ -153,7 +153,7 @@
   {
    "command": "Jarvis, research this idea.",
    "http_status": 200,
-   "ms": 294,
+   "ms": 758,
    "intent": "search_papers",
    "tools": [
     "search_papers"
@@ -213,7 +213,7 @@
   {
    "command": "Jarvis, turn on study mode.",
    "http_status": 200,
-   "ms": 4,
+   "ms": 6,
    "intent": "home_routine",
    "tools": [
     "run_home_routine"

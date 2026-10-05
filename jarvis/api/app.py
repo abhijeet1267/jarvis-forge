@@ -1148,28 +1148,58 @@ async def metrics(_: None = Protected) -> Dict[str, Any]:
     }
 
 
+#: The tokens this project writes into the ledger's `result` column. A value outside the set is
+#: either an early build that stored a response message there, or an edit -- and the surface has to
+#: tell those two apart rather than bucket both as "something".
+KNOWN_RESULT_VALUES = frozenset({
+    "success", "failure", "denied", "blocked", "awaiting_confirmation", "unverified",
+    "no_action", "pending", "recovered", "clarification", "expired", "cancelled", "unknown",
+    "",
+})
+
+
 def _audit_summary(core) -> Dict[str, Any]:
-    rows = core.audit.recent(limit=500)
-    total = len(rows)
+    """The ledger's own numbers, counted over the whole table.
+
+    This used to read the newest 500 rows while `verify_chain` walked the *oldest* 500 of the same
+    table, so on this machine's 525-row ledger the two surfaces looked at different halves: the 25
+    newest rows were never chain-checked and the oldest were never counted, and neither blind spot
+    was stated anywhere. Both halves now cover everything, and what the verifier could not reach is
+    published as a number instead of being assumed.
+    """
+    counts = core.audit.result_value_counts()
     by_result: Dict[str, int] = {}
+    unexpected = 0
+    for value, n in counts.items():
+        # A row whose result column holds a sentence is labelled honestly as a legacy message,
+        # not renamed into a status that was never recorded and not dropped from the count.
+        label = "legacy_message" if len(value) > 32 else (value or "unknown")
+        by_result[label] = by_result.get(label, 0) + n
+        if value not in KNOWN_RESULT_VALUES and len(value) <= 32:
+            unexpected += n
+        elif len(value) > 32:
+            unexpected += n
+
+    rows = core.audit.recent(limit=100000)
     by_tool: Dict[str, int] = {}
     for row in rows:
-        result = row["result"] or "unknown"
-        # Very early builds stored a message here instead of a status token.
-        # Label those honestly rather than inventing a status for them.
-        if len(result) > 32:
-            result = "legacy_message"
-        by_result[result] = by_result.get(result, 0) + 1
         tool = row["tool"] or row["intent"] or "unknown"
         by_tool[tool] = by_tool.get(tool, 0) + 1
 
     chain = core.audit.verify_chain()
     return {
-        "sampled": total,
+        "sampled": sum(counts.values()),
+        "ledger_rows": sum(counts.values()),
         "by_result": by_result,
+        "unexpected_result_values": unexpected,
         "top_tools": dict(sorted(by_tool.items(), key=lambda kv: kv[1], reverse=True)[:10]),
         "chain_intact": chain["ok"],
         "chain_checked": chain["checked"],
+        "chain_verified_of": chain["verified_of"],
+        "chain_unverified": chain["unverified"],
+        "chain_breaks": chain["breaks"],
+        "chain_reason": chain["reason"],
+        "chain_first_bad": chain.get("first_bad_log_id", ""),
     }
 
 

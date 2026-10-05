@@ -12,7 +12,7 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from ..config import get_settings
-from ..core.models import AuditRecord, new_id
+from ..core.models import AuditRecord, new_id, utcnow
 from ..db.database import get_db
 from ..logging_setup import get_logger
 from .privacy import redact, redact_value
@@ -150,7 +150,7 @@ class AuditLog:
             detail=json.loads(row["detail"] or "{}"),
         )
 
-    def seal_chain(self) -> int:
+    def seal_chain(self, force: bool = False) -> int:
         """Give every record a hash, in order.
 
         Records written before the chain existed have no hash, which would make
@@ -159,12 +159,21 @@ class AuditLog:
         Honest limitation: sealing happens *now*, so it protects against future
         edits, not edits made before sealing. Data that was never hashed cannot
         be retroactively protected.
+
+        `force=True` re-seals a ledger that is already hashed, which is what repairing
+        a row requires -- a deletion or an edit invalidates that row's hash and its
+        successor's `prev_hash`, and the chain only verifies again from the change on.
+        It is refused as a quiet default on purpose, and when it does run it writes an
+        event row, because a re-sealed chain proves only that nothing changed *after*
+        the re-seal. A reader who cannot see that date would read the ledger's green
+        light as a longer guarantee than it is.
         """
         unhashed = self.db.query(
             "SELECT COUNT(*) AS n FROM action_logs WHERE record_hash IS NULL OR record_hash = ''"
         )
         if not unhashed or not unhashed[0]["n"]:
-            return 0
+            if not force:
+                return 0
 
         rows = self.db.query(
             "SELECT * FROM action_logs ORDER BY created_at ASC, rowid ASC"
@@ -178,11 +187,34 @@ class AuditLog:
                 (previous, digest, row["log_id"]),
             )
             previous = digest
+        resealed = len(rows)
 
-        log.info("audit chain sealed", extra_fields={"records": len(rows)})
-        return len(rows)
+        if force:
+            self.record(
+                intent=f"audit chain re-sealed: {len(rows)} records re-hashed on "
+                       f"{utcnow().isoformat()}",
+                tool="seal_chain", result="success",
+                detail={"forced": True, "records": len(rows),
+                        "meaning": "integrity is proved from this moment forward; edits before "
+                                   "it cannot be detected by the chain any longer"},
+            )
 
-    def verify_chain(self, limit: int = 500) -> Dict[str, Any]:
+        log.info("audit chain re-sealed" if force else "audit chain sealed",
+                 extra_fields={"records": resealed, "forced": bool(force)})
+        return resealed
+
+    def result_value_counts(self) -> Dict[str, int]:
+        """Every distinct value in the `result` column, counted over the whole ledger.
+
+        `/metrics` buckets the newest 500 rows for its own summary; this asks the table instead,
+        because the two malformed rows this was written for (an early build stored a *response
+        message* in a status column) sit older than that window and were therefore invisible in
+        every published count. A blind spot that is not reported is a blind spot that is trusted.
+        """
+        rows = self.db.query("SELECT result, COUNT(*) AS n FROM action_logs GROUP BY result")
+        return {(r["result"] or ""): r["n"] for r in rows}
+
+    def verify_chain(self, limit: Optional[int] = None) -> Dict[str, Any]:
         """Re-walk the audit chain, reporting every break rather than stopping at one.
 
         Detects deletion, reordering and edits of past records. An attacker who
@@ -199,9 +231,13 @@ class AuditLog:
         describe what was actually proved. ``reason``/``at`` still report the
         first break, which is what callers assert on.
         """
-        rows = self.db.query(
-            "SELECT * FROM action_logs ORDER BY created_at ASC, rowid ASC LIMIT ?", (limit,)
-        )
+        total_rows = self.db.query("SELECT COUNT(*) AS n FROM action_logs")[0]["n"]
+        if limit is None:
+            rows = self.db.query("SELECT * FROM action_logs ORDER BY created_at ASC, rowid ASC")
+        else:
+            rows = self.db.query(
+                "SELECT * FROM action_logs ORDER BY created_at ASC, rowid ASC LIMIT ?", (limit,)
+            )
         previous = GENESIS
         checked = 0
         breaks: list[Dict[str, Any]] = []
@@ -221,7 +257,8 @@ class AuditLog:
                 reason = ""
 
             if reason:
-                breaks.append({"reason": reason, "at": row["created_at"], "log_id": row["log_id"]})
+                breaks.append({"reason": reason, "at": row["created_at"], "log_id": row["log_id"],
+                              "position": checked + len(breaks) + 1})
                 # Re-sync so a single break does not cascade into every later row.
                 previous = stored_hash or GENESIS
                 continue
@@ -229,18 +266,25 @@ class AuditLog:
             previous = stored_hash
             checked += 1
 
+        # `total` is what this walk covered; `verified_of` is the ledger. They were the same
+        # number while the default limit reached every row, and they are not any more: 525 rows
+        # on this machine, a 500-row window, and the newest 25 -- the ones a week-later edit
+        # touches -- were never read. Reporting only the first of the two let the panel say
+        # "intact" about a part of the chain it had not looked at.
+        covered = {
+            "checked": checked,
+            "total": len(rows),
+            "verified_of": total_rows,
+            "unverified": total_rows - len(rows),
+        }
         if breaks:
-            return {
-                "ok": False,
-                "checked": checked,
-                "total": len(rows),
-                "breaks": len(breaks),
-                "reason": breaks[0]["reason"],
-                "at": breaks[0]["at"],
-                "first_bad_log_id": breaks[0]["log_id"],
-            }
+            return dict(covered, ok=False, breaks=len(breaks), break_details=breaks,
+                        reason=breaks[0]["reason"], at=breaks[0]["at"],
+                        first_bad_log_id=breaks[0]["log_id"],
+                        first_bad_position=breaks[0]["position"])
 
-        return {"ok": True, "checked": checked, "total": len(rows), "reason": "", "head": previous}
+        return dict(covered, ok=True, breaks=0, break_details=[],
+                    reason="", head=previous)
 
     def _append_file(self, record: AuditRecord) -> None:
         try:

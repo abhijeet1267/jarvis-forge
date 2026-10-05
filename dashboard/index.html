@@ -1124,6 +1124,23 @@ function setPersistNote(text) {
   if (el) el.textContent = text;
 }
 
+function auditChainLine(a) {
+  // A colour is not an explanation. The verifier knows which record broke, how many did, and how
+  // much of the ledger it actually walked, so the row says those three: "BROKEN" alone cannot be
+  // acted on, and the word "intact" over rows the walk never reached would be read as a longer
+  // guarantee than the walk gives.
+  const checked = a.chain_checked ?? 0;
+  const of = a.chain_verified_of ?? checked;
+  const gaps = a.chain_unverified ?? 0;
+  if (a.chain_intact) {
+    const tail = gaps ? ` · ${gaps} not verified` : "";
+    return `intact · ${checked} of ${of} verified${tail}`;
+  }
+  const breaks = a.chain_breaks ?? 1;
+  const reason = a.chain_reason ? ` · ${a.chain_reason}` : "";
+  return `BROKEN · ${breaks} record${breaks === 1 ? "" : "s"} · ${checked} of ${of} verified${reason}`;
+}
+
 async function loadMetrics() {
   const m = await get("/metrics");
   const f = m.failures || {};
@@ -1137,9 +1154,15 @@ async function loadMetrics() {
   html += line("Failures recorded", f.total_failures ?? 0);
   html += line("Recovered automatically", `${f.total_recovered ?? 0} (${rate}%)`,
                rate > 0 ? "ok" : "off");
-  html += line("Audit chain", a.chain_intact ? "intact" : "BROKEN",
-               a.chain_intact ? "ok" : "bad");
-  html += line("Actions sampled", a.sampled ?? 0);
+  html += line("Audit chain", auditChainLine(a), a.chain_intact ? "ok" : "bad");
+  html += line("Actions recorded", a.ledger_rows ?? a.sampled ?? 0);
+  const odd = a.unexpected_result_values ?? 0;
+  if (odd) {
+    // Rows whose `result` column holds something that is not a status token -- an early build wrote
+    // a response message there. Counted and named, never renamed into a status that was not
+    // recorded and never left out of the total.
+    html += line("· result values that are not statuses", odd, "muted");
+  }
 
   const topTools = Object.entries(a.top_tools || {}).slice(0, 3);
   for (const [tool, count] of topTools) {
