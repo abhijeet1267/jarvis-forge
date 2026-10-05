@@ -5,7 +5,7 @@
 | Phase | 63 (post-final-audit follow-up: open items 60-C and 61-A, plus the flake the final audit had not finished) |
 | Date | 2026-10-05 |
 | Starting commit | `02870f8` (cold-start addendum close) |
-| Ending commit | `—` (filled by the next edit to this line) |
+| Ending commit | `149412d` (the work) → the close-out commit named in §9 |
 | Tests before | 2387 passed · 0 failed |
 | Tests after | **2396 passed · 0 failed**, verified on **8 consecutive full-suite runs** including two slow ones (125 s, 167 s) |
 | Tools / gated | 148 / 32 → **148 / 32** — no capability added |
@@ -135,7 +135,24 @@ says a vendor answered — the same line Phase 60 held itself to.
 
 ## 9. Delivery
 
-Work commit `—`, close-out commit `—`, filled in by the next edit to these lines.
+Work commit `149412d` — *Say who a status answer is about, and finish the flake fix properly*.
+Close-out commit `—`: filled in by the next edit to this line, since a file cannot carry the hash of
+its own commit.
 
-`dashboard/index.html` ships inside the bundle, so the app was rebuilt and re-deployed, verified
-with GETs only, and both archives rebuilt from this tree. Nothing was pushed.
+`dashboard/index.html` ships inside the bundle, so the app was rebuilt, re-deployed over the old
+copy (kept aside until the new one answered, then removed), and verified:
+
+| check | result |
+|---|---|
+| `codesign --verify --deep --strict` on the deployed bundle | valid, satisfies its Designated Requirement |
+| `rules (no key)` present in the staged `dashboard/index.html` | yes — and again in `Vantage.app.zip` after extraction into a temp dir, which also re-verifies |
+| **browser** on the delivered app at 8765, `/dashboard` | `#llm` reads `model: rules (no key) · 148 tools`, box ending at 371 px with no overflow, **0 console errors** |
+| `GET /health` | `status ok`, **148 tools**, 15 agents |
+| `GET /tools` | **148** entries, risk labels as published |
+| `GET /persistence` | `supported: true`, `installed: false` — the machine left as found |
+| `GET /health` with no token | **401** |
+| archives | `Vantage.app.zip` 1,173,807 B and `vantage-source.zip` 2,573,354 B, rebuilt from this tree |
+| suite | **2396 passed · 0 failed** — nine consecutive clean full-suite runs |
+
+`READ ME FIRST.txt` needed no change: it never claimed the badge said "cloud", which is the reason
+this phase went and read it before assuming. Nothing was pushed.
