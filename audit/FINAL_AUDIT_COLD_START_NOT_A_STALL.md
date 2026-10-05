@@ -5,7 +5,7 @@
 | Follows | `VANTAGE_FINAL_ACCEPTANCE_REPORT.md` §7, which recorded this as "cause not established" |
 | Date | 2026-10-05 |
 | Starting commit | `455a64c` (final audit close-out) |
-| Ending commit | `5e90b81` (the fix) → the redeploy commit named below |
+| Ending commit | `5e90b81` (the fix) → `0896589` (the redeploy record; its own hash is written by the next commit to touch this file) |
 | Tests before | 2383 passed · 0 failed |
 | Tests after | **2387 passed · 0 failed** (77.2 s), verified on **6 consecutive full-suite runs, 0 failures** |
 | Before, measured today | five `test_vision.py` OCR tests failed on **4 of ~12** full-suite runs, always as a group of exactly five, and passed on an immediate re-run |
@@ -157,9 +157,10 @@ Nothing was pushed.
 
 ## 8. Delivery
 
-Work commit `5e90b81` — *Measure a cold Vision start as what it is, not as a stall*. The close-out
-commit that contains this line is the one recorded by the next edit to it, since a file cannot
-carry the hash of its own commit.
+Work commit `5e90b81` — *Measure a cold Vision start as what it is, not as a stall*.
+Close-out commit `0896589` — *Record the cold-start addendum's redeploy, and the eight clean runs*
+(its own hash was added by the commit after it, because a file cannot carry the hash of the commit
+that contains it).
 
 `jarvis/vision/ocr.py` is shipped code, so the bundle was rebuilt and re-deployed:
 
