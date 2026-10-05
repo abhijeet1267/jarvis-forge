@@ -90,6 +90,20 @@ _TIMEOUT = 20.0
 #: is a latency guard, not a claim that OCR is missing.
 _COOLDOWN_SECONDS = 45.0
 
+#: The budget for a process's *first* recogniser call.
+#:
+#: Measured on this machine, same image, same helper binary: 0.28 s per call once a process has
+#: completed one (25 calls), and 7.4 s for its very first on an idle machine -- and over 20 s for
+#: that first call when the rest of a test suite was running. So a steady-state ceiling applied to
+#: cold Vision initialisation reads as a stall, and because a stall cools the shared backend down
+#: for 45 s, one slow start failed five tests at once (the traced evidence is in
+#: tests/test_final_audit_the_cold_start_was_called_a_stall.py). This is the allowance for
+#: initialisation, not a licence to wait forever: it is capped, and it ends the moment one read
+#: succeeds.
+_COLD_START_SECONDS = 45.0
+_MAX_BUDGET_SECONDS = 120.0
+
+
 
 def _configured_timeout() -> float:
     raw = (os.environ.get("JARVIS_OCR_TIMEOUT") or "").strip()
@@ -115,8 +129,25 @@ class OCRBackend:
         #: left alone. See :data:`_COOLDOWN_SECONDS`.
         self._cooldown_until = 0.0
         self._last_timeout: Optional[float] = None
+        #: Whether this process has ever completed a recogniser call, and how many stalls in a
+        #: row it has seen without one. Both feed the cooldown decision: a cold framework that
+        #: takes ten seconds to wake up is not a subsystem that stopped answering.
+        self._ever_succeeded = False
+        self._stalls = 0
 
     # -- responsiveness ------------------------------------------------------
+    # -- responsiveness ------------------------------------------------------
+    def _budget(self) -> float:
+        """The ceiling for the next call, in seconds.
+
+        Steady after a success; larger before the first one, because the cost being bounded is
+        different (measured: 0.28 s steady, 7.4 s and over 20 s cold).
+        """
+        steady = _configured_timeout()
+        if self._ever_succeeded:
+            return steady
+        return min(max(steady, _COLD_START_SECONDS), _MAX_BUDGET_SECONDS)
+
     def cooling_down(self) -> float:
         """Seconds remaining on the cooldown, or 0.0 when another try is due."""
         remaining = self._cooldown_until - time.monotonic()
@@ -139,6 +170,8 @@ class OCRBackend:
             "responsive": waiting == 0.0 and self.available(),
             "cooling_down_seconds": waiting,
             "timeout_seconds": _configured_timeout(),
+            "cold_start_seconds": self._budget(),
+            "stalls": self._stalls,
             "last_timeout_after": self._last_timeout,
             "reason": (
                 f"the recogniser did not answer within {self._last_timeout:g}s and is "
@@ -240,7 +273,7 @@ class OCRBackend:
                 "state": self.state(),
             }
 
-        limit = _configured_timeout()
+        limit = self._budget()
         try:
             completed = subprocess.run(
                 [str(self._binary), str(target)],
@@ -249,8 +282,14 @@ class OCRBackend:
                 timeout=limit,
             )
         except subprocess.TimeoutExpired:
-            self._cooldown_until = time.monotonic() + _COOLDOWN_SECONDS
             self._last_timeout = limit
+            self._stalls += 1
+            # One exhausted budget cools the recogniser down, as before. That rule was tested
+            # against relaxing it, and kept: three of Phase 27's tests encode it, and the flake
+            # this file fixes was never the guard firing on a real stall -- it was the guard
+            # firing on a *cold first call* that had been given a steady-state budget. The
+            # allowance in `_budget()` is what removes that, and it does so by succeeding.
+            self._cooldown_until = time.monotonic() + _COOLDOWN_SECONDS
             log.warning("ocr helper timed out", extra_fields={"timeout": limit})
             return {
                 "ok": False,
@@ -275,9 +314,12 @@ class OCRBackend:
         if "error" in payload:
             return {"ok": False, "error": str(payload["error"])}
 
-        # A completed read clears any earlier stall.
+        # A completed read clears any earlier stall, and ends the cold-start allowance:
+        # the framework demonstrably answers, so the next call is held to the steady budget.
         self._cooldown_until = 0.0
         self._last_timeout = None
+        self._ever_succeeded = True
+        self._stalls = 0
         lines: List[Dict[str, Any]] = payload.get("lines", [])
         text = "\n".join(line.get("text", "") for line in lines).strip()
         return {

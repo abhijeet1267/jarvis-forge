@@ -4,8 +4,8 @@
 |---|---|
 | Date | 2026-10-05 |
 | Scope | the whole product, as the code stands today: commit `c138807` (Phase 61 close-out) plus this audit |
-| Phases closed | 61, written up in 63 reports under `audit/` |
-| Suite | **2383 passed · 0 failed · 0 xfailed** (76.3 s), measured twice today |
+| Phases closed | 61, plus this audit and its cold-start addendum — 64 reports under `audit/` |
+| Suite | **2383** as measured for this audit; **2387 passed · 0 failed** after the addendum fixed the Vision flake (`audit/FINAL_AUDIT_COLD_START_NOT_A_STALL.md`), verified on six consecutive full-suite runs |
 | Everything below | produced by a command in the right-hand column. Nothing is typed in from memory. |
 
 The instruction this report answers is that **IMPLEMENTED, VERIFIED, BLOCKED, UNKNOWN, NOT
@@ -138,7 +138,14 @@ know about is kept — with three tests written red-first before the change
 harness did not write survives the harness*. Re-measured after the fix: running the documented
 command leaves all 53 rows and changes nothing in the committed file.
 
-**Also still open, and not resolved by this audit:** the five `test_vision.py` OCR tests failed on
+**RESOLVED after this report was written**, in `audit/FINAL_AUDIT_COLD_START_NOT_A_STALL.md`: the
+cause was found by tracing every recogniser call inside full-suite runs — a cold first call of
+20.02 s, later 45.02 s, against a 20 s steady-state budget, and a 45 s per-process cooldown that
+converted one slow start into five simultaneous failures. Six consecutive full-suite runs since:
+0 failures. What stays true is the method point: the report published an honest label and the work
+did not stop at it.
+
+The finding as originally written: the five `test_vision.py` OCR tests failed on
 three runs today and passed on the others (slow runs, 21 s, against 3 s when they pass). It is
 documented as load-sensitive since Phase 27 and it reproduced here after a change to
 `benchmarks/` and `tests/` that cannot touch Vision — but "cannot touch it" is a reason, not a
@@ -176,12 +183,12 @@ And the numbers this repository publishes, re-measured for the record:
 
 | | value |
 |---|---|
-| Tests / modules | **2383 passed · 0 failed** (76.3 s) / **89 modules** |
+| Tests / modules | **2387 passed · 0 failed** (77.2 s, six consecutive clean runs) / **90 modules** — was 2383 / 89 when this audit was written |
 | Tools / gated / rules | **148 / 32 / 52** |
 | HTTP surface | **122 route objects, 115 paths**, 118 route decorators |
 | Database tables | 32 |
-| Reports | 63 in `audit/` + this file |
-| Code | 75,024 versioned lines — 44,181 shipped, 30,225 tests |
+| Reports | 64 in `audit/` + this file |
+| Code | 75,250 versioned lines — 44,223 shipped, 30,409 tests |
 | Commits | local only — `c138807` (Phase 61 close) → `f08b999` (this audit) → the commit that fills in this hash. **Nothing pushed.** |
 
 ## 10. Verdict, in one paragraph each

@@ -25,7 +25,7 @@ measurement spent closing that gap, in the ledger and on the screen.
 > too: they are dated evidence of what was true then.
 
 [![ci](https://img.shields.io/github/actions/workflow/status/abhijeet1267/jarvis-forge/ci.yml?label=tests%20%C2%B7%20macos)](https://github.com/abhijeet1267/jarvis-forge/actions/workflows/ci.yml)
-[![suite](https://img.shields.io/badge/tests-2383%20passing%20%C2%B7%201%20network--gated-16a34a)](tests)
+[![suite](https://img.shields.io/badge/tests-2387%20passing%20%C2%B7%201%20network--gated-16a34a)](tests)
 [![tools](https://img.shields.io/badge/tools-148%20across%2015%20agents-2f6df6)](jarvis/tools)
 [![offline](https://img.shields.io/badge/LLM-off%20by%20default%20%C2%B7%20runs%20fully%20offline-0f172a)](jarvis/config.py)
 [![python](https://img.shields.io/badge/python-3.11%20%C2%B7%203.12%20(CI)-6b7688)](.github/workflows/ci.yml)
@@ -39,7 +39,7 @@ measurement spent closing that gap, in the ledger and on the screen.
 | **Ledger** | `action_logs` hash-chained + `audit.jsonl` append-only, `verify_chain()` |
 | **Edge** | token file `0600` · constant-time compare · same-origin · Host allowlist · 600/min |
 | **Surface** | web dashboard · phone client page over the LAN · voice (macOS `say` + on-device STT) · watch queue · device pairing · macOS permission status · optional authenticated relay (proven locally, not off-LAN) |
-| **Size** | 75.0k lines of versioned Python/HTML/JS/Swift · 44.2k source · 30.2k tests · 89 test modules |
+| **Size** | 75.3k lines of versioned Python/HTML/JS/Swift · 44.2k source · 30.4k tests · 90 test modules |
 | **Final audit** | `VANTAGE_FINAL_ACCEPTANCE_REPORT.md` — the verdicts kept separate: implemented · verified · blocked · not measured · unknown · yours to decide |
 
 ---
@@ -52,8 +52,8 @@ and the diagrams read their counts from the live registry.
 
 | Claim | Value | Reproduce |
 |---|---|---|
-| Test suite | **2383 passed · 0 failed · 0 xfailed** (76.3 s at the final acceptance audit; one test is network-gated — it skips as "arXiv could not be reached: The read operation timed out" when the network refuses, so a run reports either 2383 + 0 or 2382 + 1 skipped. Five `test_vision.py` OCR tests fail on a loaded machine and pass clean — measured, documented in 27-D, reported in the Phase 60 and 61 runs rather than hidden) | `python -m pytest -q -rs` |
-| Suite growth, Phase 9 → final audit | 875 passing / **126 failing** → 2383 passing / 0 failing / **0 xfailed** at the final acceptance audit | `cat benchmarks/suite_history.json` |
+| Test suite | **2387 passed · 0 failed · 0 xfailed** (77.2 s at the final audit addendum; one test is network-gated — it skips as "arXiv could not be reached: The read operation timed out" when the network refuses, so a run reports either 2387 + 0 or 2386 + 1 skipped. The five `test_vision.py` OCR failures that recurred through Phases 59-61 were diagnosed and fixed: a cold Vision call was being held to a steady-state budget, and the cooldown after it turned one slow start into five failures — `audit/FINAL_AUDIT_COLD_START_NOT_A_STALL.md`, six consecutive clean full-suite runs since) | `python -m pytest -q -rs` |
+| Suite growth, Phase 9 → final audit | 875 passing / **126 failing** → 2387 passing / 0 failing / **0 xfailed** at the final audit and its cold-start addendum | `cat benchmarks/suite_history.json` |
 | Tools registered | **148** | `python -c "from jarvis.core.orchestrator import JarvisCore as J; print(len(J().tools.names()))"` |
 | Confirmation-gated | **32** of 148 | `python assets/build_diagrams.py` (prints the live counts) |
 | Risk tiers | read 78 · low 38 · external 15 · destructive 14 · physical 3 | same |
@@ -132,7 +132,7 @@ and not a quiet success.
 
 ### Suite growth, Phase 9 → Phase 45
 
-<img src="assets/chart-suite-growth.svg" alt="Test suite growth from 875 passing with 126 failing, to 2383 passing with none failing at the final acceptance audit" width="100%"/>
+<img src="assets/chart-suite-growth.svg" alt="Test suite growth from 875 passing with 126 failing, to 2387 passing with none failing at the final audit addendum" width="100%"/>
 
 Phase 9 inherited **126 failing tests**. The cause was a single import line in
 `jarvis/tools/base.py` that left `Verification` undefined, so every tool result raised
@@ -495,7 +495,7 @@ curl -s -H "X-JARVIS-Token: $TOKEN" -H 'Content-Type: application/json' \
      -d '{"text":"what is my battery"}' http://127.0.0.1:8765/command
 
 # Prove it to yourself:
-python -m pytest -q                       # 2383 passed, 0 failed (2382 + 1 skip when arXiv refuses; the research test is network-gated)
+python -m pytest -q                       # 2387 passed, 0 failed (2386 + 1 skip when arXiv refuses; the research test is network-gated)
 python benchmarks/acceptance_run.py       # re-measures the README's numbers
 python assets/build_charts.py && python assets/build_diagrams.py
 ```
@@ -520,9 +520,9 @@ jarvis/
                host's answer returned unchanged — proven on loopback, never claimed off-LAN
   gateway/     provider-neutral model gateway: OpenAI and Gemini wire shapes behind one selection
                point, each answer naming its vendor and model; no vendor call has been made here
-tests/         89 modules · 2383 collected · includes the shipped page JS, run by Node
+tests/         90 modules · 2387 collected · includes the shipped page JS, run by Node
 dashboard/     index.html control panel + phone.html, the client a phone uses over the LAN
-audit/         63 phase reports + 4 CSV matrices — the evidence behind this README
+audit/         64 phase reports + 4 CSV matrices — the evidence behind this README
 benchmarks/    acceptance_run.py and the JSON the charts are drawn from
 assets/        generated figures + the two generators that draw them
 app/           PyInstaller spec and bundle sources (the launcher and its wifi switch; see the Phase 36 report)

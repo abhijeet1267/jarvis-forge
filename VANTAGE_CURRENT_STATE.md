@@ -15,7 +15,7 @@ capability exists but was **not** re-measured today, it says so rather than impl
 | Current phase | **Final acceptance audit** (closed) — the last of 61 phases; `VANTAGE_FINAL_ACCEPTANCE_REPORT.md` separates IMPLEMENTED / VERIFIED / BLOCKED / NOT MEASURED / UNKNOWN / USER DECISION REQUIRED |
 | Last feature phase | **Phase 61 — desktop control that asks before it touches, and was never demonstrated touching** (closed) |
 | Previous phases | **Phase 60 — a second vendor behind one selection point** (no vendor call made) · **Phase 59 — an authenticated relay, proven locally and no further** (its off-LAN verdict still stands) |
-| Test suite | **2383 passed · 0 failed** — 76.3 s at the final acceptance audit (one arXiv-gated skip on some runs; five Vision-OCR tests fail on three runs of eight and pass on the rest — cause not established, reported in the final audit §7) |
+| Test suite | **2387 passed · 0 failed** — 77.2 s, **verified on six consecutive full-suite runs** (the five-test Vision-OCR flake was diagnosed and fixed: `audit/FINAL_AUDIT_COLD_START_NOT_A_STALL.md`) |
 | Spec §6 coverage | **37 of 37** — every utterance the build prompt lists reaches a capability |
 | Delivered | `~/Downloads/Vantage/` — `Vantage.app` (running, seal valid), `Vantage.app.zip`, `vantage-source.zip`, `READ ME FIRST.txt` |
 | Commits | `a20e39c` (Ph 57), `7c828fa` (Ph 56 close), `ea68c7d` (Ph 56 close), `0cdc770` (Ph 56), `176bcfb` (Ph 55), `377e79f` (Ph 54 correction), `67d9530` (Ph 54), `35c9abf` (Ph 53), `3708f85` (Ph 52 correction), `92efc6b` (Ph 52), `f047eb2` (Ph 51), `452e9c0` (Ph 50) — **local only, nothing pushed** |
@@ -904,9 +904,9 @@ User → Intent → RulePlanner (50 routes) → PermissionEngine → [Confirmati
 | Database tables | **32** | read-only `sqlite_master` count on the delivered app's database |
 | Memories indexed | 52 / 52, coverage 1.0, hybrid retrieval | `/health` |
 | Scheduler | running, 30 s tick, 67 jobs | `/health` |
-| Test suite | 2383 passed, 0 failed; 76.3 s at the final acceptance audit | `pytest -q` |
-| Test modules / phase reports | 89 / 63 | `ls` |
-| Code volume | 75,024 versioned lines — 44,181 shipped code (`jarvis/` + `dashboard/` + `app/` + `assets/` + `run.py`) · 30,225 tests | `git ls-files -co --exclude-standard '*.py' '*.html' '*.js' '*.swift' \| xargs grep -c ''` |
+| Test suite | 2387 passed, 0 failed; 77.2 s, six consecutive clean runs | `pytest -q` |
+| Test modules / phase reports | 90 / 64 | `ls` |
+| Code volume | 75,250 versioned lines — 44,223 shipped code (`jarvis/` + `dashboard/` + `app/` + `assets/` + `run.py`) · 30,409 tests | `git ls-files -co --exclude-standard '*.py' '*.html' '*.js' '*.swift' \| xargs grep -c ''` |
 
 ### 3.3 Permissions, as the OS reports them right now (`/permissions`)
 
@@ -1136,7 +1136,8 @@ edited only additively.
 | question | file |
 |---|---|
 | What the product is and how to use it | `README.md`, `~/Downloads/Vantage/READ ME FIRST.txt` |
-| Why each phase did what it did | `audit/PHASE*.md` (63 reports, newest first in the README table) |
+| Why each phase did what it did | `audit/PHASE*.md` and `audit/FINAL_AUDIT_*.md` (64 reports, newest first in the README table) |
+| The flake, found and fixed | `audit/FINAL_AUDIT_COLD_START_NOT_A_STALL.md` — traced to a cold Vision call measured against a steady-state budget, then six clean runs |
 | The whole verdict, separated | `VANTAGE_FINAL_ACCEPTANCE_REPORT.md` — IMPLEMENTED / VERIFIED / BLOCKED / NOT MEASURED / UNKNOWN / USER DECISION REQUIRED, each with the command that measured it |
 | What is still open | the open-items block at the end of `README.md` |
 | Why a permission ask must not be a poll | `audit/PHASE50_*.md` (the read-only rule) and `audit/PHASE56_ASKING_ON_PURPOSE_REPORT.md` (the request path, and why a helper cannot use it) |

@@ -377,6 +377,13 @@
    "passed": 2383,
    "failed": 0,
    "note": "the harness that publishes every score deleted 16 phases of this history when it ran -- found while measuring, fixed additively, and guarded by a test that a row it did not write survives it"
+  },
+  {
+   "phase": "final audit addendum: the cold start",
+   "collected": 2387,
+   "passed": 2387,
+   "failed": 0,
+   "note": "the flake was a cold Vision initialisation measured against a steady-state budget; its cooldown turned one slow call into five failures -- traced inside a real run, fixed, then verified on six consecutive full suites"
   }
  ]
 }

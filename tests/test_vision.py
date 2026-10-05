@@ -34,6 +34,47 @@ from jarvis.vision.image import available as pil_available
 from jarvis.vision.image import inspect
 from jarvis.vision.ocr import available as ocr_available
 from jarvis.vision.ocr import find_text, read_text
+import shutil
+
+@pytest.fixture(scope="session", autouse=True)
+def _pay_for_the_frameworks_cold_start():
+    """Do the Vision framework's one-time initialisation before any test measures it.
+
+    Measured on this machine, same image, same helper binary, 2026-10-05:
+
+        steady state            0.28 s a call (25 calls averaged, one process)
+        first call, idle        7.4 s
+        first call, suite busy  over 45 s -- and a timeout cools the shared backend down for
+                                45 s more, which is why the five real-OCR tests below used to
+                                fail *together* and pass on an immediate re-run.
+
+    Those tests assert what the recogniser reads. They were, unintentionally, also a measurement
+    of macOS framework cold-start, which is not a property of Vantage and not something an
+    assertion should decide. Nothing is asserted about this call, no test is skipped, and the
+    five still run against the real framework and the real helper. The product's own cold-start
+    allowance in `jarvis/vision/ocr.py` stays, because a person's first "read this image" after
+    launch is the same 7 s-or-more call and deserves the same budget.
+    """
+    import tempfile
+
+    if not ocr_available():
+        return
+    try:
+        from PIL import Image, ImageDraw
+    except ImportError:
+        return
+    area = Path(tempfile.mkdtemp(prefix="jarvis-warm-", dir="/tmp"))
+    canvas = Image.new("RGB", (400, 120), "white")
+    ImageDraw.Draw(canvas).text((20, 40), "warming the recogniser", fill="black")
+    probe = area / "warm.png"
+    canvas.save(probe)
+    try:
+        read_text(str(probe))          # outcome deliberately unused
+    except Exception:  # noqa: BLE001 - a failed warm-up must not fail the session
+        pass
+    shutil.rmtree(area, ignore_errors=True)
+
+
 from jarvis.vision.providers import active_provider, describe as describe_providers
 
 
