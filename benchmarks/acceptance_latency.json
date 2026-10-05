@@ -8,7 +8,7 @@
   {
    "command": "Jarvis, find my latest project report.",
    "http_status": 200,
-   "ms": 1320,
+   "ms": 1005,
    "intent": "search_files",
    "tools": [
     "search_files"
@@ -23,10 +23,10 @@
   {
    "command": "Jarvis, show me my laptop battery.",
    "http_status": 200,
-   "ms": 19,
+   "ms": 17,
    "intent": "laptop_battery",
    "tools": [
-    "battery_status"
+    "get_battery_status"
    ],
    "verification": [
     "success"
@@ -38,7 +38,7 @@
   {
    "command": "Jarvis, transfer this file to my phone.",
    "http_status": 200,
-   "ms": 5,
+   "ms": 4,
    "intent": "transfer",
    "tools": [],
    "verification": [],
@@ -60,7 +60,7 @@
   {
    "command": "Jarvis, plan my day.",
    "http_status": 200,
-   "ms": 6,
+   "ms": 5,
    "intent": "daily_schedule",
    "tools": [
     "daily_schedule"
@@ -75,7 +75,7 @@
   {
    "command": "Jarvis, schedule two hours for project work tomorrow.",
    "http_status": 200,
-   "ms": 5,
+   "ms": 4,
    "intent": "schedule_task",
    "tools": [],
    "verification": [],
@@ -86,7 +86,7 @@
   {
    "command": "Jarvis, draft an email to my teammate.",
    "http_status": 200,
-   "ms": 6,
+   "ms": 5,
    "intent": "draft_email",
    "tools": [
     "draft_email"
@@ -101,7 +101,7 @@
   {
    "command": "Jarvis, send it.",
    "http_status": 200,
-   "ms": 6,
+   "ms": 3,
    "intent": "send_email",
    "tools": [],
    "verification": [],
@@ -127,7 +127,7 @@
   {
    "command": "Jarvis, what did I work on yesterday?",
    "http_status": 200,
-   "ms": 5,
+   "ms": 4,
    "intent": "recall",
    "tools": [
     "search_memory"
@@ -137,12 +137,12 @@
    ],
    "audit_result": "success",
    "dashboard_state": "VERIFIED",
-   "reply": "Nothing was recorded in memory on 2026-10-02."
+   "reply": "Nothing was recorded in memory on 2026-10-04."
   },
   {
    "command": "Jarvis, design this system.",
    "http_status": 200,
-   "ms": 6,
+   "ms": 5,
    "intent": "unknown",
    "tools": [],
    "verification": [],
@@ -153,7 +153,7 @@
   {
    "command": "Jarvis, research this idea.",
    "http_status": 200,
-   "ms": 739,
+   "ms": 159,
    "intent": "search_papers",
    "tools": [
     "search_papers"
@@ -168,7 +168,7 @@
   {
    "command": "Jarvis, check my car fuel.",
    "http_status": 200,
-   "ms": 8,
+   "ms": 6,
    "intent": "car_telemetry",
    "tools": [
     "get_car_telemetry"
@@ -198,7 +198,7 @@
   {
    "command": "Jarvis, give me today's location summary.",
    "http_status": 200,
-   "ms": 9,
+   "ms": 4,
    "intent": "location_summary",
    "tools": [
     "get_location_summary"

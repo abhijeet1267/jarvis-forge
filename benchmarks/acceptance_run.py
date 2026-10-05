@@ -167,7 +167,14 @@ def measure_hardware() -> dict:
 
 
 def suite_history() -> dict:
-    """Suite size at the close of each phase, as recorded in the audit reports."""
+    """Suite size at the close of each phase, as recorded in the audit reports.
+
+    The list below is that transcription, and it stops wherever the last person left it. Reading
+    the file first and keeping any row it already holds is what makes running this command
+    additive: Phases 46 onward were written by their own phases, and a documented command that
+    rewrote the file from this literal list deleted them (measured 2026-10-05: 53 rows became 37).
+    A history is not the place to lose a number.
+    """
     points = [
         ("9 audit", 1002, 875, 126, "baseline as found"),
         ("10 truth/authority", 1002, 998, 3, "P0 verification authority fixed"),
@@ -207,8 +214,18 @@ def suite_history() -> dict:
         ("44 answers, not command lists", 1846, 1846, 0, "a question containing the word run was parsed as a command to execute"),
         ("45a a key outside the bundle", 1856, 1856, 0, "the natural place to put a key was inside the signed bundle, where it breaks the seal"),
     ]
-    return {"phases": [{"phase": p, "collected": c, "passed": q, "failed": f, "note": n}
-                       for p, c, q, f, n in points]}
+    rows = [{"phase": p, "collected": c, "passed": q, "failed": f, "note": n}
+            for p, c, q, f, n in points]
+    known = {row["phase"] for row in rows}
+    existing = OUT / "suite_history.json"
+    if existing.exists():
+        try:
+            held = json.loads(existing.read_text()).get("phases", [])
+        except (ValueError, AttributeError):
+            held = []
+        # Whatever the file knows that this list does not stays, in the order it was recorded.
+        rows.extend(row for row in held if row.get("phase") not in known)
+    return {"phases": rows}
 
 
 def main() -> None:

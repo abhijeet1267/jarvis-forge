@@ -1,6 +1,6 @@
 {
  "surface": "GET /health, no hardware attached, no accounts configured",
- "tools": 134,
+ "tools": 148,
  "agents": [
   "laptop",
   "laptop_center",

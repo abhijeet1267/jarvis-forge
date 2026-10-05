@@ -1,4 +1,4 @@
-# Vantage — full working report, Phase 61 close-out
+# Vantage — full working report, final acceptance audit
 
 Written 2026-10-04, refreshed at each phase close; this pass is 2026-10-05. §2A–§2J are Phase 52,
 53, 54, 55, 56, 57, 58, 59, 60 and 61. Every number below was produced by a command on this machine during this
@@ -12,9 +12,10 @@ capability exists but was **not** re-measured today, it says so rather than impl
 | | |
 |---|---|
 | What it is | A personal AI operating system for macOS: one command pipeline, 145 governed capabilities (30 of them confirmation-gated), a laptop panel, a scoped phone client, an optional forward-only relay (locally proven, off-LAN blocked), a signed `.app` delivered as files |
-| Current phase | **Phase 61 — desktop control that asks before it touches, and was never demonstrated touching** (closed) |
+| Current phase | **Final acceptance audit** (closed) — the last of 61 phases; `VANTAGE_FINAL_ACCEPTANCE_REPORT.md` separates IMPLEMENTED / VERIFIED / BLOCKED / NOT MEASURED / UNKNOWN / USER DECISION REQUIRED |
+| Last feature phase | **Phase 61 — desktop control that asks before it touches, and was never demonstrated touching** (closed) |
 | Previous phases | **Phase 60 — a second vendor behind one selection point** (no vendor call made) · **Phase 59 — an authenticated relay, proven locally and no further** (its off-LAN verdict still stands) |
-| Test suite | **2380 passed · 0 failed** — 76.5 s at the Phase 61 close (one arXiv-gated skip on one run; the documented Vision-OCR load flake appeared on two of four) |
+| Test suite | **2383 passed · 0 failed** — 76.3 s at the final acceptance audit (one arXiv-gated skip on some runs; five Vision-OCR tests fail on three runs of eight and pass on the rest — cause not established, reported in the final audit §7) |
 | Spec §6 coverage | **37 of 37** — every utterance the build prompt lists reaches a capability |
 | Delivered | `~/Downloads/Vantage/` — `Vantage.app` (running, seal valid), `Vantage.app.zip`, `vantage-source.zip`, `READ ME FIRST.txt` |
 | Commits | `a20e39c` (Ph 57), `7c828fa` (Ph 56 close), `ea68c7d` (Ph 56 close), `0cdc770` (Ph 56), `176bcfb` (Ph 55), `377e79f` (Ph 54 correction), `67d9530` (Ph 54), `35c9abf` (Ph 53), `3708f85` (Ph 52 correction), `92efc6b` (Ph 52), `f047eb2` (Ph 51), `452e9c0` (Ph 50) — **local only, nothing pushed** |
@@ -903,9 +904,9 @@ User → Intent → RulePlanner (50 routes) → PermissionEngine → [Confirmati
 | Database tables | **32** | read-only `sqlite_master` count on the delivered app's database |
 | Memories indexed | 52 / 52, coverage 1.0, hybrid retrieval | `/health` |
 | Scheduler | running, 30 s tick, 67 jobs | `/health` |
-| Test suite | 2380 passed, 0 failed; 76.5 s at the Phase 61 close | `pytest -q` |
-| Test modules / phase reports | 88 / 63 | `ls` |
-| Code volume | 74,892 versioned lines — 44,161 shipped code (`jarvis/` + `dashboard/` + `app/` + `assets/` + `run.py`) · 30,130 tests | `git ls-files -co --exclude-standard '*.py' '*.html' '*.js' '*.swift' \| xargs grep -c ''` |
+| Test suite | 2383 passed, 0 failed; 76.3 s at the final acceptance audit | `pytest -q` |
+| Test modules / phase reports | 89 / 63 | `ls` |
+| Code volume | 75,024 versioned lines — 44,181 shipped code (`jarvis/` + `dashboard/` + `app/` + `assets/` + `run.py`) · 30,225 tests | `git ls-files -co --exclude-standard '*.py' '*.html' '*.js' '*.swift' \| xargs grep -c ''` |
 
 ### 3.3 Permissions, as the OS reports them right now (`/permissions`)
 
@@ -1136,6 +1137,7 @@ edited only additively.
 |---|---|
 | What the product is and how to use it | `README.md`, `~/Downloads/Vantage/READ ME FIRST.txt` |
 | Why each phase did what it did | `audit/PHASE*.md` (63 reports, newest first in the README table) |
+| The whole verdict, separated | `VANTAGE_FINAL_ACCEPTANCE_REPORT.md` — IMPLEMENTED / VERIFIED / BLOCKED / NOT MEASURED / UNKNOWN / USER DECISION REQUIRED, each with the command that measured it |
 | What is still open | the open-items block at the end of `README.md` |
 | Why a permission ask must not be a poll | `audit/PHASE50_*.md` (the read-only rule) and `audit/PHASE56_ASKING_ON_PURPOSE_REPORT.md` (the request path, and why a helper cannot use it) |
 | Suite size over time | `benchmarks/suite_history.json`, `assets/chart-suite-growth.svg` |

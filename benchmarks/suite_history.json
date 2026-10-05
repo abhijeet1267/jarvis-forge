@@ -370,6 +370,13 @@
    "passed": 2380,
    "failed": 0,
    "note": "Computer Use built and never demonstrated: accessibility is granted to a terminal-launched process while the app is not, so the gate that matters is the confirmation card -- and the recorder that kept the user's cursor still exposed the after-read trusting any string as an application name"
+  },
+  {
+   "phase": "final acceptance audit",
+   "collected": 2383,
+   "passed": 2383,
+   "failed": 0,
+   "note": "the harness that publishes every score deleted 16 phases of this history when it ran -- found while measuring, fixed additively, and guarded by a test that a row it did not write survives it"
   }
  ]
 }
