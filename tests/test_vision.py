@@ -32,6 +32,7 @@ from jarvis.vision.diff import available as diff_available
 from jarvis.vision.diff import compare
 from jarvis.vision.image import available as pil_available
 from jarvis.vision.image import inspect
+from jarvis.vision import ocr as ocr_module
 from jarvis.vision.ocr import available as ocr_available
 from jarvis.vision.ocr import find_text, read_text
 import shutil
@@ -68,8 +69,15 @@ def _pay_for_the_frameworks_cold_start():
     ImageDraw.Draw(canvas).text((20, 40), "warming the recogniser", fill="black")
     probe = area / "warm.png"
     canvas.save(probe)
+    # A throwaway backend, on purpose. The recogniser's cold cost is per *process*, so a
+    # separate instance still pays it -- but a warm-up that exceeded its budget on the shared
+    # backend cooled *that* one down for 45 seconds, and the five tests below were refused
+    # without being asked (measured 2026-10-05: a 121 s suite with exactly these five failing).
+    # Warming up must not be able to declare the subsystem stalled.
     try:
-        read_text(str(probe))          # outcome deliberately unused
+        probe_backend = ocr_module.OCRBackend()
+        if probe_backend.available():
+            probe_backend.read_text(str(probe))      # outcome deliberately unused
     except Exception:  # noqa: BLE001 - a failed warm-up must not fail the session
         pass
     shutil.rmtree(area, ignore_errors=True)
@@ -137,6 +145,48 @@ def test_pillow_availability_is_reported() -> None:
 # OCR
 # ---------------------------------------------------------------------------
 @pytest.mark.slow
+def test_a_stall_on_one_backend_cannot_silence_another(tmp_path):
+    """The property the warm-up above depends on, stated instead of assumed.
+
+    The recogniser's cold cost is paid per process, so warming up through a separate instance is
+    only harmless while the stall guard is per instance too. Were it ever module state, a warm-up
+    that timed out would refuse every real read for 45 seconds -- which is the exact bug this
+    file's fixture avoids by construction.
+
+    Two things the first version of this test got wrong, and both are now asserted rather than
+    trusted: it repointed the *shared* backend's binary at /usr/bin/true, so every later real read
+    in the session answered `ok=True, lines=0` in 0.00 s (a poisoned suite that looked exactly like
+    the flake it was written to study), and it passed a path that does not exist, which `read_text`
+    refuses before the helper is ever asked. Hence the file on disk, and no mutation of the shared
+    instance at all.
+    """
+    import subprocess as sp
+
+    probe = tmp_path / "stall.png"
+    probe.write_bytes(b"stub png; the helper call is what is faked")
+    shared_before = ocr_module.get_ocr_backend()._binary
+
+    class _Stall:
+        def __call__(self, args, **kwargs):
+            raise sp.TimeoutExpired(args, timeout=kwargs.get("timeout"))
+
+    original = ocr_module.subprocess.run
+    ocr_module.subprocess.run = _Stall()  # type: ignore[attr-defined]
+    try:
+        stalling = ocr_module.OCRBackend()
+        stalling._binary = Path("/usr/bin/true")
+        result = stalling.read_text(str(probe))
+        assert result["timed_out"] is True, result
+        assert stalling.cooling_down() > 0
+        assert ocr_module.get_ocr_backend().cooling_down() == 0.0, (
+            "a stall recorded on one backend silenced the shared one")
+        assert ocr_module.get_ocr_backend()._binary == shared_before, \
+            "a test repointed the shared backend's binary"
+    finally:
+        ocr_module.subprocess.run = original  # type: ignore[attr-defined]
+
+
+
 def test_ocr_reads_real_text(sample_image: Path) -> None:
     """The recognised text must match what was actually drawn."""
     if not ocr_available():

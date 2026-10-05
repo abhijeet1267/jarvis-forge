@@ -101,8 +101,15 @@ timed-out call plus four cooldown-refused calls costs more wall clock than the w
 protecting against. Tight numbers around 77 s say the cascade is gone, not merely that one run
 passed.
 
-**The limit of this claim, stated rather than implied:** the mechanism that produced every observed
-failure is removed, and six consecutive runs corroborate it. A machine slow or loaded enough to
+**CORRECTED THE SAME DAY, and kept here as written rather than quietly edited:** the eight-run
+verification below did not hold. The flake returned, and the trace showed two things this addendum
+had wrong — a warm-up that timed out could set the cooldown on the shared backend it was working
+around, and the regression test written to protect the suite mutated that same shared backend,
+manufacturing five `ok=True, lines=0` failures that looked exactly like the original flake. Both
+are fixed, with the evidence, in `audit/PHASE63_A_SURFACE_NAMES_ITS_SUBJECT_REPORT.md` §4.
+
+The limit of this claim, stated rather than implied: the mechanism that produced every observed
+failure is removed, and six consecutive runs corroborated it — briefly. A machine slow or loaded enough to
 push a cold first call past 45 s would still time out — by design, with a truthful message and its
 number in it. This is not a proof of impossibility; it is the removal of the cause that was
 actually observed, twice traced.

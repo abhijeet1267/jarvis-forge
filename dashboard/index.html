@@ -626,8 +626,13 @@ async function renderWorkflow(jobId) {
 }
 
 function applyHealth(h) {
+  // "cloud" named no vendor while the gateway can be pointed at two of them, which is the
+  // smaller twin of the badge Phase 60 removed. With no key configured there is no vendor to
+  // name either: rules answer, and printing a configured-by-default vendor would advertise a
+  // call path that will never be taken.
+  const model = h.llm_enabled ? (h.ai_provider || "a configured model") : "rules (no key)";
   document.getElementById("llm").textContent =
-    "model: " + (h.llm_enabled ? "cloud" : "rules") + " · " + h.tools + " tools";
+    "model: " + model + " · " + h.tools + " tools";
 }
 
 // "OFFLINE" is not one fact, it is several: a device that was never paired, one

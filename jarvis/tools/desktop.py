@@ -131,6 +131,15 @@ async def get_desktop_control_state(ctx: ToolContext, **_: Any) -> Any:
     state = _accessibility(ctx)
     status = str(state.get("status") or "UNKNOWN")
     can_control = status == "GRANTED"
+    # Phase 50's rule, applied to a capability that arrived after it: macOS answers a permission
+    # question about the process that asks, and Phase 61 measured the same question answering
+    # GRANTED from a terminal and refused for the app. A state without its subject is a claim
+    # about the product drawn from a reading of something else.
+    about_app = state.get("about_bundled_host")
+    subject = ("— read from Vantage.app itself" if about_app is True
+               else "— this is the answer for the process that asked, not the app in your Dock"
+               if about_app is False else "— the reader could not say which process it describes")
+    note = str(state.get("status_note") or "")
     target = ""
     if can_control:
         target = _focused(_osascript(_READ_FRONTMOST, []))
@@ -138,15 +147,16 @@ async def get_desktop_control_state(ctx: ToolContext, **_: Any) -> Any:
         # Granted, and yet the read that uses it returned nothing. "Ready" would be a claim about
         # a path that just failed to work.
         return unverified("get_desktop_control_state",
-                          "Accessibility is granted, but the focused application could not be "
-                          "read, so desktop control is not confirmed working either.",
-                          device=ctx.device_id, accessibility=status, focused="")
+                          f"Accessibility is granted {subject}, but the focused application could "
+                          "not be read, so desktop control is not confirmed working either.",
+                          device=ctx.device_id, accessibility=status, focused="",
+                          about_bundled_host=about_app, status_note=note)
     return ok("get_desktop_control_state",
-              (f"Desktop control is available; the focused application is {target}."
+              (f"Desktop control is available {subject}; the focused application is {target}."
                if target else
-               f"Desktop control is not available. {_refusal(status)}"),
+               f"Desktop control is not available {subject}. {_refusal(status)}"),
               device=ctx.device_id, accessibility=status, focused=target,
-              can_control=can_control)
+              can_control=can_control, about_bundled_host=about_app, status_note=note)
 
 
 async def click_desktop(ctx: ToolContext, x: Optional[int] = None, y: Optional[int] = None,

@@ -12,10 +12,11 @@ capability exists but was **not** re-measured today, it says so rather than impl
 | | |
 |---|---|
 | What it is | A personal AI operating system for macOS: one command pipeline, 145 governed capabilities (30 of them confirmation-gated), a laptop panel, a scoped phone client, an optional forward-only relay (locally proven, off-LAN blocked), a signed `.app` delivered as files |
-| Current phase | **Final acceptance audit** (closed) — the last of 61 phases; `VANTAGE_FINAL_ACCEPTANCE_REPORT.md` separates IMPLEMENTED / VERIFIED / BLOCKED / NOT MEASURED / UNKNOWN / USER DECISION REQUIRED |
+| Current phase | **Phase 63 — a surface names its subject** (closed) |
+| Final audit | **Final acceptance audit** (closed — the last of 61 phases; `VANTAGE_FINAL_ACCEPTANCE_REPORT.md` separates IMPLEMENTED / VERIFIED / BLOCKED / NOT MEASURED / UNKNOWN / USER DECISION REQUIRED |
 | Last feature phase | **Phase 61 — desktop control that asks before it touches, and was never demonstrated touching** (closed) |
 | Previous phases | **Phase 60 — a second vendor behind one selection point** (no vendor call made) · **Phase 59 — an authenticated relay, proven locally and no further** (its off-LAN verdict still stands) |
-| Test suite | **2387 passed · 0 failed** — 77.2 s, **verified on six consecutive full-suite runs** (the five-test Vision-OCR flake was diagnosed and fixed: `audit/FINAL_AUDIT_COLD_START_NOT_A_STALL.md`) |
+| Test suite | **2396 passed · 0 failed** — 77 s typical, 125 s and 167 s under load, **eight consecutive clean full-suite runs** (the Vision-OCR flake needed a second, correct fix: `audit/PHASE63_A_SURFACE_NAMES_ITS_SUBJECT_REPORT.md` §4) |
 | Spec §6 coverage | **37 of 37** — every utterance the build prompt lists reaches a capability |
 | Delivered | `~/Downloads/Vantage/` — `Vantage.app` (running, seal valid), `Vantage.app.zip`, `vantage-source.zip`, `READ ME FIRST.txt` |
 | Commits | `a20e39c` (Ph 57), `7c828fa` (Ph 56 close), `ea68c7d` (Ph 56 close), `0cdc770` (Ph 56), `176bcfb` (Ph 55), `377e79f` (Ph 54 correction), `67d9530` (Ph 54), `35c9abf` (Ph 53), `3708f85` (Ph 52 correction), `92efc6b` (Ph 52), `f047eb2` (Ph 51), `452e9c0` (Ph 50) — **local only, nothing pushed** |
@@ -874,6 +875,60 @@ That ordering is deliberate: 58-B (a phone can approve its own gated actions) ha
 before any remote surface is allowed to approve a click.
 
 
+
+## 2K. Phase 63 in full — a surface has to say who it is talking about
+
+Two open items with one theme, both Phase 50's subject rule applied to things that arrived after it.
+**60-C:** the panel badge said `model: cloud` when the gateway has had two selectable vendors since
+Phase 60 and the badge named neither. **61-A:** the desktop-control read answered whether *the
+process that asked* may click, and said so as though it were a fact about the product — while
+Phase 61 had measured that same question answering `GRANTED` from a terminal and
+`REQUIRES_MANUAL_SYSTEM_SETTINGS` for the app.
+
+The badge now reads `model: gemini · 148 tools` when a key is configured and
+`model: rules (no key) · 148 tools` when it is not — and the second half is the decision: with no
+key it refuses to print the vendor that happens to be the configuration default, because naming a
+vendor nobody will call is the same badge lie Phase 60 removed, in a smaller font. The desktop read
+carries its subject in the sentence and in the output on every path (granted, refused, unverified):
+`— read from Vantage.app itself`, `— this is the answer for the process that asked, not the app in
+your Dock`, or, when even that cannot be established, `— the reader could not say which process it
+describes`.
+
+Eight of the nine new tests run the **shipped** page function under node rather than grepping the
+file, because a grep passes on a function that never runs. The ninth is the reason this phase is
+worth its own report.
+
+**The Vision flake came back, and the post-mortem is uncomfortable.** The cold-start addendum
+claimed it fixed on eight clean runs; the next suite failed the same five tests again. Two defects,
+both introduced by the fix:
+
+1. The warm-up used the **shared** backend, so a warm-up call that exceeded its budget set the
+   45 s cooldown itself — the cascade, with a new entry point. Warming now goes through a throwaway
+   instance: the cold cost is per process, so the cost is still paid; the shared guard is untouched.
+2. The regression test written to protect the suite **mutated the shared backend's binary** to
+   `/usr/bin/true`. Every later real read in that session answered `ok=True, lines=0` in 0.00 s,
+   producing five failures that looked exactly like the flake being studied, in a 2-second run that
+   should have taken 45. It also passed a path that does not exist, which the helper is never asked
+   about at all.
+
+The same mistake, made twice in one day: *asserting a property of a shared object by mutating it.*
+The test now asserts the opposite — a stall on one backend leaves `get_ocr_backend().cooling_down()`
+at zero and the shared `_binary` exactly as found — so a future move of that guard to module state,
+or another test reaching for the singleton, fails loudly instead of corrupting its neighbours.
+Verification: **8 consecutive full-suite runs, 0 failures at 2396 tests**, including runs at 125 s
+and 167 s — the slow moments that used to produce the cluster.
+
+Browser verification was **done**, not assumed, because a page changed: two isolated hosts (one with
+no key, one with `ai_provider=gemini`), `dashboard/index.html` at 1440×900, badge text read from the
+live DOM (`model: rules (no key) · 148 tools` / `model: gemini · 148 tools`), bounding box ending at
+330 px with no horizontal overflow, 0 console errors. Configuring a base URL that is not reachable
+was deliberate: the badge reads `/health`, which reports a *selection*, and no model call was made
+in this phase.
+
+Measured after: **2396 tests passing**, 148 tools / 32 gated / 52 planner rules / 122 route objects
+and 115 paths unchanged, 91 test modules, 65 reports, 75,515 versioned lines.
+
+
 ## 3. Working status of the whole product, as measured today
 
 All values from the **delivered app** over HTTP (read-only GETs) unless stated.
@@ -904,9 +959,9 @@ User → Intent → RulePlanner (50 routes) → PermissionEngine → [Confirmati
 | Database tables | **32** | read-only `sqlite_master` count on the delivered app's database |
 | Memories indexed | 52 / 52, coverage 1.0, hybrid retrieval | `/health` |
 | Scheduler | running, 30 s tick, 67 jobs | `/health` |
-| Test suite | 2387 passed, 0 failed; 77.2 s, six consecutive clean runs | `pytest -q` |
-| Test modules / phase reports | 90 / 64 | `ls` |
-| Code volume | 75,250 versioned lines — 44,223 shipped code (`jarvis/` + `dashboard/` + `app/` + `assets/` + `run.py`) · 30,409 tests | `git ls-files -co --exclude-standard '*.py' '*.html' '*.js' '*.swift' \| xargs grep -c ''` |
+| Test suite | 2396 passed, 0 failed; 77 s typical, eight consecutive clean runs | `pytest -q` |
+| Test modules / phase reports | 91 / 65 | `ls` |
+| Code volume | 75,515 versioned lines — 44,238 shipped code (`jarvis/` + `dashboard/` + `app/` + `assets/` + `run.py`) · 30,659 tests | `git ls-files -co --exclude-standard '*.py' '*.html' '*.js' '*.swift' \| xargs grep -c ''` |
 
 ### 3.3 Permissions, as the OS reports them right now (`/permissions`)
 
@@ -1099,7 +1154,7 @@ shipped calls it a native app, because no toolchain on this machine could build 
    against stubs and one real abort, and **has not been observed prompting this machine.**
 
 Carried open items, all still true: **49a-A…F**, **50-A…F**, **51-A…F**, **52-A…F**,
-**53-A…F**, **54-A…F**, **55-A…E**, **56-A…F**, **57-A…G**, **58-A…H**, **59-A…E**, **60-A…F**, **61-A…E** — each written up in its
+**53-A…F**, **54-A…F**, **55-A…E**, **56-A…F**, **57-A…G**, **58-A…H**, **59-A…E**, **60-A…F**, **61-A…E**, **63-A…C** — each written up in its
 phase report and indexed in `README.md`.
 
 ---
@@ -1136,8 +1191,8 @@ edited only additively.
 | question | file |
 |---|---|
 | What the product is and how to use it | `README.md`, `~/Downloads/Vantage/READ ME FIRST.txt` |
-| Why each phase did what it did | `audit/PHASE*.md` and `audit/FINAL_AUDIT_*.md` (64 reports, newest first in the README table) |
-| The flake, found and fixed | `audit/FINAL_AUDIT_COLD_START_NOT_A_STALL.md` — traced to a cold Vision call measured against a steady-state budget, then six clean runs |
+| Why each phase did what it did | `audit/PHASE*.md` and `audit/FINAL_AUDIT_*.md` (65 reports, newest first in the README table) |
+| The flake, found and fixed | `audit/FINAL_AUDIT_COLD_START_NOT_A_STALL.md` and `audit/PHASE63_A_SURFACE_NAMES_ITS_SUBJECT_REPORT.md` §4 — a cold Vision call measured against a steady-state budget; the first fix was incomplete and its test made things worse, both corrected |
 | The whole verdict, separated | `VANTAGE_FINAL_ACCEPTANCE_REPORT.md` — IMPLEMENTED / VERIFIED / BLOCKED / NOT MEASURED / UNKNOWN / USER DECISION REQUIRED, each with the command that measured it |
 | What is still open | the open-items block at the end of `README.md` |
 | Why a permission ask must not be a poll | `audit/PHASE50_*.md` (the read-only rule) and `audit/PHASE56_ASKING_ON_PURPOSE_REPORT.md` (the request path, and why a helper cannot use it) |
