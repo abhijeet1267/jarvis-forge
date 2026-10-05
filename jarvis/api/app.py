@@ -86,6 +86,13 @@ async def lifespan(_app: FastAPI):
     for url in settings.reachable_urls():
         print(f"Phone client           -> {url}", flush=True)
 
+    # The documentation switch is opt-in because the pages take no credential, and with
+    # lan_mode on this machine's own Wi-Fi address is an accepted Host header. Saying it at
+    # start is the least the process can do: an open door should be visible from outside.
+    if settings.api_docs:
+        print("API docs               -> /openapi.json, unauthenticated, on every "
+              "address listed above", flush=True)
+
     # v0.8: run scheduled jobs in the background while the server is up.
     core = get_core()
     if settings.scheduler_enabled:
@@ -122,11 +129,24 @@ async def lifespan(_app: FastAPI):
         await core.scheduler.stop()
 
 
+def doc_routes(settings) -> Dict[str, Any]:
+    """The kwargs that decide whether FastAPI publishes this API's blueprint.
+
+    `docs_url`/`redoc_url`/`openapi_url` are read once, at construction, so the answer has to
+    be a dict rather than a per-request check -- and the keyword names are part of the
+    contract: a misspelled one is not an error, it is a default that still mounts the route.
+    """
+    if settings.api_docs:
+        return {}
+    return {"docs_url": None, "redoc_url": None, "openapi_url": None}
+
+
 app = FastAPI(
     title="Vantage Core",
     version=__version__,
     description="Permissioned multi-agent personal AI operating system (v0.3 core).",
     lifespan=lifespan,
+    **doc_routes(_settings),
 )
 
 # Only the dashboard's own origin may read responses. A wildcard here would let
@@ -541,13 +561,18 @@ class VoiceTextBody(BaseModel):
 # ---------------------------------------------------------------------------
 @app.get("/")
 async def root() -> Dict[str, Any]:
-    return {
+    index: Dict[str, Any] = {
         "name": "Vantage Core",
         "version": __version__,
-        "docs": "/docs",
         "dashboard": "/dashboard",
         "tools": len(get_core().tools.names()),
     }
+    # A signpost on an unauthenticated route to a page that is only there because someone
+    # asked for it. When they did not, the key is absent rather than set to null: the index
+    # describing a closed door would still be describing a door.
+    if get_settings().api_docs:
+        index["docs"] = "/docs"
+    return index
 
 
 def describe_peripherals() -> Dict[str, Any]:

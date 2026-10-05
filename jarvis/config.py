@@ -108,6 +108,16 @@ class Settings(BaseSettings):
     cors_origins: List[str] = Field(default_factory=list)
     # Reject requests whose Host header is not a loopback name (anti DNS-rebinding).
     enforce_host_header: bool = True
+    # Publish the API's own shape at /openapi.json, /docs and /redoc.
+    #
+    # FastAPI mounts those three for you, and none of them takes a credential. With
+    # `lan_mode` on, `host_allowed` deliberately accepts this machine's own Wi-Fi address,
+    # so the unauthenticated documentation is not a localhost convenience: it is readable
+    # from anything on the network, and what it publishes is every route, every parameter
+    # and every tool name this laptop can be asked to run. Phase 9 recorded it at 71,047
+    # bytes; it was measured again at 82,556 before it was turned off. Development keeps
+    # it behind one switch.
+    api_docs: bool = False
     # Token-bucket rate limiting, per client address.
     #
     # Sized with headroom: the dashboard polls several endpoints every 2.5s

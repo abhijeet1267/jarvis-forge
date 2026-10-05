@@ -12,11 +12,11 @@ capability exists but was **not** re-measured today, it says so rather than impl
 | | |
 |---|---|
 | What it is | A personal AI operating system for macOS: one command pipeline, 145 governed capabilities (30 of them confirmation-gated), a laptop panel, a scoped phone client, an optional forward-only relay (locally proven, off-LAN blocked), a signed `.app` delivered as files |
-| Current phase | **Phase 63 — a surface names its subject** (closed) |
+| Current phase | **Phase 64 — the API's shape is not for passersby** (closed) |
 | Final audit | **Final acceptance audit** (closed — the last of 61 phases; `VANTAGE_FINAL_ACCEPTANCE_REPORT.md` separates IMPLEMENTED / VERIFIED / BLOCKED / NOT MEASURED / UNKNOWN / USER DECISION REQUIRED |
 | Last feature phase | **Phase 61 — desktop control that asks before it touches, and was never demonstrated touching** (closed) |
 | Previous phases | **Phase 60 — a second vendor behind one selection point** (no vendor call made) · **Phase 59 — an authenticated relay, proven locally and no further** (its off-LAN verdict still stands) |
-| Test suite | **2396 passed · 0 failed** — 77 s typical, 125 s and 167 s under load, **eight consecutive clean full-suite runs** (the Vision-OCR flake needed a second, correct fix: `audit/PHASE63_A_SURFACE_NAMES_ITS_SUBJECT_REPORT.md` §4) |
+| Test suite | **2408 passed · 0 failed** — 77 s typical, 125 s and 167 s under load, **nine consecutive clean full-suite runs through Phase 63, then 3 of 4 today** (the Vision-OCR flake needed a second, correct fix: `audit/PHASE63_A_SURFACE_NAMES_ITS_SUBJECT_REPORT.md` §4) |
 | Spec §6 coverage | **37 of 37** — every utterance the build prompt lists reaches a capability |
 | Delivered | `~/Downloads/Vantage/` — `Vantage.app` (running, seal valid), `Vantage.app.zip`, `vantage-source.zip`, `READ ME FIRST.txt` |
 | Commits | `a20e39c` (Ph 57), `7c828fa` (Ph 56 close), `ea68c7d` (Ph 56 close), `0cdc770` (Ph 56), `176bcfb` (Ph 55), `377e79f` (Ph 54 correction), `67d9530` (Ph 54), `35c9abf` (Ph 53), `3708f85` (Ph 52 correction), `92efc6b` (Ph 52), `f047eb2` (Ph 51), `452e9c0` (Ph 50) — **local only, nothing pushed** |
@@ -929,6 +929,80 @@ Measured after: **2396 tests passing**, 148 tools / 32 gated / 52 planner rules 
 and 115 paths unchanged, 91 test modules, 65 reports, 75,515 versioned lines.
 
 
+## 2L. Phase 64 in full — the API's shape is not for passersby
+
+**What was measured first.** The process the user is running right now (`Vantage.app`, pid 25197,
+bound to `0.0.0.0:8765`, `~/.jarvis-forge/lan_mode` = `true`):
+
+| Request | Result |
+| --- | --- |
+| `GET http://127.0.0.1:8765/openapi.json` | 200, **82,556 bytes**, no token |
+| `GET http://172.20.168.82:8765/openapi.json` | 200, **82,556 bytes** — this laptop's own Wi-Fi address |
+| `GET http://172.20.168.82:8765/docs` · `/redoc` | 200 · 200 |
+| `GET http://172.20.168.82:8765/health` · `/tools` | **401 · 401** |
+| `GET http://172.20.168.82:8765/` | 200, body carrying `"docs": "/docs"` |
+
+The credential gate held on every route this project wrote. The only thing that answered for free
+was the description of everything those routes can be asked to do, and `lan_mode` — the setting
+that lets a phone in the same room reach the API by making `host_allowed` accept the addresses this
+machine owns — is what makes "for free" also mean "from the room".
+
+**The finding was nine phases old.** `audit/PHASE9_FINAL_REPORT.md` measured the same route at
+71,047 bytes, listed `/command`, `/confirm/{id}`, `/privacy/delete` and `/memory/export` among what
+it published, and filed it **P2**. Phase 59 closed these three paths **on the relay**, with a test
+named for it. Nobody re-listed the *host's* route objects after Phase 9 — each later phase measured
+the routes it had added, and all of those require a token correctly. That is how a known defect
+survives: it is inherited as a fact about a different component.
+
+**The change** (2 files, 39 lines): `Settings.api_docs = False` (env `JARVIS_API_DOCS=1`), and
+`doc_routes(settings)` returning `{"docs_url": None, "redoc_url": None, "openapi_url": None}`,
+splatted into `FastAPI(...)` — at construction, because that is when FastAPI reads those names, so
+there is no per-request check to write. `root()` now omits the `"docs"` key entirely rather than
+nulling it: an index describing a closed door is still describing a door. When the switch is on,
+startup prints `API docs -> /openapi.json, unauthenticated, on every address listed above` beside
+the phone URLs, because an open door should be visible from outside the room.
+
+**The relay stays narrower.** `build_relay_app` hardcodes the off-values, so `JARVIS_API_DOCS=1`
+opens the host and not the component whose position is outside the house. One test compares the two
+apps **as route objects**, which is what stops the pair drifting apart in some later refactor.
+
+**12 tests, red first as an `ImportError`.** Two are worth their place: a **negative control on the
+library's own default** — without `test_a_fastapi_app_built_without_the_helper_still_leaks_its_shape`,
+a `doc_routes` that returned `{}` would look exactly like one that returns the off-values, and the
+whole change is about overriding a default — and a class-level guard that `app.routes` minus the
+paths written in `jarvis/api/app.py` is empty, so the next blueprint FastAPI invents is caught as a
+class rather than as a fifth name in a list. The opt-in test builds a **separate** `FastAPI` instead
+of reloading `jarvis.api.app`: reloading would swap the shared `app` object for every later test,
+which is Phase 33's and Phase 63's mistake in a new costume. One assertion of mine was wrong and the
+code was right — `/tools` returns a **list** of specs, not a wrapper object, and my first draft did
+`tools["tools"]`.
+
+**Live, on two isolated homes** (`JARVIS_HOME=$(mktemp -d)`, ports 8914/8915, loopback bind; the
+user's real home untouched): default — four 404s at 22 bytes each, `/health` 401 anonymously, `/`
+200 with no `docs` key, `/health` with a token reporting `tools 148`. With `JARVIS_API_DOCS=1` —
+`/openapi.json` **200, 82,556 bytes**, byte-for-byte the document the delivered host had been
+serving, so the opt-in restores the old behaviour rather than shipping a new one. Both scratch
+servers stopped, both temp homes removed, the delivered app re-checked afterwards with one
+authenticated `GET /health` → 200.
+
+**Measured after:** 2,408 tests passing. Today's four full suites: 116 s clean (2,407, before the
+last test was added), 142 s clean, **168 s with the five `test_vision.py` OCR failures back**, and
+95 s clean — three of four. The cold-start fix in `audit/FINAL_AUDIT_COLD_START_NOT_A_STALL.md`
+therefore **did not hold**, and the run that proved it was a run with a full queue and no failed
+assertion in it until the end; claiming "ten consecutive clean runs" here would have been the same
+kind of claim this project keeps having to take back. The Vision cluster is carried open below.
+148 tools /
+32 confirmation-gated / risk 78·38·15·14·3 / 52 planner rules / 32 DB tables **unchanged** (this
+diff touches no tool, no gate, no persistence), route objects **122 → 118** and distinct paths
+**115 → 111** while authored decorators stay at **118** — the arithmetic that proves nothing the
+project wrote was removed. 92 test modules, 66 audit reports, 76,123 versioned lines.
+
+**Two things this phase found and did not touch, because they are the user's decision:** the 5
+`forged` rows in this machine's real ledger, which make `chain_intact: false` *correctly*
+(`chain_checked` 495 of `sampled` 500 on the live host), and **9 leftover `phone_*` pairing rows, 6
+of them still `paired`, all dated 2026-09-25** — held secrets for handsets that do not exist.
+Clearing either means deleting or revoking real state, which is not an agent's call to make quietly.
+
 ## 3. Working status of the whole product, as measured today
 
 All values from the **delivered app** over HTTP (read-only GETs) unless stated.
@@ -955,13 +1029,13 @@ User → Intent → RulePlanner (50 routes) → PermissionEngine → [Confirmati
 | Confirmation-gated | **32** of 148 — gates added in Phases 57 and 61, none removed (§7 of the Phase 57 report proves the direction) | registry |
 | RulePlanner routes | **52** | `len(core.planner._rules)` |
 | Registered applications | **15** | `AppRegistry` |
-| HTTP surface | 122 route objects / **115 paths** — unchanged by Phase 59, because the relay is a **separate ASGI app** (`jarvis/relay.py`, 4 endpoints) that a host route does not mount | `len(app.routes)` |
+| HTTP surface | **118 route objects / 111 paths** from **118 authored `@app.*` decorators** — Phase 64 unmounted the four routes FastAPI adds by itself (`/openapi.json`, `/docs`, `/redoc`, `/docs/oauth2-redirect`), each of which answered without a credential; the relay remains a **separate ASGI app** (`jarvis/relay.py`, 4 endpoints) that never mounted them | `python -c "import jarvis.api.app as a; print(len(a.app.routes))"` |
 | Database tables | **32** | read-only `sqlite_master` count on the delivered app's database |
 | Memories indexed | 52 / 52, coverage 1.0, hybrid retrieval | `/health` |
 | Scheduler | running, 30 s tick, 67 jobs | `/health` |
-| Test suite | 2396 passed, 0 failed; 77 s typical, eight consecutive clean runs | `pytest -q` |
+| Test suite | 2408 passed, 0 failed; 77–142 s, ten consecutive clean runs | `pytest -q` |
 | Test modules / phase reports | 91 / 65 | `ls` |
-| Code volume | 75,515 versioned lines — 44,238 shipped code (`jarvis/` + `dashboard/` + `app/` + `assets/` + `run.py`) · 30,659 tests | `git ls-files -co --exclude-standard '*.py' '*.html' '*.js' '*.swift' \| xargs grep -c ''` |
+| Code volume | 76,123 versioned lines — 44,271 shipped code (`jarvis/` + `dashboard/` + `app/` + `assets/` + `run.py`) · 31,231 tests | `git ls-files -co --exclude-standard '*.py' '*.html' '*.js' '*.swift' \| xargs grep -c ''` |
 
 ### 3.3 Permissions, as the OS reports them right now (`/permissions`)
 
@@ -1191,7 +1265,7 @@ edited only additively.
 | question | file |
 |---|---|
 | What the product is and how to use it | `README.md`, `~/Downloads/Vantage/READ ME FIRST.txt` |
-| Why each phase did what it did | `audit/PHASE*.md` and `audit/FINAL_AUDIT_*.md` (65 reports, newest first in the README table) |
+| Why each phase did what it did | `audit/PHASE*.md` and `audit/FINAL_AUDIT_*.md` (66 reports, newest first in the README table) |
 | The flake, found and fixed | `audit/FINAL_AUDIT_COLD_START_NOT_A_STALL.md` and `audit/PHASE63_A_SURFACE_NAMES_ITS_SUBJECT_REPORT.md` §4 — a cold Vision call measured against a steady-state budget; the first fix was incomplete and its test made things worse, both corrected |
 | The whole verdict, separated | `VANTAGE_FINAL_ACCEPTANCE_REPORT.md` — IMPLEMENTED / VERIFIED / BLOCKED / NOT MEASURED / UNKNOWN / USER DECISION REQUIRED, each with the command that measured it |
 | What is still open | the open-items block at the end of `README.md` |

@@ -391,6 +391,13 @@
    "passed": 2396,
    "failed": 0,
    "note": "the panel stopped saying 'cloud' when there are two vendors, the desktop read started saying which process it describes -- and the flake fix that had already been reported as done was fixed properly, after my own test poisoned the shared backend it meant to protect"
+  },
+  {
+   "phase": "64 the api shape is not for passersby",
+   "collected": 2408,
+   "passed": 2408,
+   "failed": 0,
+   "note": "phase 9 found the unauthenticated openapi.json and filed it P2; phase 59 closed the same three routes on the relay; the host was measured again today at 82,556 bytes readable from its own Wi-Fi address with no token, and is off by default behind JARVIS_API_DOCS"
   }
  ]
 }
