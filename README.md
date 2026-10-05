@@ -421,9 +421,9 @@ Measured, because "feels faster" is not evidence:
 
 | Path | Before | After |
 |---|---|---|
-| `search_files`, query that matches nothing, rooted at `~` | **6,955 ms** | **346–1,217 ms** |
-| `search_files`, the acceptance command | 11,299 ms | 1,217 ms (346 ms on a quieter run) |
-| All 17 measured acceptance commands | 22,573 ms | **1,491 ms** as measured, **74 ms** of it once `research` and the `$HOME` walk are separated out (see the note above) |
+| `search_files`, query that matches nothing, rooted at `~` | **6,955 ms** | **346–1,217 ms**, 3,342 ms on the 2026-10-05 re-check |
+| `search_files`, the acceptance command | 11,299 ms | 1,217 ms best, 346 ms on a quiet run, **3,342 ms** re-measured 2026-10-05 — the walk of `$HOME` is the whole cost and it moves with what the machine is doing |
+| All 17 measured acceptance commands | 22,573 ms | **1,491 ms** best-measured; **4,309 ms** on the 2026-10-05 re-check, of which `search_files` alone is 3,342 ms and `research` 888 ms — **967 ms** across the other fifteen. Median 5 ms. Both figures are printed rather than the flattering one (see the note above) |
 | Any API read (`/tools`, `/tasks`, `/audit`, `/memory`) | 1-2 ms | unchanged |
 | `GET /health`, launched server, warm | 1.5-8 ms (first call in a process: 110 ms) | unchanged — nothing expensive runs per request |
 | `JarvisCore()` construction | 29 ms | unchanged |
