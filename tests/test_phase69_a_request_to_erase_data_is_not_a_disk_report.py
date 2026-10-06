@@ -100,15 +100,15 @@ def test_the_sentences_that_really_do_want_a_disk_report_still_get_one(core, say
     assert plan.actions[0].tool == "check_storage", (say, plan.actions[0].tool)
 
 
-def test_the_how_much_space_wording_is_a_separate_gap_and_is_recorded_as_one(core):
-    """This sentence has never routed: the storage trigger wants `space free` or `space left`, and
-    the wording here is `space is free`. It failed before the decline rule was added and still
-    fails, so it is written down rather than fixed under cover of a safety change -- and rather
-    than dropped from the list above, which would have hidden it."""
+def test_the_how_much_space_wording_now_routes_and_the_gap_it_recorded_is_closed(core):
+    """This sentence used to reach nothing: the storage trigger wanted `space free` or `space left`
+    and the wording is `space is free`. Phase 69 recorded it as 69-D with a test asserting the gap
+    was still there; Phase 70 closed it by widening that trigger, so the assertion is inverted here
+    rather than deleted -- a test that used to prove a defect is the cheapest record of when it was
+    fixed."""
     plan = core.planner.parse("how much space is free")
 
-    assert plan.actions == []
-    assert plan.intent == "unknown"
+    assert plan.actions and plan.actions[0].tool == "check_storage", plan.direct_reply
 
 
 def test_a_deletion_question_about_space_is_still_a_read(core):

@@ -25,7 +25,7 @@ from ..config import get_settings
 from ..logging_setup import get_logger
 from ..registry.apps import AppRegistry
 from ..registry.tools import ToolRegistry
-from .models import Plan, PlannedAction
+from .models import Plan, PlannedAction, RiskLevel
 
 log = get_logger("core.planner")
 
@@ -216,6 +216,7 @@ class RulePlanner:
             self._run_command,
             self._smalltalk,
             self._ask_question,
+            self._single_word_capability,
             self._capability_fallback,
         ]
 
@@ -230,6 +231,11 @@ class RulePlanner:
             return composed
 
         intent = self._first_intent(lowered, raw)
+        if intent is None:
+            # Phase 70: a second read for wording the chain matched nowhere -- a transcription
+            # comma, a one-edit typo -- bounded to capabilities a tidy sentence could already reach
+            # unaided at READ/LOW tier. Nothing here runs when the first read already found something.
+            intent = self._tolerant_intent(lowered, raw)
         plan = self._to_plan(text, intent) if intent else self._unrecognised(text)
         plan.unhandled = dropped
         return plan
@@ -787,7 +793,7 @@ class RulePlanner:
 
     def _storage(self, text: str, raw: str) -> Optional[Intent]:
         if not re.search(r"\bstorage\b|\bdisk (space|full|usage)\b|\bfree space\b"
-                         r"|\bspace (left|free)\b", text):
+                         r"|\bspace (?:is )?(?:left|free|available)\b", text):
             return None
         if _ERASE_REQUEST.search(text):
             return Intent(
@@ -808,7 +814,7 @@ class RulePlanner:
         return Intent("check_storage", tool="check_storage")
 
     def _battery(self, text: str, raw: str) -> Optional[Intent]:
-        if not re.search(r"\bbattery\b|\bpower level\b|\bcharge level\b", text):
+        if not re.search(r"\bbattery\b|\bpower level\b|\bcharge level\b|\bcharg(?:e|ing)\b", text):
             return None
         # "watch" is absent here on purpose: _watch runs earlier and answers a
         # watch battery from the watch's own reported state.
@@ -1426,7 +1432,7 @@ class RulePlanner:
                       "png", "jpg", "jpeg", "gif", "heic", "zip", "tar", "gz", "json",
                       "yaml", "yml", "py", "js", "ts", "rb", "go", "rs", "mp4", "mov",
                       "mp3", "wav", "log", "ini", "env", "sql", "ipynb", "tsx"}
-        if not re.search(r"\b(?:open|go to|visit|bring up|pull up)\b", text):
+        if not re.search(r"\b(?:open|go to|navigate to|visit|bring up|pull up)\b", text):
             return None
 
         browser = ""
@@ -1516,7 +1522,7 @@ class RulePlanner:
 
         # "open vscode with/in/to <folder>"
         m = re.search(
-            r"\b(?:open|launch|start|run)\b\s+(?P<app>.+?)\s+(?:with|in|on|to|at|for)\s+"
+            rf"\b(?:{self._launch_pattern()})\b\s+(?P<app>.+?)\s+(?:with|in|on|to|at|for)\s+"
             r"(?P<path>.+?)\s*$", raw, re.I)
         if m:
             app = self.apps.resolve(self._arg(m.group("app")))
@@ -1525,7 +1531,7 @@ class RulePlanner:
                               params={"app": app.key, "path": m.group("path").strip()},
                               confidence=0.9)
 
-        captured = self._match(r"\b(?:open|launch|start|run)\b\s+(.+)", raw)
+        captured = self._match(rf"\b(?:{self._launch_pattern()})\b\s+(.+)", raw)
         if captured is None:
             return None
         #: A path is not an application. `open ~/notes/vantage-notes.txt` resolved to the
@@ -2896,6 +2902,166 @@ class RulePlanner:
         if len(w) > 3 and w.endswith("s") and not w.endswith("ss"):
             return w[:-1]
         return w
+
+    # -- wording tolerance (Phase 70) ----------------------------------------
+    #
+    # Phase 69's corpus counted the gap: `opne safari`, `batery`, `screnshot`, `serch`, `open, safari`
+    # and "can you bring up contacts" all name capabilities that are registered and reachable from
+    # the tidy wording, and route to nothing from the untidy wording. The answer a person gets -- "I
+    # understood the words but not the goal" -- is true of the router and false about the product.
+    #
+    # Tolerance is admitted under one constraint: the repaired sentence may only produce an action on
+    # a tool at READ or LOW tier that nobody has to approve. `delete` is a token of `delete_file`
+    # (DESTRUCTIVE, gated) and `send` reaches `send_to_device` (EXTERNAL, gated), so a typo of either
+    # word is repaired by the distance function and then *refused by the acceptance rule* -- the
+    # tolerant pass can never hand the router a reach the exact wording did not already have.
+
+    #: Verbs a person uses for "start this program". Kept explicit rather than derived, because the
+    #: only way to discover that "bring up" means "open" is to be told.
+    _LAUNCH_VERBS = ("open", "launch", "start", "run", "bring up", "fire up")
+
+    @classmethod
+    def _launch_pattern(cls) -> str:
+        """The alternation the launch routes use, built from `_LAUNCH_VERBS` so a verb added to the
+        vocabulary cannot silently miss one of the three patterns that need it."""
+        return "|".join(cls._LAUNCH_VERBS)
+
+    @staticmethod
+    def _edit_distance(left: str, right: str) -> int:
+        """Damerau-Levenshtein: an adjacent transposition counts as one edit.
+
+        `opne` -> `open` is a swap of two keys, the single most common typo shape on a physical
+        keyboard. Plain Levenshtein scores it 2, which would leave the commonest real error unfixed
+        while rarer insertions were handled.
+        """
+        if left == right:
+            return 0
+        width, height = len(left) + 1, len(right) + 1
+        grid = [[0] * height for _ in range(width)]
+        for i in range(width):
+            grid[i][0] = i
+        for j in range(height):
+            grid[0][j] = j
+        for i in range(1, width):
+            for j in range(1, height):
+                cost = 0 if left[i - 1] == right[j - 1] else 1
+                grid[i][j] = min(grid[i - 1][j] + 1, grid[i][j - 1] + 1, grid[i - 1][j - 1] + cost)
+                if i > 1 and j > 1 and left[i - 1] == right[j - 2] and left[i - 2] == right[j - 1]:
+                    grid[i][j] = min(grid[i][j], grid[i - 2][j - 2] + 1)
+        return grid[-1][-1]
+
+    def _repair_cues(self) -> frozenset:
+        """The only words a repair may land on: capability name tokens, application names, launch verbs.
+
+        Derived from the registry rather than hand-listed, so it covers the tools that get added next
+        month -- the same reasoning Phase 30's fallback was written for.
+        """
+        cached = getattr(self, "_cues", None)
+        if cached is not None:
+            return cached
+        cues = {self._stem(v) for v in self._LAUNCH_VERBS}
+        for spec in self.tools.all():
+            cues |= {self._stem(t) for t in spec.name.split("_")} - self._NAME_STOP
+        for app in self.apps.all():
+            for name in (app.key, getattr(app, "name", ""), *(getattr(app, "aliases", ()) or ())):
+                for token in re.findall(r"[A-Za-z][A-Za-z0-9]*", str(name).lower()):
+                    cues.add(self._stem(token))
+        cues = frozenset(c for c in cues if len(c) >= 4)
+        self._cues = cues
+        return cues
+
+    @staticmethod
+    def _is_transposition(word: str, cue: str) -> bool:
+        """Exactly one pair of adjacent characters swapped: `opne` / `open`."""
+        if len(word) != len(cue):
+            return False
+        diff = [i for i, (a, b) in enumerate(zip(word, cue)) if a != b]
+        return (len(diff) == 2 and diff[1] == diff[0] + 1
+                and word[diff[0]] == cue[diff[1]] and word[diff[1]] == cue[diff[0]])
+
+    def _repair(self, word: str) -> str:
+        """Rewrite one unknown token only when exactly one cue is one edit away.
+
+        Two cues at the same distance means the typing is genuinely ambiguous, and the answer is to
+        leave the word alone rather than take whichever candidate the set yielded first.
+
+        A cue shorter than six characters is only accepted as a key-swap, and that boundary was set
+        by a false positive this rule produced on its first run: `root` is one insertion away from
+        `robot`, so "run this command as root" was repaired into a robot-status query the person
+        never asked for. Short English words are cue words too often for an insertion to be safe; a
+        transposition is, because it cannot make a word out of a different word.
+        """
+        stem = self._stem(word)
+        cues = self._repair_cues()
+        if len(word) < 4 or stem in cues:
+            return word
+        near = sorted(c for c in cues if self._edit_distance(word, c) == 1
+                      and (len(c) >= 6 or self._is_transposition(word, c)))
+        return near[0] if len(near) == 1 else word
+
+    def _repair_text(self, text: str) -> str:
+        return " ".join(self._repair(token) for token in text.split())
+
+    @staticmethod
+    def _pause_normalised(text: str) -> str:
+        """`open, safari` -> `open safari`. Measured: the comma version reaches nothing.
+
+        A comma between a verb and its object is what a thumb on a phone keyboard or a
+        transcription engine leaves behind; it carries no meaning the router needs to keep.
+        """
+        return re.sub(r"(?<=[A-Za-z0-9]),\s*(?=[A-Za-z0-9])", " ", text)
+
+    def _tolerable(self, tool: str) -> bool:
+        """Can the tolerant pass act on this tool at all? READ/LOW and ungated, or nothing."""
+        spec = self.tools.get(tool) if tool else None
+        return bool(spec) and not spec.requires_confirmation and spec.risk <= RiskLevel.LOW
+
+    def _tolerant_intent(self, lowered: str, raw: str) -> Optional[Intent]:
+        """Re-read a sentence the chain found nothing in. Only ever called after a miss."""
+        pause = self._pause_normalised(lowered)
+        pause_raw = self._pause_normalised(raw)
+        repaired = self._repair_text(pause)
+        tried = set()
+        for candidate, argument_source in ((pause, pause_raw),
+                                           (repaired, self._repair_text(pause_raw))):
+            if candidate == lowered or candidate in tried:
+                continue
+            tried.add(candidate)
+            intent = self._first_intent(candidate, argument_source)
+            if intent and intent.tool and self._tolerable(intent.tool):
+                return intent
+        return None
+
+    def _single_word_capability(self, text: str, raw: str) -> Optional[Intent]:
+        """One shouted word at a laptop: route it if it names exactly one capability.
+
+        Measured before deciding this, because the decision is a registry fact and not a preference:
+        `status` is the last token of **13** registered tools and `workspaces` of **5**, so guessing
+        `system_status` for "status" would be a guess wearing a confidence score. Those get the
+        registry's own ambiguity question instead of "I understood the words but not the goal" --
+        which is a capability list the product already has, not an invention.
+
+        The utterance must be *literally* one word. Phase 30 registers `widget_gizmo` and refuses to
+        plan anything for "the gizmo", and it is right: a noun phrase with an article is not a
+        command. Stripping stop words here would have quietly overridden that decision, so "the gizmo"
+        stays two words and reaches nothing.
+        """
+        words = re.findall(r"[A-Za-z][A-Za-z0-9]*", text)
+        if len(words) != 1:
+            return None
+        wanted = self._stem(words[0])
+        fits = [s for s in self.tools.all() if self._stem(s.name.split("_")[-1]) == wanted]
+        if not fits:
+            return None
+        if len(fits) == 1:
+            spec = fits[0]
+            params = self._sentence_values(raw, tuple(spec.required_parameters))
+            return Intent(spec.name, tool=spec.name, params=params, confidence=0.6)
+        named = "; ".join((s.description or s.name).rstrip(".") for s in fits[:3])
+        return Intent("capability_ambiguous",
+                      note=f"I know {len(fits)} capabilities that fit {words[0]!r}: {named}. "
+                           "Which did you mean?",
+                      clarification=True, confidence=0.5)
 
     @classmethod
     def _sentence_values(cls, raw: str, needed: Tuple[str, ...]) -> Dict[str, Any]:

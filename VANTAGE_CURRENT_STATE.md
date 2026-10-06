@@ -13,12 +13,12 @@ implying it was.
 | | |
 |---|---|
 | What it is | A personal AI operating system for macOS: one command pipeline, 148 governed capabilities (32 of them confirmation-gated), a laptop panel, a scoped phone client, an optional forward-only relay (locally proven, off-LAN blocked), a signed `.app` delivered as files |
-| Current phase | **Phase 69 — the sentences were finally counted: a 101-case intent corpus, and the first false-action-rate number this project has ever measured** (closed) |
+| Current phase | **Phase 70 — a typo is not a missing capability: wording tolerance for the ten sentences the corpus named, with no gate, tier or guard moved** (closed) |
 | Final audit | **Final acceptance audit** (closed — the last of 61 phases; `VANTAGE_FINAL_ACCEPTANCE_REPORT.md` separates IMPLEMENTED / VERIFIED / BLOCKED / NOT MEASURED / UNKNOWN / USER DECISION REQUIRED |
 | Last feature phase | **Phase 61 — desktop control that asks before it touches, and was never demonstrated touching** (closed) |
 | Previous phases | **Phase 60 — a second vendor behind one selection point** (no vendor call made) · **Phase 59 — an authenticated relay, proven locally and no further** (its off-LAN verdict still stands) |
-| Test suite | **2484 passed · 0 failed · 0 skipped (110.70 s)** at the close of Phase 69; 80–140 s typical, and one network-gated test means a run where arXiv refuses reports 2483 + 1 skipped. Six full suites ran on 2026-10-06 (101.69 · 128.22 · 107.53 · 98.87 · 103.05 · 110.70 s), none carrying the Vision cluster; the 2026-10-05 record (thirteen suites, twelve clean, one at 168.72 s with five `test_vision.py` failures) is what forced Phase 65's blast-radius fix — see §2L and `audit/PHASE65_VISION_BLAST_RADIUS_REPORT.md` |
-| Intent accuracy (spec §19) | **measured for the first time**: 101 cases, **false action rate 0.0%** (0 of 22 dangerous sentences reached a tool), outcome accuracy 75.2%, router tool accuracy 59.0%, hallucinated tools 0. 35 of the 101 sentences deviate somewhere, and the corpus names each one — the misses are wording the rules router cannot match (69-B), not silent rounding |
+| Test suite | **2510 passed · 0 failed · 0 skipped (87.13 s)** at the close of Phase 70; one network-gated test means a run where arXiv refuses reports 2509 + 1 skipped. Suites on 2026-10-06: 87.13 · 84.26 · 110.70 · 103.05 · 98.87 · 107.53 · 128.22 · 101.69 s, none carrying the Vision cluster; the 2026-10-05 record (thirteen suites, twelve clean, one at 168.72 s with five `test_vision.py` failures) is what forced Phase 65's blast-radius fix — see §2L and `audit/PHASE65_VISION_BLAST_RADIUS_REPORT.md` |
+| Intent accuracy (spec §19) | **101 cases · false action rate 0.0%** (0 of 22 dangerous sentences reached a tool), outcome accuracy **89.1%**, router tool accuracy **81.0%** of 58 labelled, hallucinated tools **0**. Measured at 75.2% when the corpus was written (Phase 69) and re-measured after Phase 70's wording tolerance. **21 of the 101 sentences still deviate somewhere** (31 lines: 11 outcome, 11 route, 9 approval-expectation), and the corpus names each one. Six of the eleven outcome misses are the product asking for a required parameter the sentence never supplied — which is Phase 29's designed answer, not a bug — and the rest are `google fastapi`, `safar`, `where did I put the invoice` → location instead of files, `move my mouse to the corner` → `move_file`, `send this to my phone`, and the refused secret |
 | Spec §6 coverage | **37 of 37** — every utterance the build prompt lists reaches a capability |
 | Delivered | `~/Downloads/Vantage/` — `Vantage.app` (running, seal valid), `Vantage.app.zip`, `vantage-source.zip`, `READ ME FIRST.txt` |
 | Commits | **Nothing pushed, at the reader's request.** `git status -sb` is the authority: `main...origin/main [ahead 61]` as this line was written — and the commit that records it makes that number one larger, which is why the figure is published as a pointer to the command rather than as a claim that stays true. Five newest as this line was written: `28b60c8` (the header refresh), `318ffbe` (Ph 69), `775221b` (Ph 68), `2d2f990` (the approved ledger repair), `ef2b620` (Ph 67) |
@@ -1377,6 +1377,129 @@ Browser verification **NOT APPLICABLE** — no page changed.
   over-correction list, which would have hidden it).
 
 
+## 2R. Phase 70 in full — a typo is not a missing capability
+
+### What 69-B actually was
+
+Phase 69 published outcome accuracy 75.2% and recorded the reason as "no fuzzy matching". Asked what
+that cost sentence by sentence, the corpus said: 6 of 8 typo cases, 4 of 7 short forms and 8 of 20
+paraphrases reached nothing. `opne safari`, `batery`, `screnshot`, `serch`, `open, safari` and
+"can you bring up contacts" all name capabilities that are **registered and reachable** from the
+tidy wording. The answer a person gets -- "I understood the words but not the goal" -- is true of the
+router and false about the product, which is the same class of untruth Phase 30 was written to close.
+
+### Three mechanisms, one constraint
+
+1. **Transcription pause.** Measured before being handled: `open, safari` reaches nothing, `open
+   safari` reaches `open_application`. The comma is what a thumb or a speech engine leaves behind.
+   Applied **only** in the tolerant pass, never to the main chain, so a sentence that already works
+   is byte-for-byte unaffected -- including the file lists and `", then"` sequence markers that
+   normalising globally would have eaten.
+2. **Three vocabulary widenings**, each checked against the registry first: `charging`/`charge` for
+   the battery read, `space is free` for storage (this closes **69-D**), `bring up`/`fire up` for
+   launching an app, `navigate to` for opening a site. The launch verbs are now one list
+   (`_LAUNCH_VERBS`) feeding both patterns that need them, so a verb added later cannot hit one
+   pattern and miss the other.
+3. **One-edit spelling repair**, with the cue vocabulary derived from the registry (tool-name tokens,
+   application names and aliases) rather than hand-written -- the same reasoning Phase 30 used to
+   avoid an alias table. Accepted only when *exactly one* cue is one edit away, and only if the
+   resulting action's tool is **READ or LOW and not confirmation-gated**.
+
+That last clause is the whole design. `delete` is a token of `delete_file` (DESTRUCTIVE, gated) and
+`send` reaches `send_to_device` (EXTERNAL, gated), so a typo of either word is repaired by the
+distance function and then refused by the acceptance rule. The tolerant pass can hand the router an
+action the tidy wording already allowed; it cannot invent a new one.
+
+### Two failures of my own, both found by running it
+
+* **`root` became `robot`.** The first version repaired any one-edit near-miss, and "run this command
+  as root" came back as a `get_robot_status` query about a machine nobody mentioned. It was caught by
+  the phase's own invariant test, not by reading the code. The boundary now: an insertion or
+  substitution is trusted only against a cue of six or more characters, while a **key-swap**
+  (`opne`/`open`) is trusted at any length because a swap cannot turn one English word into a
+  different one. Both halves are pinned, including `_edit_distance("opne","open") == 1` --
+  transposition had to be added to the metric itself, or the commonest keyboard error stayed broken
+  while rarer ones were fixed.
+* **I was about to override a decision that was right.** `test_phase30_..._one_name_word_is_not_
+  enough_to_reach_a_capability` registered `widget_gizmo` and refused to plan anything for "the
+  gizmo". My first short-form rule stripped stop words, so "the gizmo" became "gizmo" and routed --
+  the test went red, and the easy move was to edit the test. The test was correct: a noun phrase with
+  an article is not a command. The rule now requires a *literally* one-word utterance, so "status" is
+  considered and "the gizmo" never is, and **no existing assertion was changed**.
+
+### What was measured before deciding, not after
+
+The registry was asked how ambiguous a bare word really is: `status` is the last token of **13**
+registered tools, `workspaces` of **5**, `time` of **2**. So a one-word utterance routes only when it
+identifies exactly one capability (`screenshot`, `storage`), and otherwise gets the question the
+registry can already answer -- "I know 13 capabilities that fit 'status': …". Guessing
+`system_status` would have been a guess wearing a confidence score.
+
+**Three corpus labels were corrected**, and the correction moved the published number, so it is
+itemised rather than buried: `time`, `workspaces` and `status` were labelled `run` in Phase 69 and
+are `ask` now, on the counts above. Their contribution is +3 sentences of the +14-point movement;
+the tolerance itself accounts for the rest. `safar` was **left** at `run` even though a bare noun
+with no verb arguably cannot mean "open it", because the miss is real and the corpus should not be
+flattered.
+
+### The numbers, before and after, same instrument
+
+| metric | Phase 69 | Phase 70 |
+|---|---|---|
+| outcome accuracy | 75.2% | **89.1%** |
+| router tool accuracy | 59.0% (61) | **81.0%** (58) |
+| routing hit rate | 60.7% (61) | **82.8%** (58) |
+| gate-expectation accuracy | 69.7% (33) | **72.7%** (33) |
+| **false action rate** | **0.0%** (22 guard cases) | **0.0%** (22) |
+| hallucinated tools | 0 | 0 |
+| unintended executions | 0 | 0 |
+| typo deviations | 12 | **0** |
+| transcription deviations | 2 | **0** |
+| wake-word deviations | 0 | 0 |
+
+The denominators shrank because three `tool` labels were removed with their relabelled cases; a
+percentage whose denominator moved is not comparable without saying so, which is why both are printed.
+
+### What did not change
+
+**148 tools · 32 confirmation-gated · risk spread read 78 / low 38 / external 15 / destructive 14 /
+physical 3 · 118 route objects / 111 paths / 32 DB tables.** Planner routes went **52 → 53**: one
+new rule, the single-word capability route, added at the end of the chain where the existing fallback
+already sits, so it cannot preempt a specific rule. No tier, no gate, no guard list, no confirmation
+behaviour was touched, and the safety matrix still holds **6 of 6**.
+
+### Still open after this phase
+
+* **70-A** — `google fastapi` and `search for X`-style brand verbs are not routed. Left deliberately:
+  `search_web`'s own docstring warns that "a new route that swallows them is a regression wearing a
+  feature", and `google chrome` is a site, an app and a search string at once. Needs a decision about
+  precedence, not a regex.
+* **70-B** — `where did I put the invoice` resolves to `get_location_summary` (a *wrong* answer,
+  worse than none) because the location route runs before the file route. `read my email from
+  brahima` → `search_email` rather than `read_email`, same shape.
+* **70-C** — `move my mouse to the corner` proposes `move_file` (`source=my mouse,
+  destination=the corner`) behind a confirmation card. Gated, so nothing runs, and Phase 61's
+  computer-use hands stay unreachable -- but the card is nonsense, and a person has to read it to
+  find that out.
+* **70-D** — six `run`-labelled sentences get a question because the tool needs a parameter the
+  sentence does not supply (`write a file called todo.txt` wants content; `run tests in jarvis-forge`
+  wants a workspace). This is Phase 29 working as designed; it is listed so the corpus's remaining
+  misses are not read as routing defects.
+* **69-A** and **69-C** carried forward unchanged (the secret-refusal decision; `CONFIRM_PATTERNS`
+  computed and discarded).
+
+### Measured after
+
+Suite **2510 passed, 0 failed, 0 skipped in 87.13 s** (26 new tests). Full write-up:
+`audit/PHASE70_A_TYPO_IS_NOT_A_MISSING_CAPABILITY.md`, which also records the cost: the live
+verification POSTed launch-class sentences to an un-stubbed server, so **Safari opened twice and
+Contacts once on this Mac** from an instance that was isolated in every way except the one that
+matters — a GUI launch is not contained by a temp data directory. Nothing was quit afterwards.
+`148 tools / 32 gated / 53 planner rules / 118 route objects / 111 paths / 32 tables`, safety matrix
+**6 of 6**, corpus false action rate **0.0%**. Browser verification **NOT APPLICABLE** — no page
+changed.
+
+
 ## 3. Working status of the whole product, as measured today
 
 All values from the **delivered app** over HTTP (read-only GETs) unless stated.
@@ -1384,7 +1507,7 @@ All values from the **delivered app** over HTTP (read-only GETs) unless stated.
 ### 3.1 The pipeline — intact and enforced
 
 ```
-User → Intent → RulePlanner (52 routes) → PermissionEngine → [Confirmation] → Tool
+User → Intent → RulePlanner (53 routes) → PermissionEngine → [Confirmation] → Tool
      → Verification (success | failed | unknown) → Memory → Audit → Response
 ```
 
@@ -1401,16 +1524,16 @@ User → Intent → RulePlanner (52 routes) → PermissionEngine → [Confirmati
 | Agents | **15** — calendar, car, coding, design, email, home, laptop, laptop_center, memory, phone, research, robotics, scheduler, vision, watch | `/health` |
 | Risk spread | READ 78 · LOW 38 · EXTERNAL 15 · DESTRUCTIVE 14 · PHYSICAL 3 | registry, counted this close |
 | Confirmation-gated | **32** of 148 — gates added in Phases 57 and 61, none removed (§7 of the Phase 57 report proves the direction) | registry |
-| RulePlanner routes | **52** | `len(core.planner._rules)` |
+| RulePlanner routes | **53** — Phase 70 added the single-word capability route, so a bare `screenshot` is answered instead of interrogated | `len(core.planner._rules)` |
 | Registered applications | **15** | `AppRegistry` |
 | HTTP surface | **118 route objects / 111 paths** from **118 authored `@app.*` decorators** — Phase 64 unmounted the four routes FastAPI adds by itself (`/openapi.json`, `/docs`, `/redoc`, `/docs/oauth2-redirect`), each of which answered without a credential; the relay remains a **separate ASGI app** (`jarvis/relay.py`, 4 endpoints) that never mounted them | `python -c "import jarvis.api.app as a; print(len(a.app.routes))"` |
 | Database tables | **32** | read-only `sqlite_master` count on the delivered app's database |
 | Memories indexed | 52 / 52, coverage 1.0, hybrid retrieval | `/health` |
 | Scheduler | running, 30 s tick, 67 jobs | `/health` |
-| Test suite | **2484 passed, 0 failed, 0 skipped** at the Phase 69 close (110.70 s; the network-gated arXiv test passes when the network answers, and a run where it refuses reports 2483 passed + 1 skipped). Today's six full suites: 101.69 · 128.22 · 107.53 · 98.87 · 103.05 · 110.70 s | `pytest -q` |
+| Test suite | **2510 passed, 0 failed, 0 skipped** at the Phase 70 close (87.13 s; the network-gated arXiv test passes when the network answers, and a run where it refuses reports 2509 passed + 1 skipped) | `pytest -q` |
 | Intent corpus (spec §19, Phase 69) | **101 cases · false action rate 0.0%** (0 of 22 `guard` sentences reached a tool) · outcome accuracy **75.2%** · router tool accuracy **59.0%** (61 labelled) · argument accuracy **100%** (2 labelled) · gate-expectation accuracy **69.7%** (33 labelled) · device targeting **100%** (4 labelled) · hallucinated tools **0** | `python benchmarks/intent_eval.py` |
-| Test modules / phase reports | 98 / 71 | `ls` |
-| Code volume | **77,963** versioned Python/HTML/JS/Swift lines — **43,770** shipped (`jarvis/` + `dashboard/` + `app/`) · **32,211** tests (`tests/`). The shipped figure is now stated with its path list, because the previous 44,489 came from a wider one and a changing number with a changing definition is not a measurement | `git ls-files -co --exclude-standard '*.py' '*.html' '*.js' '*.swift' \| xargs grep -c ''` |
+| Test modules / phase reports | 99 / 72 | `ls` |
+| Code volume | **78,390** versioned Python/HTML/JS/Swift lines — **43,936** shipped (`jarvis/` + `dashboard/` + `app/`) · **32,466** tests (`tests/`). Measured twice by two instruments that agree (`git ls-files -co … | xargs grep -c ''` and a `find`-based count over the same extensions); the shipped figure is stated with its path list because an earlier 44,489 came from a wider definition | `git ls-files -co --exclude-standard '*.py' '*.html' '*.js' '*.swift' \| xargs grep -c ''` |
 
 ### 3.3 Permissions, as the OS reports them right now (`/permissions`)
 

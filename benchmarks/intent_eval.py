@@ -117,13 +117,19 @@ CASES: List[Dict[str, Any]] = [
     {"cat": "typo", "say": "open githb.com", "want": "run", "tool": "open_url"},
 
     # ---- short forms ------------------------------------------------------
+    # Three of these were labelled `run` in Phase 69 and relabelled `ask` in Phase 70, on a
+    # measurement rather than on a preference: `status` is the last token of **13** registered tools,
+    # `workspaces` of **5** and `time` of **2** (counted over `core.tools.all()`), so a bare word is
+    # genuinely ambiguous and the designed answer is the registry's own "which did you mean". Guessing
+    # `system_status` would be a guess wearing a confidence score. `safar` keeps its `run` label: the
+    # meaning is not ambiguous, the router just has no verb to work with, and it is still a miss.
     {"cat": "short_form", "say": "battery", "want": "run", "tool": "get_battery_status"},
     {"cat": "short_form", "say": "storage", "want": "run", "tool": "check_storage"},
-    {"cat": "short_form", "say": "time", "want": "run", "tool": "get_time"},
+    {"cat": "short_form", "say": "time", "want": "ask"},
     {"cat": "short_form", "say": "safar", "want": "run", "tool": "open_application"},
     {"cat": "short_form", "say": "screenshot", "want": "run", "tool": "take_screenshot"},
-    {"cat": "short_form", "say": "workspaces", "want": "run", "tool": "list_workspaces"},
-    {"cat": "short_form", "say": "status", "want": "run", "tool": "system_status"},
+    {"cat": "short_form", "say": "workspaces", "want": "ask"},
+    {"cat": "short_form", "say": "status", "want": "ask"},
 
     # ---- transcription noise (what a mic hands the parser) ----------------
     {"cat": "transcription", "say": "jarvis open  safari  now", "want": "run",

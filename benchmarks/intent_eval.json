@@ -1,14 +1,14 @@
 {
  "cases": 101,
- "outcome_accuracy_pct": 75.2,
+ "outcome_accuracy_pct": 89.1,
  "outcome_denominator": 101,
- "route_tool_accuracy_pct": 59.0,
- "route_tool_denominator": 61,
+ "route_tool_accuracy_pct": 81.0,
+ "route_tool_denominator": 58,
  "argument_accuracy_pct": 100.0,
  "argument_denominator": 2,
- "routing_hit_rate_pct": 60.7,
- "routing_hit_denominator": 61,
- "gate_expectation_accuracy_pct": 69.7,
+ "routing_hit_rate_pct": 82.8,
+ "routing_hit_denominator": 58,
+ "gate_expectation_accuracy_pct": 72.7,
  "gate_expectation_denominator": 33,
  "device_expectation_accuracy_pct": 100.0,
  "device_expectation_denominator": 4,
@@ -22,82 +22,11 @@
  "_hallucinated": [],
  "_deviations": [
   {
-   "say": "can you bring up contacts",
-   "cat": "paraphrase",
-   "kind": "outcome",
-   "want": "run",
-   "got": "none",
-   "route_tool": "",
-   "run_tool": ""
-  },
-  {
-   "say": "can you bring up contacts",
-   "cat": "paraphrase",
-   "kind": "route",
-   "want": "tool=open_application",
-   "got": "tool=-"
-  },
-  {
-   "say": "is the laptop charging",
-   "cat": "paraphrase",
-   "kind": "outcome",
-   "want": "run",
-   "got": "none",
-   "route_tool": "",
-   "run_tool": ""
-  },
-  {
-   "say": "is the laptop charging",
-   "cat": "paraphrase",
-   "kind": "route",
-   "want": "tool=get_battery_status",
-   "got": "tool=-"
-  },
-  {
-   "say": "how much space is free",
-   "cat": "paraphrase",
-   "kind": "outcome",
-   "want": "run",
-   "got": "none",
-   "route_tool": "",
-   "run_tool": ""
-  },
-  {
-   "say": "how much space is free",
-   "cat": "paraphrase",
-   "kind": "route",
-   "want": "tool=check_storage",
-   "got": "tool=-"
-  },
-  {
-   "say": "how much space is free",
-   "cat": "paraphrase",
-   "kind": "gate",
-   "want": "none",
-   "got": "not-routed"
-  },
-  {
    "say": "where did I put the invoice",
    "cat": "paraphrase",
    "kind": "route",
    "want": "tool=search_files",
    "got": "tool=get_location_summary"
-  },
-  {
-   "say": "navigate to the url example.com",
-   "cat": "paraphrase",
-   "kind": "outcome",
-   "want": "run",
-   "got": "none",
-   "route_tool": "",
-   "run_tool": ""
-  },
-  {
-   "say": "navigate to the url example.com",
-   "cat": "paraphrase",
-   "kind": "route",
-   "want": "tool=open_url",
-   "got": "tool=-"
   },
   {
    "say": "google fastapi",
@@ -148,118 +77,6 @@
    "got": "tool=ask_question"
   },
   {
-   "say": "opne safari",
-   "cat": "typo",
-   "kind": "outcome",
-   "want": "run",
-   "got": "none",
-   "route_tool": "",
-   "run_tool": ""
-  },
-  {
-   "say": "opne safari",
-   "cat": "typo",
-   "kind": "route",
-   "want": "tool=open_application",
-   "got": "tool=-"
-  },
-  {
-   "say": "open safri",
-   "cat": "typo",
-   "kind": "outcome",
-   "want": "run",
-   "got": "none",
-   "route_tool": "",
-   "run_tool": ""
-  },
-  {
-   "say": "open safri",
-   "cat": "typo",
-   "kind": "route",
-   "want": "tool=open_application",
-   "got": "tool=-"
-  },
-  {
-   "say": "lunch firefox",
-   "cat": "typo",
-   "kind": "outcome",
-   "want": "run",
-   "got": "none",
-   "route_tool": "",
-   "run_tool": ""
-  },
-  {
-   "say": "lunch firefox",
-   "cat": "typo",
-   "kind": "route",
-   "want": "tool=open_application",
-   "got": "tool=-"
-  },
-  {
-   "say": "what is my batery",
-   "cat": "typo",
-   "kind": "outcome",
-   "want": "run",
-   "got": "none",
-   "route_tool": "",
-   "run_tool": ""
-  },
-  {
-   "say": "what is my batery",
-   "cat": "typo",
-   "kind": "route",
-   "want": "tool=get_battery_status",
-   "got": "tool=-"
-  },
-  {
-   "say": "take a screnshot",
-   "cat": "typo",
-   "kind": "outcome",
-   "want": "run",
-   "got": "none",
-   "route_tool": "",
-   "run_tool": ""
-  },
-  {
-   "say": "take a screnshot",
-   "cat": "typo",
-   "kind": "route",
-   "want": "tool=take_screenshot",
-   "got": "tool=-"
-  },
-  {
-   "say": "serch files for invoice",
-   "cat": "typo",
-   "kind": "outcome",
-   "want": "run",
-   "got": "none",
-   "route_tool": "",
-   "run_tool": ""
-  },
-  {
-   "say": "serch files for invoice",
-   "cat": "typo",
-   "kind": "route",
-   "want": "tool=search_files",
-   "got": "tool=-"
-  },
-  {
-   "say": "time",
-   "cat": "short_form",
-   "kind": "outcome",
-   "want": "run",
-   "got": "none",
-   "route_tool": "",
-   "run_tool": ""
-  },
-  {
-   "say": "time",
-   "cat": "short_form",
-   "kind": "route",
-   "want": "tool=get_time",
-   "got": "tool=-"
-  },
-  {
    "say": "safar",
    "cat": "short_form",
    "kind": "outcome",
@@ -271,54 +88,6 @@
   {
    "say": "safar",
    "cat": "short_form",
-   "kind": "route",
-   "want": "tool=open_application",
-   "got": "tool=-"
-  },
-  {
-   "say": "workspaces",
-   "cat": "short_form",
-   "kind": "outcome",
-   "want": "run",
-   "got": "none",
-   "route_tool": "",
-   "run_tool": ""
-  },
-  {
-   "say": "workspaces",
-   "cat": "short_form",
-   "kind": "route",
-   "want": "tool=list_workspaces",
-   "got": "tool=-"
-  },
-  {
-   "say": "status",
-   "cat": "short_form",
-   "kind": "outcome",
-   "want": "run",
-   "got": "none",
-   "route_tool": "",
-   "run_tool": ""
-  },
-  {
-   "say": "status",
-   "cat": "short_form",
-   "kind": "route",
-   "want": "tool=system_status",
-   "got": "tool=-"
-  },
-  {
-   "say": "open, safari",
-   "cat": "transcription",
-   "kind": "outcome",
-   "want": "run",
-   "got": "none",
-   "route_tool": "",
-   "run_tool": ""
-  },
-  {
-   "say": "open, safari",
-   "cat": "transcription",
    "kind": "route",
    "want": "tool=open_application",
    "got": "tool=-"
@@ -507,7 +276,7 @@
   },
   "paraphrase": {
    "cases": 20,
-   "deviations": 16
+   "deviations": 7
   },
   "permission_bypass": {
    "cases": 12,
@@ -515,15 +284,15 @@
   },
   "short_form": {
    "cases": 7,
-   "deviations": 8
+   "deviations": 2
   },
   "transcription": {
    "cases": 6,
-   "deviations": 2
+   "deviations": 0
   },
   "typo": {
    "cases": 8,
-   "deviations": 12
+   "deviations": 0
   },
   "unsupported": {
    "cases": 13,
@@ -536,7 +305,7 @@
  },
  "surface": "route: RulePlanner.parse; pipeline: JarvisCore.handle with every handler stubbed, HOME sandboxed, no model key",
  "handlers_stubbed": 148,
- "stub_calls_total": 40,
+ "stub_calls_total": 51,
  "model_used": false,
  "rows": [
   {
@@ -604,16 +373,18 @@
    "cat": "paraphrase",
    "want": "run",
    "route": {
-    "tool": "",
-    "params": {},
-    "intent": "unknown"
+    "tool": "open_application",
+    "params": {
+     "app": "contacts"
+    },
+    "intent": "open_app"
    },
    "pipeline": {
-    "outcome": "none",
-    "decision": null,
-    "tool": "",
-    "stub_calls": 0,
-    "reply": "I understood the words but not the goal yet. You don't have to remember a command list -- things I can do right now: \"what is a train\", \"open github.com\", \"check storage\", \"open my",
+    "outcome": "ran",
+    "decision": "EXECUTE",
+    "tool": "open_application",
+    "stub_calls": 1,
+    "reply": "stubbed by benchmarks/intent_eval.py: nothing here touched this machine",
     "model_used": "rules"
    }
   },
@@ -678,16 +449,16 @@
    "cat": "paraphrase",
    "want": "run",
    "route": {
-    "tool": "",
+    "tool": "get_battery_status",
     "params": {},
-    "intent": "unknown"
+    "intent": "laptop_battery"
    },
    "pipeline": {
-    "outcome": "none",
-    "decision": null,
-    "tool": "",
-    "stub_calls": 0,
-    "reply": "I understood the words but not the goal yet. You don't have to remember a command list -- things I can do right now: \"what is a train\", \"open github.com\", \"check storage\", \"open my",
+    "outcome": "ran",
+    "decision": "EXECUTE",
+    "tool": "get_battery_status",
+    "stub_calls": 1,
+    "reply": "stubbed by benchmarks/intent_eval.py: nothing here touched this machine",
     "model_used": "rules"
    }
   },
@@ -696,16 +467,16 @@
    "cat": "paraphrase",
    "want": "run",
    "route": {
-    "tool": "",
+    "tool": "check_storage",
     "params": {},
-    "intent": "unknown"
+    "intent": "check_storage"
    },
    "pipeline": {
-    "outcome": "none",
-    "decision": null,
-    "tool": "",
-    "stub_calls": 0,
-    "reply": "I understood the words but not the goal yet. You don't have to remember a command list -- things I can do right now: \"what is a train\", \"open github.com\", \"check storage\", \"open my",
+    "outcome": "ran",
+    "decision": "EXECUTE",
+    "tool": "check_storage",
+    "stub_calls": 1,
+    "reply": "stubbed by benchmarks/intent_eval.py: nothing here touched this machine",
     "model_used": "rules"
    }
   },
@@ -832,16 +603,18 @@
    "cat": "paraphrase",
    "want": "run",
    "route": {
-    "tool": "",
-    "params": {},
-    "intent": "unknown"
+    "tool": "open_url",
+    "params": {
+     "url": "https://example.com"
+    },
+    "intent": "open_url"
    },
    "pipeline": {
-    "outcome": "none",
-    "decision": null,
-    "tool": "",
-    "stub_calls": 0,
-    "reply": "I understood the words but not the goal yet. You don't have to remember a command list -- things I can do right now: \"what is a train\", \"open github.com\", \"check storage\", \"open my",
+    "outcome": "ran",
+    "decision": "EXECUTE",
+    "tool": "open_url",
+    "stub_calls": 1,
+    "reply": "stubbed by benchmarks/intent_eval.py: nothing here touched this machine",
     "model_used": "rules"
    }
   },
@@ -926,16 +699,18 @@
    "cat": "typo",
    "want": "run",
    "route": {
-    "tool": "",
-    "params": {},
-    "intent": "unknown"
+    "tool": "open_application",
+    "params": {
+     "app": "safari"
+    },
+    "intent": "open_app"
    },
    "pipeline": {
-    "outcome": "none",
-    "decision": null,
-    "tool": "",
-    "stub_calls": 0,
-    "reply": "I understood the words but not the goal yet. You don't have to remember a command list -- things I can do right now: \"what is a train\", \"open github.com\", \"check storage\", \"open my",
+    "outcome": "ran",
+    "decision": "EXECUTE",
+    "tool": "open_application",
+    "stub_calls": 1,
+    "reply": "stubbed by benchmarks/intent_eval.py: nothing here touched this machine",
     "model_used": "rules"
    }
   },
@@ -944,16 +719,18 @@
    "cat": "typo",
    "want": "run",
    "route": {
-    "tool": "",
-    "params": {},
-    "intent": "unknown"
+    "tool": "open_application",
+    "params": {
+     "app": "safari"
+    },
+    "intent": "open_app"
    },
    "pipeline": {
-    "outcome": "none",
-    "decision": null,
-    "tool": "",
-    "stub_calls": 0,
-    "reply": "I understood the words but not the goal yet. You don't have to remember a command list -- things I can do right now: \"what is a train\", \"open github.com\", \"check storage\", \"open my",
+    "outcome": "ran",
+    "decision": "EXECUTE",
+    "tool": "open_application",
+    "stub_calls": 1,
+    "reply": "stubbed by benchmarks/intent_eval.py: nothing here touched this machine",
     "model_used": "rules"
    }
   },
@@ -962,16 +739,18 @@
    "cat": "typo",
    "want": "run",
    "route": {
-    "tool": "",
-    "params": {},
-    "intent": "unknown"
+    "tool": "open_application",
+    "params": {
+     "app": "firefox"
+    },
+    "intent": "open_app"
    },
    "pipeline": {
-    "outcome": "none",
-    "decision": null,
-    "tool": "",
-    "stub_calls": 0,
-    "reply": "I understood the words but not the goal yet. You don't have to remember a command list -- things I can do right now: \"what is a train\", \"open github.com\", \"check storage\", \"open my",
+    "outcome": "ran",
+    "decision": "EXECUTE",
+    "tool": "open_application",
+    "stub_calls": 1,
+    "reply": "stubbed by benchmarks/intent_eval.py: nothing here touched this machine",
     "model_used": "rules"
    }
   },
@@ -980,16 +759,16 @@
    "cat": "typo",
    "want": "run",
    "route": {
-    "tool": "",
+    "tool": "get_battery_status",
     "params": {},
-    "intent": "unknown"
+    "intent": "laptop_battery"
    },
    "pipeline": {
-    "outcome": "none",
-    "decision": null,
-    "tool": "",
-    "stub_calls": 0,
-    "reply": "I understood the words but not the goal yet. You don't have to remember a command list -- things I can do right now: \"what is a train\", \"open github.com\", \"check storage\", \"open my",
+    "outcome": "ran",
+    "decision": "EXECUTE",
+    "tool": "get_battery_status",
+    "stub_calls": 1,
+    "reply": "stubbed by benchmarks/intent_eval.py: nothing here touched this machine",
     "model_used": "rules"
    }
   },
@@ -1016,16 +795,16 @@
    "cat": "typo",
    "want": "run",
    "route": {
-    "tool": "",
+    "tool": "take_screenshot",
     "params": {},
-    "intent": "unknown"
+    "intent": "screenshot"
    },
    "pipeline": {
-    "outcome": "none",
-    "decision": null,
-    "tool": "",
-    "stub_calls": 0,
-    "reply": "I understood the words but not the goal yet. You don't have to remember a command list -- things I can do right now: \"what is a train\", \"open github.com\", \"check storage\", \"open my",
+    "outcome": "ran",
+    "decision": "EXECUTE",
+    "tool": "take_screenshot",
+    "stub_calls": 1,
+    "reply": "stubbed by benchmarks/intent_eval.py: nothing here touched this machine",
     "model_used": "rules"
    }
   },
@@ -1034,16 +813,20 @@
    "cat": "typo",
    "want": "run",
    "route": {
-    "tool": "",
-    "params": {},
-    "intent": "unknown"
+    "tool": "search_files",
+    "params": {
+     "query": "files for invoice",
+     "limit": 10,
+     "sort": "relevance"
+    },
+    "intent": "search_files"
    },
    "pipeline": {
-    "outcome": "none",
-    "decision": null,
-    "tool": "",
-    "stub_calls": 0,
-    "reply": "I understood the words but not the goal yet. You don't have to remember a command list -- things I can do right now: \"what is a train\", \"open github.com\", \"check storage\", \"open my",
+    "outcome": "ran",
+    "decision": "EXECUTE",
+    "tool": "search_files",
+    "stub_calls": 1,
+    "reply": "stubbed by benchmarks/intent_eval.py: nothing here touched this machine",
     "model_used": "rules"
    }
   },
@@ -1106,18 +889,18 @@
   {
    "say": "time",
    "cat": "short_form",
-   "want": "run",
+   "want": "ask",
    "route": {
     "tool": "",
     "params": {},
-    "intent": "unknown"
+    "intent": "capability_ambiguous"
    },
    "pipeline": {
-    "outcome": "none",
+    "outcome": "ask",
     "decision": null,
     "tool": "",
     "stub_calls": 0,
-    "reply": "I understood the words but not the goal yet. You don't have to remember a command list -- things I can do right now: \"what is a train\", \"open github.com\", \"check storage\", \"open my",
+    "reply": "I know 2 capabilities that fit 'time': Find the first free slot of a given length; Get the current date and time. Which did you mean?",
     "model_used": "rules"
    }
   },
@@ -1160,36 +943,36 @@
   {
    "say": "workspaces",
    "cat": "short_form",
-   "want": "run",
+   "want": "ask",
    "route": {
     "tool": "",
     "params": {},
-    "intent": "unknown"
+    "intent": "capability_ambiguous"
    },
    "pipeline": {
-    "outcome": "none",
+    "outcome": "ask",
     "decision": null,
     "tool": "",
     "stub_calls": 0,
-    "reply": "I understood the words but not the goal yet. You don't have to remember a command list -- things I can do right now: \"what is a train\", \"open github.com\", \"check storage\", \"open my",
+    "reply": "I know 5 capabilities that fit 'workspaces': Describe a workspace's structure and languages; List open workspaces; Close a workspace. Which did you mean?",
     "model_used": "rules"
    }
   },
   {
    "say": "status",
    "cat": "short_form",
-   "want": "run",
+   "want": "ask",
    "route": {
     "tool": "",
     "params": {},
-    "intent": "unknown"
+    "intent": "capability_ambiguous"
    },
    "pipeline": {
-    "outcome": "none",
+    "outcome": "ask",
     "decision": null,
     "tool": "",
     "stub_calls": 0,
-    "reply": "I understood the words but not the goal yet. You don't have to remember a command list -- things I can do right now: \"what is a train\", \"open github.com\", \"check storage\", \"open my",
+    "reply": "I know 13 capabilities that fit 'status': Report whether an app is installed, its version, and whether it is running; Read the laptop battery percentage and charging state; Summari",
     "model_used": "rules"
    }
   },
@@ -1218,16 +1001,18 @@
    "cat": "transcription",
    "want": "run",
    "route": {
-    "tool": "",
-    "params": {},
-    "intent": "unknown"
+    "tool": "open_application",
+    "params": {
+     "app": "safari"
+    },
+    "intent": "open_app"
    },
    "pipeline": {
-    "outcome": "none",
-    "decision": null,
-    "tool": "",
-    "stub_calls": 0,
-    "reply": "I understood the words but not the goal yet. You don't have to remember a command list -- things I can do right now: \"what is a train\", \"open github.com\", \"check storage\", \"open my",
+    "outcome": "ran",
+    "decision": "EXECUTE",
+    "tool": "open_application",
+    "stub_calls": 1,
+    "reply": "stubbed by benchmarks/intent_eval.py: nothing here touched this machine",
     "model_used": "rules"
    }
   },
@@ -2271,7 +2056,7 @@
    "route": {
     "tool": "read_file",
     "params": {
-     "path": "/private/var/folders/y2/8qgnpl313ws7ktxtnt11mnsw0000gn/T/intent-eval-sandbox-dndw4wi9/JARVIS_REAL_TEST/notes.txt"
+     "path": "/private/var/folders/y2/8qgnpl313ws7ktxtnt11mnsw0000gn/T/intent-eval-sandbox-407nigvl/JARVIS_REAL_TEST/notes.txt"
     },
     "intent": "read_file"
    },

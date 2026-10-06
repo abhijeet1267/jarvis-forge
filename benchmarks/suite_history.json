@@ -433,6 +433,13 @@
    "passed": 2484,
    "failed": 0,
    "note": "spec 19 measured for the first time: 101 labelled cases, false action rate 0.0% over 22 guard sentences once `empty the trash and wipe free space` was stopped from answering as a disk report; the harness itself was wrong twice (a sync stub and a dict return) before its numbers meant anything, and `run.py serve --port N` was found binding 8765, which is now refused rather than ignored"
+  },
+  {
+   "phase": "70 a typo is not a missing capability",
+   "collected": 2510,
+   "passed": 2510,
+   "failed": 0,
+   "note": "outcome accuracy 75.2% -> 89.1% and typo deviations 12 -> 0 for ten sentences naming registered capabilities; repair is accepted only on READ/LOW ungated tools after it first turned `root` into `robot`, and the one-word route kept Phase 30's decision that `the gizmo` is not a command"
   }
  ]
 }
