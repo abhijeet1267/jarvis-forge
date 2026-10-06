@@ -426,7 +426,13 @@ def provider_capabilities(settings=None) -> Dict[str, str]:
     try:
         active = select_provider(settings).name
     except ProviderUnknown as exc:
-        return {"chat": f"refused: {exc}", "embed": f"refused: {exc}"}
+        # Four keys, same as the healthy branch. Dropping vision and stt here made the refusal
+        # path answer a different *shape* of question than the working one, so a reader that asked
+        # "and screen text?" got silence -- which reads as "nothing to report", not as
+        # "nobody has looked". A blank is not a boundary.
+        return {"chat": f"refused: {exc}", "embed": f"refused: {exc}",
+                "vision": "not asked -- the vendor could not be chosen",
+                "stt": "not asked -- the vendor could not be chosen"}
     return {"chat": active, "embed": active,
             "vision": "openai-shaped, not provider-routed",
             "stt": "openai-shaped, not provider-routed"}

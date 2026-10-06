@@ -412,6 +412,13 @@
    "passed": 2419,
    "failed": 0,
    "note": "/metrics counted the newest 500 rows while verify_chain walked the oldest 500 of the same 525-row ledger; both now cover everything and say what they covered, the panel names the break, and the rebuilt bundle finally shipped Phase 64 after a 200/82,556-byte measurement proved the staged copy wins"
+  },
+  {
+   "phase": "67 the phone says who answers",
+   "collected": 2433,
+   "passed": 2433,
+   "failed": 0,
+   "note": "63-A and 63-B closed without widening the phone surface: the model line rides the HTML the phone already loads, PHONE_ALLOWED pinned by equality at 8 paths, and the provider refusal path now describes all four tasks; browser verified at 375x812 mobile emulation with 0 console messages"
   }
  ]
 }

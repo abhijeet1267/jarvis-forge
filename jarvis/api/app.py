@@ -2872,6 +2872,29 @@ PHONE_PAGE = Path(__file__).resolve().parents[2] / "dashboard" / "phone.html"
 DASHBOARD = Path(__file__).resolve().parents[2] / "dashboard" / "index.html"
 
 
+def model_status(settings) -> Dict[str, Any]:
+    """Who answers a sentence on this laptop, as data rather than as prose.
+
+    The phone had no idea (63-A): `grep -n "model|provider|llm" dashboard/phone.html` returned
+    nothing, five phases after the vendor became selectable and two after the laptop's own panel
+    grew a badge that names it. The values are the ones `/health` already publishes to the operator,
+    including `provider_paths` -- which no surface had ever read (63-B) -- and they travel in the
+    HTML the phone is already allowed to load, because giving a handset `/health` to get one status
+    line would widen the surface Phase 58 spent a whole phase narrowing.
+
+    Two rules carried over from the panel's badge, both about not over-claiming: with no key the line
+    says rules and names no vendor nobody will call, and an unusable selection is printed as the
+    refusal it is rather than falling back to a vendor name.
+    """
+    paths = provider_capabilities(settings)
+    chat = paths["chat"]
+    if not settings.llm_enabled:
+        answered = "rules (no key)"
+    else:
+        answered = chat
+    return {"llm_enabled": settings.llm_enabled, "answered_by": answered, **paths}
+
+
 async def phone_client() -> Any:
     """Serve the phone's side of the pairing flow.
 
@@ -2889,8 +2912,12 @@ async def phone_client() -> Any:
     # not the request body, that decides.
     bootstrap = (_issue_credential(_bootstraps, BOOTSTRAP_TTL_SECONDS, "phone")
                  if settings.auth_enabled else "")
-    return HTMLResponse(content=PHONE_PAGE.read_text(encoding="utf-8").replace(
-        "__JARVIS_BOOTSTRAP__", bootstrap))
+    # `<` is escaped so a value can never carry a `</script>` into the page, whatever a
+    # provider's own error text happens to contain.
+    model_json = json.dumps(model_status(settings), default=str).replace("<", "\u003c")
+    return HTMLResponse(content=PHONE_PAGE.read_text(encoding="utf-8")
+                        .replace("__JARVIS_BOOTSTRAP__", bootstrap)
+                        .replace("__JARVIS_MODEL_JSON__", model_json))
 
 
 @app.get("/phone", include_in_schema=False)

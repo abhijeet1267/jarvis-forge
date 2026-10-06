@@ -303,11 +303,21 @@ def test_a_dynamic_request_is_never_answered_from_the_cache(client):
 
 
 def test_the_cache_name_carries_a_version_so_an_update_replaces_it(client):
+    """The rule is *advances*, not *equals the version that was current in September*.
+
+    This asserted `"2" in names` as written, which is a literal for one day's shell: it passed while
+    nobody changed the page and failed the first time somebody did -- the same trap Phase 57 found
+    in the frozen `== 28` gate counts, where a total can be satisfied by moving one thing somewhere
+    else. The version still has to exist, still has to be at least the shell that shipped in Phase
+    58, and must move whenever the shell does; that is what makes `activate()`'s delete-the-old-
+    caches branch mean anything on a phone that installed v2.
+    """
     body = client.get("/sw.js").text
-    names = set(re.findall(r"phone-shell-v(\d+)", body))
+    names = {int(n) for n in re.findall(r"phone-shell-v(\d+)", body)}
     assert names, "no versioned shell cache"
-    assert "2" in names, \
-        "the shell changed this phase; the cache name has to change with it or phones keep v1"
+    assert max(names) >= 2, \
+        "the shell changed this phase; the cache name has to change with it or phones keep the old one"
+    assert "caches.delete" in body, "old caches are never removed, so the new name never takes effect"
 
 
 # ---------------------------------------------------------------------------

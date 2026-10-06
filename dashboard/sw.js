@@ -18,7 +18,7 @@ const SHELL = PRECACHE.join("|");
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open("jarvis-phone-shell-v2")
+    caches.open("jarvis-phone-shell-v3")
       .then((cache) => cache.addAll(PRECACHE))
       .then(() => self.skipWaiting())
   );
@@ -27,7 +27,7 @@ self.addEventListener("install", (event) => {
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches.keys()
-      .then((keys) => Promise.all(keys.filter((k) => k !== "jarvis-phone-shell-v2")
+      .then((keys) => Promise.all(keys.filter((k) => k !== "jarvis-phone-shell-v3")
         .map((k) => caches.delete(k))))
       .then(() => self.clients.claim())
   );
@@ -47,7 +47,7 @@ self.addEventListener("fetch", (event) => {
     event.respondWith(
       fetch(request).then((response) => {
         const copy = response.clone();
-        caches.open("jarvis-phone-shell-v2").then((cache) => cache.put(request, copy));
+        caches.open("jarvis-phone-shell-v3").then((cache) => cache.put(request, copy));
         return response;
       }).catch(() => caches.match(request))
     );

@@ -12,11 +12,11 @@ capability exists but was **not** re-measured today, it says so rather than impl
 | | |
 |---|---|
 | What it is | A personal AI operating system for macOS: one command pipeline, 145 governed capabilities (30 of them confirmation-gated), a laptop panel, a scoped phone client, an optional forward-only relay (locally proven, off-LAN blocked), a signed `.app` delivered as files |
-| Current phase | **Phase 66 — the ledger was being read in two different halves** (closed) |
+| Current phase | **Phase 67 — the phone says who answers, and no gate moved to let it speak** (closed) |
 | Final audit | **Final acceptance audit** (closed — the last of 61 phases; `VANTAGE_FINAL_ACCEPTANCE_REPORT.md` separates IMPLEMENTED / VERIFIED / BLOCKED / NOT MEASURED / UNKNOWN / USER DECISION REQUIRED |
 | Last feature phase | **Phase 61 — desktop control that asks before it touches, and was never demonstrated touching** (closed) |
 | Previous phases | **Phase 60 — a second vendor behind one selection point** (no vendor call made) · **Phase 59 — an authenticated relay, proven locally and no further** (its off-LAN verdict still stands) |
-| Test suite | **2419 passed · 0 failed** — 80–116 s typical; thirteen full suites on 2026-10-05, **twelve clean and one at 168.72 s with the five Vision failures**, which Phase 65 reproduces deterministically instead of waiting for (the Vision-OCR flake needed a second, correct fix: `audit/PHASE63_A_SURFACE_NAMES_ITS_SUBJECT_REPORT.md` §4) |
+| Test suite | **2433 passed · 0 failed** — 80–140 s typical; thirteen full suites on 2026-10-05, **twelve clean and one at 168.72 s with the five Vision failures**, which Phase 65 reproduces deterministically instead of waiting for (the Vision-OCR flake needed a second, correct fix: `audit/PHASE63_A_SURFACE_NAMES_ITS_SUBJECT_REPORT.md` §4) |
 | Spec §6 coverage | **37 of 37** — every utterance the build prompt lists reaches a capability |
 | Delivered | `~/Downloads/Vantage/` — `Vantage.app` (running, seal valid), `Vantage.app.zip`, `vantage-source.zip`, `READ ME FIRST.txt` |
 | Commits | `a20e39c` (Ph 57), `7c828fa` (Ph 56 close), `ea68c7d` (Ph 56 close), `0cdc770` (Ph 56), `176bcfb` (Ph 55), `377e79f` (Ph 54 correction), `67d9530` (Ph 54), `35c9abf` (Ph 53), `3708f85` (Ph 52 correction), `92efc6b` (Ph 52), `f047eb2` (Ph 51), `452e9c0` (Ph 50) — **local only, nothing pushed** |
@@ -1118,6 +1118,78 @@ The row list, the effect (525 to 519 rows plus a forced re-seal) and the reason 
 rows should *not* be rewritten are all in `audit/PHASE66_THE_LEDGER_WAS_READ_IN_TWO_HALVES_REPORT.md`
 §6, waiting on your explicit yes. Device rows untouched, as instructed.
 
+## 2O. Phase 67 in full — the phone says who answers, and no gate moved to let it speak
+
+Two open items, both found by asking a page what it knows. `grep -n "health|llm|model|provider"
+dashboard/phone.html` returned **nothing**: the device in a person's hand could not say whether rules
+or a vendor was answering, five phases after the vendor became selectable (Phase 60) and two after the
+laptop's own panel grew a badge that names it (Phase 63). And `/health` published `provider_paths`
+whose only reader anywhere in the repository was a test — a field nobody renders is a field nobody can
+be caught being wrong about.
+
+The cheap fix was one line: let a phone session read `/health`. **Refused.** `/health` answers tools,
+agents, memory counts, security posture, peripherals and the reachable URLs; a status line needs none
+of it, and Phase 58 spent an entire phase fixing the phone's surface at the moment its credential is
+minted, precisely so that a handset cannot decide later what it is allowed to read. That refusal is
+now an assertion: `PHONE_ALLOWED` is pinned by **equality** to the eight paths Phase 58 shipped, with
+the added and removed sets printed in the failure message, and route objects stay at 118 / 111 because
+no route was added.
+
+So the value rides the HTML the phone is already allowed to load, the way the bootstrap code does:
+`model_status(settings)` is injected as a `<script type="application/json" id="jarvis-model">` block
+by `phone_client()`, `<` escaped so that no value -- including a vendor's own error text -- can close
+the element it sits in. The page renders it through a pure `modelLine()` into `#modelline`, using the
+existing `.sub micline` classes: no new CSS, no new colour. It carries Phase 63's two badge rules --
+no key means the line says `rules (no key)` and names nobody, and an unusable selection is printed as
+the refusal it is rather than borrowing a vendor's name -- and it degrades honestly: no element,
+nothing written; unparseable data, `answers: unknown (this laptop sent no model state)`.
+
+A defect found on the way, in the same family: `provider_capabilities()` returned **two** keys when
+the provider name was unusable and **four** when it was fine, so the one path where a reader most
+wants to ask "and screen text?" was answered by a missing key -- which looks like "nothing to report"
+and not at all like "nobody looked". The refusal path now says
+`not asked -- the vendor could not be chosen`.
+
+The shell gained an element, so `jarvis-phone-shell-v2` became **v3** -- otherwise a phone holding the
+old cache renders the line from a page with no place for it, and `activate()`'s delete-the-rest branch
+is what makes the bump real. That change required editing one Phase 58 assertion, and the edit is on
+the record: it read `assert "2" in names`, a literal for one day's shell that failed the first time the
+shell legitimately advanced, and it is now `max(names) >= 2` plus a required `caches.delete`. The
+version still has to exist and still cannot go backwards, so this is the same correction Phase 57 made
+to the frozen `== 28` gate counts -- a total freezes, an invariant holds.
+
+**14 tests, red first as 7 failures and 4 errors.** Three on `model_status`, one on the four-keys-in-
+every-branch shape, three on the served page (block present and parseable, placeholder never survives,
+no credential or `Bearer`/`api_token`/`secret` travels inside a status field), two on the gate, four
+running the shipped `modelLine` **under node** against the exact JSON the route injects, and one on the
+cache version.
+
+**Live.** Three isolated hosts (`JARVIS_HOME=$(mktemp -d)`, ports 8921/8922/8923, loopback, fake keys,
+the user's home untouched): no key → `rules (no key)`; `JARVIS_AI_PROVIDER=gemini` → `gemini`;
+`mistral` → `refused: JARVIS_AI_PROVIDER='mistral' is not a provider this build can talk to. Known:
+gemini, openai` with vision and STT marked `not asked`. Neither keyed host mentioned a vendor in its
+log -- 0 references -- so `PROVIDER_LIVE_VENDOR_CALL` stays `NOT MEASURED`, as it has been since
+Phase 60. A real phone session minted against a running process returned 200 on `/tools` and
+`/voice/status` and **403** on `/health`, `/audit`, `/memory`, `/permissions`, `/metrics` and
+`POST /privacy/delete`.
+
+**Browser verification: done.** Chrome at `375x812x2,mobile` emulation, page reloaded under it, read
+from the live DOM: `answers: rules · no vendor on this laptop — screen text and voice are
+openai-shaped, not provider-routed`, `innerWidth` 375, `scrollWidth` 375 with no horizontal overflow,
+13 px wrapping to two lines, 3 cards laid out, **0 console messages**, and a screenshot inspected
+rather than assumed. The first attempt used `resize_page`, which reported a 500 px viewport -- the
+operating system's window minimum, not a phone -- so the mobile numbers come from emulation. All three
+hosts were stopped and their temp homes deleted; the delivered app was re-checked with one
+authenticated `GET /health` → 200.
+
+**Measured after:** 2433 passing, 94 test modules, 69 reports, 76,467 versioned lines; 148 tools /
+32 gated / 52 planner rules / 32 tables, **118 route objects / 111 paths / 8 phone-reachable paths**
+all unchanged. **67-A, left open on purpose:** the line is rendered when the page loads, so a key
+added while a phone sits open appears on the next reload -- the alternative being the polled endpoint
+this phase declined to add. Still open on the phone as well: 58-C (the session token lives in a page
+variable, though it is never persisted), 58-B (a phone can approve its own gated actions), 58-E (no
+push).
+
 ## 3. Working status of the whole product, as measured today
 
 All values from the **delivered app** over HTTP (read-only GETs) unless stated.
@@ -1148,9 +1220,9 @@ User → Intent → RulePlanner (50 routes) → PermissionEngine → [Confirmati
 | Database tables | **32** | read-only `sqlite_master` count on the delivered app's database |
 | Memories indexed | 52 / 52, coverage 1.0, hybrid retrieval | `/health` |
 | Scheduler | running, 30 s tick, 67 jobs | `/health` |
-| Test suite | 2419 passed, 0 failed; 80–116 s typical, one 168.72 s run carrying the five Vision failures (Phase 65) | `pytest -q` |
-| Test modules / phase reports | 93 / 68 | `ls` |
-| Code volume | 76,144 versioned lines — 44,379 shipped code (`jarvis/` + `dashboard/` + `app/` + `assets/` + `run.py`) · 31,147 tests | `git ls-files -co --exclude-standard '*.py' '*.html' '*.js' '*.swift' \| xargs grep -c ''` |
+| Test suite | 2433 passed, 0 failed; 80–140 s typical, one 168.72 s run carrying the five Vision failures (Phase 65) | `pytest -q` |
+| Test modules / phase reports | 94 / 69 | `ls` |
+| Code volume | 76,467 versioned lines — 44,444 shipped code (`jarvis/` + `dashboard/` + `app/` + `assets/` + `run.py`) · 31,405 tests | `git ls-files -co --exclude-standard '*.py' '*.html' '*.js' '*.swift' \| xargs grep -c ''` |
 
 ### 3.3 Permissions, as the OS reports them right now (`/permissions`)
 
@@ -1333,7 +1405,10 @@ shipped calls it a native app, because no toolchain on this machine could build 
    is a user decision, not missing code. Vision and transcription are still OpenAI-shaped (60-A).
    **Computer Use** was built last, in Phase 61, as §26 orders -- and its actuations were
    deliberately never demonstrated on the user's desktop.
-7. **Decisions the user owns, not fixes**: whether to clear the 5 deliberate `forged` audit
+7. **Decisions the user owns, not fixes**: whether to clear the **6** deliberate `forged` audit
+   rows -- re-counted on the live ledger on 2026-10-05 (`SELECT COUNT(*) … WHERE result='forged'`),
+   where this row previously said 5 because the oldest one, `LEGACY-TEST`, sits outside the
+   newest-500 window `/metrics` samples;
    rows that make the chain read BROKEN; whether to grant the bundle Accessibility (which
    unlocks `show the current application` and Finder confirmation); whether to clean the
    **9 `phone_*` rows** measured today on the delivered app — 13 device rows in total, of which
@@ -1343,7 +1418,7 @@ shipped calls it a native app, because no toolchain on this machine could build 
    against stubs and one real abort, and **has not been observed prompting this machine.**
 
 Carried open items, all still true: **49a-A…F**, **50-A…F**, **51-A…F**, **52-A…F**,
-**53-A…F**, **54-A…F**, **55-A…E**, **56-A…F**, **57-A…G**, **58-A…H**, **59-A…E**, **60-A…F**, **61-A…E**, **63-A…C** — each written up in its
+**53-A…F**, **54-A…F**, **55-A…E**, **56-A…F**, **57-A…G**, **58-A…H**, **59-A…E**, **60-A…F**, **61-A…E**, **63-C** (63-A and 63-B closed by Phase 67, 67-A added) — each written up in its
 phase report and indexed in `README.md`.
 
 ---
