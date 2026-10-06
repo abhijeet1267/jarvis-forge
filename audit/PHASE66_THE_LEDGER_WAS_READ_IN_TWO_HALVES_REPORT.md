@@ -180,6 +180,32 @@ shipped — they are now named, counted, and visible — and rewriting them woul
 was never recorded. `~/.jarvis-forge/audit.jsonl`, the off-box mirror, keeps every original line
 including these six regardless of what you decide about the database.
 
+### 6.1 Executed on 2026-10-06, after being asked directly
+
+The user chose **delete and re-seal**. Run against the real ledger, app stopped, with a second backup
+taken immediately before (`jarvis.db.pre-repair-2`):
+
+| Step | `verify_chain()` |
+| --- | --- |
+| before | `ok=False`, checked 520 of 525, 5 breaks, first bad `LEGACY-TEST` |
+| 6 rows deleted | `ok=False`, checked 513 of 519, **6 breaks**, `previous-hash mismatch (a record was removed or reordered)` |
+| `seal_chain(force=True)` | **`ok=True`, checked 520 of 520, 0 breaks, 0 unverified** |
+
+The middle row is the point of the whole exercise being done in one go: deleting a row does not leave
+a shorter valid chain, it leaves a *broken* one, because the successor's `prev_hash` names the row that
+is gone. The re-seal wrote its own event -- `audit chain re-hashed 519 records on
+2026-10-06T03:18:53+00:00` -- so the ledger itself records that its guarantee starts there.
+
+The 2 `legacy_message` rows were left exactly as they are, as predicted: they record actions that
+really happened, and the honest fix was the one that shipped in this phase -- name them, count them,
+show them. `/metrics` now reads `unexpected_result_values: 2` and the panel
+`· result values that are not statuses 2`.
+
+One thing the repair revealed that no test had: a dashboard tab left open across it kept rendering
+`BROKEN · 5 records · 520 of 525 verified` until reloaded, because Chrome throttles timers in a
+background tab. The server was correct the whole time; the stale view was the artifact. Worth knowing
+before anyone treats an unwatched panel as a monitor.
+
 ## 7. Numbers, re-measured
 
 | Measure | Before | After |

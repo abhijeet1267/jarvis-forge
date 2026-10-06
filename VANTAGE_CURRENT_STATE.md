@@ -1111,12 +1111,12 @@ including when addressed at the Wi-Fi IP, and `GET /` no longer advertises `/doc
 32 gated / 52 planner rules / 118 route objects / 111 paths / 32 tables unchanged -- `/metrics` gained
 fields, not a route.
 
-**Not done, by design:** the 6 `forged` rows are still in the ledger. The app was stopped, the database
-and WAL were copied to `~/.jarvis-forge/repair-2026-10-05/`, and the eight affected rows exported --
-then the deletion itself was blocked, and I did not route around a block on deleting audit history.
-The row list, the effect (525 to 519 rows plus a forced re-seal) and the reason the 2 `legacy_message`
-rows should *not* be rewritten are all in `audit/PHASE66_THE_LEDGER_WAS_READ_IN_TWO_HALVES_REPORT.md`
-§6, waiting on your explicit yes. Device rows untouched, as instructed.
+**Not done at the time, then done:** the 6 `forged` rows were still in the ledger at this phase's
+close. The app was stopped, the database and WAL were copied to `~/.jarvis-forge/repair-2026-10-05/`,
+and the eight affected rows exported -- then the deletion itself was blocked, and I did not route
+around a block on deleting audit history. On 2026-10-06, asked directly, the user chose to delete and
+re-seal; §3.5 carries the before/mid/after numbers, the re-seal's own ledger row, and the reason the
+2 `legacy_message` rows were left alone. Device rows untouched, as instructed.
 
 ## 2O. Phase 67 in full — the phone says who answers, and no gate moved to let it speak
 
@@ -1270,14 +1270,46 @@ Two consequences that are live behaviour, not caveats:
   host's answer unchanged or a `502`/`504`. Not started by the app, the login item or any page;
   proven on loopback only (§2H).
 
-### 3.5 Audit — one honest red light
+### 3.5 Audit — the red light, and what became of it
 
-`/metrics` on the delivered app: `sampled: 500`, `chain_checked: 495`, **`chain_intact: false`**,
-and `by_result` includes **`forged: 5`**. This is the documented C-2/C-2a state: deliberate
-tamper-test rows are in this machine's real history, so the hash chain correctly reports
-BROKEN. The dashboard shows "Audit chain: BROKEN" for exactly that reason. It is the verifier
-working, not a broken verifier — but it also means **the user's history contains rows that were
-inserted to test detection**, and cleaning them is a decision, not a fix.
+For eight phases this section read: `/metrics` shows `chain_intact: false` and `by_result` includes
+`forged`, because deliberate tamper-test rows sit in this machine's real history, and the verifier
+is right to say BROKEN. The count published here said 5 while the ledger held **6** — the oldest one,
+`LEGACY-TEST` dated 2020-01-01, falls outside the newest-500 window `/metrics` samples, which is
+exactly the blind spot Phase 66 removed.
+
+On 2026-10-06 the user decided to clear them. Measured, in order, on the real ledger:
+
+| Step | `verify_chain()` |
+| --- | --- |
+| before | `ok=False`, checked 520 of 525, **5 breaks**, first bad `LEGACY-TEST` |
+| the 6 `result='forged'` rows deleted | `ok=False`, checked 513 of 519, **6 breaks**, reason `previous-hash mismatch (a record was removed or reordered)` — the arithmetic that shows why a deletion cannot stand on its own |
+| `seal_chain(force=True)`, 519 records re-hashed | **`ok=True`, checked 520 of 520, 0 breaks, 0 unverified** |
+
+The re-seal wrote its own row, as Phase 66 designed it to: `audit chain re-sealed: 519 records
+re-hashed on 2026-10-06T03:18:53+00:00`. That row is the honest caveat — the chain now proves that
+nothing changed *after* that moment, not that nothing changed before it. The pre-repair database and
+the exported rows are kept at `~/.jarvis-forge/repair-2026-10-05/` (`jarvis.db.pre-repair`,
+`.pre-repair-2`, `affected_rows.pre-repair.json`), and `~/.jarvis-forge/audit.jsonl`, the off-box
+mirror, still carries every original line including the six.
+
+Two rows remain that are **not** statuses, and deliberately so: an early build wrote response
+sentences into the `result` column ("Your laptop battery is at 82% (charging).", "Opening Visual
+Studio Code on your macos machine."). They record actions that really happened, so rewriting them
+would invent a status that was never recorded; they are labelled `legacy_message`, counted, and shown
+on the panel as `· result values that are not statuses 2`.
+
+`/metrics` and the dashboard now read, on the delivered app:
+
+```
+chain_intact True | checked 520 of 520 | breaks 0 | unverified 0 | unexpected_result_values 2
+Audit chain intact · 520 of 520 verified        (read from the live DOM after a reload)
+```
+
+One observation worth keeping: the dashboard tab that had been open across the repair kept showing
+`BROKEN · 5 records · 520 of 525 verified` until it was reloaded — Chrome throttles timers in a
+background tab, so a panel nobody is looking at freezes on yesterday's status. The server was never
+wrong; the stale view was. Same class as 67-A on the phone.
 
 ### 3.6 Voice
 
@@ -1405,10 +1437,11 @@ shipped calls it a native app, because no toolchain on this machine could build 
    is a user decision, not missing code. Vision and transcription are still OpenAI-shaped (60-A).
    **Computer Use** was built last, in Phase 61, as §26 orders -- and its actuations were
    deliberately never demonstrated on the user's desktop.
-7. **Decisions the user owns, not fixes**: whether to clear the **6** deliberate `forged` audit
-   rows -- re-counted on the live ledger on 2026-10-05 (`SELECT COUNT(*) … WHERE result='forged'`),
-   where this row previously said 5 because the oldest one, `LEGACY-TEST`, sits outside the
-   newest-500 window `/metrics` samples;
+7. **Decisions the user owns, not fixes**: ~~whether to clear the **6** deliberate `forged` audit
+   rows~~ -- **asked on 2026-10-06 and answered: delete and re-seal**, executed, with the before and
+   after verification in §3.5 and the pre-repair database kept in
+   `~/.jarvis-forge/repair-2026-10-05/`. The count had been published as 5 because the oldest row,
+   `LEGACY-TEST`, sits outside the newest-500 window `/metrics` used to sample;
    rows that make the chain read BROKEN; whether to grant the bundle Accessibility (which
    unlocks `show the current application` and Finder confirmation); whether to clean the
    **9 `phone_*` rows** measured today on the delivered app — 13 device rows in total, of which

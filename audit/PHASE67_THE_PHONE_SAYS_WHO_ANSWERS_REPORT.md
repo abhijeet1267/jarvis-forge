@@ -122,8 +122,10 @@ the delivered app was re-checked with one authenticated `GET /health` → 200.
 
 - Did not widen any gate. `PHONE_ALLOWED` is pinned by equality, and the live 403s are in §5.
 - Did not contact a vendor, and did not pretend otherwise.
-- Did not delete the 6 `forged` audit rows — still waiting on an explicit yes; the chain still reads
-  BROKEN, now with the reason and the coverage printed.
+- Did not delete the 6 `forged` audit rows *at the time of writing* — asked directly on 2026-10-06,
+  the user chose delete and re-seal, and it was done: the chain now reads
+  `intact · 520 of 520 verified`, with the before/mid/after numbers and the re-seal's own ledger row
+  in `audit/PHASE66_THE_LEDGER_WAS_READ_IN_TWO_HALVES_REPORT.md` §6.1.
 - Did not touch the device rows, as instructed.
 - Still open on the phone: **58-C** (the session token lives in a page variable, so any script that
   ever runs in this page can read it — the mitigation is that it is never persisted), **58-B** (a
