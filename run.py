@@ -6,14 +6,65 @@
     python run.py voice      # voice REPL (speaks replies aloud)
     python run.py demo       # run the acceptance commands and print results
     python run.py voice-demo # run the acceptance commands through the voice pipeline
+
+Flags for the server mode, refused rather than ignored if unrecognised:
+
+    --port N     the port to bind        (same as JARVIS_PORT)
+    --host H     the address to bind     (same as JARVIS_HOST)
+    --home DIR   the data directory      (same as JARVIS_HOME)
 """
 
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
+from typing import Dict, List
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+#: Flags `run.py` accepts, mapped to the environment name `Settings` reads. Anything else is
+#: refused by `apply_flags` rather than dropped: measured on 2026-10-06, `python run.py serve
+#: --port 8899` started on **8765**, because `main()` looked only at `argv[1]`.
+_FLAGS: Dict[str, str] = {"--port": "JARVIS_PORT", "--host": "JARVIS_HOST",
+                          "--home": "JARVIS_HOME"}
+
+_MODES = ("serve", "cli", "voice", "demo", "voice-demo")
+
+
+def apply_flags(argv: List[str]) -> str:
+    """Resolve the mode and put the supported flags where the settings will pick them up.
+
+    An unknown flag or mode exits non-zero. A silently ignored `--port` is how "verified on an
+    isolated instance" turns into a second server on the production port, polling-visible to
+    whoever already had the dashboard open.
+    """
+    argv = list(argv)
+    if not argv:
+        return "serve"
+    if argv[0].startswith("-"):
+        mode, rest = "serve", argv
+    else:
+        mode, rest = argv[0], argv[1:]
+
+    if mode not in _MODES:
+        raise SystemExit(f"run.py: unknown mode {mode!r}; expected one of {', '.join(_MODES)}")
+
+    index = 0
+    while index < len(rest):
+        flag = rest[index]
+        env_key = _FLAGS.get(flag)
+        if env_key is None:
+            raise SystemExit(
+                f"run.py: unknown flag {flag!r}; supported: {', '.join(sorted(_FLAGS))}")
+        if index + 1 >= len(rest):
+            raise SystemExit(f"run.py: {flag} needs a value")
+        value = rest[index + 1]
+        if flag == "--port" and not value.isdigit():
+            raise SystemExit(f"run.py: --port wants a number, got {value!r}")
+        os.environ[env_key] = value
+        index += 2
+    return mode
 
 ACCEPTANCE = [
     "open VS Code",
@@ -34,7 +85,7 @@ ACCEPTANCE = [
 
 
 def main() -> None:
-    mode = sys.argv[1] if len(sys.argv) > 1 else "serve"
+    mode = apply_flags(sys.argv[1:])
 
     if mode == "cli":
         from jarvis.cli import main as cli_main

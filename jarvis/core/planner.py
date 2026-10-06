@@ -39,6 +39,14 @@ _WS = re.compile(r"\s+")
 #: has to be joined with an explicit conjunction.
 _SEQUENCE = re.compile(r"\s+and\s+then\s+|\s*,\s*and\s+then\s+|\s*,\s+then\s+", re.I)
 
+#: An erase verb acting on the storage itself, rather than on a file the person names. Found by
+#: the Phase 69 corpus: "empty the trash and wipe free space" matched the `free space` trigger in
+#: `_storage` and ran `check_storage`, answering two destructive requests with a disk report. The
+#: three-word window keeps "delete some photos" a read while "clean up my disk" stays a refusal.
+_ERASE_REQUEST = re.compile(
+    r"\b(empty|wipe|erase|shred|purge|clear|delete|remove|clean)\b(?:\s+\w+){0,3}\s*"
+    r"\b(trash|recycle\s+bin|bin|free\s+space|disk|drive)\b", re.I)
+
 #: Words that unambiguously name a vehicle. Kept narrow on purpose: "fuel" or
 #: "mileage" alone can belong to an app or a laptop question, so they only route
 #: to the car when a word from this list (or one of the vehicle-exclusive
@@ -781,6 +789,17 @@ class RulePlanner:
         if not re.search(r"\bstorage\b|\bdisk (space|full|usage)\b|\bfree space\b"
                          r"|\bspace (left|free)\b", text):
             return None
+        if _ERASE_REQUEST.search(text):
+            return Intent(
+                "storage_erase",
+                clarification=False,
+                note=(
+                    "I can read your disk, but I will not empty the trash or wipe free space from "
+                    "a sentence -- that is removing data, and it needs to be something you do "
+                    "deliberately yourself. Nothing was run. Say \"check storage\" if you wanted "
+                    "the number."
+                ),
+            )
         if re.search(r"\b(phone|mobile|android)\b", text):
             return Intent(
                 "phone_storage",

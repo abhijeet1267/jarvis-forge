@@ -426,6 +426,13 @@
    "passed": 2442,
    "failed": 0,
    "note": "twelve phantom `running` jobs made get_current_task narrate dead work and made the emergency stop cancel a phantom with verified=True; refresh_status was called on eight write paths and at no process boundary, so startup now reconciles them -- 12 running rows -> 0, nothing deleted"
+  },
+  {
+   "phase": "69 the sentences were counted",
+   "collected": 2484,
+   "passed": 2484,
+   "failed": 0,
+   "note": "spec 19 measured for the first time: 101 labelled cases, false action rate 0.0% over 22 guard sentences once `empty the trash and wipe free space` was stopped from answering as a disk report; the harness itself was wrong twice (a sync stub and a dict return) before its numbers meant anything, and `run.py serve --port N` was found binding 8765, which is now refused rather than ignored"
   }
  ]
 }
