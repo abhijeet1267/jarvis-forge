@@ -1,9 +1,10 @@
 # Vantage — full working report, final acceptance audit
 
-Written 2026-10-04, refreshed at each phase close; this pass is 2026-10-05. §2A–§2J are Phase 52,
-53, 54, 55, 56, 57, 58, 59, 60 and 61. Every number below was produced by a command on this machine during this
-session or the immediately preceding phases, and the command is named next to it. Where a
-capability exists but was **not** re-measured today, it says so rather than implying it was.
+Written 2026-10-04, refreshed at each phase close; this pass is 2026-10-06 (Phase 69 close).
+§2A–§2Q are Phases 52 through 69, one section each. Every number below was produced by a command
+on this machine during this session or the immediately preceding phases, and the command is named
+next to it. Where a capability exists but was **not** re-measured today, it says so rather than
+implying it was.
 
 ---
 
@@ -20,7 +21,7 @@ capability exists but was **not** re-measured today, it says so rather than impl
 | Intent accuracy (spec §19) | **measured for the first time**: 101 cases, **false action rate 0.0%** (0 of 22 dangerous sentences reached a tool), outcome accuracy 75.2%, router tool accuracy 59.0%, hallucinated tools 0. 35 of the 101 sentences deviate somewhere, and the corpus names each one — the misses are wording the rules router cannot match (69-B), not silent rounding |
 | Spec §6 coverage | **37 of 37** — every utterance the build prompt lists reaches a capability |
 | Delivered | `~/Downloads/Vantage/` — `Vantage.app` (running, seal valid), `Vantage.app.zip`, `vantage-source.zip`, `READ ME FIRST.txt` |
-| Commits | `a20e39c` (Ph 57), `7c828fa` (Ph 56 close), `ea68c7d` (Ph 56 close), `0cdc770` (Ph 56), `176bcfb` (Ph 55), `377e79f` (Ph 54 correction), `67d9530` (Ph 54), `35c9abf` (Ph 53), `3708f85` (Ph 52 correction), `92efc6b` (Ph 52), `f047eb2` (Ph 51), `452e9c0` (Ph 50) — **local only, nothing pushed** |
+| Commits | **60 local commits ahead of `origin/main`, nothing pushed** (measured `git status -sb`: `main...origin/main [ahead 60]`). The five newest: `318ffbe` (Ph 69), `775221b` (Ph 68), `2d2f990` (the approved ledger repair), `35a9395` (Ph 67 redeploy), `ef2b620` (Ph 67) |
 | Biggest known gap | Off the wifi there is still nothing you can use: the relay protocol exists and works on loopback, but there is no relay host outside this network to run it on and no client is wired to it (59-A, 59-B) — and there is no push. The phone surface is a served web page rather than a store app — a native build is blocked on this machine's toolchain (58-D, measured). Phone sessions are now scoped, but the credential is still readable by page script (58-C) and a phone can approve its own gated actions (58-B). Persistence exists but has never been left **installed** on this machine (57-A — a user decision), and the permission ask still cannot land because it lives in the helper (57-G). There is also no model key on this machine, so the gateway built in Phase 60 has never spoken to a vendor — `PROVIDER_LIVE_VENDOR_CALL: NOT MEASURED`. |
 
 ---
