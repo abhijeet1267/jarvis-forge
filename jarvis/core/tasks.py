@@ -316,6 +316,46 @@ class TaskManager:
             (f"{prior_detail} | this attempt: {current}", job_id, seq),
         )
 
+    def reconcile_after_restart(self) -> List[str]:
+        """Correct the `running` rows this process cannot possibly have started.
+
+        Called once, at startup, before the scheduler wakes. At that instant nothing is in
+        flight here, so every row still marked `running` belongs to a process that is gone --
+        usually one that died between opening the job and writing its first step, which leaves
+        the steps `pending` and the job `running` forever.
+
+        That stale column is not a display problem. `get_current_task` reads it and tells a
+        person "Current task: \"lifecycle test\" -- running, 0 of 2 step(s) done" about work ten
+        days dead, and `stop_current_task` reads it, cancels that row and reports
+        `verified: True` -- a stop spent on a phantom while anything real keeps running.
+
+        The derivation is the existing one (`job_status_for` over the step rows), so this adds no
+        policy: it applies, at the one moment the answer is knowable, the rule ``refresh_status``
+        already documents -- "anything not recomputed there stayed ``running`` forever". It runs
+        nowhere else on purpose: a read that reconciles is a GET that writes job state, and this
+        project removed that class of thing in Phase 28.
+
+        Rows whose steps cannot contradict `running` (a job with no step rows at all) are left
+        alone rather than guessed at; a measured pass over the delivered database found none.
+        """
+        rows = self.db.query("SELECT job_id FROM tasks WHERE status = 'running' ORDER BY created_at ASC")
+        moved: List[str] = []
+        for row in rows:
+            job_id = row["job_id"]
+            derived = job_status_for(self.step_statuses(job_id))
+            if derived == "running":
+                continue
+            self.set_status(job_id, derived)
+            moved.append(job_id)
+
+        if moved:
+            log.info(
+                "stale running jobs reconciled at startup",
+                extra_fields={"jobs": len(moved), "statuses": sorted(
+                    {self.get(job_id)["status"] for job_id in moved})},
+            )
+        return moved
+
     def failed_jobs(self, limit: int = 20) -> List[Dict[str, Any]]:
         rows = self.db.query(
             "SELECT * FROM tasks WHERE status = 'failed' ORDER BY created_at DESC LIMIT ?",

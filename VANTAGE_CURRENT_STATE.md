@@ -12,11 +12,11 @@ capability exists but was **not** re-measured today, it says so rather than impl
 | | |
 |---|---|
 | What it is | A personal AI operating system for macOS: one command pipeline, 145 governed capabilities (30 of them confirmation-gated), a laptop panel, a scoped phone client, an optional forward-only relay (locally proven, off-LAN blocked), a signed `.app` delivered as files |
-| Current phase | **Phase 67 — the phone says who answers, and no gate moved to let it speak** (closed) |
+| Current phase | **Phase 68 — a job cannot outlive the process that was running it** (closed) |
 | Final audit | **Final acceptance audit** (closed — the last of 61 phases; `VANTAGE_FINAL_ACCEPTANCE_REPORT.md` separates IMPLEMENTED / VERIFIED / BLOCKED / NOT MEASURED / UNKNOWN / USER DECISION REQUIRED |
 | Last feature phase | **Phase 61 — desktop control that asks before it touches, and was never demonstrated touching** (closed) |
 | Previous phases | **Phase 60 — a second vendor behind one selection point** (no vendor call made) · **Phase 59 — an authenticated relay, proven locally and no further** (its off-LAN verdict still stands) |
-| Test suite | **2433 passed · 0 failed** — 80–140 s typical; thirteen full suites on 2026-10-05, **twelve clean and one at 168.72 s with the five Vision failures**, which Phase 65 reproduces deterministically instead of waiting for (the Vision-OCR flake needed a second, correct fix: `audit/PHASE63_A_SURFACE_NAMES_ITS_SUBJECT_REPORT.md` §4) |
+| Test suite | **2442 passed · 0 failed** — 80–140 s typical; thirteen full suites on 2026-10-05, **twelve clean and one at 168.72 s with the five Vision failures**, which Phase 65 reproduces deterministically instead of waiting for (the Vision-OCR flake needed a second, correct fix: `audit/PHASE63_A_SURFACE_NAMES_ITS_SUBJECT_REPORT.md` §4) |
 | Spec §6 coverage | **37 of 37** — every utterance the build prompt lists reaches a capability |
 | Delivered | `~/Downloads/Vantage/` — `Vantage.app` (running, seal valid), `Vantage.app.zip`, `vantage-source.zip`, `READ ME FIRST.txt` |
 | Commits | `a20e39c` (Ph 57), `7c828fa` (Ph 56 close), `ea68c7d` (Ph 56 close), `0cdc770` (Ph 56), `176bcfb` (Ph 55), `377e79f` (Ph 54 correction), `67d9530` (Ph 54), `35c9abf` (Ph 53), `3708f85` (Ph 52 correction), `92efc6b` (Ph 52), `f047eb2` (Ph 51), `452e9c0` (Ph 50) — **local only, nothing pushed** |
@@ -1190,6 +1190,71 @@ this phase declined to add. Still open on the phone as well: 58-C (the session t
 variable, though it is never persisted), 58-B (a phone can approve its own gated actions), 58-E (no
 push).
 
+## 2P. Phase 68 in full — a job cannot outlive the process that was running it
+
+The worst defect found on the host arrived as a cosmetic one: `GET /tasks` returned **twelve jobs
+named `lifecycle test`, all `running`**, every one created between 14:01 and 14:19 on 2026-09-25 by
+`tests/test_api.py:385` against the default home, in the week before conftest gave each session its
+own. Each had two steps, both `pending`.
+
+Calling the two tools that read that table -- against a **copy** of the real database, never the
+user's -- turned it into two lies. `get_current_task` answered `Current task: "lifecycle test" --
+running, 0 of 2 step(s) done.`: the assistant narrating work that had been dead for ten days. And
+`stop_current_task` answered `Stopped "lifecycle test" -- the job is cancelled` with `verified: True`:
+the emergency stop spending itself on a phantom. Because `_active_job()` takes the **newest** active
+row, a real job that is not the newest would keep running while the user was told it had been
+stopped -- Phase 54's "a stop has to stop the thing it named", broken from the opposite direction,
+with no attacker involved.
+
+The root cause was documented in the code and never connected to the read side.
+`TaskManager.refresh_status()` says: *"anything not recomputed there stayed `running` forever"* -- and
+it is called from eight orchestrator write paths, **no read path, and no process boundary**. `/tasks`,
+`/tasks/{id}`, the briefing (`briefing.py:86`) and the stop candidate all read the stored column. A
+process that died between `create()` and its first step write therefore left a row asserting it was
+working, permanently.
+
+This is the third instance of the same shape in this project's history: Phase 26 found `retry()`
+marking a job `running` and executing nothing ("0 executions and a job permanently `running`, which
+the briefing then published as '1 job(s) in progress'"), and Phase 14 §3 fixed orphaned step state.
+Each previous fix added another derivation call on a write path. The gap was never the derivation --
+it was that nothing owned the moment a process starts. So: `reconcile_after_restart()` recomputes
+every `running` row from its own steps, and it is called **once, in the lifespan, before
+`scheduler.start()`** -- the only instant at which "nothing is in flight in this process" is
+guaranteed.
+
+Nowhere else, deliberately: the orchestrator writes a step's status at its **outcome**, not when a
+step begins, so a live job's steps are `pending` while it runs. A sweep on a read path would look at
+real work in flight and call it `incomplete`. Two tests hold that line -- one asserts `list()` and
+`get()` never reconcile (a GET must not write job state, the Phase 28 principle), the other asserts a
+job started after startup keeps its `running`, and a third insists `paused` survives, because that is
+a state a person set, not a crash mark. Nothing was deleted: the twelve rows are now `incomplete`,
+which is what their own steps prove.
+
+**9 tests, red first as 8 failures and one pass** -- and that pass is the negative control, which
+asserts the stop *still* falls for the phantom when the sweep is absent, so the two symptom tests
+above cannot be vacuous. One of my own tests was order-dependent and is on the record: the startup
+test first swapped the `db_module._DB` singleton, passed alone, and failed in a full run, because
+`get_core()` had long since been built against the session database and the lifespan reconciled a
+database the test was not looking at. Rewritten to seed through the core the server actually uses and
+to delete its own row afterwards -- the same leak class as Phase 33's stub handlers and Phase 63's
+shared OCR backend, caught by running the suite rather than by reading the diff.
+
+**Measured after:** suite **2442 passed, 0 failed in 90.77 s**; rebuilt, re-signed, redeployed and
+restarted (stopping the launcher as well as the server, which Phase 67 learned the hard way). On the
+live host: `running` rows **12 → 0**, distribution `12 × incomplete`, and the log carries
+`stale running jobs reconciled at startup {"jobs": 12}`. Against a copy of the repaired database the
+two tools now say `Nothing is running right now.` and `Nothing was stopped: no task is running.` with
+`cancelled: False`; the panel's live DOM shows no task claiming work and
+`Audit chain intact · 520 of 520 verified`. 148 tools / 32 gated / 52 planner rules / 118 route
+objects / 32 tables unchanged -- no route was added. Browser verification **NOT APPLICABLE** for a
+page change (no page changed); the DOM read above was confirmation, not the method.
+
+**68-A, left open on purpose:** a `running` row with **no** step rows is not touched, because the
+derivation has nothing to work from and inventing a status is what this project keeps refusing to do
+(measured: zero such rows exist on this host today). And a crash mid-run leaves its row `running`
+until the next start -- distinguishing "the process died" from "this step is slow" needs an owner
+epoch or a heartbeat, which is a schema change with its own failure modes, not a shorter timeout.
+
 ## 3. Working status of the whole product, as measured today
 
 All values from the **delivered app** over HTTP (read-only GETs) unless stated.
@@ -1220,9 +1285,9 @@ User → Intent → RulePlanner (50 routes) → PermissionEngine → [Confirmati
 | Database tables | **32** | read-only `sqlite_master` count on the delivered app's database |
 | Memories indexed | 52 / 52, coverage 1.0, hybrid retrieval | `/health` |
 | Scheduler | running, 30 s tick, 67 jobs | `/health` |
-| Test suite | 2433 passed, 0 failed; 80–140 s typical, one 168.72 s run carrying the five Vision failures (Phase 65) | `pytest -q` |
-| Test modules / phase reports | 94 / 69 | `ls` |
-| Code volume | 76,467 versioned lines — 44,444 shipped code (`jarvis/` + `dashboard/` + `app/` + `assets/` + `run.py`) · 31,405 tests | `git ls-files -co --exclude-standard '*.py' '*.html' '*.js' '*.swift' \| xargs grep -c ''` |
+| Test suite | 2442 passed, 0 failed; 80–140 s typical, one 168.72 s run carrying the five Vision failures (Phase 65) | `pytest -q` |
+| Test modules / phase reports | 95 / 70 | `ls` |
+| Code volume | 76,725 versioned lines — 44,489 shipped code (`jarvis/` + `dashboard/` + `app/` + `assets/` + `run.py`) · 31,618 tests | `git ls-files -co --exclude-standard '*.py' '*.html' '*.js' '*.swift' \| xargs grep -c ''` |
 
 ### 3.3 Permissions, as the OS reports them right now (`/permissions`)
 

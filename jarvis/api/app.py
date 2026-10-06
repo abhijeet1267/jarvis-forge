@@ -95,6 +95,11 @@ async def lifespan(_app: FastAPI):
 
     # v0.8: run scheduled jobs in the background while the server is up.
     core = get_core()
+    # Before anything can start work here: a `running` job row from a previous process is a
+    # statement about a process that no longer exists, and three readers (the panel's task card,
+    # "what are you doing", and the emergency stop) take it at face value. See
+    # TaskManager.reconcile_after_restart for what that cost when it was left stale.
+    core.tasks.reconcile_after_restart()
     if settings.scheduler_enabled:
         await core.scheduler.start(core)
 

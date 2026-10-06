@@ -419,6 +419,13 @@
    "passed": 2433,
    "failed": 0,
    "note": "63-A and 63-B closed without widening the phone surface: the model line rides the HTML the phone already loads, PHONE_ALLOWED pinned by equality at 8 paths, and the provider refusal path now describes all four tasks; browser verified at 375x812 mobile emulation with 0 console messages"
+  },
+  {
+   "phase": "68 a job cannot outlive its process",
+   "collected": 2442,
+   "passed": 2442,
+   "failed": 0,
+   "note": "twelve phantom `running` jobs made get_current_task narrate dead work and made the emergency stop cancel a phantom with verified=True; refresh_status was called on eight write paths and at no process boundary, so startup now reconciles them -- 12 running rows -> 0, nothing deleted"
   }
  ]
 }
