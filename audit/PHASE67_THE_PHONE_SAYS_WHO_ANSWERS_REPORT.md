@@ -133,3 +133,25 @@ the delivered app was re-checked with one authenticated `GET /health` → 200.
   gains a key while the phone sits open keeps showing the old answer until a reload. The alternative
   -- a polled endpoint -- is the surface this phase refused to add, and a status line is not worth a
   new reachable path.
+
+## 8. Delivery
+
+The phone page and the worker ship inside the bundle, so this phase required a rebuild (see the
+Phase 66 note: `launcher.resolve_project_dir()` prefers `Contents/Resources/app` over the checkout).
+
+| Step | Result |
+| --- | --- |
+| `build_app.py` | built, `codesign verify: ok` |
+| staged copies checked before deploying | `modelLine` ×2 in `dashboard/phone.html`, `jarvis-phone-shell-v3` ×3 in `dashboard/sw.js`, `doc_routes` ×2 in `jarvis/api/app.py`, `not asked` ×2 in `jarvis/gateway/providers.py`, and the `__JARVIS_MODEL_JSON__` placeholder present in the staged page (it is replaced at serve time, not at build time) |
+| deployed bundle signature | `codesign --verify --deep --strict` → valid on disk, satisfies its Designated Requirement |
+| delivered app, live | `GET /phone` → the injected block, `{"llm_enabled": false, "answered_by": "rules (no key)", "chat": "openai", "embed": "openai", "vision": "openai-shaped, not provider-routed", "stt": "openai-shaped, not provider-routed"}`; `grep -c __JARVIS_MODEL_JSON__` on the served page → **0**; `GET /sw.js` → `jarvis-phone-shell-v3`; `GET /` → no `docs` key, 148 tools; `/openapi.json`, `/docs`, `/redoc`, `/docs/oauth2-redirect` → **404** |
+| delivered app, browser | the same page at **375×812 mobile emulation**: line text read from the DOM, `scrollWidth` 375 = viewport, no overflow, 38 px tall at 13 px, 3 cards, **6 registry-driven quick actions** still present, **0 console messages** |
+| archives | `Vantage.app.zip` 1,178,320 B and `vantage-source.zip` 2,629,409 B, both rebuilt from this tree; the extracted app archive verifies (`codesign` silent) and carries `modelLine` and the v3 shell; the source archive contains the Phase 67 test file and report |
+| documents refreshed in `~/Downloads/Vantage/` | `README.md`, `VANTAGE_CURRENT_STATE.md`, `VANTAGE_FINAL_ACCEPTANCE_REPORT.md`, `PHASE67_THE_PHONE_SAYS_WHO_ANSWERS_REPORT.md` |
+
+One operational note, because it cost two minutes and the next reader should not lose them: after the
+old server was stopped, the first `open` of the new bundle did nothing -- LaunchServices still saw the
+previous **launcher** process alive, so it never started the replacement. The claim file named a dead
+pid and nothing listened on 8765. Terminating the leftover launcher and opening the app again brought
+it up (pid 86868, `started 2026-10-06T08:16:52+0530`). A restart of the delivered app therefore has to
+stop the launcher as well as the server it spawns.
