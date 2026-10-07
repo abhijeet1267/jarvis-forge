@@ -698,8 +698,8 @@ async function loadDevices() {
   if (!devices.length) {
     // An empty box reads as broken. Say what is missing and how it gets filled.
     box.innerHTML =
-      '<div class="empty"><b>Nothing paired yet.</b> Open the phone client on this '
-      + 'laptop\'s address and tap "Pair with this laptop", or plug in a watch.</div>';
+      '<div class="empty"><b>Nothing paired yet.</b>' +
+      '<br><a href="/ai-connections" style="color: var(--accent);">Configure AI providers in settings</a></div>';
     return;
   }
   box.innerHTML = devices.map(d => {

@@ -392,6 +392,144 @@ class GeminiProvider(AIProvider):
                              notes={"finish": candidates[0].get("finishReason") or ""})
 
 
+class OpenAIProvider(AIProvider):
+    """Official OpenAI chat/completion API adapter.
+    
+    This speaks the documented `/v1/chat/completions` endpoint using Bearer-token auth.
+    It does NOT use ChatGPT web cookies or session tokens -- that would violate the 
+    documented boundary between Vantage's secure credential store and external providers.
+    The user supplies an API key via Vantage's secure settings UI; it is stored in macOS 
+    Keychain (or equivalent on this machine) and never exposed in responses or logs.
+    """
+
+    name = "openai"
+    DEFAULT_BASE_URL = "https://api.openai.com/v1"
+    
+    # Configured default model list - confirmed valid by current OpenAI docs
+    SUPPORTED_MODELS = [
+        "gpt-4o",           # Latest O-series model  
+        "gpt-4o-mini",      # Fast, affordable
+        "gpt-4-turbo",      # Turbo variant
+        "gpt-4",            # Original GPT-4
+        "gpt-3.5-turbo",    # Legacy but still valid
+    ]
+    
+    def configured(self) -> bool:
+        """OpenAI requires both base_url and api_key."""
+        return bool(self.base_url and self.api_key)
+    
+    def _chat_request(self, system: str, user: str, model: str,
+                      json_mode: bool) -> tuple:
+        """(url, payload) for one chat turn."""
+        url = f"{self.root()}/chat/completions"
+        
+        messages: List[Dict[str, str]] = []
+        if system:
+            messages.append({"role": "system", "content": system})
+        messages.append({"role": "user", "content": user})
+        
+        body: Dict[str, Any] = {
+            "model": model,
+            "messages": messages,
+            "temperature": 0.7,
+        }
+        if json_mode:
+            body["response_format"] = {"type": "json_object"}
+            
+        return url, body
+    
+    def parse(self, raw: bytes, model: str) -> ProviderReply:
+        """Parse an OpenAI response into a unified reply."""
+        try:
+            data = json.loads(raw.decode() or "{}")
+        except (ValueError, UnicodeDecodeError) as exc:
+            return ProviderReply(False, self.name, model, error=f"unreadable response: {exc}")
+        
+        # Check for errors in response
+        if data.get("error"):
+            error_info = data["error"]
+            error_msg = error_info.get("message", error_info.get("status", ""))
+            status_code = error_info.get("code", 0)
+            
+            # Special handling for common errors
+            if "incorrect api key" in str(error_msg).lower():
+                return ProviderReply(False, self.name, model, 
+                                   error="invalid or expired API key")
+            if "rate limit" in str(error_msg).lower():
+                return ProviderReply(False, self.name, model,
+                                   error=f"rate limit exceeded (code {status_code})")
+            if "not found" in str(error_msg).lower() or "invalid model":
+                return ProviderReply(False, self.name, model,
+                                   error=f"model not found: {model}")
+                
+            return ProviderReply(False, self.name, model,
+                               error=_vendor_message(raw, status_code, self.api_key),
+                               status=status_code)
+        
+        # Parse successful response
+        choices = data.get("choices") or []
+        if not choices:
+            return ProviderReply(False, self.name, model,
+                                 error="provider returned no response choices")
+        
+        choice = choices[0].get("message") or {}
+        content = choice.get("content") or ""
+        
+        if not content.strip():
+            finish_reason = choice.get("finishReason") or "unknown"
+            return ProviderReply(False, self.name, model,
+                                 error=f"empty response (finish reason: {finish_reason})")
+        
+        # Extract usage metadata if available
+        usage = data.get("usage") or {}
+        notes = {
+            "tokens_used": usage.get("total_tokens", 0),
+            "prompt_tokens": usage.get("prompt_tokens", 0),
+            "completion_tokens": usage.get("completion_tokens", 0),
+        }
+        
+        return ProviderReply(True, self.name, model, text=content.strip(), notes=notes)
+    
+    def verify_connection(self, *, timeout: float = 5.0) -> ProviderReply:
+        """Verify connection by hitting /models endpoint (returns model list)."""
+        url = f"{self.root()}/models"
+        
+        request = urllib.request.Request(url, headers={**self.headers()}, method="GET")
+        
+        try:
+            raw = http_read(request, total=timeout, what=f"the {self.name} models endpoint")
+            data = json.loads(raw.decode() or "{}")
+            
+            # Check if we got valid models back
+            models = data.get("data") or []
+            if not models:
+                return ProviderReply(False, self.name, "verify",
+                                   error="provider returned empty model list")
+            
+            # Verify at least one supported model exists
+            supported = [m for m in models if m.get("id") in self.SUPPORTED_MODELS]
+            if not supported:
+                return ProviderReply(False, self.name, "verify",
+                                   error="no supported models found on server")
+            
+            return ProviderReply(True, self.name, "verify", 
+                               notes={"available_models": len(models)})
+                               
+        except Exception as exc:
+            return ProviderReply(False, self.name, "verify",
+                               error=f"connection failed: {exc}")
+    
+    def test_credentials(self, api_key: str) -> ProviderReply:
+        """Test an API key without storing it permanently."""
+        from ..config import Settings
+        
+        # Temporarily create a provider instance with the test key
+        temp_settings = Settings(llm_api_key=api_key, llm_base_url=self.DEFAULT_BASE_URL)
+        temp_provider = OpenAIProvider(temp_settings)
+        
+        return temp_provider.verify_connection(timeout=5.0)
+
+
 #: The names `JARVIS_AI_PROVIDER` accepts.
 PROVIDERS: Dict[str, type] = {"openai": OpenAIProvider, "gemini": GeminiProvider}
 

@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>AI Connections · Vantage Settings</title>
+  <style>
+    body {
+      font-family: system-ui, sans-serif;
+      max-width: 900px;
+      margin: 40px auto;
+      padding: 20px;
+      color: #333;
+    }
+    h1 {
+      font-size: 28px;
+      margin-bottom: 8px;
+    }
+    .subtitle {
+      color: #666;
+      margin-bottom: 32px;
+    }
+    .card {
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 24px;
+      margin-bottom: 24px;
+    }
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+    }
+    .provider-title {
+      font-size: 20px;
+      font-weight: 600;
+    }
+    .section {
+      background: #f8f9fa;
+      padding: 16px;
+      border-radius: 6px;
+      margin-top: 16px;
+    }
+    .section-title {
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 12px;
+      text-transform: uppercase;
+      color: #555;
+    }
+    button {
+      padding: 8px 16px;
+      border-radius: 6px;
+      border: none;
+      cursor: pointer;
+      font-size: 14px;
+      margin-right: 8px;
+      margin-bottom: 8px;
+    }
+    .btn-primary {
+      background: #007aff;
+      color: white;
+    }
+    .btn-secondary {
+      background: #e5e5ea;
+      color: #333;
+    }
+    .btn-danger {
+      background: #ff3b30;
+      color: white;
+    }
+    .status {
+      display: inline-block;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-weight: 500;
+      margin-left: 8px;
+    }
+    .status-not-connected { background: #eee; color: #666; }
+    .status-configured { background: #cfe2ff; color: #084298; }
+    .status-verified { background: #d1e7dd; color: #0f5132; }
+    .status-failed { background: #f8d7da; color: #842029; }
+    .input-group {
+      margin-bottom: 16px;
+    }
+    .input-label {
+      display: block;
+      font-size: 14px;
+      margin-bottom: 6px;
+    }
+    input[type="text"], input[type="password"] {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      font-size: 14px;
+    }
+    .masked {
+      font-family: monospace;
+      letter-spacing: 1px;
+    }
+    .error {
+      color: #dc3545;
+      font-size: 13px;
+      margin-top: 8px;
+    }
+    .success {
+      color: #198754;
+      font-size: 13px;
+      margin-top: 8px;
+    }
+    .note {
+      font-size: 12px;
+      color: #666;
+      font-style: italic;
+    }
+    .badge {
+      display: inline-block;
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-size: 11px;
+      margin-left: 8px;
+    }
+    .badge-free { background: #c6f6d5; color: #276749; }
+    .badge-paid { background: #fed7aa; color: #9c4221; }
+    .info-box {
+      background: #ebf8ff;
+      border-left: 3px solid #3182ce;
+      padding: 12px;
+      margin-top: 12px;
+      font-size: 13px;
+    }
+  </style>
+</head>
+<body>
+  <h1>AI Connections</h1>
+  <div class="subtitle">Manage your AI provider connections and API keys</div>
+
+  <!-- OPENAI / CHATGPT -->
+  <div class="card" id="openai-card">
+    <div class="card-header">
+      <span class="provider-title">OpenAI / ChatGPT</span>
+    </div>
+
+    <div class="section">
+      <div class="section-title">API Connection</div>
+      <div style="margin-bottom: 16px;">
+        <button class="btn-primary js-show-api-input" data-provider="openai">Connect OpenAI API Key</button>
+        <button class="btn-secondary js-hide-api-input" data-provider="openai" style="display:none;">Cancel</button>
+        <span class="status status-not-connected" id="openai-api-status">Not connected</span>
+      </div>
+
+      <div class="js-api-input-section" data-provider="openai" style="display:none;">
+        <div class="input-group">
+          <label class="input-label">OpenAI API Key</label>
+          <input type="password" class="api-key-input" data-provider="openai" placeholder="sk-...">
+        </div>
+        <button class="btn-primary js-test-api" data-provider="openai">Test Connection</button>
+        <button class="btn-success js-save-api" data-provider="openai" style="display:none;">Save Key</button>
+        <div class="message-output" data-provider="openai"></div>
+      </div>
+
+      <div class="section-info" data-provider="openai" style="display:none;">
+        <div class="info-box">
+          ✅ Configuration verified. Model discovery successful.
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Official Account Connection</div>
+      <div style="margin-bottom: 16px;">
+        <button class="btn-secondary js-account-btn" data-provider="chatgpt" disabled>Sign in with ChatGPT</button>
+        <span class="status status-not-connected" id="chatgpt-account-status">Not signed in</span>
+      </div>
+
+      <div class="info-box">
+        Official ChatGPT account integration: awaiting OpenAI developer approval.<br>
+        Use OpenAI API connection instead for programmatic access.
+      </div>
+    </div>
+  </div>
+
+  <!-- GOOGLE GEMINI -->
+  <div class="card">
+    <div class="card-header">
+      <span class="provider-title">Google Gemini</span>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Gemini API Connection</div>
+      <div style="margin-bottom: 16px;">
+        <button class="btn-primary js-show-api-input" data-provider="gemini">Connect Gemini API Key</button>
+        <button class="btn-secondary js-hide-api-input" data-provider="gemini" style="display:none;">Cancel</button>
+        <span class="status status-not-connected" id="gemini-api-status">Not connected</span>
+      </div>
+
+      <div class="js-api-input-section" data-provider="gemini" style="display:none;">
+        <div class="input-group">
+          <label class="input-label">Gemini API Key (AI Studio)</label>
+          <input type="password" class="api-key-input" data-provider="gemini" placeholder="AIza...">
+        </div>
+        <button class="btn-primary js-test-api" data-provider="gemini">Test Connection</button>
+        <button class="btn-success js-save-api" data-provider="gemini" style="display:none;">Save Key</button>
+        <div class="message-output" data-provider="gemini"></div>
+      </div>
+
+      <div class="section-info" data-provider="gemini" style="display:none;">
+        <div class="info-box">
+          ✅ Configuration verified. Free tier models available.
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Account Connection</div>
+      <div style="margin-bottom: 16px;">
+        <button class="btn-secondary js-account-btn" data-provider="gemini" disabled>Sign in with Google</button>
+        <span class="status status-not-connected" id="google-account-status">Not signed in</span>
+      </div>
+
+      <div class="info-box">
+        Google consumer-account integration unavailable as an official Vantage partner.<br>
+        Use Gemini API / AI Studio connection for programmatic access.
+      </div>
+    </div>
+  </div>
+
+  <!-- SHREE AI -->
+  <div class="card">
+    <div class="card-header">
+      <span class="provider-title">Shree AI</span>
+    </div>
+
+    <div class="section">
+      <div class="section-title">API Connection</div>
+      <div style="margin-bottom: 16px;">
+        <button class="btn-primary js-show-api-input" data-provider="shree">Connect API</button>
+        <button class="btn-secondary js-hide-api-input" data-provider="shree" style="display:none;">Cancel</button>
+        <span class="status status-not-connected" id="shree-api-status">Not connected</span>
+      </div>
+
+      <div class="js-api-input-section" data-provider="shree" style="display:none;">
+        <div class="input-group">
+          <label class="input-label">Shree AI API Key</label>
+          <input type="password" class="api-key-input" data-provider="shree" placeholder="Enter API key">
+        </div>
+        <button class="btn-primary js-test-api" data-provider="shree">Test Connection</button>
+        <button class="btn-success js-save-api" data-provider="shree" style="display:none;">Save Key</button>
+        <div class="message-output" data-provider="shree"></div>
+      </div>
+
+      <div class="section-info" data-provider="shree" style="display:none;">
+        <div class="info-box">
+          ⚠️ Configuration pending provider verification.
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Account Connection</div>
+      <div style="margin-bottom: 16px;">
+        <button class="btn-secondary js-account-btn" data-provider="shree" disabled>Sign in with Shree</button>
+        <span class="status status-not-connected" id="shree-account-status">Not signed in</span>
+      </div>
+
+      <div class="info-box">
+        Shree account integration unavailable: no verified official third-party authorization mechanism yet implemented.<br>
+        Contact Shree AI for developer participation opportunities.
+      </div>
+    </div>
+  </div>
+
+  <!-- USAGE CONTROLS -->
+  <div class="card">
+    <div class="card-header">
+      <span class="provider-title">AI Usage Controls</span>
+    </div>
+
+    <div class="section">
+      <label style="display: flex; align-items: center; margin-bottom: 12px;">
+        <input type="checkbox" id="use-free-first" checked style="margin-right: 8px;">
+        Use free/plan allowance when available
+      </label>
+      <label style="display: flex; align-items: center; margin-bottom: 12px;">
+        <input type="checkbox" id="allow-paid-fallback" style="margin-right: 8px;">
+        Allow paid API fallback (default: OFF)
+      </label>
+      <label style="display: flex; align-items: center;">
+        <input type="checkbox" id="require-paid-confirmation" checked style="margin-right: 8px;">
+        Require confirmation before paid fallback
+      </label>
+    </div>
+
+    <div class="note" style="margin-top: 16px;">
+      Paid API usage will be charged according to the respective provider's pricing.<br>
+      Free tiers are subject to rate limits and availability.
+    </div>
+  </div>
+
+  <script>
+    // Provider state management
+    const providers = {
+      openai: { api_connected: false, verified: false },
+      gemini: { api_connected: false, verified: false },
+      shree: { api_connected: false, verified: false }
+    };
+
+    // Show/hide API input sections
+    document.querySelectorAll('.js-show-api-input').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const provider = btn.dataset.provider;
+        document.querySelector(`.js-api-input-section[data-provider="${provider}"]`).style.display = 'block';
+        btn.style.display = 'none';
+        document.querySelector(`.js-hide-api-input[data-provider="${provider}"]`).style.display = 'inline-block';
+      });
+    });
+
+    document.querySelectorAll('.js-hide-api-input').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const provider = btn.dataset.provider;
+        document.querySelector(`.js-api-input-section[data-provider="${provider}"]`).style.display = 'none';
+        btn.style.display = 'none';
+        document.querySelector(`.js-show-api-input[data-provider="${provider}"]`).style.display = 'inline-block';
+        clearMessages(provider);
+      });
+    });
+
+    // Test API connection
+    async function testConnection(provider) {
+      const input = document.querySelector(`.api-key-input[data-provider="${provider}"]`);
+      const apiKey = input.value.trim();
+
+      if (!apiKey || apiKey.length < 10) {
+        showMessage(provider, 'Please enter a valid API key.', 'error');
+        return;
+      }
+
+      setMessageText(provider, 'Testing connection...', 'info');
+      
+      try {
+        const response = await fetch(`/api/ai/providers/${provider}/test`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-JARVIS-Token': getToken()
+          },
+          credentials: 'include',
+          body: JSON.stringify({ api_key: apiKey })
+        });
+
+        const result = await response.json();
+        
+        if (result.success) {
+          providers[provider].verified = true;
+          providers[provider].api_connected = true;
+          updateStatus(provider, 'verified');
+          showSectionInfo(provider);
+          showMessage(provider, `Verified: ${result.message}`, 'success');
+          
+          // Show save button
+          document.querySelector(`.js-save-api[data-provider="${provider}"]`).style.display = 'inline-block';
+          setMessageText(provider, null, '');
+        } else {
+          providers[provider].verified = false;
+          updateStatus(provider, 'failed');
+          showMessage(provider, result.message || 'Connection failed', 'error');
+        }
+      } catch (err) {
+        showMessage(provider, `Error: ${err.message}`, 'error');
+        providers[provider].verified = false;
+        updateStatus(provider, 'failed');
+      }
+    }
+
+    // Save API credentials
+    async function saveCredentials(provider) {
+      const input = document.querySelector(`.api-key-input[data-provider="${provider}"]`);
+      const apiKey = input.value.trim();
+
+      setMessageText(provider, 'Storing credentials securely...', 'info');
+
+      try {
+        const response = await fetch(`/api/ai/providers/${provider}/store`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-JARVIS-Token': getToken()
+          },
+          credentials: 'include',
+          body: JSON.stringify({ api_key: apiKey })
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+          providers[provider].api_connected = true;
+          clearApiKeyInput(provider);
+          document.querySelector(`.js-save-api[data-provider="${provider}"]`).style.display = 'none';
+          setMessageText(provider, 'Credentials stored securely!', 'success');
+          refreshProviderStatus(provider);
+        } else {
+          showMessage(provider, result.detail || 'Failed to store credentials', 'error');
+        }
+      } catch (err) {
+        showMessage(provider, `Error: ${err.message}`, 'error');
+      }
+    }
+
+    // Clear API input after save
+    function clearApiKeyInput(provider) {
+      const input = document.querySelector(`.api-key-input[data-provider="${provider}"]`);
+      input.value = '';
+    }
+
+    // Update status badge
+    function updateStatus(provider, status) {
+      const statusEl = document.getElementById(`${provider}-api-status`);
+      statusEl.textContent = getStatusText(status);
+      statusEl.className = `status status-${status}`;
+    }
+
+    function getStatusText(status) {
+      const map = {
+        'not_connected': 'Not connected',
+        'configured': 'Configured',
+        'verified': 'Verified ✓',
+        'failed': 'Failed'
+      };
+      return map[status] || 'Unknown';
+    }
+
+    // Show section info
+    function showSectionInfo(provider) {
+      document.querySelector(`.section-info[data-provider="${provider}"]`).style.display = 'block';
+    }
+
+    // Clear messages
+    function clearMessages(provider) {
+      document.querySelector(`.message-output[data-provider="${provider}"]`).innerHTML = '';
+    }
+
+    function setMessageText(provider, text, type) {
+      const el = document.querySelector(`.message-output[data-provider="${provider}"]`);
+      if (!el) return;
+      el.innerHTML = text ? `<div class="${type === 'info' ? 'info-box' : type}">${text}</div>` : '';
+    }
+
+    function showMessage(provider, text, type) {
+      setMessageText(provider, text, type);
+    }
+
+    // Get token from window global set by server
+    function getToken() {
+      return window.sessionToken || '';
+    }
+
+    // Refresh provider status
+    async function refreshProviderStatus(provider) {
+      try {
+        const response = await fetch(`/api/ai/providers/${provider}`, {
+          headers: {
+            'X-JARVIS-Token': getToken()
+          },
+          credentials: 'include'
+        });
+        const data = await response.json();
+        
+        if (data.configured && data.verified) {
+          updateStatus(provider, 'verified');
+        } else if (data.configured) {
+          updateStatus(provider, 'configured');
+        } else {
+          updateStatus(provider, 'not_connected');
+        }
+      } catch (err) {
+        console.error('Error refreshing status:', err);
+      }
+    }
+
+    // Event listeners
+    document.querySelectorAll('.js-test-api').forEach(btn => {
+      btn.addEventListener('click', () => testConnection(btn.dataset.provider));
+    });
+
+    document.querySelectorAll('.js-save-api').forEach(btn => {
+      btn.addEventListener('click', () => saveCredentials(btn.dataset.provider));
+    });
+
+    // Initialize
+    document.addEventListener('DOMContentLoaded', () => {
+      // No auto-refresh needed - user actively manages connections
+      console.log('AI Connections page loaded. Manage connections below.');
+    });
+  </script>
+</body>
+</html>
