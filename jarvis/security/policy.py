@@ -70,6 +70,9 @@ class PermissionEngine:
         self.classifier = classifier or RiskClassifier()
         self.settings = settings or get_settings()
         self.db = get_db()
+        
+        # Add provenance columns (Phase 71 migration)
+        self._ensure_provenance_columns()
 
     # -- explicit grants -----------------------------------------------------
     def grant(self, tool: str, device: Optional[str] = None, subject: str = "user") -> None:
@@ -83,6 +86,32 @@ class PermissionEngine:
             """,
             (new_id("PERM"), subject, tool, device),
         )
+
+    def _ensure_provenance_columns(self):
+        """Add provenance columns to confirmations table (Phase 71 migration)."""
+        try:
+            self.db.query("SELECT requested_by_session FROM confirmations LIMIT 1")
+            # Columns already exist
+            return
+        except Exception:
+            pass
+        
+        # Run migrations
+        for col_name, col_def in [
+            ("requested_by_session", "TEXT DEFAULT ''"), 
+            ("approved_by_session", "TEXT DEFAULT ''"),
+            ("requested_surface", "TEXT DEFAULT ''"),
+            ("approved_surface", "TEXT DEFAULT ''"),
+        ]:
+            try:
+                self.db.execute(f"ALTER TABLE confirmations ADD COLUMN {col_name} {col_def}")
+                log.info(f"provenance column added: {col_name}")
+            except Exception as e:
+                # Column might already exist from previous run
+                log.info(f"provenance column migration skip: {col_name}", extra_fields={"error": str(e)})
+        
+        log.info("confirmations provenance schema ready")
+
 
     def revoke(self, tool: str, device: Optional[str] = None, subject: str = "user") -> None:
         """Revoke a tool. Records an explicit denial even if none existed."""
@@ -369,12 +398,13 @@ class PermissionEngine:
         request_id: str,
     ) -> str:
         confirmation_id = new_secret_id("CONF")
+        
         self.db.execute(
             """
             INSERT INTO confirmations
                 (confirmation_id, request_id, session_id, tool, params, device,
-                 risk, preview, state, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 risk, preview, state, created_at, requested_by_session, requested_surface)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?)
             """,
             (
                 confirmation_id,
@@ -385,8 +415,9 @@ class PermissionEngine:
                 action.device,
                 int(spec.risk),
                 self._preview(spec, action),
-                ConfirmationState.PENDING.value,
                 utcnow().isoformat(),
+                session_id,
+                "phone" if "/" in request_id else "dashboard",
             ),
         )
         log.info(
@@ -458,7 +489,8 @@ class PermissionEngine:
             log.info("confirmations expired", extra_fields={"count": len(expired)})
         return len(expired)
 
-    def resolve(self, confirmation_id: str, approve: bool) -> Optional[Dict[str, Any]]:
+    def resolve(self, confirmation_id: str, approve: bool, 
+                approver_session: str = "", approver_surface: str = "") -> Optional[Dict[str, Any]]:
         record = self.get_confirmation(confirmation_id)
         if record is None or record["state"] != ConfirmationState.PENDING.value:
             return record
@@ -472,17 +504,47 @@ class PermissionEngine:
             record["state"] = ConfirmationState.EXPIRED.value
             log.info("confirmation expired before approval", extra_fields={"id": confirmation_id})
             return record
-
-        state = ConfirmationState.APPROVED if approve else ConfirmationState.DENIED
+        
+        # Self-approval boundary: phone cannot approve its own requests
+        requested_session = record.get("requested_by_session", "")
+        if requested_session == approver_session:
+            log.warning(
+                "self-approval rejected",
+                extra_fields={
+                    "confirmation_id": confirmation_id,
+                    "session": approver_session,
+                },
+            )
+            record["state"] = ConfirmationState.DENIED.value
+            self.db.execute(
+                "UPDATE confirmations SET state = ?, resolved_at = ? WHERE confirmation_id = ?",
+                (ConfirmationState.DENIED.value, utcnow().isoformat(), confirmation_id),
+            )
+            return record
+        
+        # Cross-surface check: phone requesting, dashboard approving - allowed
+        # Phone approving phone request - blocked above
+        # Dashboard approving dashboard request - allowed for same-session (Phase 58 rule)
+        
+        # Update provenance tracking
         self.db.execute(
-            "UPDATE confirmations SET state = ?, resolved_at = ? WHERE confirmation_id = ?",
-            (state.value, utcnow().isoformat(), confirmation_id),
+            """UPDATE confirmations 
+               SET state = ?, resolved_at = ?, approved_by_session = ?, approved_surface = ?
+               WHERE confirmation_id = ?""",
+            (
+                ConfirmationState.APPROVED.value if approve else ConfirmationState.DENIED.value,
+                utcnow().isoformat(),
+                approver_session if approver_session else record["session_id"],
+                approver_surface if approver_surface else "unknown",
+                confirmation_id,
+            ),
         )
+
+        record["state"] = ConfirmationState.APPROVED.value if approve else ConfirmationState.DENIED.value
         log.info(
             "confirmation resolved",
-            extra_fields={"confirmation_id": confirmation_id, "state": state.value},
+            extra_fields={"confirmation_id": confirmation_id, "state": record["state"]},
         )
-        record["state"] = state.value
         return record
 
     # -- helpers -------------------------------------------------------------

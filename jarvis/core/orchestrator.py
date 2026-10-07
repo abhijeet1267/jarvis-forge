@@ -831,7 +831,8 @@ class JarvisCore:
 
     # --------------------------------------------------------- confirmation
     async def resolve_confirmation(
-        self, confirmation_id: str, approve: bool, session_id: str = ""
+        self, confirmation_id: str, approve: bool, session_id: str = "", 
+        request_id: str = "", approver_session: str = "", approver_surface: str = ""
     ) -> CommandResponse:
         """Execute or discard a previously pending action."""
         started = time.perf_counter()
@@ -853,8 +854,43 @@ class JarvisCore:
             response.needs_confirmation = False
             response.decision = PolicyDecision.BLOCK
             return response
-
-        self.policy.resolve(confirmation_id, approve)
+        
+        # Get approver surface from session for provenance tracking
+        from jarvis.api.app import _surface_of
+        approver_surface = _surface_of(session_id) or "unknown"
+        
+        # Reject self-approval at server side
+        requested_session = record.get("requested_by_session", record.get("session_id", ""))
+        if requested_session == session_id and approver_surface != "dashboard":
+            log.warning(
+                "self-approval rejected",
+                extra_fields={
+                    "confirmation_id": confirmation_id,
+                    "session": session_id,
+                    "approver_surface": approver_surface,
+                },
+            )
+            response.reply = "You cannot approve your own requests. Approve this on the laptop instead."
+            response.needs_confirmation = False
+            response.decision = PolicyDecision.BLOCK
+            # Record denial with provenance
+            self.policy.resolve(confirmation_id, approve=False, 
+                              approver_session=session_id, approver_surface=approver_surface)
+            self.audit.record(
+                intent=record["tool"],
+                tool=record["tool"],
+                result="denied",
+                risk="denied_self_approval",
+                confirmation=True,
+                session_id=session_id,
+                request_id=request_id or response.request_id,
+                detail={"reason": "self-approval prohibited"},
+            )
+            return response
+        
+        # Resolve with provenance tracking
+        self.policy.resolve(confirmation_id, approve, 
+                          approver_session=session_id, approver_surface=approver_surface)
 
         # resolve() may have expired the request rather than honouring it.
         resolved = self.policy.get_confirmation(confirmation_id)

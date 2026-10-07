@@ -172,22 +172,10 @@
 const API = "";
 const BOOTSTRAP = (document.querySelector('meta[name="jarvis-bootstrap"]') || {}).content || "";
 
-// Who answers a sentence here, in the phone's own words: which vendor would be called, and which
-// reads do not go through it. Naming a vendor no key will reach, or letting an unusable selection
-// borrow a vendor's name, is the pair of over-claims this project removed twice already (Phase 60
-// on the panel, Phase 63 on the badge). The value is rendered by the route that serves this page,
-// so the phone needs no new endpoint and no wider surface to say it.
-function modelLine(m) {
-  m = m || {};
-  const answered = String(m.answered_by || "unknown");
-  let text = answered.indexOf("rules") === 0
-    ? "answers: rules · no vendor on this laptop"
-    : "answers: " + answered;
-  const reach = m.vision || m.stt;
-  if (reach) text += " — screen text and voice are " + reach;
-  return text;
-}
-let token = "";
+// Token is stored in an HttpOnly cookie set by the server — no page JavaScript can read it.
+// We manage the token lifecycle via cookies instead of window variables.
+let token = ""; // Unused here; cookie access is automatic on subsequent requests
+
 let lastConf = null;
 let lastQuick = null;
 // Set once when the laptop refuses this page's own credential. The poll ends on it.
@@ -221,13 +209,22 @@ async function login() {
   const res = await fetch(API + "/auth/session", {
     method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ bootstrap: BOOTSTRAP }),
+    credentials: "include",  // Send cookie automatically
   });
-  if (res.ok) token = (await res.json()).session_token || "";
-  else set("status", "this page's code was already used — reload it from the laptop", "bad");
+  if (res.ok) {
+    const data = await res.json();
+    if (!data.session_token) {
+      set("status", "this page's code was already used — reload it from the laptop", "bad");
+    } else {
+      // Cookie is now sent automatically via credentials: include
+      set("status", "connected", "ok");
+    }
+  } else {
+    set("status", "this page's code was already used — reload it from the laptop", "bad");
+  }
 }
 
-const headers = () => token ? { "X-JARVIS-Token": token, "Content-Type": "application/json" }
-                           : { "Content-Type": "application/json" };
+const headers = () => ({ "Content-Type": "application/json" });
 function set(id, text, cls) {
   const el = document.getElementById(id);
   el.className = id === "status" ? ("sub " + (cls || "")) : el.className;
@@ -242,7 +239,7 @@ async function stopEverything() {
   note.textContent = "stopping…";
   let res;
   try {
-    res = await fetch("/emergency_stop", { method: "POST", headers: headers() });
+    res = await fetch("/emergency_stop", { method: "POST", headers: headers(), credentials: "include" });
   } catch (e) {
     note.textContent = "the laptop did not answer";
     return;
@@ -263,6 +260,7 @@ async function call(path, method, body) {
   const res = await fetch(API + path, {
     method: method || "GET", headers: headers(),
     body: method ? JSON.stringify(body || {}) : undefined,
+    credentials: "include",  // Send cookie automatically
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {

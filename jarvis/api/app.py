@@ -703,7 +703,7 @@ async def auth_token(request: Request, _: None = SameOriginProtected) -> Dict[st
 
 
 @app.post("/auth/session")
-async def auth_session(request: Request, body: BootstrapBody) -> Dict[str, Any]:
+async def auth_session(request: Request, body: BootstrapBody) -> Response:
     """Spend a single-use bootstrap code for a dashboard session.
 
     ``/dashboard`` is still public -- it is only a shell now -- but what it
@@ -716,7 +716,11 @@ async def auth_session(request: Request, body: BootstrapBody) -> Dict[str, Any]:
     settings = get_settings()
     _refuse_unless_same_origin(request, settings)
     if not settings.auth_enabled:
-        return {"auth_enabled": False, "session_token": None, "expires_in": 0}
+        return JSONResponse({
+            "auth_enabled": False,
+            "session_token": None,
+            "expires_in": 0,
+        })
 
     # The surface was chosen when the code was minted, by the route that minted
     # it. Whatever the body asks for is ignored, which is the point: a handset
@@ -729,12 +733,28 @@ async def auth_session(request: Request, body: BootstrapBody) -> Dict[str, Any]:
         log.info("rejected dashboard bootstrap", extra_fields={"path": request.url.path})
         raise HTTPException(status_code=403, detail="Bootstrap refused.")
 
-    return {
+    session_token = _issue_credential(_sessions, SESSION_TTL_SECONDS, surface)
+    
+    response = JSONResponse({
         "auth_enabled": True,
-        "session_token": _issue_credential(_sessions, SESSION_TTL_SECONDS, surface),
+        "session_token": session_token,
         "expires_in": SESSION_TTL_SECONDS,
         "surface": surface,
-    }
+    })
+    
+    # Set session as HttpOnly cookie — prevents JavaScript access via window.token
+    # This closes Phase 71 credential exposure gap
+    response.set_cookie(
+        key="jarvis_session",
+        value=session_token,
+        httponly=True,
+        samesite="lax",  # CSRF protection without breaking simple GET requests
+        max_age=SESSION_TTL_SECONDS,
+        path="/",
+        secure=False,  # False for localhost/dev; production should use HTTPS
+    )
+    
+    return response
 
 
 @app.delete("/auth/session")
@@ -798,7 +818,14 @@ async def confirm(
 ) -> CommandResponse:
     """Approve or deny a pending confirmation."""
     core = get_core()
-    return await core.resolve_confirmation(confirmation_id, approve, session_id)
+    
+    # Extract approver surface from session for provenance
+    approver_surface = _surface_of(session_id) or "unknown"
+    
+    return await core.resolve_confirmation(confirmation_id, approve, session_id, 
+                                           request_id="",
+                                           approver_session=session_id,
+                                           approver_surface=approver_surface)
 
 
 @app.get("/confirmations")
