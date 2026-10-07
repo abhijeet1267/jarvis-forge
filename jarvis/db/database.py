@@ -502,4 +502,31 @@ def get_db() -> Database:
     global _DB
     if _DB is None:
         _DB = Database()
+    
+    # Create AI chat tables (Phase 73)
+    _DB.execute("""CREATE TABLE IF NOT EXISTS ai_chats (
+        id TEXT PRIMARY KEY,
+        title TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+    )""")
+    
+    _DB.execute("""CREATE TABLE IF NOT EXISTS ai_messages (
+        id TEXT PRIMARY KEY,
+        conversation_id TEXT NOT NULL,
+        role TEXT NOT NULL CHECK(role IN ('user', 'assistant', 'error')),
+        content TEXT NOT NULL,
+        provider_meta TEXT DEFAULT '{}',
+        timestamp TEXT NOT NULL,
+        FOREIGN KEY (conversation_id) REFERENCES ai_chats(id)
+    )""")
+    
+    _DB.execute("""CREATE INDEX IF NOT EXISTS idx_ai_messages_conversation 
+                   ON ai_messages(conversation_id, timestamp DESC)""")
+    
     return _DB
+
+
+# ---------------------------------------------------------------------------
+# AI Chat Database Schema (Phase 73) - Deprecated (moved above)
+# ---------------------------------------------------------------------------

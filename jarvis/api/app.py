@@ -17,7 +17,7 @@ from typing import Any, AsyncIterator, Dict, List, Optional, Tuple
 
 from contextlib import asynccontextmanager
 
-from fastapi import Depends, FastAPI, File, HTTPException, Query, Request, Response, UploadFile
+from fastapi import Depends, FastAPI, File, HTTPException, Query, Request, Response, UploadFile, Body
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, StreamingResponse
 from pydantic import BaseModel, field_validator
@@ -3283,6 +3283,242 @@ async def dashboard() -> Any:
                  if settings.auth_enabled else "")
     html = DASHBOARD.read_text(encoding="utf-8").replace("__JARVIS_BOOTSTRAP__", bootstrap)
     return HTMLResponse(content=html)
+
+
+# ---------------------------------------------------------------------------
+# AI Chat (Phase 73)
+# ---------------------------------------------------------------------------
+from ..db.database import get_db
+from ..logging_setup import get_logger
+
+log = get_logger("api.chat")
+
+AI_CHAT_DIR = Path(__file__).resolve().parents[2] / "dashboard" / "ai_chat.html"
+
+
+@app.get("/ai/chat", include_in_schema=False)
+async def ai_chat_page(_: None = Protected) -> HTMLResponse:
+    """Vantage unified AI chat interface."""
+    if not AI_CHAT_DIR.exists():
+        raise HTTPException(status_code=404, detail="AI chat page not found")
+    
+    # Read and return static HTML
+    html = AI_CHAT_DIR.read_text(encoding="utf-8")
+    
+    return HTMLResponse(content=html, media_type="text/html")
+
+
+@app.post("/ai/chats")
+async def create_chat(body: dict = Body(None), _: None = Protected) -> Dict[str, Any]:
+    """Create a new AI conversation."""
+    db = get_db()
+    title = body.get("title", "New conversation") if body else "New conversation"
+    chat_id = secrets.token_urlsafe(16)
+    now = utcnow().isoformat()
+    
+    db.execute(
+        """INSERT INTO ai_chats (id, title, created_at, updated_at)
+           VALUES (?, ?, ?, ?)""",
+        (chat_id, title, now, now)
+    )
+    
+    return {"id": chat_id, "title": title, "created_at": now}
+
+
+@app.get("/ai/chats/{chat_id}")
+async def get_chat(chat_id: str, _: None = Protected) -> Dict[str, Any]:
+    """Get a conversation by ID."""
+    db = get_db()
+    row = db.query(
+        "SELECT id, title, created_at, updated_at FROM ai_chats WHERE id = ?",
+        (chat_id,)
+    )
+    if not row:
+        raise HTTPException(status_code=404, detail="Chat not found")
+    return dict(row[0])
+
+
+@app.delete("/ai/chats/{chat_id}")
+async def delete_chat(chat_id: str, _: None = Protected) -> Dict[str, Any]:
+    """Delete a conversation and all its messages."""
+    db = get_db()
+    db.execute("DELETE FROM ai_messages WHERE conversation_id = ?", (chat_id,))
+    db.execute("DELETE FROM ai_chats WHERE id = ?", (chat_id,))
+    return {"deleted": True}
+
+
+@app.post("/ai/chats/{chat_id}/messages")
+async def save_message(chat_id: str, body: dict = Body(None), _: None = Protected) -> Dict[str, Any]:
+    """Save a message to a conversation."""
+    if not body:
+        raise HTTPException(status_code=400, detail="No message body provided")
+    
+    db = get_db()
+    
+    role = body.get("role", "user")
+    content = body.get("content", "")
+    provider_meta = json.dumps(body.get("provider_meta", {})) if body.get("provider_meta") else "{}"
+    
+    msg_id = secrets.token_urlsafe(16)
+    now = utcnow().isoformat()
+    
+    db.execute(
+        """INSERT INTO ai_messages (id, conversation_id, role, content, provider_meta, timestamp)
+           VALUES (?, ?, ?, ?, ?, ?)""",
+        (msg_id, chat_id, role, content, provider_meta, now)
+    )
+    
+    # Update last message time on chat
+    db.execute(
+        """UPDATE ai_chats SET updated_at = ? WHERE id = ?""",
+        (now, chat_id)
+    )
+    
+    return {"id": msg_id, "conversation_id": chat_id, "role": role, "timestamp": now}
+
+
+@app.get("/ai/chats/{chat_id}/messages")
+async def get_chat_messages(chat_id: str, limit: int = 50, _: None = Protected) -> List[Dict[str, Any]]:
+    """Get messages from a conversation."""
+    db = get_db()
+    rows = db.query(
+        """SELECT id, role, content, provider_meta, timestamp 
+           FROM ai_messages 
+           WHERE conversation_id = ? 
+           ORDER BY timestamp DESC 
+           LIMIT ?""",
+        (chat_id, limit)
+    )
+    return [dict(r) for r in reversed(rows)]
+
+
+@app.post("/ai/chat/send")
+async def send_ai_message(body: dict = Body(None), _: None = Protected) -> Dict[str, Any]:
+    """Send a message to an AI provider with intelligent routing."""
+    if not body:
+        raise HTTPException(status_code=400, detail="No message body provided")
+    
+    text = body.get("text", "").strip()
+    conversation_id = body.get("conversation_id")
+    provider_pref = body.get("provider_preference")
+    free_first = body.get("free_first", True)
+    allow_paid_fallback = body.get("allow_paid_fallback", False)
+    
+    if not text:
+        raise HTTPException(status_code=400, detail="Empty message")
+    
+    if not conversation_id:
+        raise HTTPException(status_code=400, detail="Conversation ID required")
+    
+    # Verify connection exists
+    try:
+        provider_id = select_provider(get_settings()).name
+    except ProviderUnknown:
+        raise HTTPException(status_code=503, detail="No AI provider configured")
+    
+    # Build API call
+    api_key = KeychainStorage.retrieve(provider_id)
+    if not api_key:
+        raise HTTPException(status_code=401, detail="API key not configured for selected provider")
+    
+    try:
+        # Route request (simple version - would implement full router later)
+        provider_name = provider_id if provider_pref == "auto" or not provider_pref else provider_pref
+        
+        # Check if provider is OpenAI
+        if provider_name == "openai":
+            # Call OpenAI API directly
+            response_data = await openai_chat_completion(api_key, text)
+            
+            return {
+                "response": response_data["choices"][0]["message"]["content"],
+                "provider": "OpenAI",
+                "model": response_data["model"],
+                "connection_type": "api",
+                "free_or_paid": "unknown",
+                "tokens_used": response_data.get("usage", {}).get("total_tokens", 0)
+            }
+        else:
+            # Unknown provider
+            raise HTTPException(status_code=404, detail=f"Provider {provider_name} not supported yet")
+            
+    except Exception as exc:
+        log.error(f"AI request failed: {exc}")
+        raise HTTPException(status_code=503, detail=f"AI service unavailable: {str(exc)[:200]}")
+
+
+async def openai_chat_completion(api_key: str, prompt: str) -> Dict[str, Any]:
+    """Call OpenAI chat completion endpoint."""
+    url = "https://api.openai.com/v1/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json"
+    }
+    payload = {
+        "model": "gpt-4o",
+        "messages": [{"role": "user", "content": prompt}]
+    }
+    
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        response = await client.post(url, headers=headers, json=payload)
+        return response.json()
+
+
+# ---------------------------------------------------------------------------
+# Connection Health (Phase 73)
+# ---------------------------------------------------------------------------
+@app.get("/ai/connection-health")
+async def get_connection_health(_: None = Protected) -> Dict[str, Any]:
+    """Report connection health for all configured providers."""
+    results = {}
+    
+    for spec in list_providers():
+        provider_cls = PROVIDERS.get(spec.id)
+        if not provider_cls:
+            continue
+        
+        api_key = KeychainStorage.retrieve(spec.id)
+        
+        if not api_key:
+            results[spec.id] = {
+                "configured": False,
+                "authorized": False,
+                "verified": False,
+                "status": "not_configured"
+            }
+            continue
+        
+        # Try to verify connection
+        try:
+            temp_settings = type('Settings', (), {
+                'llm_api_key': api_key,
+                'llm_base_url': getattr(provider_cls, 'DEFAULT_BASE_URL', 'https://api.openai.com/v1'),
+                'ai_provider': spec.type.value
+            })()
+            
+            test_provider = provider_cls(temp_settings)
+            result = test_provider.verify_connection(timeout=3.0)
+            
+            results[spec.id] = {
+                "configured": True,
+                "authorized": True,
+                "verified": result.success,
+                "status": "available" if result.success else "unavailable",
+                "last_error": result.error if not result.success else None,
+                "last_verification": utcnow().isoformat()
+            }
+            
+        except Exception as e:
+            results[spec.id] = {
+                "configured": True,
+                "authorized": True,
+                "verified": False,
+                "status": "error",
+                "last_error": str(e),
+                "last_verification": utcnow().isoformat()
+            }
+    
+    return {"providers": results}
 
 
 @app.exception_handler(Exception)

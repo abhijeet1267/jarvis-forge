@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="jarvis-bootstrap" content="__JARVIS_BOOTSTRAP__" />
+<title>Vantage AI Chat</title>
+<style>
+:root {
+  --bg: #f5f7fa;
+  --panel: #ffffff;
+  --ink: #1b2230;
+  --muted: #6b7688;
+  --line: #e2e7ef;
+  --accent: #2f6df6;
+  --on-accent: #ffffff;
+  --ok: #16a34a;
+  --warn: #d97706;
+  --bad: #dc2626;
+  --radius: 10px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0b1220;
+    --panel: #0f172a;
+    --ink: #e6edf7;
+    --muted: #8b98ab;
+    --line: #1c2332;
+    --accent: #6ea8ff;
+    --on-accent: #0f172a;
+    --on-ok: #34d399;
+    --on-warn: #fbbf24;
+    --on-bad: #f87171;
+  }
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 16px; background: var(--panel); border-bottom: 1px solid var(--line);
+  position: sticky; top: 0; z-index: 5;
+}
+
+.header-left { display: flex; align-items: center; gap: 12px; }
+header h1 { font-size: 16px; margin: 0; }
+
+.provider-row, .model-row, .connection-row {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 12px; color: var(--muted);
+}
+
+.select-wrapper { position: relative; }
+select {
+  appearance: none;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  color: var(--ink);
+  padding: 6px 24px 6px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+}
+select:disabled { opacity: 0.6; cursor: not-allowed; }
+select-option.selected { color: var(--accent); font-weight: 600; }
+select-arrow {
+  position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
+  pointer-events: none; color: var(--muted);
+}
+
+main { max-width: 900px; margin: 0 auto; padding: 16px; }
+
+.conversation-container {
+  display: flex; flex-direction: column;
+  min-height: 400px; background: var(--panel);
+  border: 1px solid var(--line); border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.messages-area {
+  flex: 1; overflow-y: auto; padding: 16px;
+  display: flex; flex-direction: column; gap: 12px;
+}
+
+.message {
+  display: flex; flex-direction: column;
+  max-width: 85%;
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  word-wrap: break-word;
+}
+
+.message.user {
+  align-self: flex-end;
+  background: var(--accent);
+  color: var(--on-accent);
+  border-color: transparent;
+}
+
+.message.ai {
+  align-self: flex-start;
+  border-left: 3px solid var(--accent);
+}
+
+.message-content { line-height: 1.5; }
+
+.message-meta {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 11px; opacity: 0.8; margin-top: 6px;
+}
+
+.status-indicator {
+  display: inline-block; width: 8px; height: 8px;
+  border-radius: 50%; margin-right: 6px;
+}
+.status-connected { background: var(--ok); }
+.status-unavailable { background: var(--bad); }
+.status-streaming { background: var(--warn); animation: pulse 1s infinite; }
+
+@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
+
+.composer-area {
+  display: flex; gap: 8px; padding: 12px;
+  border-top: 1px solid var(--line);
+  background: var(--bg);
+}
+
+.composer-input {
+  flex: 1;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+  color: var(--ink);
+  font-size: 14px;
+  resize: none;
+  min-height: 44px;
+  max-height: 200px;
+  font-family: inherit;
+}
+
+.send-button {
+  padding: 10px 20px;
+  background: var(--accent);
+  color: var(--on-accent);
+  border: none;
+  border-radius: var(--radius);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.send-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.control-bar {
+  display: flex; gap: 8px; margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.control-button {
+  padding: 8px 14px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  color: var(--ink);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.control-button:hover:not(:disabled) {
+  background: var(--line);
+}
+
+.empty-state {
+  text-align: center; padding: 40px; color: var(--muted);
+}
+
+.tool-request {
+  background: var(--warn);
+  color: #000;
+  padding: 16px;
+  margin: 8px 16px;
+  border-radius: var(--radius);
+  border: 1px solid var(--warn);
+}
+
+.loading-dots::after {
+  content: "";
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--accent);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+<header>
+  <div class="header-left">
+    <h1>VANTAGE AI</h1>
+  </div>
+  <div style="display:flex;gap:12px;align-items:center;">
+    <span id="provider-status"></span>
+    <button id="new-chat-btn" class="control-button">New Chat</button>
+  </div>
+</header>
+
+<main>
+  <div class="control-bar">
+    <div class="select-wrapper">
+      Provider:
+      <select id="provider-select">
+        <option value="auto" selected>Auto (default)</option>
+      </select>
+    </div>
+    <div class="select-wrapper">
+      Plan:
+      <label><input type="checkbox" id="free-first-check" checked> Free first</label>
+      <label><input type="checkbox" id="paid-fallback"> Allow paid fallback</label>
+    </div>
+    <button id="health-btn" class="control-button">Connection Health</button>
+  </div>
+
+  <div class="conversation-container">
+    <div class="messages-area" id="messages-area">
+      <div class="empty-state">
+        Welcome to Vantage AI. Select a provider below or use Auto mode.<br/>
+        Connect providers in Settings → AI Connections first.
+      </div>
+    </div>
+  </div>
+
+  <div class="composer-area">
+    <textarea class="composer-input" id="message-input" placeholder="Type your message..."></textarea>
+    <button class="send-button" id="send-button" disabled>Send</button>
+  </div>
+
+  <div id="tool-request-area"></div>
+</main>
+
+<script>
+// Global state
+const state = {
+  currentChat: null,
+  conversations: [],
+  providers: [],
+  bootstrapToken: document.querySelector('meta[name="jarvis-bootstrap"]')?.content || "",
+};
+
+// Fetch provider list on load
+async function initProviders() {
+  const response = await fetch("/ai/providers", authHeaders());
+  if (!response.ok) return;
+  
+  state.providers = await response.json();
+  updateProviderSelector();
+}
+
+function updateProviderSelector() {
+  const select = document.getElementById("provider-select");
+  select.innerHTML = '<option value="auto" selected>Auto (default)</option>';
+  
+  for (const p of state.providers) {
+    if (p.enabled && (p.configured || p.type === "openai")) {
+      const option = document.createElement("option");
+      option.value = p.provider_id;
+      option.textContent = p.display_name;
+      
+      if (p.verified) {
+        option.classList.add("selected");
+      } else {
+        option.disabled = true;
+      }
+      
+      select.appendChild(option);
+    }
+  }
+}
+
+// Auth headers
+function authHeaders() {
+  return {"X-JARVIS-Token": window.sessionToken || ""};
+}
+
+// Create chat session
+async function createChatSession(title = "New conversation") {
+  const response = await fetch("/ai/chats", {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify({ title })
+  });
+  if (!response.ok) throw new Error("Failed to create chat");
+  const chat = await response.json();
+  state.currentChat = chat;
+  state.conversations.push(chat);
+  return chat;
+}
+
+// Save message to conversation
+async function saveMessage(conversationId, role, content, providerMeta = {}) {
+  const response = await fetch(`/ai/chats/${conversationId}/messages`, {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify({
+      role, content, provider_meta: providerMeta
+    })
+  });
+  if (!response.ok) throw new Error("Failed to save message");
+  return await response.json();
+}
+
+// Send message to AI provider
+async function sendMessageToAI(text) {
+  const providerId = document.getElementById("provider-select").value;
+  const freeFirst = document.getElementById("free-first-check").checked;
+  const paidFallback = document.getElementById("paid-fallback").checked;
+  
+  const response = await fetch("/ai/chat/send", {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify({
+      text,
+      conversation_id: state.currentChat.id,
+      provider_preference: providerId !== "auto" ? providerId : undefined,
+      free_first: freeFirst,
+      allow_paid_fallback: paidFallback
+    })
+  });
+  
+  return response;
+}
+
+// Update messages area
+function appendMessage(role, content, providerMeta = {}) {
+  const area = document.getElementById("messages-area");
+  const messageDiv = document.createElement("div");
+  messageDiv.className = `message ${role}`;
+  
+  let contentHtml = content.replace(/\n/g, "<br>");
+  
+  messageDiv.innerHTML = `
+    <div class="message-content">${contentHtml}</div>
+    ${providerMeta ? `
+    <div class="message-meta">
+      <span>${providerMeta.provider || "Vantage"}</span>
+      ${providerMeta.model ? `<span>${providerMeta.model}</span>` : ""}
+      ${providerMeta.connection_type ? `<span>[${providerMeta.connection_type}]</span>` : ""}
+    </div>` : ""}
+  `;
+  
+  // Remove empty state if present
+  const emptyState = area.querySelector(".empty-state");
+  if (emptyState) emptyState.remove();
+  
+  area.appendChild(messageDiv);
+  area.scrollTop = area.scrollHeight;
+}
+
+// Show loading indicator
+function showLoading(provider = "AI") {
+  const area = document.getElementById("messages-area");
+  const loadingDiv = document.createElement("div");
+  loadingDiv.className = "message ai";
+  loadingDiv.id = "loading-indicator";
+  loadingDiv.innerHTML = `
+    <div class="message-content">
+      <span class="status-indicator status-streaming"></span>
+      <span>${provider} is thinking...</span>
+    </div>
+  `;
+  area.appendChild(loadingDiv);
+  area.scrollTop = area.scrollHeight;
+}
+
+function hideLoading() {
+  const indicator = document.getElementById("loading-indicator");
+  if (indicator) indicator.remove();
+}
+
+// Enable/disable send button based on input
+function toggleSendButton() {
+  const input = document.getElementById("message-input");
+  const sendBtn = document.getElementById("send-button");
+  sendBtn.disabled = input.value.trim().length === 0;
+}
+
+// Handle send
+async function handleSend() {
+  const input = document.getElementById("message-input");
+  const text = input.value.trim();
+  if (!text) return;
+  
+  input.value = "";
+  toggleSendButton();
+  showLoading();
+  
+  try {
+    const userMsg = await saveMessage(state.currentChat.id, "user", text);
+    appendMessage("user", text);
+    
+    const response = await sendMessageToAI(text);
+    hideLoading();
+    
+    if (!response.ok) {
+      const error = await response.json();
+      appendMessage("error", `AI request failed: ${error.detail || "Unknown error"}`, {});
+      return;
+    }
+    
+    const result = await response.json();
+    const aiText = result.response || "No response received.";
+    
+    const providerMeta = {
+      provider: result.provider || "Vantage AI",
+      model: result.model || undefined,
+      connection_type: result.connection_type || "api"
+    };
+    
+    await saveMessage(state.currentChat.id, "assistant", aiText, providerMeta);
+    appendMessage("ai", aiText, providerMeta);
+    
+  } catch (err) {
+    hideLoading();
+    appendMessage("error", `Error: ${err.message}`, {});
+  }
+}
+
+// New chat button
+document.getElementById("new-chat-btn").addEventListener("click", async () => {
+  await createChatSession(`Conversation ${state.conversations.length + 1}`);
+  document.getElementById("messages-area").innerHTML = 
+    '<div class="empty-state">New conversation started. What would you like to do?</div>';
+});
+
+// Health check button
+document.getElementById("health-btn").addEventListener("click", async () => {
+  const response = await fetch("/ai/connection-health", authHeaders());
+  if (!response.ok) return;
+  
+  const health = await response.json();
+  console.log("Connection Health:", health);
+  alert(JSON.stringify(health, null, 2));
+});
+
+// Initialize
+initProviders();
+createChatSession();
+
+// Event listeners
+document.getElementById("send-button").addEventListener("click", handleSend);
+document.getElementById("message-input").addEventListener("keyup", (e) => {
+  if (e.key === "Enter" && !e.shiftKey) {
+    e.preventDefault();
+    handleSend();
+  }
+});
+document.getElementById("message-input").addEventListener("input", toggleSendButton);
+</script>
+</body>
+</html>
