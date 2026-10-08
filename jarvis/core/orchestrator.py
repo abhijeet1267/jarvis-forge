@@ -31,6 +31,7 @@ from ..registry.devices import get_device_registry
 from ..registry.tools import ToolRegistry
 from ..security.audit import AuditLog
 from ..security.policy import PermissionEngine
+from ..security.providers import CapabilityRegistry, CapabilityType
 from ..security.risk import RiskClassifier
 from ..tools import build_default_registry
 from ..tools.base import ToolContext
@@ -119,7 +120,8 @@ class JarvisCore:
         self.agents: Dict[str, Agent] = build_agents(self.tools)
         self.planner = RulePlanner(self.tools, self.apps)
         self.router = ModelRouter()
-
+        self.capability_registry = CapabilityRegistry()
+        
         log.info(
             "jarvis core initialised",
             extra_fields={
@@ -128,6 +130,10 @@ class JarvisCore:
                 "llm": self.settings.llm_enabled,
             },
         )
+    
+    def check_ai_capability(self, provider_id: str, required_capabilities: List[CapabilityType]) -> bool:
+        """Check if AI provider supports required capabilities for multimodal requests."""
+        return self.capability_registry.can_handle_request(provider_id, "", required_capabilities)
 
     # ------------------------------------------------------------------ utils
     def _context(self, request: CommandRequest) -> ToolContext:

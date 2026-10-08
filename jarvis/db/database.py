@@ -524,6 +524,112 @@ def get_db() -> Database:
     _DB.execute("""CREATE INDEX IF NOT EXISTS idx_ai_messages_conversation 
                    ON ai_messages(conversation_id, timestamp DESC)""")
     
+    # AI attachments table (Phase 74 - multimodal support)
+    _DB.execute("""CREATE TABLE IF NOT EXISTS ai_attachments (
+        id TEXT PRIMARY KEY,
+        message_id TEXT NOT NULL,
+        file_type TEXT NOT NULL CHECK(file_type IN ('image/png', 'image/jpeg', 'image/gif', 'image/webp', 'application/pdf', 'audio/wav', 'audio/mp3', 'audio/mpeg', 'text/plain')),
+        file_size INTEGER NOT NULL,
+        filename TEXT NOT NULL,
+        storage_path TEXT NOT NULL,
+        upload_status TEXT NOT NULL DEFAULT 'pending',
+        processing_status TEXT NOT NULL DEFAULT 'pending',
+        metadata TEXT DEFAULT '{}',
+        created_at TEXT NOT NULL,
+        FOREIGN KEY (message_id) REFERENCES ai_messages(id)
+    )""")
+    
+    # File uploads table (shared across features)
+    _DB.execute("""CREATE TABLE IF NOT EXISTS uploaded_files (
+        id TEXT PRIMARY KEY,
+        path TEXT NOT NULL,
+        size_bytes INTEGER DEFAULT 0,
+        sha256 TEXT,
+        mime_type TEXT,
+        device TEXT,
+        project_id TEXT,
+        indexed_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )""")
+    
+    _DB.execute("""CREATE INDEX IF NOT EXISTS idx_ai_attachments_message 
+                   ON ai_attachments(message_id, created_at ASC)""")
+    _DB.execute("""CREATE INDEX IF NOT EXISTS idx_uploaded_files_sha256 
+                   ON uploaded_files(sha256)""")
+    
+    # ============================================================================
+    # AGENT CORE DATABASE SCHEMA (Phase 75 - JARVIS Agent)
+    # ============================================================================
+    
+    _DB.execute("""CREATE TABLE IF NOT EXISTS intents (
+        intent_id TEXT PRIMARY KEY,
+        session_id TEXT NOT NULL,
+        user_id TEXT DEFAULT 'user',
+        source TEXT DEFAULT 'unknown',
+        action_type TEXT NOT NULL,
+        parameters TEXT DEFAULT '{}',
+        risk_level TEXT DEFAULT 'LOW',
+        approval_required INTEGER DEFAULT 0,
+        created_at TEXT NOT NULL,
+        status TEXT DEFAULT 'pending',
+        processed_at TEXT,
+        result TEXT,
+        verification_status TEXT
+    )""")
+    
+    _DB.execute("""CREATE TABLE IF NOT EXISTS intent_steps (
+        step_id TEXT PRIMARY KEY,
+        intent_id TEXT NOT NULL REFERENCES intents(intent_id) ON DELETE CASCADE,
+        action_type TEXT NOT NULL,
+        description TEXT,
+        parameters TEXT DEFAULT '{}',
+        dependencies TEXT DEFAULT '[]',
+        expected_state TEXT,
+        risk TEXT DEFAULT 'LOW',
+        approval_required INTEGER DEFAULT 0,
+        seq INTEGER DEFAULT 0
+    )""")
+    
+    _DB.execute("""CREATE TABLE IF NOT EXISTS plans (
+        plan_id TEXT PRIMARY KEY,
+        intent_id TEXT NOT NULL REFERENCES intents(intent_id),
+        session_id TEXT NOT NULL,
+        description TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        status TEXT DEFAULT 'draft',
+        current_step_index INTEGER DEFAULT -1,
+        steps_completed INTEGER DEFAULT 0,
+        steps_total INTEGER DEFAULT 0,
+        result TEXT,
+        failure_reason TEXT
+    )""")
+    
+    _DB.execute("""CREATE TABLE IF NOT EXISTS plan_steps (
+        step_id TEXT PRIMARY KEY,
+        plan_id TEXT NOT NULL REFERENCES plans(plan_id) ON DELETE CASCADE,
+        step_index INTEGER NOT NULL,
+        tool_name TEXT NOT NULL,
+        arguments TEXT DEFAULT '{}',
+        description TEXT,
+        dependencies TEXT DEFAULT '[]',
+        risk_level TEXT DEFAULT 'LOW',
+        approval_required INTEGER DEFAULT 0,
+        approval_id TEXT,
+        expected_state TEXT,
+        verification_method TEXT DEFAULT 'observe',
+        status TEXT DEFAULT 'pending',
+        started_at TEXT,
+        completed_at TEXT,
+        actual_result TEXT,
+        error_message TEXT
+    )""")
+    
+    _DB.execute("""CREATE INDEX IF NOT EXISTS idx_intents_session ON intents(session_id)""")
+    _DB.execute("""CREATE INDEX IF NOT EXISTS idx_intents_created ON intents(created_at DESC)""")
+    _DB.execute("""CREATE INDEX IF NOT EXISTS idx_intent_steps_intent ON intent_steps(intent_id)""")
+    _DB.execute("""CREATE INDEX IF NOT EXISTS idx_plans_intent ON plans(intent_id)""")
+    _DB.execute("""CREATE INDEX IF NOT EXISTS idx_plan_steps_plan ON plan_steps(plan_id)""")
+    _DB.execute("""CREATE INDEX IF NOT EXISTS idx_plans_status ON plans(status)""")
+    
     return _DB
 
 

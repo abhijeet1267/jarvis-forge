@@ -136,8 +136,64 @@ def prepare_tk_environment() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Server management
+# Runtime Supervisor Integration (Phase 85)
 # ---------------------------------------------------------------------------
+
+def build_supervisor(project_dir: Path, python: str, port: int) -> "RuntimeSupervisor":
+    """Create and initialize the runtime supervisor."""
+    sys.path.insert(0, str(project_dir))
+    
+    try:
+        from jarvis.runtime.supervisor import RuntimeSupervisor, SUP
+        
+        # Initialize with background mode enabled
+        supervisor = RuntimeSupervisor.get_instance(background_mode=True)
+        
+        return supervisor
+        
+    except Exception as e:
+        print(f"Warning: Could not initialize runtime supervisor: {e}")
+        return None
+
+
+class RuntimeWrapper:
+    """Adaptor that makes RuntimeSupervisor work like ServerController."""
+    
+    def __init__(self, project_dir: Path, python: str, host: str, port: int):
+        self.project_dir = project_dir
+        self.python = python
+        self.host = host
+        self.port = port
+        self.supervisor = build_supervisor(project_dir, python, port)
+        self._started = False
+    
+    def start(self) -> bool:
+        if not self.supervisor:
+            return False
+        
+        if self._started:
+            return True
+        
+        success = self.supervisor.start()
+        self._started = success
+        return success
+    
+    def stop(self) -> None:
+        if self.supervisor:
+            self.supervisor.stop()
+        self._started = False
+    
+    def running(self) -> bool:
+        if not self.supervisor:
+            return False
+        return self.supervisor.app_state.is_ready
+    
+    def get_status(self) -> Dict[str, Any]:
+        if not self.supervisor:
+            return {"state": "unavailable"}
+        return self.supervisor.get_status()
+
+
 def port_in_use(host: str, port: int) -> bool:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
         sock.settimeout(0.5)
@@ -403,7 +459,10 @@ class ServerController:
             bufsize=1,
         )
         self._note(f"Started server (pid {self.process.pid})")
-
+        
+        # Initialize runtime supervisor if available
+        self.runtime = RuntimeWrapper(self.project_dir, self.python, self.host, self.port)
+        
         threading.Thread(target=self._pump, daemon=True).start()
 
     def _pump(self) -> None:
@@ -417,25 +476,63 @@ class ServerController:
             del self.tail[:-400]
 
     def wait_ready(self, timeout: float = 45.0) -> bool:
+        """Wait for server and supervisor to be ready."""
         deadline = time.time() + timeout
+        
+        # Wait for both server and supervisor to be ready
         while time.time() < deadline:
             try:
+                # Check backend API health first
                 api_get(self.host, self.port, "/health", timeout=2.0)
+                
+                # Then check supervisor runtime state
+                if hasattr(self, 'runtime') and self.runtime:
+                    status = self.runtime.get_status()
+                    if status.get('overall_state') == 'ready':
+                        return True
+                
+                # Fallback: just check port availability
+                if not port_in_use(self.host, self.port):
+                    time.sleep(0.4)
+                    continue
+                    
                 return True
+                
             except Exception:
-                if self.process and self.process.poll() is not None and not self.attached:
+                # If process exited unexpectedly, fail fast
+                if hasattr(self, 'process') and self.process and self.process.poll() is not None and not self.attached:
+                    log.error("backend exited during startup")
                     return False
                 time.sleep(0.4)
+        
+        log.error("server failed to start within timeout")
         return False
 
     def stop(self) -> None:
+        """Stop server with graceful shutdown through supervisor."""
+        
+        # First request runtime supervisor to initiate shutdown
+        if hasattr(self, 'runtime') and self.runtime:
+            try:
+                log.info("requesting runtime shutdown via supervisor")
+                self.runtime.stop()
+                # Give runtime time to shut down services gracefully
+                time.sleep(2.0)
+            except Exception as e:
+                log.warning(f"runtime shutdown error: {e}")
+        
+        # Then stop the actual subprocess
         if self.process and self.process.poll() is None:
+            self._note("stopping backend server")
             self.process.terminate()
             try:
                 self.process.wait(timeout=8)
             except subprocess.TimeoutExpired:
+                log.warning("backend unresponsive, force killing")
                 self.process.kill()
-            self._note("Server stopped")
+            self._note("backend stopped")
+        
+        # Close log handle
         if self._log_handle:
             try:
                 self._log_handle.close()
@@ -510,10 +607,47 @@ def build_ui(controller: ServerController, on_quit) -> None:
 
     dot = tk.Label(status_row, text="\u25cf", bg=PANEL, fg=MUTED, font=("Helvetica", 13))
     dot.pack(side="left")
-    status = tk.Label(
-        status_row, text="starting…", bg=PANEL, fg=MUTED, font=("Helvetica Neue", 12)
-    )
+    
+    def update_status():
+        """Update status display from runtime supervisor."""
+        if hasattr(controller, 'runtime') and controller.runtime:
+            try:
+                status = controller.runtime.get_status()
+                overall_state = status.get('overall_state', 'unavailable')
+                
+                # Update dot color and status text based on actual state
+                if overall_state == 'ready':
+                    dot.config(bg=OK)
+                    status.config(text="RUNNING", fg=INK)
+                elif overall_state == 'starting':
+                    dot.config(bg=ACCENT)
+                    status.config(text="STARTING...", fg=ACCENT)
+                elif overall_state == 'degraded':
+                    dot.config(bg=WARN)
+                    status.config(text="DEGRADED", fg=WARN)
+                elif overall_state == 'stopping':
+                    dot.config(bg=BAD)
+                    status.config(text="STOPPING", fg=BAD)
+                else:
+                    dot.config(bg=MUTED)
+                    status.config(text="OFFLINE", fg=MUTED)
+            except Exception as e:
+                # Fallback to checking if port is in use
+                if controller.running():
+                    dot.config(bg=OK)
+                    status.config(text="RUNNING", fg=INK)
+                else:
+                    dot.config(bg=MUTED)
+                    status.config(text="OFFLINE", fg=MUTED)
+        
+        # Schedule next update
+        root.after(2000, update_status)
+    
+    WARN = "#d97706"
     status.pack(side="left", padx=(6, 0))
+    
+    # Start status updates
+    update_status()
 
     # --- stats -------------------------------------------------------------
     stats = tk.Frame(root, bg=BG)

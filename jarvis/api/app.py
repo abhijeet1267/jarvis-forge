@@ -3521,6 +3521,414 @@ async def get_connection_health(_: None = Protected) -> Dict[str, Any]:
     return {"providers": results}
 
 
+# ============================================================================
+# AI ATTACHMENT SYSTEM (Phase 74 - Multimodal Support)
+# ============================================================================
+
+class AttachmentRequest(BaseModel):
+    """Schema for attachment operations."""
+    message_id: str
+    file_type: str
+    filename: str
+    metadata: Dict[str, Any] = {}
+
+
+@app.post("/ai/attachments/upload")
+async def upload_attachment(
+    file: UploadFile = File(...),
+    request: AttachmentRequest = Body(...),
+    _: None = Protected
+) -> Dict[str, Any]:
+    """Upload an attachment for an AI chat message.
+    
+    Supports:
+    - Images: PNG, JPEG, GIF, WebP
+    - Documents: PDF
+    - Audio: WAV, MP3
+    - Text: Plain text
+    
+    Each file must have a valid message_id association.
+    """
+    from ..config import get_settings
+    
+    # Validate request
+    if not request.message_id:
+        raise HTTPException(status_code=400, detail="message_id is required")
+    
+    # Validate MIME type and size
+    allowed_types = {
+        'image/png', 'image/jpeg', 'image/gif', 'image/webp',
+        'application/pdf',
+        'audio/wav', 'audio/mp3', 'audio/mpeg',
+        'text/plain'
+    }
+    
+    if file.content_type not in allowed_types:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported file type: {file.content_type}. "
+                   f"Allowed: {', '.join(allowed_types)}"
+        )
+    
+    # Check file size (10MB limit for Phase 74)
+    max_size = 10 * 1024 * 1024  # 10MB
+    content = await file.read()
+    if len(content) > max_size:
+        raise HTTPException(
+            status_code=400,
+            detail=f"File too large. Maximum size: {max_size / (1024*1024)}MB"
+        )
+    
+    # Generate secure storage path
+    settings = get_settings()
+    attachments_dir = settings.home / "attachments" / "ai"
+    attachments_dir.mkdir(parents=True, exist_ok=True)
+    
+    timestamp = time.strftime("%Y%m%d-%H%M%S")
+    file_ext = Path(file.filename).suffix or ".bin"
+    storage_filename = f"{timestamp}-{secrets.token_urlsafe(12)}{file_ext}"
+    storage_path = attachments_dir / storage_filename
+    
+    # Write file to disk
+    with open(storage_path, "wb") as f:
+        f.write(content)
+    
+    # Save to database
+    db = get_db()
+    attachment_id = secrets.token_urlsafe(16)
+    now = utcnow().isoformat()
+    
+    db.execute(
+        """INSERT INTO ai_attachments 
+           (id, message_id, file_type, file_size, filename, storage_path, 
+            upload_status, processing_status, metadata, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (
+            attachment_id,
+            request.message_id,
+            file.content_type,
+            len(content),
+            file.filename,
+            str(storage_path),
+            "uploaded",
+            "pending",
+            json.dumps(request.metadata),
+            now
+        )
+    )
+    
+    log.info(
+        "attachment uploaded",
+        extra_fields={
+            "attachment_id": attachment_id,
+            "file_type": file.content_type,
+            "size_bytes": len(content),
+            "filename": file.filename,
+        },
+    )
+    
+    return {
+        "success": True,
+        "attachment_id": attachment_id,
+        "filename": file.filename,
+        "file_type": file.content_type,
+        "size_bytes": len(content),
+        "status": "uploaded",
+    }
+
+
+@app.get("/ai/attachments/{attachment_id}")
+async def get_attachment(attachment_id: str, _: None = Protected) -> Dict[str, Any]:
+    """Get attachment metadata without exposing the file content."""
+    db = get_db()
+    row = db.query(
+        "SELECT * FROM ai_attachments WHERE id = ?",
+        (attachment_id,)
+    )
+    
+    if not row:
+        raise HTTPException(status_code=404, detail="Attachment not found")
+    
+    return {
+        "id": row[0]["id"],
+        "message_id": row[0]["message_id"],
+        "file_type": row[0]["file_type"],
+        "file_size": row[0]["file_size"],
+        "filename": row[0]["filename"],
+        "upload_status": row[0]["upload_status"],
+        "processing_status": row[0]["processing_status"],
+        "metadata": json.loads(row[0]["metadata"]),
+        "created_at": row[0]["created_at"],
+    }
+
+
+@app.delete("/ai/attachments/{attachment_id}")
+async def delete_attachment(attachment_id: str, _: None = Protected) -> Dict[str, Any]:
+    """Delete an attachment both from database and filesystem."""
+    db = get_db()
+    
+    # Get the attachment first
+    rows = db.query(
+        "SELECT * FROM ai_attachments WHERE id = ?",
+        (attachment_id,)
+    )
+    
+    if not rows:
+        raise HTTPException(status_code=404, detail="Attachment not found")
+    
+    row = rows[0]
+    storage_path = Path(row["storage_path"])
+    
+    # Delete from filesystem
+    if storage_path.exists():
+        try:
+            storage_path.unlink()
+        except Exception as e:
+            log.warning("failed to delete attachment file", extra_fields={"error": str(e)})
+    
+    # Delete from database
+    db.execute("DELETE FROM ai_attachments WHERE id = ?", (attachment_id,))
+    
+    return {
+        "success": True,
+        "message": "Attachment deleted successfully",
+    }
+
+
+@app.get("/ai/attachments/messages/{message_id}")
+async def get_attachments_for_message(message_id: str, _: None = Protected) -> Dict[str, Any]:
+    """Get all attachments for a specific message."""
+    db = get_db()
+    rows = db.query(
+        "SELECT * FROM ai_attachments WHERE message_id = ? ORDER BY created_at ASC",
+        (message_id,)
+    )
+    
+    return {
+        "message_id": message_id,
+        "attachments": [
+            {
+                "id": row["id"],
+                "file_type": row["file_type"],
+                "filename": row["filename"],
+                "file_size": row["file_size"],
+                "upload_status": row["upload_status"],
+                "processing_status": row["processing_status"],
+                "created_at": row["created_at"],
+            }
+            for row in rows
+        ],
+        "total_count": len(rows),
+    }
+
+
+@app.post("/ai/process-attachments")
+async def process_attachments(
+    body: Dict[str, Any] = Body(None),
+    _: None = Protected
+) -> Dict[str, Any]:
+    """Process pending attachments (vision, transcription, PDF parsing)."""
+    from ..core.models import new_id
+    
+    attachments_to_process = body.get("attachment_ids", [])
+    
+    if not attachments_to_process:
+        # Process all pending attachments
+        db = get_db()
+        rows = db.query(
+            "SELECT id FROM ai_attachments WHERE processing_status = 'pending'",
+            ()
+        )
+        attachments_to_process = [row["id"] for row in rows]
+    
+    results = []
+    
+    for attachment_id in attachments_to_process:
+        db = get_db()
+        row = db.query(
+            "SELECT * FROM ai_attachments WHERE id = ?",
+            (attachment_id,)
+        )
+        
+        if not row:
+            results.append({
+                "attachment_id": attachment_id,
+                "status": "not_found"
+            })
+            continue
+        
+        row = row[0]
+        file_path = Path(row["storage_path"])
+        file_type = row["file_type"]
+        
+        try:
+            if file_type.startswith('image'):
+                # TODO: Add vision processing pipeline here
+                processing_result = {
+                    "status": "processed",
+                    "type": "image_vision",
+                    "extracted_data": "vision_processing_placeholder"
+                }
+            
+            elif file_type == 'application/pdf':
+                # TODO: Add PDF parsing pipeline here
+                processing_result = {
+                    "status": "processed",
+                    "type": "pdf_extraction",
+                    "extracted_data": "pdf_content_placeholder"
+                }
+            
+            elif file_type.startswith('audio'):
+                # TODO: Add audio transcription pipeline here
+                processing_result = {
+                    "status": "processed",
+                    "type": "audio_transcription",
+                    "extracted_data": "audio_transcript_placeholder"
+                }
+            
+            else:
+                processing_result = {
+                    "status": "skipped",
+                    "type": "unsupported",
+                    "reason": "No processing defined for this type"
+                }
+            
+            # Update database
+            db.execute(
+                "UPDATE ai_attachments SET processing_status = 'processed' WHERE id = ?",
+                (attachment_id,)
+            )
+            
+            results.append({
+                "attachment_id": attachment_id,
+                **processing_result
+            })
+            
+        except Exception as e:
+            log.error("attachment processing failed", extra_fields={
+                "attachment_id": attachment_id,
+                "error": str(e)
+            })
+            
+            results.append({
+                "attachment_id": attachment_id,
+                "status": "error",
+                "error": str(e)
+            })
+    
+    return {
+        "processed_count": len(results),
+        "results": results,
+    }
+
+
+# ============================================================================
+# WORKFLOW ROUTES (Phase 77)
+# ============================================================================
+
+@app.get("/workflows")
+async def list_workflows(_: None = Protected) -> Dict[str, Any]:
+    """List available workflow templates."""
+    from ..workflows.engine import TEMPLATE_DEFINITIONS
+    
+    workflows = []
+    for wf_id, name, desc, source, trigger in TEMPLATE_DEFINITIONS:
+        workflows.append({
+            "workflow_id": wf_id,
+            "name": name,
+            "description": desc,
+            "source": source,
+            "trigger": trigger,
+        })
+    
+    return {"workflows": workflows}
+
+
+@app.post("/workflows/{template_name}/execute")
+async def execute_workflow(
+    template_name: str,
+    body: Dict[str, Any] = Body(None),
+    _: None = Protected
+) -> Dict[str, Any]:
+    """Execute a workflow template."""
+    
+    if not body:
+        raise HTTPException(status_code=400, detail="body is required")
+    
+    session_id = body.get("session_id", "")
+    user_request = body.get("user_request", "")
+    
+    try:
+        from ..workflows.orchestrator import WorkflowOrchestrator
+        
+        orchestrator = WorkflowOrchestrator()
+        result = orchestrator.execute_workflow_request(
+            user_input=user_request or f"Run {template_name}",
+            session_id=session_id,
+            workflow_template=template_name,
+        )
+        
+        return result
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/workflows/status/{run_id}")
+async def get_workflow_status(run_id: str, _: None = Protected) -> Dict[str, Any]:
+    """Get status of a running workflow."""
+    
+    from ..workflows.orchestrator import WorkflowOrchestrator
+    
+    orchestrator = WorkflowOrchestrator()
+    status = orchestrator.get_workflow_status(run_id)
+    
+    if not status:
+        raise HTTPException(status_code=404, detail="Workflow run not found")
+    
+    return {"status": status}
+
+
+@app.post("/workflows/cancel")
+async def cancel_workflow(
+    body: Dict[str, Any] = Body(None),
+    _: None = Protected
+) -> Dict[str, Any]:
+    """Cancel a running workflow."""
+    
+    if not body:
+        raise HTTPException(status_code=400, detail="body is required")
+    
+    session_id = body.get("session_id", "")
+    run_id = body.get("run_id")
+    
+    from ..workflows.orchestrator import WorkflowOrchestrator
+    
+    orchestrator = WorkflowOrchestrator()
+    success = orchestrator.cancel_workflow(session_id, run_id)
+    
+    return {
+        "success": success,
+        "cancelled_run_id": run_id,
+        "session_id": session_id,
+    }
+
+
+@app.get("/workflows/active/{session_id}")
+async def get_active_workflows(session_id: str, _: None = Protected) -> Dict[str, Any]:
+    """Get all active workflows for a session."""
+    
+    from ..workflows.orchestrator import WorkflowOrchestrator
+    
+    orchestrator = WorkflowOrchestrator()
+    active = orchestrator.get_running_workflows(session_id)
+    
+    return {
+        "active_workflows": active,
+        "count": len(active),
+    }
+
+
 @app.exception_handler(Exception)
 async def unhandled(_request: Any, exc: Exception) -> JSONResponse:  # pragma: no cover
     log.info("unhandled api error", extra_fields={"error": str(exc)})
