@@ -177,13 +177,19 @@ def build(dest_root: Path, python: Path) -> Path:
     executable.chmod(0o755)
 
     # --- sign ---------------------------------------------------------------
+    # Ad-hoc signing is not optional here: without a stable code identity TCC
+    # cannot persist microphone/accessibility grants, so an unsigned bundle
+    # would "work" until the first permission prompt — then silently lose it.
+    # A signing failure therefore fails the build instead of shipping a bundle
+    # whose permissions were never real.
     print("  · ad-hoc signing (gives TCC a stable identity)")
     signed = run(["codesign", "--force", "--sign", "-", "--timestamp=none", str(app)])
     if signed.returncode != 0:
-        print(f"    warning: codesign failed -> {signed.stderr.strip()}")
-    else:
-        verify = run(["codesign", "--verify", "--verbose=1", str(app)])
-        print(f"    codesign verify: {'ok' if verify.returncode == 0 else verify.stderr.strip()}")
+        raise RuntimeError(f"codesign failed -> {signed.stderr.strip() or signed.stdout.strip()}")
+    verify = run(["codesign", "--verify", "--verbose=1", str(app)])
+    if verify.returncode != 0:
+        raise RuntimeError(f"codesign verify failed -> {verify.stderr.strip()}")
+    print("    codesign verify: ok")
 
     # Clear the quarantine bit so Gatekeeper does not block a local build.
     run(["xattr", "-cr", str(app)])
