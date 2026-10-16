@@ -1,0 +1,316 @@
+{
+  "updated": "2026-10-16T15:00:00+00:00",
+  "version": 1,
+  "note": "Durable task queue for the autodev supervisor. Statuses: pending, ready, running, completed, failed, blocked, skipped. A task is completed only when its acceptance criteria are met AND evidence is recorded. Priority: lower = sooner. Mirror of docs/PROJECT_ROADMAP.md.",
+  "tasks": {
+    "R0.1-infra": {
+      "title": "Durable dev infrastructure (CLAUDE.md, docs, queue, supervisor, runbook, login agent)",
+      "status": "completed",
+      "priority": 0,
+      "acceptance": [
+        "CLAUDE.md resume protocol",
+        "roadmap+status+architecture+runbook in docs/",
+        "queue+checkpoints in .autodev/",
+        "supervisor start/status/stop/resume verified",
+        "deadline persists across restart"
+      ],
+      "evidence": [
+        "created 2026-10-16; supervisor syntax-checked; login plist template + scripts present"
+      ],
+      "attempts": 1,
+      "max_attempts": 3
+    },
+    "R0.2-green-baseline": {
+      "title": "Green full test suite (0 failures, honest skips)",
+      "status": "ready",
+      "priority": 0,
+      "acceptance": [
+        "full pytest run: 0 failed",
+        "every skip names an external prerequisite",
+        "totals recorded in docs/PROJECT_STATUS.md"
+      ],
+      "evidence": [
+        "9/9 baseline failures fixed per-file 2026-10-16; full-suite verification run pending (started 15:xx UTC)"
+      ],
+      "blockers": [],
+      "attempts": 1,
+      "max_attempts": 3
+    },
+    "R0.3-android-tree": {
+      "title": "Preserve canonical android/ tree (it is untracked by git)",
+      "status": "pending",
+      "priority": 1,
+      "depends_on": [],
+      "acceptance": [
+        "android/ intentionally git-added (or written decision recorded)",
+        "no git clean can remove it"
+      ],
+      "blockers": [
+        "needs a decision: commit the whole tree vs. .gitkeep + note. Worker should NOT unilaterally commit a whole untracked app tree without the owner reviewing it."
+      ],
+      "evidence": ["git ls-files android/ -> empty (2026-10-16)"],
+      "attempts": 0,
+      "max_attempts": 2
+    },
+    "R1.1-gateway-tests": {
+      "title": "Companion gateway security test coverage",
+      "status": "completed",
+      "priority": 1,
+      "acceptance": [
+        "pairing-code gen/redeem/expiry/reuse/supersession tested",
+        "session expiry/revocation tested",
+        "proxy allowlist denial tested",
+        "master-token forwarding + device identity tested"
+      ],
+      "evidence": ["tests/test_companion_gateway.py: 31 passed (2026-10-16)"],
+      "attempts": 1,
+      "max_attempts": 3
+    },
+    "R1.2-supersession": {
+      "title": "Pairing-code supersession (one live code per surface)",
+      "status": "completed",
+      "priority": 1,
+      "acceptance": [
+        "issuing a new code invalidates the previous one for the same surface",
+        "old code redemption fails 403"
+      ],
+      "evidence": [
+        "jarvis/companion/gateway.py issue_pairing_code now deletes prior same-surface codes; test_issuing_a_new_code_supersedes_the_previous_one passes"
+      ],
+      "attempts": 1,
+      "max_attempts": 3
+    },
+    "R1.3-gateway-wiring": {
+      "title": "Wire companion gateway into backend lifecycle (start/stop with backend, health, stable cert)",
+      "status": "ready",
+      "priority": 2,
+      "depends_on": ["R1.1-gateway-tests"],
+      "acceptance": [
+        "a documented command starts the gateway on demand",
+        "main-backend shutdown stops it (no orphan process on :8766)",
+        "/companion/health answers",
+        "cert+fingerprint stable across restarts",
+        "start/stop covered by tests"
+      ],
+      "blockers": [],
+      "files": [
+        "jarvis/companion/gateway.py",
+        "jarvis/api/app.py (lifespan)",
+        "run.py"
+      ],
+      "evidence": [
+        "build_companion_app defined+exported but never called (2026-10-16 audit)"
+      ],
+      "attempts": 0,
+      "max_attempts": 3
+    },
+    "R1.4-android-contract": {
+      "title": "Native Android client: gateway contract + TLS cert pinning",
+      "status": "pending",
+      "priority": 3,
+      "depends_on": ["R1.3-gateway-wiring"],
+      "acceptance": [
+        "QR/manual entry -> POST /companion/pairing-redeem",
+        "scoped token stored (EncryptedSharedPreferences, already done)",
+        "OkHttp CertificatePinner on served fingerprint",
+        "allowed paths 200 / denied 403 / expired+reused codes fail — verified against a real gateway"
+      ],
+      "blockers": ["needs R1.3 (a running gateway) to verify end-to-end"],
+      "files": [
+        "android/app/src/main/java/.../VantageApiClient.kt",
+        "AuthInterceptor.kt",
+        "ApiModels.kt"
+      ],
+      "evidence": [
+        "VantageApiClient.kt:137-155 legacy /phone + /auth/session; no CertificatePinner (2026-10-16 audit)"
+      ],
+      "attempts": 0,
+      "max_attempts": 3
+    },
+    "R1.5-release-pipeline": {
+      "title": "Release pipeline ships native companion (not the WebView wrapper)",
+      "status": "ready",
+      "priority": 3,
+      "depends_on": [],
+      "acceptance": [
+        "android/build_apk.sh builds com.vantage.companion",
+        "installers/build_release.sh calls it",
+        "artifact identity verified via aapt badging before success",
+        "legacy installers/android/ retired or clearly marked"
+      ],
+      "blockers": [
+        "Android SDK / gradle availability in this environment is unverified — may be BLOCKED on toolchain"
+      ],
+      "files": ["installers/build_release.sh:93", "android/"],
+      "evidence": [
+        "build_release.sh:93 -> installers/android/build_apk.sh (WebView wrapper); :100 'The Android project uses a WebView' (2026-10-16 audit)"
+      ],
+      "attempts": 0,
+      "max_attempts": 3
+    },
+    "R2.1-conversation-memory": {
+      "title": "Multi-turn conversation memory on the chat path",
+      "status": "pending",
+      "priority": 4,
+      "acceptance": [
+        "/ai/chat/send threads prior turns from conversation_id (bounded window)",
+        "/command fallback advice includes last N relevant turns",
+        "tests assert the model receives history"
+      ],
+      "files": [
+        "jarvis/api/app.py:3621 (send_ai_message)",
+        "jarvis/gateway/providers.py:307",
+        "jarvis/core/orchestrator.py:216,250-269"
+      ],
+      "blockers": [],
+      "evidence": ["no history assembled on either path (2026-10-16 audit)"],
+      "attempts": 0,
+      "max_attempts": 3
+    },
+    "R2.2-unify-chat": {
+      "title": "Unify the two chat surfaces; model actions gated by PermissionEngine",
+      "status": "pending",
+      "priority": 4,
+      "depends_on": ["R2.1-conversation-memory"],
+      "acceptance": [
+        "one documented primary path",
+        "model-proposed actions validated (params/paths/risk) + permission decision",
+        "no model-bypass of approvals (DESTRUCTIVE model suggestion requires confirmation, proven by test)"
+      ],
+      "files": [
+        "jarvis/core/orchestrator.py:479 (_handle)",
+        "jarvis/security/policy.py:189"
+      ],
+      "blockers": [],
+      "attempts": 0,
+      "max_attempts": 3
+    },
+    "R2.3-model-planned-actions": {
+      "title": "Model-planned actions feeding Plan.actions (beyond the 54 regex rules)",
+      "status": "pending",
+      "priority": 5,
+      "depends_on": ["R2.2-unify-chat"],
+      "acceptance": [
+        "model proposes structured plan -> validated -> permission -> execution with tri-state verification",
+        "negative tests for invalid/over-privileged proposals"
+      ],
+      "files": ["jarvis/core/planner.py:224"],
+      "blockers": [],
+      "attempts": 0,
+      "max_attempts": 3
+    },
+    "R2.4-default-unverified": {
+      "title": "Default-UNKNOWN verification for effect tools",
+      "status": "pending",
+      "priority": 5,
+      "acceptance": [
+        "tools/base.ok() gains explicit verified arg, default unverified for write-side tools",
+        "affected tools updated + tested",
+        "replies read honestly"
+      ],
+      "files": ["jarvis/tools/base.py:105,135"],
+      "blockers": [],
+      "attempts": 0,
+      "max_attempts": 3
+    },
+    "R3.1-macos-lifecycle": {
+      "title": "macOS service lifecycle (onDisappear kill, connect idempotency, SIGTERM to python not env)",
+      "status": "ready",
+      "priority": 6,
+      "acceptance": [
+        "no listener on :8765/:8766 after app quit (process-group kill)",
+        "double connect() is safe",
+        "minimize/Space-switch does not disconnect (or documented choice)"
+      ],
+      "files": [
+        "macos/Vantage/Sources/Views/ContentView.swift:19-21",
+        "Services/BackendManager.swift:41-50,137"
+      ],
+      "blockers": [],
+      "evidence": [
+        "audit 2026-10-16: no terminationHandler; SIGTERM to /usr/bin/env"
+      ],
+      "attempts": 0,
+      "max_attempts": 3
+    },
+    "R3.2-destructive-confirm": {
+      "title": "Confirmation dialogs for destructive macOS actions",
+      "status": "ready",
+      "priority": 6,
+      "acceptance": [
+        "Delete All Data / session revoke / task cancel each show a confirmation naming the effect"
+      ],
+      "files": [
+        "SettingsView.swift:210-217,136-142",
+        "ActivityView.swift:131-138"
+      ],
+      "blockers": [],
+      "attempts": 0,
+      "max_attempts": 2
+    },
+    "R3.3-honest-states": {
+      "title": "Honest loading/error states in macOS views",
+      "status": "pending",
+      "priority": 7,
+      "acceptance": [
+        "no spinner-forever; each view shows error or retry; Export Data exports or is removed"
+      ],
+      "files": [
+        "HomeView.swift:119-145",
+        "ProvidersView.swift:309-313",
+        "SettingsView.swift:206-215"
+      ],
+      "blockers": [],
+      "attempts": 0,
+      "max_attempts": 2
+    },
+    "R3.4-version-plist": {
+      "title": "macOS version from Info.plist (not hardcoded)",
+      "status": "pending",
+      "priority": 8,
+      "acceptance": ["CFBundleShortVersionString read at runtime"],
+      "files": ["SettingsView.swift:248"],
+      "blockers": [],
+      "attempts": 0,
+      "max_attempts": 1
+    },
+    "R3.5-url-encoding": {
+      "title": "Percent-encode URL paths in APIClient",
+      "status": "pending",
+      "priority": 8,
+      "acceptance": [
+        "addingPercentEncoding applied to interpolated ids",
+        "a non-ASCII id round-trips in a test"
+      ],
+      "files": ["APIClient.swift:75"],
+      "blockers": [],
+      "attempts": 0,
+      "max_attempts": 1
+    },
+    "R5.1-fail-loud-signing": {
+      "title": "Packaging: fail loud on codesign failure",
+      "status": "pending",
+      "priority": 9,
+      "acceptance": [
+        "signing failure = build failure, or explicit logged opt-in ad-hoc mode"
+      ],
+      "files": ["build_app.py:182", "installers/macos/build_dmg.sh:51"],
+      "blockers": [],
+      "attempts": 0,
+      "max_attempts": 2
+    },
+    "R5.2-artifact-provenance": {
+      "title": "Record build sha+timestamp+checksum; release_verify.sh verifies it",
+      "status": "pending",
+      "priority": 9,
+      "acceptance": [
+        "manifest carries sha/timestamp/sha256",
+        "scripts/release_verify.sh checks provenance"
+      ],
+      "files": ["scripts/release_verify.sh", "build_app.py"],
+      "blockers": [],
+      "attempts": 0,
+      "max_attempts": 2
+    }
+  }
+}

@@ -1,0 +1,605 @@
+#!/usr/bin/env python3
+"""VANTAGE/JARVIS Forge autonomous development supervisor.
+
+Commands:
+  setup                  validate prerequisites, create .autodev state
+  start [--hours 12]     begin a bounded run (hard cap 24h)
+  status                 show actual run state (deadline, task, worker)
+  stop                   controlled stop (worker + supervisor)
+  resume                 resume an active, unexpired run (never invents one)
+  logs [--task ID] [-n N] display/locate logs (secrets redacted)
+
+The worker is a real `claude -p` headless session per task with a bounded
+tool allowlist. Deadlines persist across restarts; a restart never extends
+them. The final 10% of the budget is reserved for wrap-up (regression,
+status update, report). See docs/AUTODEV_RUNBOOK.md.
+"""
+
+from __future__ import annotations
+
+import argparse
+import fcntl
+import json
+import os
+import re
+import shutil
+import signal
+import subprocess
+import sys
+import time
+import uuid
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+
+REPO = Path(__file__).resolve().parent.parent.parent
+AUTODEV = REPO / ".autodev"
+TASKS = AUTODEV / "tasks.json"
+STATE = AUTODEV / "state.json"
+LOCK = AUTODEV / "supervisor.lock"
+PIDF = AUTODEV / "supervisor.pid"
+LOGS = AUTODEV / "logs"
+REPORT = AUTODEV / "worker-report.json"
+CHECKPOINTS = AUTODEV / "checkpoints"
+PROMPT_TPL = Path(__file__).resolve().parent / "worker_prompt.md"
+
+BUDGET_CAP_HOURS = 24.0
+DEFAULT_HOURS = 12.0
+WRAPUP_FRACTION = 0.10
+MAX_TASK_ATTEMPTS_DEFAULT = 3
+BACKOFF_BASE_S = 300
+BACKOFF_CAP_S = 1800
+
+# Bounded allowlist for headless workers: no permission-prompt bypass;
+# anything not listed is auto-denied in print mode.
+ALLOWED_TOOLS = [
+    "Read", "Edit", "Write", "Glob", "Grep", "Task",
+    "Bash(git status:*)", "Bash(git diff:*)", "Bash(git add:*)",
+    "Bash(git log:*)", "Bash(git show:*)", "Bash(git commit:*)",
+    "Bash(.venv/bin/python:*)", "Bash(pytest:*)",
+]
+
+SECRET_PATTERNS = [
+    re.compile(r"sk-[A-Za-z0-9_\-]{16,}"),
+    re.compile(r"\bBearer\s+[A-Za-z0-9._\-]{16,}"),
+    re.compile(r"(?i)(api[_-]?key|token|secret|password)\s*[=:]\s*\S+"),
+]
+
+
+def now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+def parse_iso(s: str) -> datetime:
+    return datetime.fromisoformat(s)
+
+
+def atomic_write_json(path: Path, obj) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(path.suffix + f".tmp-{os.getpid()}")
+    tmp.write_text(json.dumps(obj, indent=2, ensure_ascii=False))
+    os.replace(tmp, path)
+
+
+def load_json(path: Path, default):
+    try:
+        return json.loads(path.read_text())
+    except (FileNotFoundError, json.JSONDecodeError):
+        return default
+
+
+def acquire_lock() -> bool:
+    AUTODEV.mkdir(parents=True, exist_ok=True)
+    LOCK.parent.mkdir(parents=True, exist_ok=True)
+    with open(LOCK, "a+") as f:
+        fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        f.seek(0)
+        f.truncate()
+        f.write(str(os.getpid()))
+        f.flush()
+    # keep the fd open for process lifetime
+    acquire_lock._fd = f
+    return True
+
+
+def release_lock() -> None:
+    fd = getattr(acquire_lock, "_fd", None)
+    if fd:
+        try:
+            fcntl.flock(fd, fcntl.LOCK_UN)
+            fd.close()
+        except OSError:
+            pass
+    for p in (LOCK, PIDF):
+        try:
+            p.unlink(missing_ok=True)
+        except OSError:
+            pass
+
+
+def supervisor_alive() -> bool:
+    pid = load_json(PIDF, None)
+    if not pid:
+        return False
+    try:
+        os.kill(int(pid), 0)
+        return True
+    except (ProcessLookupError, ValueError):
+        return False
+    except PermissionError:
+        return True
+
+
+def check_prereqs() -> list[str]:
+    problems = []
+    if not shutil.which("claude"):
+        problems.append("`claude` CLI not found on PATH")
+    venv_py = REPO / ".venv" / "bin" / "python"
+    if not venv_py.exists():
+        problems.append("`.venv/bin/python` not found")
+    if not (REPO / "CLAUDE.md").exists():
+        problems.append("CLAUDE.md missing — resume protocol would have no source of truth")
+    if not TASKS.exists():
+        problems.append(f"{TASKS} missing — run with a tasks.json in place")
+    return problems
+
+
+def new_run(hours: float) -> dict:
+    hours = min(hours, BUDGET_CAP_HOURS)
+    started = datetime.now(timezone.utc)
+    return {
+        "run_id": str(uuid.uuid4())[:8],
+        "started_iso": started.isoformat(timespec="seconds"),
+        "deadline_iso": (started + timedelta(hours=hours)).isoformat(timespec="seconds"),
+        "budget_hours": hours,
+        "phase": "working",
+        "current_task": None,
+        "last_worker_session": None,
+        "stop_requested": False,
+        "blocked_reason": None,
+        "wrapup_done": False,
+        "updated": now_iso(),
+    }
+
+
+def pick_next(tasks: dict, state: dict) -> str | None:
+    """Highest-priority task whose deps are completed and status is ready/pending."""
+    if state.get("phase") == "wrapup":
+        return None
+    eligible = []
+    for task_id, t in tasks.items():
+        if t.get("status") not in ("ready", "pending"):
+            continue
+        if t.get("attempts", 0) >= t.get("max_attempts", MAX_TASK_ATTEMPTS_DEFAULT):
+            continue
+        deps = t.get("depends_on", [])
+        if all(tasks.get(d, {}).get("status") == "completed" for d in deps):
+            eligible.append((t.get("priority", 99), task_id, t))
+    if not eligible:
+        return None
+    eligible.sort(key=lambda item: (item[0], item[1]))
+    return eligible[0][1]
+
+
+def worker_prompt(task: dict) -> str:
+    tpl = PROMPT_TPL.read_text()
+    return (tpl.replace("__TASK_JSON__", json.dumps(task, indent=2, ensure_ascii=False))
+                .replace("__REPO__", str(REPO)))
+
+
+def launch_worker(task: dict) -> tuple[subprocess.Popen, str, Path]:
+    session_id = str(uuid.uuid4())
+    log_path = LOGS / f"{task['id']}-{session_id[:8]}.log"
+    LOGS.mkdir(parents=True, exist_ok=True)
+    cmd = [
+        "claude", "-p",
+        "--session-id", session_id,
+        "--permission-mode", "acceptEdits",
+        "--output-format", "stream-json",
+        *("--allowedTools", " ".join(ALLOWED_TOOLS)),
+        "--", worker_prompt(task),
+    ]
+    env = dict(os.environ)
+    env.setdefault("CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC", "1")
+    with open(log_path, "ab") as out:
+        proc = subprocess.Popen(
+            cmd, cwd=REPO, stdout=out,
+            stderr=subprocess.STDOUT, env=env,
+            start_new_session=True,
+        )
+    return proc, session_id, log_path
+
+
+def read_worker_report() -> dict | None:
+    rep = load_json(REPORT, None)
+    if not isinstance(rep, dict) or "task_id" not in rep:
+        return None
+    try:
+        REPORT.unlink()
+    except OSError:
+        pass
+    return rep
+
+
+def merge_report(tasks: dict, state: dict, task_id: str, rep: dict) -> None:
+    t = tasks.get(task_id)
+    if not t:
+        return
+    t["attempts"] = t.get("attempts", 0) + 1
+    t["evidence"] = t.get("evidence", [])
+    t["blockers"] = t.get("blockers", [])
+    cmds = rep.get("commands") or []
+    if cmds:
+        t["evidence"].append(f"[{now_iso()}] commands: " + " | ".join(map(str, cmds)[:8]))
+    for ev in (rep.get("evidence") or [])[:10]:
+        t["evidence"].append(f"[{now_iso()}] {ev}")
+    for b in (rep.get("blockers") or [])[:6]:
+        if b not in t["blockers"]:
+            t["blockers"].append(b)
+    t["status"] = rep.get("status") if rep.get("status") in (
+        "completed", "failed", "blocked", "skipped") else "failed"
+    if rep.get("commit"):
+        t["evidence"].append(f"[{now_iso()}] commit: {rep['commit']}")
+    if rep.get("summary"):
+        t["evidence"].append(f"[{now_iso()}] summary: {str(rep['summary'])[:400]}")
+    if rep.get("next_recommendation"):
+        t["next"] = rep["next_recommendation"]
+    t["updated"] = now_iso()
+    state["last_worker_session"] = state.get("last_worker_session")
+
+
+def run_worker(task: dict, state: dict, deadline: datetime) -> bool:
+    """Run one worker for the task. Returns True if budget exhausted mid-task."""
+    state["current_task"] = task["id"]
+    state["updated"] = now_iso()
+    atomic_write_json(STATE, state)
+    proc, session_id, log_path = launch_worker(task)
+    state["last_worker_session"] = session_id
+    state["updated"] = now_iso()
+    atomic_write_json(STATE, state)
+    log_path.touch()
+    while proc.poll() is None:
+        if datetime.now(timezone.utc) >= deadline:
+            _terminate(proc)
+            state["phase"] = "expired"
+            state["updated"] = now_iso()
+            atomic_write_json(STATE, state)
+            return True
+        if state.get("stop_requested"):
+            _terminate(proc)
+            state["phase"] = "stopped"
+            state["updated"] = now_iso()
+            atomic_write_json(STATE, state)
+            return True
+        time.sleep(10)
+    state["current_task"] = None
+    state["updated"] = now_iso()
+    atomic_write_json(STATE, state)
+    # worker exit: nonzero may still have left a valid report
+    return False
+
+
+def _terminate(proc: subprocess.Popen) -> None:
+    try:
+        os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
+    except (ProcessLookupError, PermissionError):
+        try:
+            proc.terminate()
+        except OSError:
+            return
+    try:
+        proc.wait(timeout=30)
+    except subprocess.TimeoutExpired:
+        try:
+            os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+        except (ProcessLookupError, PermissionError):
+            proc.kill()
+
+
+def do_start(hours: float) -> int:
+    problems = check_prereqs()
+    if problems:
+        print("Prerequisites not met:")
+        for p in problems:
+            print(f"  - {p}")
+        return 1
+    if supervisor_alive():
+        print("A supervisor is already running (see `autodev status`).")
+        return 1
+    existing = load_json(STATE, None)
+    if existing and not existing.get("stop_requested"):
+        try:
+            if datetime.now(timezone.utc) < parse_iso(existing["deadline_iso"]):
+                print("An active, unexpired run exists — use `autodev resume`, not a new start.")
+                return 1
+        except (KeyError, ValueError):
+            pass
+    if not acquire_lock():
+        print("Could not acquire the supervisor lock (another supervisor starting?).")
+        return 1
+    try:
+        state = new_run(hours)
+        atomic_write_json(STATE, state)
+        PIDF.write_text(str(os.getpid()))
+        _supervisor_loop(state)
+    finally:
+        release_lock()
+    return 0
+
+
+def _supervisor_loop(state: dict) -> None:
+    deadline = parse_iso(state["deadline_iso"])
+    budget = timedelta(hours=state["budget_hours"])
+    stop_flag = {"sig": False}
+
+    def _sigterm(signum, frame):  # noqa: ARG001
+        state["stop_requested"] = True
+        atomic_write_json(STATE, state)
+
+    signal.signal(signal.SIGTERM, _sigterm)
+    signal.signal(signal.SIGINT, _sigterm)
+
+    print(f"autodev run {state['run_id']} started; deadline {state['deadline_iso']}")
+    while True:
+        now = datetime.now(timezone.utc)
+        if state.get("stop_requested"):
+            state["phase"] = "stopped"
+            break
+        if now >= deadline:
+            state["phase"] = "expired"
+            break
+        remaining = deadline - now
+        if remaining <= budget * WRAPUP_FRACTION:
+            if state["phase"] != "wrapup":
+                state["phase"] = "wrapup"
+                state["updated"] = now_iso()
+                atomic_write_json(STATE, state)
+                _run_wrapup(state, deadline)
+            state["phase"] = "stopped" if state.get("stop_requested") else "complete"
+            break
+        tasks_doc = load_json(TASKS, {"tasks": {}})
+        tasks = tasks_doc.get("tasks", {})
+        # a task left `running` by a crash is reverted to ready (checkpoint-safe)
+        for t in tasks.values():
+            if t.get("status") == "running":
+                t["status"] = "ready"
+                t["blockers"].append(f"[{now_iso()}] previous attempt interrupted; restarted")
+                atomic_write_json(TASKS, tasks_doc)
+        task_id = pick_next(tasks, state)
+        if not task_id:
+            state["phase"] = "complete"
+            print("autodev: no eligible tasks remaining; run complete.")
+            break
+        task = dict(tasks[task_id])
+        task["id"] = task_id  # stable id, so prompts/reports/logs can name it
+        task["status"] = "running"
+        tasks[task_id]["status"] = "running"
+        tasks[task_id]["updated"] = now_iso()
+        tasks_doc["updated"] = now_iso()
+        atomic_write_json(TASKS, tasks_doc)
+        exhausted = run_worker(task, state, deadline)
+        if exhausted:
+            break
+        rep = read_worker_report()
+        if rep and rep.get("task_id") == task_id:
+            merge_report(tasks, state, task_id, rep)
+        else:
+            t = tasks[task_id]
+            t["status"] = "failed"
+            t["blockers"].append(
+                f"[{now_iso()}] worker exited without a valid report "
+                f"(session {state.get('last_worker_session')})")
+        tasks_doc["tasks"] = tasks
+        tasks_doc["updated"] = now_iso()
+        atomic_write_json(TASKS, tasks_doc)
+        _checkpoint(state, tasks_doc)
+        t = tasks[task_id]
+        print(f"autodev: task {task_id} -> {t['status']} (attempt {t.get('attempts', 0)})")
+        if t["status"] == "failed":
+            backoff = min(BACKOFF_BASE_S * (2 ** (t.get("attempts", 1) - 1)), BACKOFF_CAP_S)
+            if datetime.now(timezone.utc) + timedelta(seconds=backoff) >= deadline:
+                break
+            time.sleep(backoff)
+    state["updated"] = now_iso()
+    atomic_write_json(STATE, state)
+    _checkpoint(state, load_json(TASKS, {"tasks": {}}))
+    print(f"autodev: run ended, phase={state['phase']}")
+
+
+def _run_wrapup(state: dict, deadline: datetime) -> None:
+    wrapup = {
+        "id": "WRAPUP",
+        "title": "Run wrap-up",
+        "objective": ("Final 10% of the development budget. Run the full test suite, "
+                      "update docs/PROJECT_STATUS.md with verified results and quality "
+                      "scores, write a final section into .autodev/logs/wrapup-notes.md "
+                      "(what changed, what remains, ranked), and ensure the queue in "
+                      ".autodev/tasks.json reflects reality."),
+        "acceptance": ["full pytest run executed with recorded totals",
+                       "PROJECT_STATUS.md updated with evidence"],
+        "priority": 0,
+    }
+    state["current_task"] = "WRAPUP"
+    atomic_write_json(STATE, state)
+    try:
+        proc, session_id, log_path = launch_worker(wrapup)
+        state["last_worker_session"] = session_id
+        atomic_write_json(STATE, state)
+        while proc.poll() is None:
+            if datetime.now(timezone.utc) >= deadline or state.get("stop_requested"):
+                _terminate(proc)
+                return
+            time.sleep(10)
+    except Exception as e:  # noqa: BLE001
+        state["wrapup_error"] = str(e)
+    finally:
+        state["current_task"] = None
+        state["wrapup_done"] = True
+        state["updated"] = now_iso()
+        atomic_write_json(STATE, state)
+
+
+def _checkpoint(state: dict, tasks_doc: dict) -> None:
+    CHECKPOINTS.mkdir(parents=True, exist_ok=True)
+    name = f"checkpoint-{parse_iso(state['updated']).strftime('%Y%m%dT%H%M%S')}-{os.getpid()}.json"
+    atomic_write_json(CHECKPOINTS / name, {"state": state, "tasks": tasks_doc})
+    # keep last 10
+    cps = sorted(CHECKPOINTS.glob("checkpoint-*.json"))
+    for old in cps[:-10]:
+        try:
+            old.unlink()
+        except OSError:
+            pass
+
+
+def do_resume() -> int:
+    if supervisor_alive():
+        print("A supervisor is already running — nothing to resume.")
+        return 0
+    state = load_json(STATE, None)
+    if not state:
+        print("No run on record. Use `autodev start` to begin one.")
+        return 0
+    if state.get("stop_requested") or state.get("phase") in ("stopped", "complete", "expired"):
+        print(f"Recorded run is {state.get('phase')} — not resumable. Start a new run explicitly.")
+        return 0
+    try:
+        deadline = parse_iso(state["deadline_iso"])
+    except (KeyError, ValueError):
+        print("State file is malformed and unreadable deadline; not resuming.")
+        return 1
+    if datetime.now(timezone.utc) >= deadline:
+        state["phase"] = "expired"
+        atomic_write_json(STATE, state)
+        print("The run's deadline has passed. It will not be extended; start a new run explicitly.")
+        return 0
+    if not acquire_lock():
+        print("Lock busy; another supervisor may be starting.")
+        return 1
+    try:
+        state["stop_requested"] = False
+        state["updated"] = now_iso()
+        atomic_write_json(STATE, state)
+        PIDF.write_text(str(os.getpid()))
+        print(f"Resuming run {state['run_id']}; deadline {state['deadline_iso']} (unchanged).")
+        _supervisor_loop(state)
+    finally:
+        release_lock()
+    return 0
+
+
+def do_stop() -> int:
+    state = load_json(STATE, None)
+    if state:
+        state["stop_requested"] = True
+        state["updated"] = now_iso()
+        atomic_write_json(STATE, state)
+    pid = load_json(PIDF, None)
+    if pid:
+        try:
+            os.kill(int(pid), signal.SIGTERM)
+            print(f"Stop requested; supervisor pid {pid} notified.")
+            return 0
+        except (ProcessLookupError, ValueError):
+            print("Supervisor not running; stop flag recorded.")
+            return 0
+    print("No supervisor process found; stop flag recorded for any future resume.")
+    return 0
+
+
+def do_status() -> int:
+    state = load_json(STATE, None)
+    tasks_doc = load_json(TASKS, {"tasks": {}})
+    tasks = tasks_doc.get("tasks", {})
+    if not state:
+        print("No run on record.")
+    else:
+        now = datetime.now(timezone.utc)
+        try:
+            deadline = parse_iso(state["deadline_iso"])
+            left = deadline - now
+            left_s = str(timedelta(seconds=int(left.total_seconds()))) if left.total_seconds() > 0 else "past deadline"
+        except (KeyError, ValueError):
+            left_s = "unknown"
+        print(f"run:        {state.get('run_id')}  phase: {state.get('phase')}")
+        print(f"deadline:   {state.get('deadline_iso')} (time left: {left_s})")
+        print(f"supervisor: {'RUNNING (pid ' + str(load_json(PIDF, '?')) + ')' if supervisor_alive() else 'not running'}")
+        print(f"current:    {state.get('current_task')}")
+        if state.get("blocked_reason"):
+            print(f"blocked:    {state['blocked_reason']}")
+    counts: dict[str, int] = {}
+    for key, t in tasks.items():
+        counts[t.get("status", "?")] = counts.get(t.get("status", "?"), 0) + 1
+    print("tasks:      " + ", ".join(f"{k}={v}" for k, v in sorted(counts.items())))
+    ready = [key for key, t in tasks.items() if t.get("status") in ("ready", "pending")][:8]
+    if ready:
+        print("next-ish:   " + ", ".join(sorted(ready)))
+    logs = sorted(LOGS.glob("*.log"), key=lambda p: p.stat().st_mtime, reverse=True)
+    if logs:
+        print(f"last log:   {logs[0].relative_to(REPO)}")
+    return 0
+
+
+def do_logs(task: str | None, n: int) -> int:
+    logs = sorted(LOGS.glob("*.log"), key=lambda p: p.stat().st_mtime, reverse=True)
+    if task:
+        logs = [p for p in logs if task in p.name] or logs
+    if not logs:
+        print(f"No logs yet in {LOGS}")
+        return 0
+    print(f"== {logs[0]} ==")
+    tail = logs[0].read_text(errors="replace").splitlines()[-n:]
+    for line in tail:
+        for pat in SECRET_PATTERNS:
+            line = pat.sub("[REDACTED]", line)
+        print(line)
+    print(f"\n(all logs: {LOGS}; {len(list(LOGS.glob('*.log')))} files)")
+    return 0
+
+
+def do_setup() -> int:
+    AUTODEV.mkdir(parents=True, exist_ok=True)
+    for d in (LOGS, CHECKPOINTS):
+        d.mkdir(exist_ok=True)
+    problems = check_prereqs()
+    if problems:
+        print("Prerequisite problems (fix before start):")
+        for p in problems:
+            print(f"  - {p}")
+        return 1
+    print("autodev ready: claude CLI, .venv, CLAUDE.md, tasks.json all present.")
+    print("Start a bounded run with: scripts/autodev/autodev start --hours 12")
+    return 0
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(prog="autodev", description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    sub = ap.add_subparsers(dest="cmd", required=True)
+    sub.add_parser("setup")
+    p_start = sub.add_parser("start")
+    p_start.add_argument("--hours", type=float, default=DEFAULT_HOURS,
+                         help=f"run budget in hours (default {DEFAULT_HOURS}, cap {BUDGET_CAP_HOURS})")
+    sub.add_parser("status")
+    sub.add_parser("stop")
+    sub.add_parser("resume")
+    p_logs = sub.add_parser("logs")
+    p_logs.add_argument("--task", default=None)
+    p_logs.add_argument("-n", type=int, default=40)
+    args = ap.parse_args()
+    if args.cmd == "setup":
+        return do_setup()
+    if args.cmd == "start":
+        return do_start(args.hours)
+    if args.cmd == "status":
+        return do_status()
+    if args.cmd == "stop":
+        return do_stop()
+    if args.cmd == "resume":
+        return do_resume()
+    if args.cmd == "logs":
+        return do_logs(args.task, args.n)
+    return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main())

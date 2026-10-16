@@ -20,3 +20,8 @@ app/build/
 
 # macOS
 .DS_Store
+
+# Autonomous dev runner (scripts/autodev). The durable task queue (tasks.json)
+# IS tracked; runtime state, checkpoints, and worker logs are not.
+.autodev/*
+!.autodev/tasks.json
