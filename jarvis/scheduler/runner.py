@@ -178,23 +178,71 @@ class SchedulerRunner:
         """Run a built-in scheduled action."""
         if job.action == "briefing":
             from ..core.briefing import build_briefing
+            from ..notify import notify
 
             briefing = await build_briefing(core, sections=job.params.get("sections"))
+            # The briefing's first line is its headline; the banner carries that,
+            # the full text stays in the run record.
+            headline = (briefing["text"] or "").strip().splitlines()[:2]
+            notify(title="Vantage briefing", body=" ".join(headline)[:200])
             return briefing["text"]
 
         if job.action == "reminder":
             message = job.params.get("message") or job.name
-            return f"Reminder: {message}"
+            # A reminder whose only effect is a row in the run history is not a
+            # reminder -- nobody is reading that table when it fires. Ask the
+            # system for a banner. `accepted` is reported, `delivered` is not:
+            # Focus can swallow it and nothing here can see that.
+            from ..notify import notify
+
+            result = notify(title="Vantage reminder", body=str(message))
+            if result.get("accepted"):
+                return f"Reminder: {message} (banner requested)"
+            return f"Reminder: {message} (no banner: {result.get('detail')})"
 
         raise ValueError(f"unknown builtin {job.action!r}")
 
     # -- all due jobs --------------------------------------------------------
     async def tick(self, core, moment: Optional[datetime] = None) -> List[Dict[str, Any]]:
-        """Run every job that is due. Returns one record per job."""
+        """Run every job that is due, then notify for tasks whose time arrived.
+
+        The task half is what makes a *deadline* mean something. A planner task
+        with a due time only ever appeared in a list on a page nobody had open;
+        the tick asks the system for a banner once per task, and records that it
+        did so, because a banner repeated every tick is one a person learns to
+        ignore.
+        """
         results = []
         for job in self.store.due(moment):
             outcome = await self.run_job(core, job)
             results.append({"schedule_id": job.schedule_id, "name": job.name, **outcome})
+
+        results.extend(self._notify_due_tasks(core, moment))
+        return results
+
+    def _notify_due_tasks(self, core, moment: Optional[datetime] = None) -> List[Dict[str, Any]]:
+        """One banner per task whose due time has passed, never twice."""
+        from ..notify import notify
+
+        results: List[Dict[str, Any]] = []
+        try:
+            due = core.planner_service.due_now(moment)
+        except Exception as exc:  # a planner read must not kill the scheduler
+            log.warning("due-task sweep failed", extra_fields={"error": str(exc)[:120]})
+            return results
+
+        for task in due:
+            outcome = notify(title="Task due", body=task.title)
+            # Marked whether or not a banner appeared: retrying a suppressed
+            # notification every tick is the same banner-fatigue problem.
+            core.planner_service.mark_notified(task.task_ref)
+            results.append({
+                "kind": "task_due",
+                "task_ref": task.task_ref,
+                "name": task.title,
+                "outcome": "notified" if outcome.get("accepted") else "not-notified",
+                "detail": outcome.get("detail", ""),
+            })
         return results
 
     # -- background loop -----------------------------------------------------

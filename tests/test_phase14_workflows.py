@@ -149,7 +149,7 @@ async def test_approving_one_step_does_not_claim_the_workflow_finished(core, wor
     response = await core.handle(CommandRequest(text=MID_GOAL, source="test"))
     assert response.needs_confirmation
     after = await core.resolve_confirmation(
-        response.confirmation_id, True, session_id=response.session_id)
+        response.confirmation_id, True, session_id="laptop")
 
     job = core.tasks.get(after.job_id)
     assert job["status"] == "incomplete", job["status"]
@@ -164,7 +164,7 @@ async def test_approving_one_step_does_not_claim_the_workflow_finished(core, wor
 async def test_denied_step_leaves_the_workflow_failed_not_done(core, workspace):
     response = await core.handle(CommandRequest(text=MID_GOAL, source="test"))
     denied = await core.resolve_confirmation(
-        response.confirmation_id, False, session_id=response.session_id)
+        response.confirmation_id, False, session_id="laptop")
 
     job = core.tasks.get(denied.job_id)
     assert job["status"] == "failed"

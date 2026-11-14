@@ -54,6 +54,7 @@ from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from .logging_setup import get_logger
+from .security.privacy import redact
 
 # Imported at module level, not inside build_relay_app: FastAPI resolves a route's annotations
 # through the function's *globals*, so a function-local ``Request`` import makes ``request:
@@ -301,9 +302,17 @@ class RelayService:
             return 502, _json_bytes({"relay_error": "host_unavailable",
                                      "detail": str(exc)}), "host_unavailable"
         except Exception as exc:  # a transport surprise is still an outage, never an empty answer
-            log.warning("relay forward failed", extra_fields={"error": str(exc)})
+            # A transport error's text is not under this code's control: an
+            # httpx/h11 exception can carry the request URL, and this service
+            # forwards a credential on every call. Redact before it reaches the
+            # log or the response. `redact` catches key=value, Bearer and
+            # standalone credential shapes; a bare token with no surrounding
+            # context is not a shape any redactor can recognise, which is why
+            # this is a floor rather than a guarantee.
+            detail = redact(str(exc))
+            log.warning("relay forward failed", extra_fields={"error": detail})
             return 502, _json_bytes({"relay_error": "host_unavailable",
-                                     "detail": f"The laptop could not be reached: {exc}"}), "host_unavailable"
+                                     "detail": f"The laptop could not be reached: {detail}"}), "host_unavailable"
         return int(status), bytes(raw), ""
 
     # -- what an operator may be told --------------------------------------

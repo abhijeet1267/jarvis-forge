@@ -308,7 +308,13 @@ def test_the_two_capabilities_this_phase_added_are_there(registry):
     for name in ("open_user_folder", "get_frontmost_application"):
         assert registry.get(name) is not None, f"{name} is gone"
     readme = (REPO / "README.md").read_text()
-    claimed = int(re.search(r"\| Tools registered \| \*\*(\d+)\*\*", readme).group(1))
+    # The README's count column is padded, so the cell may be `| Tools registered   | **148**`
+    # rather than tightly joined. Match the label and the bold number with flexible
+    # whitespace between them; the invariant is that the published count equals the
+    # live registry, which the formatting cannot change.
+    m = re.search(r"Tools registered\s*\|\s*\*\*(\d+)\*\*", readme)
+    assert m, "README no longer publishes a tool count"
+    claimed = int(m.group(1))
     assert claimed == len(registry.names()), (
         f"the README publishes {claimed} tools; the registry has {len(registry.names())}")
 

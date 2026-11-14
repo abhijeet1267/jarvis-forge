@@ -111,12 +111,25 @@ async def run_coding_agent(ctx: ToolContext, prompt: str = "", path: str = "",
         "turns": (payload or {}).get("num_turns") if isinstance(payload, dict) else None,
         "cost_usd": (payload or {}).get("total_cost_usd") if isinstance(payload, dict) else None,
     }
+
+    # The agent exits 0 with an empty result when it could not reach its model.
+    # Saying only "it failed" leaves a person with nothing to act on, so the
+    # agent's own terminal reason is turned into a sentence naming the fix.
+    reason = str((payload or {}).get("terminal_reason") or "") if isinstance(payload, dict) else ""
+    if reason == "api_error" or (not said and not errored and not payload.get("num_turns")):
+        return fail(
+            TOOL,
+            "Claude Code is installed but could not reach its model, so it did no work. "
+            "Sign in to the CLI (run `claude` in a terminal) or set its API key, then try "
+            "again. Nothing was changed in the workspace.",
+            device=ctx.device_id, terminal_reason=reason, **detail)
+
     if errored or code != 0:
         return fail(TOOL, said or err or "The coding agent reported an error.",
                     device=ctx.device_id, **detail)
 
     return ok(TOOL, said or "The coding agent answered without saying anything.",
-              device=ctx.device_id, **detail)
+              device=ctx.device_id, verified=True, **detail)
 
 
 SPECS: List[Tuple[ToolSpec, Any]] = [

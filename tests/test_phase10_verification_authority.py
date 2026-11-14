@@ -49,13 +49,20 @@ def _replace_handler(core, name, factory):
 # --------------------------------------------------------------------------
 
 def test_ok_and_unverified_are_distinguishable():
-    assert ok("t", "observed").verification is Verification.SUCCESS
-    assert ok("t", "observed").verified is True
+    # Bare ok() defaults to UNKNOWN (R2.4): the default is honest — "the handler
+    # returned without exception" is not the same as "the world changed as intended."
+    # A self-verifying tool opts in with verified=True.
+    assert ok("t", "observed").verification is Verification.UNKNOWN
+    assert ok("t", "observed").verified is False
 
     result = unverified("t", "not observed")
     assert result.verification is Verification.UNKNOWN
     assert result.ok is True, "the handler did answer; only the effect is unestablished"
     assert result.verified is False, "an unobserved effect must not read as verified"
+
+    # verified=True is the opt-in for self-verifying reads.
+    assert ok("t", "verified read", verified=True).verification is Verification.SUCCESS
+    assert ok("t", "verified read", verified=True).verified is True
 
 
 # --------------------------------------------------------------------------
@@ -65,7 +72,9 @@ def test_ok_and_unverified_are_distinguishable():
 def test_action_status_maps_verification_not_ok(core):
     mapper = core._action_status
 
-    assert mapper(ok("t", "observed")) is ActionStatus.SUCCEEDED
+    # Bare ok() defaults to UNKNOWN (R2.4); a verified effect opts in.
+    assert mapper(ok("t", "observed")) is ActionStatus.UNVERIFIED
+    assert mapper(ok("t", "verified read", verified=True)) is ActionStatus.SUCCEEDED
     assert mapper(unverified("t", "not observed")) is ActionStatus.UNVERIFIED
     assert mapper(ActionResult(ok=False, tool="t", error="boom", verified=False)) \
         is ActionStatus.FAILED

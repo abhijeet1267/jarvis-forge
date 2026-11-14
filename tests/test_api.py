@@ -71,6 +71,31 @@ def test_command_validation_rejects_empty(client: TestClient) -> None:
     assert client.post("/command", json={"text": ""}).status_code == 422
 
 
+def test_command_validation_rejects_oversized(client: TestClient) -> None:
+    """An oversized paste is a 422 at the HTTP boundary, not a 500 from the route.
+
+    The length cap used to live only on CommandRequest, which the route builds
+    *after* FastAPI validates the body -- so a 50k-char body passed the request
+    model and raised inside the route (HTTP 500). It is now enforced on the body
+    model, so the client learns the limit instead of seeing a server error.
+    """
+    from jarvis.core.models import MAX_COMMAND_CHARS
+
+    response = client.post("/command", json={"text": "x" * (MAX_COMMAND_CHARS + 1)})
+    assert response.status_code == 422
+    # The client is told the limit, not just "something went wrong".
+    assert "too long" in str(response.json().get("detail"))
+
+
+def test_command_at_the_length_limit_is_accepted(client: TestClient) -> None:
+    """Exactly at MAX_COMMAND_CHARS is a valid (long) command, not a rejection."""
+    from jarvis.core.models import MAX_COMMAND_CHARS
+
+    response = client.post("/command", json={"text": "x" * MAX_COMMAND_CHARS})
+    # Passes validation (the core may then answer it); it must not be a 422.
+    assert response.status_code != 422
+
+
 def test_audit_endpoint(client: TestClient) -> None:
     client.post("/command", json={"text": "what is my battery"})
     rows = client.get("/audit?limit=5").json()
@@ -508,3 +533,47 @@ def test_dashboard_microphone_row_has_every_state(client: TestClient) -> None:
                  "consent unreadable"):
         assert f'"{word}"' in html, f"microphone state {word!r} is not named in the UI"
     assert 'line("Microphone", audio.capture_available' not in html
+
+
+# ---------------------------------------------------------------------------
+# /ai/chats — a conversation must be listable, or it cannot be resumed
+# ---------------------------------------------------------------------------
+# The dashboard started a new conversation on every page load and had no way
+# to list the ones already stored. The ids were never lost; they were only
+# unreachable. These pin the listing contract the page now depends on.
+def test_conversations_can_be_listed_most_recent_first(client: TestClient) -> None:
+    first = client.post("/ai/chats", json={"title": "First conversation"}).json()
+    second = client.post("/ai/chats", json={"title": "Second conversation"}).json()
+    client.post(f"/ai/chats/{first['id']}/messages",
+                json={"role": "user", "content": "hello"})
+    client.post(f"/ai/chats/{second['id']}/messages",
+                json={"role": "user", "content": "hello"})
+
+    listed = client.get("/ai/chats").json()
+    ids = [c["id"] for c in listed]
+    assert second["id"] in ids and first["id"] in ids, "the listing dropped a conversation"
+    # `second` was updated last, so it leads.
+    assert ids[0] == second["id"], "the listing is not most-recent-first"
+
+    for entry in listed:
+        assert {"id", "title", "created_at", "updated_at", "message_count"} <= set(entry), (
+            "a listing entry is missing a field the history panel reads")
+        assert entry["message_count"] >= 1
+
+
+def test_listing_respects_the_limit(client: TestClient) -> None:
+    for i in range(3):
+        client.post("/ai/chats", json={"title": f"Limit {i}"})
+    assert len(client.get("/ai/chats?limit=2").json()) == 2
+
+
+def test_listing_requires_a_credential() -> None:
+    anon = TestClient(app, base_url="http://127.0.0.1:8765").get("/ai/chats")
+    assert anon.status_code == 401, "the conversation index is readable without a token"
+
+
+def test_a_single_conversation_route_still_works(client: TestClient) -> None:
+    """The listing is additive: `GET /ai/chats/{id}` is unchanged."""
+    made = client.post("/ai/chats", json={"title": "Still addressable"}).json()
+    got = client.get(f"/ai/chats/{made['id']}")
+    assert got.status_code == 200 and got.json()["title"] == "Still addressable"

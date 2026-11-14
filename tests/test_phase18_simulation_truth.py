@@ -133,7 +133,7 @@ async def test_pipeline_writes_simulated_to_the_ledger(core, simulators):
         text="Jarvis, turn on the study desk lamp", source="test"))
     if response.needs_confirmation:
         response = await core.resolve_confirmation(
-            response.confirmation_id, True, session_id=response.session_id)
+            response.confirmation_id, True, session_id="laptop")
 
     rows = core.db.query(
         "SELECT result FROM action_logs ORDER BY rowid DESC LIMIT 1")

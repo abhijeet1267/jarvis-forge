@@ -31,7 +31,7 @@ turn on the motion       -> intent=unknown  kind=not_understood
 turn on the energy       -> intent=unknown  kind=not_understood
 ```
 
-Nine words. "power" is in the table the *resolver* uses to decide whether a request names a
+Nine words. "power" is in the table the _resolver_ uses to decide whether a request names a
 plug — so the system contained the meaning of the sentence and the router refused it anyway.
 This is the shape Phase 30 just fixed for tool names: a private list in the router, narrower
 than the registry it routes into, with nothing watching the two drift.
@@ -48,18 +48,18 @@ chat reply:         Details: device=kitchen light, action=set, value=40
 Two renderings of one approval, free to disagree, and neither naming the device the gateway
 will actually change (`kitchen.light`, "Kitchen light") or what will happen to it. Phase 31
 argued that an approval asked against an unidentified device is consent for the wrong reason.
-The same argument applies one step later, to the device that *was* identified.
+The same argument applies one step later, to the device that _was_ identified.
 
 ## 2. What changed
 
 **One vocabulary, and it lives in the gateway.** `device_vocabulary()` returns kinds +
-synonyms + a declared set of appliance words a house plausibly has that *this* inventory does
+synonyms + a declared set of appliance words a house plausibly has that _this_ inventory does
 not (`heater`, `radiator`, `kettle`, `boiler`, `humidifier`, … — 39 words total). The
 planner's pattern is built from it at call time, longest word first, so "air conditioner" is
 not matched as the fragment "air".
 
 The absent-appliance set matters more than it looks. Deriving the list from synonyms alone
-would have made `"turn on the heater"` *unrecognised* again, quietly undoing Phase 31's
+would have made `"turn on the heater"` _unrecognised_ again, quietly undoing Phase 31's
 refusal-with-candidates answer. A word for an appliance this house lacks is still a home
 request, and the honest answer is "there is no home device matching 'heater'; the gateway
 has: …". That belongs beside the synonym table because it is the same object: the vocabulary
@@ -141,10 +141,10 @@ before the code changed, including the nine-word sweep).
 
 The two that hold this phase honest are not about the current word list at all:
 
-* `test_the_router_follows_the_gateway_when_a_word_is_added` — adds `whirligig` as a synonym
-  of `fan` at test time and asserts the router reaches *that* device. A hardcoded list fails
+- `test_the_router_follows_the_gateway_when_a_word_is_added` — adds `whirligig` as a synonym
+  of `fan` at test time and asserts the router reaches _that_ device. A hardcoded list fails
   this immediately, so the lists cannot silently drift apart again.
-* `test_the_router_stops_accepting_a_word_the_gateway_drops` — the reverse direction, because
+- `test_the_router_stops_accepting_a_word_the_gateway_drops` — the reverse direction, because
   a one-way sync is still two lists.
 
 Also pinned: no device's `on`/`level`/`speed`/`setpoint` changes from a category word; a
@@ -158,35 +158,35 @@ Full suite: **1621 passed, 0 failed, 0 xfailed** (1621 collected), up from 1582.
 
 ## 6. Re-measured
 
-| metric | before | after | how |
-| --- | --- | --- | --- |
-| words the gateway understands | 26 synonyms + 7 kinds | 39 (adds 13 absent appliances) | `device_vocabulary()` |
-| …answered `not_understood` by the router | **9** | **0** | sweep of the table through `planner.parse` |
-| device words hardcoded in `planner.py` | 11 | 0 (`lights?|fans?` absent from the file) | source grep, plus the two mutation tests |
-| confirmation preview for a home actuation | `control_home_device on laptop_main \| device=kitchen light \| action=set \| value=40` | `set Kitchen light (kitchen.light) to 40%` | `/confirmations` on a launched server |
-| chat prompt vs stored preview | two derived strings | one string (`record["preview"] in reply`) | live HTTP + a test |
-| §45 safety matrix | 6 of 6 | **6 of 6** | `python benchmarks/safety_run.py` |
-| §59 acceptance sweep | 17 of 18 | unchanged (no home-control command in the list) | `python benchmarks/acceptance_run.py` |
-| tools / agents / api routes / confirmation-gated / tables | 127 / 15 / 104 / 27 / 32 | unchanged | `python assets/build_diagrams.py` |
-| suite | 1582 | 1621 | `python -m pytest -q` |
+| metric                                                    | before                                                                                 | after                                           | how                                        |
+| --------------------------------------------------------- | -------------------------------------------------------------------------------------- | ----------------------------------------------- | ------------------------------------------ |
+| words the gateway understands                             | 26 synonyms + 7 kinds                                                                  | 39 (adds 13 absent appliances)                  | `device_vocabulary()`                      |
+| …answered `not_understood` by the router                  | **9**                                                                                  | **0**                                           | sweep of the table through `planner.parse` |
+| device words hardcoded in `planner.py`                    | 11                                                                                     | 0 (`lights?                                     | fans?` absent from the file)               | source grep, plus the two mutation tests |
+| confirmation preview for a home actuation                 | `control_home_device on laptop_main \| device=kitchen light \| action=set \| value=40` | `set Kitchen light (kitchen.light) to 40%`      | `/confirmations` on a launched server      |
+| chat prompt vs stored preview                             | two derived strings                                                                    | one string (`record["preview"] in reply`)       | live HTTP + a test                         |
+| §45 safety matrix                                         | 6 of 6                                                                                 | **6 of 6**                                      | `python benchmarks/safety_run.py`          |
+| §59 acceptance sweep                                      | 17 of 18                                                                               | unchanged (no home-control command in the list) | `python benchmarks/acceptance_run.py`      |
+| tools / agents / api routes / confirmation-gated / tables | 127 / 15 / 104 / 27 / 32                                                               | unchanged                                       | `python assets/build_diagrams.py`          |
+| suite                                                     | 1582                                                                                   | 1621                                            | `python -m pytest -q`                      |
 
 ## 7. Carried forward
 
-* **32-A** the absent-appliance list is declared, not derived: a house that genuinely has a
-  heater would need it added in two places (the inventory *and* this set) before the word
+- **32-A** the absent-appliance list is declared, not derived: a house that genuinely has a
+  heater would need it added in two places (the inventory _and_ this set) before the word
   stopped being refused. Deriving it from "words people say about homes" is a vocabulary
   problem this phase chose not to guess at.
-* **32-B** non-home confirmations still show a parameter dump (`delete_file on laptop_main |
-  path=… | permanent=False`). Honest, and as specific as a tool without a resolver can be;
-  the memory and research tools that *do* have identifiers to resolve could use the same
+- **32-B** non-home confirmations still show a parameter dump (`delete_file on laptop_main |
+path=… | permanent=False`). Honest, and as specific as a tool without a resolver can be;
+  the memory and research tools that _do_ have identifiers to resolve could use the same
   `describe_*` treatment, one per module.
-* **32-C** `dim` arrives at the gateway as `action="set"`, so the approval reads "set Kitchen
+- **32-C** `dim` arrives at the gateway as `action="set"`, so the approval reads "set Kitchen
   light to 40%" where a person wrote "dim". No meaning is lost and nothing is invented; the
   verb is the one place the phrasing is still the tool's rather than the user's.
-* Everything already open: 30-A (closed in 30), 30-B…D, 29-A…D, 28-A narrowed, 27-A…D, 26-B,
+- Everything already open: 30-A (closed in 30), 30-B…D, 29-A…D, 28-A narrowed, 27-A…D, 26-B,
   the `ToolSpec.parameters` residual, 23-E, mic/speech TCC, 15-F, 14-D, 16-F, hardware
   **BLOCKED**, LLM planner, unattended workflows.
-* Closed here: **31-A**, **31-B**.
+- Closed here: **31-A**, **31-B**.
 
 ---
 
@@ -203,8 +203,8 @@ aa248e9  The words the router accepts and the thing the approval names are one t
 
 Run `36865970543`, both jobs green:
 
-| job | result | pytest line | wall |
-| --- | --- | --- | --- |
+| job            | result  | pytest line                                   | wall                 |
+| -------------- | ------- | --------------------------------------------- | -------------------- |
 | `suite (3.11)` | success | `1615 passed, 6 skipped, 1 warning in 77.34s` | 13:03:22 → 13:05:11Z |
 | `suite (3.12)` | success | `1615 passed, 6 skipped, 1 warning in 86.84s` | 13:03:22 → 13:05:20Z |
 

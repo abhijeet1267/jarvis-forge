@@ -30,16 +30,16 @@ between "I connected Gemini" and "the assistant got better".
 `JarvisCore._advise_from_model` runs when, and only when, the rule router returned
 `not_understood` and a model is configured.
 
-| Property | Enforced by |
-|---|---|
-| A sentence the rules already answer costs **zero** model calls | `test_a_sentence_the_rules_understand_costs_no_model_call`, plus the live log above |
-| A model's words never become actions | `response.actions == []`, and the executor is never reached (`test_a_model_suggestion_is_never_executed`) |
-| No approval card is raised for something nobody asked for | `response.needs_confirmation` stays false -- a card for an unrequested action is theatre, not a gate |
-| The answer is attributed | the reply names the model, and `model_used` becomes `gemini-2.5-flash` instead of `rules` |
-| The ledger says so | the audit row carries `stage: model` and the model name, so the chain never reads as if the rules understood |
-| A suggestion is reported, not obeyed | "It suggested `delete_file`. I did not run anything on that -- ask me for it yourself and it goes through the usual approval." |
-| No key, no pretence | the rules' own sentence, `model_used: rules`, and the router is never called |
-| A key that does not answer says so | "I also asked the model you configured (gemini-2.5-flash), and it was unavailable" |
+| Property                                                       | Enforced by                                                                                                                    |
+| -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| A sentence the rules already answer costs **zero** model calls | `test_a_sentence_the_rules_understand_costs_no_model_call`, plus the live log above                                            |
+| A model's words never become actions                           | `response.actions == []`, and the executor is never reached (`test_a_model_suggestion_is_never_executed`)                      |
+| No approval card is raised for something nobody asked for      | `response.needs_confirmation` stays false -- a card for an unrequested action is theatre, not a gate                           |
+| The answer is attributed                                       | the reply names the model, and `model_used` becomes `gemini-2.5-flash` instead of `rules`                                      |
+| The ledger says so                                             | the audit row carries `stage: model` and the model name, so the chain never reads as if the rules understood                   |
+| A suggestion is reported, not obeyed                           | "It suggested `delete_file`. I did not run anything on that -- ask me for it yourself and it goes through the usual approval." |
+| No key, no pretence                                            | the rules' own sentence, `model_used: rules`, and the router is never called                                                   |
+| A key that does not answer says so                             | "I also asked the model you configured (gemini-2.5-flash), and it was unavailable"                                             |
 
 The model's sentence is **appended** to the rule router's own answer rather than replacing it.
 If it replaced it, the reply would read as though the system understood the sentence, which is
@@ -76,14 +76,14 @@ JARVIS_LLM_MODEL=gemini-2.5-flash
 
 Three things are said plainly rather than discovered later:
 
-* **Text leaves the machine.** Memory embeddings and every advised sentence go to that host.
+- **Text leaves the machine.** Memory embeddings and every advised sentence go to that host.
   The whole build otherwise runs with no network; this is the opt-in.
-* **The embedder is configured separately** (`JARVIS_LLM_EMBED_MODEL`, default
+- **The embedder is configured separately** (`JARVIS_LLM_EMBED_MODEL`, default
   `text-embedding-3-small`) and that model name is not Gemini's. If Gemini refuses it, memory
   falls back to the dependency-free local embedder and keeps working -- verified by
   `jarvis/memory/embeddings.py`'s own fallback, not by a claim here. The live combination has
   not been run, because no key exists yet.
-* **`llm_enabled` means configured, not reachable.** A wrong key still reports `true` and the
+- **`llm_enabled` means configured, not reachable.** A wrong key still reports `true` and the
   advice path quietly degrades to "it was unavailable". Recording a probe is left open (42-B).
 
 ## 5. Numbers
@@ -103,19 +103,19 @@ new capability to act on.
 
 ## 6. Carried forward
 
-* **42-A — voice from the phone is not built.** `/voice/transcribe` accepts an uploaded clip
+- **42-A — voice from the phone is not built.** `/voice/transcribe` accepts an uploaded clip
   and `/phone` has no microphone, so today the voice path on a handset is the keyboard's own
   dictation button, which works and is not the same thing. A recorder → transcribe → command
   loop needs a working STT backend, and on this machine macOS speech is TCC-blocked and no
   whisper binary is present, so the honest options are the model key (a hosted
   transcription) or shipping a local model. Not started here rather than half-built.
-* **42-B** `/health`'s `llm_enabled` is "configured", so a bad key looks like a working model.
-* **42-C** the advice call has a 20 s deadline of its own inside the 60 s sentence budget, but
-  it is still a *sequential* extra hop on every unrecognised sentence; a model that answers in
+- **42-B** `/health`'s `llm_enabled` is "configured", so a bad key looks like a working model.
+- **42-C** the advice call has a 20 s deadline of its own inside the 60 s sentence budget, but
+  it is still a _sequential_ extra hop on every unrecognised sentence; a model that answers in
   8 s makes the honest reply arrive in 8 s.
-* **42-D** the model cannot yet be asked to *summarise something the system has read* (the
+- **42-D** the model cannot yet be asked to _summarise something the system has read_ (the
   "give summary of that data" ask). 41-B remains open; this phase only gave it a route in.
-* Unchanged: 41-B…F, 40-A…E, 39-A…E, 38-A…D, 37-A…E, 36-A…E, 35-A…C, 34-A…C.
+- Unchanged: 41-B…F, 40-A…E, 39-A…E, 38-A…D, 37-A…E, 36-A…E, 35-A…C, 34-A…C.
 
 ## 7. Git
 

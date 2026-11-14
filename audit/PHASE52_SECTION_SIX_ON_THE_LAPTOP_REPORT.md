@@ -10,11 +10,11 @@ The corrected figures are these, and §6 coverage below is the re-measured one.)
 ways, and the split decided the work, because a route is not a capability and neither is a
 regex.
 
-| class | utterances | what was actually wrong |
-|---|---|---|
-| the application registry did not know the name | `open Firefox`, `open Contacts`, `open Messages`, `open System Settings` | `open_application` works; `DEFAULT_APPS` had 9 entries and these were not among them |
-| the answer existed and the sentence had no route | `what date is it?`, `what is my hostname?` | `get_time` already replies "It is 11:53 on Sunday, 04 October 2026"; `get_machine_snapshot` already returns a `hostname` field |
-| no capability at all | `open Desktop/Downloads/Documents/Pictures`, `show the current application` | needed two tools |
+| class                                            | utterances                                                                  | what was actually wrong                                                                                                        |
+| ------------------------------------------------ | --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| the application registry did not know the name   | `open Firefox`, `open Contacts`, `open Messages`, `open System Settings`    | `open_application` works; `DEFAULT_APPS` had 9 entries and these were not among them                                           |
+| the answer existed and the sentence had no route | `what date is it?`, `what is my hostname?`                                  | `get_time` already replies "It is 11:53 on Sunday, 04 October 2026"; `get_machine_snapshot` already returns a `hostname` field |
+| no capability at all                             | `open Desktop/Downloads/Documents/Pictures`, `show the current application` | needed two tools                                                                                                               |
 
 Deliberately left for the next phase: `show pending confirmations`, `show Vantage status`,
 `show recent actions`, `stop the current task` (Vantage talking about itself) and
@@ -23,15 +23,15 @@ to say which change broke what.
 
 ## 1. What was built
 
-| file | change |
-|---|---|
-| `jarvis/registry/apps.py` | Firefox, Contacts, Messages, System Settings registered (9 → 15 applications; the other two came in Phase 51) |
-| `jarvis/core/planner.py` | `_time` answers "what date is it"; `_machine_snapshot` answers the hostname phrasings; two new rules, `_open_standard_folder` and `_frontmost_app` (48 → 50 routes) |
-| `jarvis/tools/apps.py` | `open_user_folder` and `get_frontmost_application`, plus `bundle_installed` and a bounded AppleScript deadline |
-| `jarvis/tools/agents.py` | `/System/Applications` added to `BUNDLE_ROOTS` |
-| `tests/test_phase52_section_six_on_the_laptop.py` | 52 tests |
+| file                                              | change                                                                                                                                                              |
+| ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `jarvis/registry/apps.py`                         | Firefox, Contacts, Messages, System Settings registered (9 → 15 applications; the other two came in Phase 51)                                                       |
+| `jarvis/core/planner.py`                          | `_time` answers "what date is it"; `_machine_snapshot` answers the hostname phrasings; two new rules, `_open_standard_folder` and `_frontmost_app` (48 → 50 routes) |
+| `jarvis/tools/apps.py`                            | `open_user_folder` and `get_frontmost_application`, plus `bundle_installed` and a bounded AppleScript deadline                                                      |
+| `jarvis/tools/agents.py`                          | `/System/Applications` added to `BUNDLE_ROOTS`                                                                                                                      |
+| `tests/test_phase52_section_six_on_the_laptop.py` | 52 tests                                                                                                                                                            |
 
-**The folder allowlist is the design.** `open_user_folder` takes a *name* from a five-entry
+**The folder allowlist is the design.** `open_user_folder` takes a _name_ from a five-entry
 dictionary and builds the path from the home directory; it never takes a path. So
 `open ../../.ssh`, `open /etc`, `~/Library/Mail` and `passwords` are refusals that name what
 is allowed, and a refused folder launches nothing -- asserted, not assumed. It is also not an
@@ -129,20 +129,20 @@ smoothed over.
 
 ## 4. Numbers, re-measured
 
-| | before | after | how |
-|---|---|---|---|
-| Test suite | 2013 passed · 0 skipped | **2065 passed · 0 failed · 0 skipped** (65.1 s) | `JARVIS_HOME=$(mktemp -d) .venv/bin/python -m pytest -q` |
-| Phase 52 tests | 0 | **52** | `tests/test_phase52_section_six_on_the_laptop.py` |
-| Test modules | 78 | **79** | `ls tests/test_*.py \| wc -l` |
-| Phase reports | 53 | **54** (this file) | `ls audit/*.md \| wc -l` |
-| Lines | 65,655 — 40,244 source · 25,411 tests | **66,334 — 40,506 source · 25,828 tests** | `wc -l` |
-| Tools | 134 | **136** (two new capabilities, both gated) | `len(core.tools.names())` |
-| RulePlanner routes | 48 | **50** | `len(core.planner._rules)` |
-| Registered applications | 9 | **15** | `len(AppRegistry().all())` |
-| §6 coverage | 21 of 37 | **32 of 37** | re-measured at close-out, group by group |
+|                         | before                                | after                                           | how                                                      |
+| ----------------------- | ------------------------------------- | ----------------------------------------------- | -------------------------------------------------------- |
+| Test suite              | 2013 passed · 0 skipped               | **2065 passed · 0 failed · 0 skipped** (65.1 s) | `JARVIS_HOME=$(mktemp -d) .venv/bin/python -m pytest -q` |
+| Phase 52 tests          | 0                                     | **52**                                          | `tests/test_phase52_section_six_on_the_laptop.py`        |
+| Test modules            | 78                                    | **79**                                          | `ls tests/test_*.py \| wc -l`                            |
+| Phase reports           | 53                                    | **54** (this file)                              | `ls audit/*.md \| wc -l`                                 |
+| Lines                   | 65,655 — 40,244 source · 25,411 tests | **66,334 — 40,506 source · 25,828 tests**       | `wc -l`                                                  |
+| Tools                   | 134                                   | **136** (two new capabilities, both gated)      | `len(core.tools.names())`                                |
+| RulePlanner routes      | 48                                    | **50**                                          | `len(core.planner._rules)`                               |
+| Registered applications | 9                                     | **15**                                          | `len(AppRegistry().all())`                               |
+| §6 coverage             | 21 of 37                              | **32 of 37**                                    | re-measured at close-out, group by group                 |
 
 Three count-guards failed on purpose and were handled honestly. The README's route count was
-stale (48 → 50) and was corrected. Two Phase 49 guards had frozen the *tool total* at 134 to
+stale (48 → 50) and was corrected. Two Phase 49 guards had frozen the _tool total_ at 134 to
 prove that an alias does not create a capability; a frozen total cannot survive legitimate
 growth, so they now assert the invariant they were named for -- registered specs equal distinct
 canonical names, `/tools` publishes exactly the registry, and no alias appears as its own row.
@@ -150,19 +150,19 @@ That is a stronger statement than `== 134`, not a weaker one.
 
 ## 5. Open items
 
-* **52-A** `open Downloads` cannot be confirmed on this machine at all: Finder answers no
+- **52-A** `open Downloads` cannot be confirmed on this machine at all: Finder answers no
   AppleScript, from any caller. The folder probably opened; the tool says it does not know.
-* **52-B** `get_frontmost_application` depends on Accessibility, which the delivered app does
+- **52-B** `get_frontmost_application` depends on Accessibility, which the delivered app does
   not have (Phase 50's card). From the bundle it will answer with the permission name, not an
   application.
-* **52-C** `open_user_folder` covers five named folders and nothing else, by design. "open my
+- **52-C** `open_user_folder` covers five named folders and nothing else, by design. "open my
   screenshots" is not a route, and the refusal does not offer a path.
-* **52-D** The application list is still a static registry. `bundle_installed` can now say "my
+- **52-D** The application list is still a static registry. `bundle_installed` can now say "my
   list is out of date", but nothing reconciles the list against what is installed at startup --
   so Firefox stays registered on a machine without it, which is the honest-but-noisy outcome.
-* **52-E** `System Settings` launches under that name only; on macOS 12 and earlier the bundle
+- **52-E** `System Settings` launches under that name only; on macOS 12 and earlier the bundle
   is `System Preferences.app`, and the alias resolves to a launch name that will not exist.
-* **52-F** Five sentences remain, and they are two different kinds of work: four are Vantage
+- **52-F** Five sentences remain, and they are two different kinds of work: four are Vantage
   talking about itself (pending confirmations, its status, its recent actions, stopping the
   current task), which need routes to state the process already holds; one is
   `search Google for X`, which needs a capability -- no tool in the registry performs a web

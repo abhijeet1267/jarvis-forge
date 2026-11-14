@@ -138,14 +138,19 @@ class Recurrence:
 
 
 def _parse_clock(text: str) -> Optional[tuple[int, int]]:
-    """Extract an hour/minute from a phrase, or None."""
-    # A named time of day.
-    for word, hour in NAMED_HOURS.items():
-        if re.search(rf"\b{word}\b", text):
-            return hour, 0
+    """Extract an hour/minute from a phrase, or None.
 
+    An explicit number wins over a day-part word: "every morning at 7" is 07:00,
+    not the morning *default* of 08:00. The day part is a default only when no
+    hour was given ("every morning" -> 08:00), and a hint for a bare ambiguous
+    hour ("every evening at 7" -> 19:00).
+    """
     match = re.search(r"\b(\d{1,2})(?::(\d{2}))?\s*(am|pm|a\.m\.|p\.m\.)?\b", text)
     if not match:
+        # No hour named: fall back to the day-part default.
+        for word, hour in NAMED_HOURS.items():
+            if re.search(rf"\b{word}\b", text):
+                return hour, 0
         return None
 
     hour = int(match.group(1))
@@ -154,13 +159,25 @@ def _parse_clock(text: str) -> Optional[tuple[int, int]]:
 
     if hour > 23 or minute > 59:
         return None
+    if hour >= 13 and meridiem:
+        # "13 pm" is not a time anyone means; refuse rather than reinterpret.
+        return None
     if meridiem == "pm" and hour < 12:
         hour += 12
     elif meridiem == "am" and hour == 12:
         hour = 0
-    elif not meridiem and hour <= 7:
-        # "at 5" in the evening reads as 17:00.
-        hour += 12
+    elif not meridiem and 1 <= hour <= 12 and match.group(2) is None:
+        # A *bare* 1-12 is genuinely ambiguous: "every day at 7" is a morning
+        # alarm as often as an evening one. An explicit HH:MM ("at 10:00",
+        # "at 06:00") is not ambiguous and is taken as written. A day part in the
+        # phrase decides a bare hour; without one we return None so the caller
+        # asks rather than guessing a time the person did not say.
+        if re.search(r"\b(evening|night|tonight|afternoon)\b", text):
+            hour = hour + 12 if hour < 12 else hour
+        elif re.search(r"\b(morning|early)\b", text) or hour == 12:
+            pass
+        else:
+            return None
     return hour, minute
 
 
@@ -180,6 +197,25 @@ def parse_schedule(text: str, now: Optional[datetime] = None) -> Optional[Recurr
         if minutes < 1:
             return None
         return Recurrence(kind="interval", interval_minutes=minutes)
+
+    # --- once, relative ("in 20 minutes", "in 2 hours") --------------------
+    # The most common reminder shape, and the parser produced nothing for it, so
+    # "remind me to stretch in 20 minutes" asked the person what they meant about
+    # a sentence that already said exactly what it meant.
+    relative = re.search(
+        r"\bin\s+(\d+|a|an|half\s+an)\s*(minutes?|mins?|hours?|hrs?)\b", lowered)
+    if relative:
+        raw_amount, unit = relative.group(1), relative.group(2)
+        amount = {"a": 1, "an": 1, "half an": 0.5}.get(raw_amount.strip(), None)
+        if amount is None:
+            try:
+                amount = float(raw_amount)
+            except ValueError:
+                return None
+        minutes = int(amount * 60) if unit.startswith(("hour", "hr")) else int(amount)
+        if minutes < 1:
+            return None
+        return Recurrence(kind="once", at=now + timedelta(minutes=minutes))
 
     # --- once (an explicit clock with no "every") --------------------------
     recurring = re.search(r"\b(every|each|daily|weekly|weekday)\b", lowered)
@@ -205,7 +241,13 @@ def parse_schedule(text: str, now: Optional[datetime] = None) -> Optional[Recurr
     if re.search(r"\b(every\s*day|every\s+morning|every\s+evening|every\s+night|"
                  r"every\s+afternoon|daily|each\s+day|every\s+weekday)\b", lowered):
         clock = _parse_clock(lowered)
-        hour, minute = clock if clock else (8, 0)
+        if clock is None:
+            # An hour was named ("at 7") but is ambiguous — do not substitute the
+            # default time as if the person had said it.
+            if re.search(r"\bat\s+\d", lowered):
+                return None
+            clock = (8, 0)
+        hour, minute = clock
         return Recurrence(kind="daily", hour=hour, minute=minute)
 
     # "every morning" style without the word "every day".

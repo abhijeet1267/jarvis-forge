@@ -33,12 +33,12 @@ No new capability, no LLM, no visual redesign, no architecture change.
 
 `handle()` has four no-execution returns. Two of them audited and two did not:
 
-| Branch | Line | Before |
-| --- | --- | --- |
-| guard refusal on raw phrasing | `orchestrator.py:227` | audited `blocked` |
-| `plan.direct_reply` — route-level refusal, "I don't have that capability", unrecognised goal | `:256` | **no row at all** |
-| `plan.needs_clarification or not plan.actions` | `:271` | **no row at all** |
-| per-action BLOCK / CONFIRM | `:282`, `:296` | audited `blocked` / `awaiting_confirmation` |
+| Branch                                                                                       | Line                  | Before                                      |
+| -------------------------------------------------------------------------------------------- | --------------------- | ------------------------------------------- |
+| guard refusal on raw phrasing                                                                | `orchestrator.py:227` | audited `blocked`                           |
+| `plan.direct_reply` — route-level refusal, "I don't have that capability", unrecognised goal | `:256`                | **no row at all**                           |
+| `plan.needs_clarification or not plan.actions`                                               | `:271`                | **no row at all**                           |
+| per-action BLOCK / CONFIRM                                                                   | `:282`, `:296`        | audited `blocked` / `awaiting_confirmation` |
 
 Phase 15 measured the size of the hole over the plan's own acceptance list: **5 of
 18 commands reached a decision and left no trace.** A refused command was therefore
@@ -134,13 +134,13 @@ where a test is explicitly labelled a pin.
 
 Red → green, for the right reason:
 
-| Test | First failure |
-| --- | --- |
-| `test_route_level_refusal_is_audited` | `assert (0 - 0) == 1` — no record |
-| `test_clarification_branch_is_audited` | `assert (1 - 1) == 1` — no record |
-| `test_executed_row_is_linked_to_the_response` | `'' == 'REQ-…'` / SESS- value |
-| `test_guard_row_is_linked_to_the_response` | `'' == 'REQ-3d636462fe5e'` |
-| `test_confirmation_row_is_linked_to_the_response` | `'' == 'REQ-5f3ad55ffdc8'` |
+| Test                                              | First failure                     |
+| ------------------------------------------------- | --------------------------------- |
+| `test_route_level_refusal_is_audited`             | `assert (0 - 0) == 1` — no record |
+| `test_clarification_branch_is_audited`            | `assert (1 - 1) == 1` — no record |
+| `test_executed_row_is_linked_to_the_response`     | `'' == 'REQ-…'` / SESS- value     |
+| `test_guard_row_is_linked_to_the_response`        | `'' == 'REQ-3d636462fe5e'`        |
+| `test_confirmation_row_is_linked_to_the_response` | `'' == 'REQ-5f3ad55ffdc8'`        |
 
 Pins that passed immediately, and how they were shown to discriminate: two of my
 first-cycle tests already constrained the token, so rather than claim credit I ran a
@@ -167,26 +167,26 @@ request_id mismatched: NONE
 chain verify: {'ok': True, 'checked': 36}     (on the earlier two-pass ledger)
 ```
 
-| Command | Intent | verification | rows | result | links to response |
-| --- | --- | --- | --- | --- | --- |
-| open VS Code | open_app | success | 1 | success | yes |
-| find my latest project report | search_files | success | 1 | success | yes |
-| show me my laptop battery | laptop_battery | success | 1 | success | yes |
-| transfer this file to my phone | transfer | — | 1 | **no_action** | yes |
-| what is my phone battery | phone_battery | — | 1 | **no_action** | yes |
-| plan my day | daily_schedule | success | 1 | success | yes |
-| schedule two hours for project work tomorrow | schedule_task | — | 1 | **no_action** | yes |
-| draft an email to my teammate | draft_email | failed | 1 | failure | yes |
-| send it | send_email | — | 1 | **no_action** | yes |
-| remember that this is my AMR project | remember | success | 1 | success | yes |
-| what did I work on yesterday | recall | success | 1 | success | yes |
-| design this system | unknown | — | 1 | **no_action** | yes |
-| research this idea | search_papers | failed | 1 | failure | yes |
-| check my car fuel | car_telemetry | failed | 1 | failure | yes |
-| check my car charge | car_telemetry | failed | 1 | failure | yes |
-| give me today's location summary | location_summary | failed | 1 | failure | yes |
-| turn on study mode | home_routine | failed | 1 | failure | yes |
-| stop all physical actions | emergency_stop | success | 1 | success | yes |
+| Command                                      | Intent           | verification | rows | result        | links to response |
+| -------------------------------------------- | ---------------- | ------------ | ---- | ------------- | ----------------- |
+| open VS Code                                 | open_app         | success      | 1    | success       | yes               |
+| find my latest project report                | search_files     | success      | 1    | success       | yes               |
+| show me my laptop battery                    | laptop_battery   | success      | 1    | success       | yes               |
+| transfer this file to my phone               | transfer         | —            | 1    | **no_action** | yes               |
+| what is my phone battery                     | phone_battery    | —            | 1    | **no_action** | yes               |
+| plan my day                                  | daily_schedule   | success      | 1    | success       | yes               |
+| schedule two hours for project work tomorrow | schedule_task    | —            | 1    | **no_action** | yes               |
+| draft an email to my teammate                | draft_email      | failed       | 1    | failure       | yes               |
+| send it                                      | send_email       | —            | 1    | **no_action** | yes               |
+| remember that this is my AMR project         | remember         | success      | 1    | success       | yes               |
+| what did I work on yesterday                 | recall           | success      | 1    | success       | yes               |
+| design this system                           | unknown          | —            | 1    | **no_action** | yes               |
+| research this idea                           | search_papers    | failed       | 1    | failure       | yes               |
+| check my car fuel                            | car_telemetry    | failed       | 1    | failure       | yes               |
+| check my car charge                          | car_telemetry    | failed       | 1    | failure       | yes               |
+| give me today's location summary             | location_summary | failed       | 1    | failure       | yes               |
+| turn on study mode                           | home_routine     | failed       | 1    | failure       | yes               |
+| stop all physical actions                    | emergency_stop   | success      | 1    | success       | yes               |
 
 Every command's decision is now a hash-chained, predecessor-linked, response-joinable
 record. The Phase 13/15 rule still holds: nothing that did not execute carries an
@@ -214,6 +214,7 @@ it is meant to protect.
 
 Two safe designs, if the user wants authentication in the ledger — pick one and it
 is a small phase:
+
 1. a bounded, non-user-text summary row per window (count + source, no raw text);
 2. full rows only for authenticated-but-unauthorised attempts, with anonymous
    rejections kept in the application log as today.
@@ -263,14 +264,14 @@ leak in my own car test). No assertion was weakened or removed.
 
 ## 11. Files modified
 
-| File | Change |
-| --- | --- |
-| `jarvis/core/orchestrator.py` | `no_action` and `clarification` audit records on the two silent branches; `_audit_action(request_id=…)`; `request_id=response.request_id` at 7 record sites |
-| `tests/test_phase16_accountability.py` | new, 15 tests |
-| `tests/test_pipeline.py` | car gateway reset in `finally` (16-C) |
-| `tests/test_phase15_acceptance.py` | `car_offline` fixture resetting both ways |
-| `audit/PHASE15_ACCEPTANCE_SWEEP_REPORT.md` | additive §16 correction (15-D closed; NEEDS DETAIL unreachable; harness artifacts) |
-| `audit/PHASE16_ACCOUNTABILITY_REPORT.md` | this file |
+| File                                       | Change                                                                                                                                                      |
+| ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `jarvis/core/orchestrator.py`              | `no_action` and `clarification` audit records on the two silent branches; `_audit_action(request_id=…)`; `request_id=response.request_id` at 7 record sites |
+| `tests/test_phase16_accountability.py`     | new, 15 tests                                                                                                                                               |
+| `tests/test_pipeline.py`                   | car gateway reset in `finally` (16-C)                                                                                                                       |
+| `tests/test_phase15_acceptance.py`         | `car_offline` fixture resetting both ways                                                                                                                   |
+| `audit/PHASE15_ACCEPTANCE_SWEEP_REPORT.md` | additive §16 correction (15-D closed; NEEDS DETAIL unreachable; harness artifacts)                                                                          |
+| `audit/PHASE16_ACCOUNTABILITY_REPORT.md`   | this file                                                                                                                                                   |
 
 ## 12. Carried forward
 
@@ -301,7 +302,7 @@ Still branch `main` with **no commits**; `git rev-list --count HEAD` fails with
 `unknown revision or path`; every top-level entry untracked. Nothing from Phases
 10-16 is a diff or a reviewable object.
 
-* staged: no · committed: no · pushed: no. No git write operation was performed.
+- staged: no · committed: no · pushed: no. No git write operation was performed.
 
 ## 15. Cleanup
 

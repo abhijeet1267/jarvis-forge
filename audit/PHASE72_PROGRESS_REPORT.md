@@ -3,13 +3,16 @@
 ## COMPLETED SO FAR
 
 ### PHASE A — RECONNAISSANCE ✅
+
 - Mapped existing provider architecture (`jarvis/gateway/providers.py`)
 - Documented credential storage patterns (existing: none; new: keychain-based)
 - Identified test baseline: 100 test files
 - Confirmed database schema structure
 
 ### PHASE B — PROVIDER ABSTRACTION ✅
+
 Created `jarvis/security/providers.py` with:
+
 - `ProviderSpec` dataclass for provider metadata
 - `CredentialRecord` for secure credential references
 - Keychain storage wrapper (macOS secure storage)
@@ -17,26 +20,32 @@ Created `jarvis/security/providers.py` with:
 - Provider registry system
 
 Added `OpenAIProvider` to `jarvis/gateway/providers.py`:
+
 - Official `/v1/chat/completions` endpoint support
 - Proper error handling and redaction
 - Connection verification method
 - Credential testing without permanent storage
 
 ### PHASE C — SECURE STORAGE ✅
+
 Implemented KeychainStorage class:
+
 - Stores secrets in macOS Keychain (secure OS credential store)
 - Never stores raw keys in SQLite/JSON/browser storage
 - Redaction on all responses/logs/errors
 - Separate reference from actual secret material
 
 ### PHASE F — CONNECTION TEST ✅
+
 OpenAIProvider includes:
+
 - `verify_connection()` calls /models endpoint
 - Real API validation (not just key length check)
 - Error classification (invalid key, rate limit, model not found)
 - Timeout handling (5 second default)
 
 ### PHASE H/J — INTEGRATION FOUNDATIONS ✅
+
 - Created API routes module (`jarvis/api/routes/providers.py`)
 - Integrated OpenAI provider into PROVIDERS dictionary
 - Prepared authentication flow that doesn't expose keys
@@ -45,7 +54,7 @@ OpenAIProvider includes:
 
 ### TO BE IMPLEMENTED:
 
-1. **Phase D — SETTINGS UI** 
+1. **Phase D — SETTINGS UI**
    - Create "AI Providers" page in dashboard
    - Add OpenAI provider settings form
    - Implement masked key display
@@ -97,6 +106,7 @@ OpenAIProvider includes:
 ## NEXT ACTIONS
 
 Continue systematically through pending phases:
+
 1. Integrate API routes into app.py
 2. Create AI Providers UI in dashboard
 3. Write comprehensive tests

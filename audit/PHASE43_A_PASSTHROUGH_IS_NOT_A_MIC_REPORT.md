@@ -13,16 +13,16 @@ POST /voice/transcribe   file=p43.aiff
 
 **Nothing on this machine can transcribe.** Measured:
 
-| Backend | State |
-|---|---|
-| `macos_speech` | Apple refuses it: *"macOS Speech blocked this process. Apple only grants Speech Recognition to a signed application bundle…"* A `.tcc_blocked` marker has sat in the data home since Sep 25. |
-| `whisper_cpp` | not installed (`brew install whisper-cpp` would) |
-| `openai_whisper` | no key |
-| `transcript` | available — and it is **not a microphone**: it echoes a string a test handed it |
+| Backend          | State                                                                                                                                                                                        |
+| ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `macos_speech`   | Apple refuses it: _"macOS Speech blocked this process. Apple only grants Speech Recognition to a signed application bundle…"_ A `.tcc_blocked` marker has sat in the data home since Sep 25. |
+| `whisper_cpp`    | not installed (`brew install whisper-cpp` would)                                                                                                                                             |
+| `openai_whisper` | no key                                                                                                                                                                                       |
+| `transcript`     | available — and it is **not a microphone**: it echoes a string a test handed it                                                                                                              |
 
 So `get_stt()` fell through to `TranscriptSTT`, which returned `ok=True, confidence=1.0` for a
-file it never listened to. A mic button built on that endpoint would have shown *"heard
-nothing"* as a success, and anything downstream that trusts `ok` would have acted on silence.
+file it never listened to. A mic button built on that endpoint would have shown _"heard
+nothing"_ as a success, and anything downstream that trusts `ok` would have acted on silence.
 This is the same shape the project has caught four other times — a stand-in answering a
 production request (Phase 18's simulated actuation, Phase 39's stubbed `run_command`, Phase
 33's cross-attributed identifier, Phase 15's false successes) — so the fix went at the source
@@ -30,16 +30,16 @@ of the claim rather than at the caller.
 
 ## 2. The fix
 
-* `STTBackend.real` says which kind of thing a backend is. `TranscriptSTT.real = False`.
-* `TranscriptSTT.transcribe()` **refuses an audio file it was not fed a transcript for**, and a
+- `STTBackend.real` says which kind of thing a backend is. `TranscriptSTT.real = False`.
+- `TranscriptSTT.transcribe()` **refuses an audio file it was not fed a transcript for**, and a
   fed transcript now carries `meta.passthrough = True` so a test's answer is labelled as one.
   The harness that 20+ voice tests rely on still works — proven by
   `test_a_fed_transcript_is_still_the_test_harness_it_was`.
-* `/voice/transcribe` never returns `ok` from a non-real backend. It returns an honest failure
+- `/voice/transcribe` never returns `ok` from a non-real backend. It returns an honest failure
   naming what would give the machine ears, cheapest first: grant Speech Recognition to Vantage
   and clear the marker; or install whisper.cpp for offline; or set a hosted key, **which sends
   the audio off this machine** — said in the sentence itself, not discovered later.
-* `/voice/status` gains `can_listen`, which is `false` when no real backend works. Before this,
+- `/voice/status` gains `can_listen`, which is `false` when no real backend works. Before this,
   `available: {transcript: true}` could be read by a client as "there is a way to hear", because
   a passthrough was counted in the same column as a microphone.
 
@@ -67,8 +67,8 @@ The mic button is deliberately **not** built yet: a button that always fails is 
 interface than no button, and the honest answer is on the wire now. Three paths, in cost order:
 
 1. **Free, local, private.** System Settings → Privacy & Security → **Speech Recognition** →
-   allow Vantage (the bundle already declares `NSSpeechRecognitionUsageDescription`: *"Vantage
-   transcribes your speech on-device to run commands"*), then delete
+   allow Vantage (the bundle already declares `NSSpeechRecognitionUsageDescription`: _"Vantage
+   transcribes your speech on-device to run commands"_), then delete
    `~/.jarvis-forge/voice/native/.tcc_blocked`. The permission is the user's to grant — I cannot
    and should not.
 2. **Free after one install.** `brew install whisper-cpp` — offline, no permission dance.
@@ -90,19 +90,19 @@ size             62,261 lines of versioned Python/HTML/JS (39,176 source · 23,0
 
 ## 6. Carried forward
 
-* **43-A** the microphone button itself, which now has somewhere honest to send audio the
+- **43-A** the microphone button itself, which now has somewhere honest to send audio the
   moment `can_listen` is true.
-* **43-B** `MacOSSpeechSTT.available()` means *"swiftc exists and Apple has not refused us in
-  this home yet"*, while the abstract contract says *"can transcribe on this machine"*. On a
+- **43-B** `MacOSSpeechSTT.available()` means _"swiftc exists and Apple has not refused us in
+  this home yet"_, while the abstract contract says _"can transcribe on this machine"_. On a
   fresh home it is optimistic and the first real clip discovers the truth. The right shape is a
   three-state answer — untested / refused / proven — with a successful transcript as the proof;
   probing costs a SIGABRT, so it cannot be done lazily at boot.
-* **43-C** `/voice/status`'s `available.transcript` is still `true`, which is accurate about the
+- **43-C** `/voice/status`'s `available.transcript` is still `true`, which is accurate about the
   object and misleading in a list of microphones. Only `can_listen` is now load-bearing.
-* **43-D** the clip used here was a dummy payload once the app was rebuilt; Apple's own refusal
+- **43-D** the clip used here was a dummy payload once the app was rebuilt; Apple's own refusal
   arrived before it was decoded, so no test depends on the file being real audio. A recording
   with actual speech is the stronger fixture.
-* Unchanged: 42-B…D, 41-B…F, 40-A…E, 39-A…E, 38-A…D, 37-A…E, 36-A…E, 35-A…C, 34-A…C.
+- Unchanged: 42-B…D, 41-B…F, 40-A…E, 39-A…E, 38-A…D, 37-A…E, 36-A…E, 35-A…C, 34-A…C.
 
 ## 7. Git
 

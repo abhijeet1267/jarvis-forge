@@ -13,28 +13,28 @@ and the two live findings are quoted with their actual command output.
 
 ## 1. Baseline
 
-| Item | Measured value |
-|---|---|
-| Repository root | `/Users/abhijeetmiskin/AppData/aisys/jarvis-forge` |
-| **Git revision** | **none — this is not a git repository** (`git rev-parse` → `fatal: not a git repository`) |
-| Working tree state | no VCS; `dist/` contains a built copy of `app/launcher.py` |
-| Python | 3.11.16 (project venv `./.venv`) |
-| Declared deps | fastapi, uvicorn[standard], pydantic, pydantic-settings, httpx; dev: pytest, pytest-asyncio |
-| Tests collected | **976** |
-| Passing / failing / skipped | **975 / 0 / 1** (skip = live arXiv test, network-gated) |
-| Full-suite wall clock | 16.5 s |
-| Source | 126 modules, 29,837 lines, 26 test files |
-| Tools | 126 |
-| Risk tiers | READ 68 · LOW 33 · EXTERNAL 11 · DESTRUCTIVE 11 · PHYSICAL 3 |
-| Tools requiring confirmation | 24 |
-| Agents | 15 |
-| API paths | 100 (106 route objects incl. method variants) |
-| Intent handlers | 36 (methods of `RulePlanner` with signature `(self, text, raw)`) |
-| Config fields | 55 |
-| Desktop app | 544K, `codesign --verify` valid and satisfies its Designated Requirement; self-test 7/9 |
-| Live bind | `127.0.0.1` only (verified: connection to the LAN IP fails) |
-| Live auth | 10/10 probed state routes return 401 without a token; Host-header spoof returns 400 |
-| Unauthenticated routes | 8 of 106 (enumerated in §4, risk CR3) |
+| Item                         | Measured value                                                                              |
+| ---------------------------- | ------------------------------------------------------------------------------------------- |
+| Repository root              | `/Users/abhijeetmiskin/AppData/aisys/jarvis-forge`                                          |
+| **Git revision**             | **none — this is not a git repository** (`git rev-parse` → `fatal: not a git repository`)   |
+| Working tree state           | no VCS; `dist/` contains a built copy of `app/launcher.py`                                  |
+| Python                       | 3.11.16 (project venv `./.venv`)                                                            |
+| Declared deps                | fastapi, uvicorn[standard], pydantic, pydantic-settings, httpx; dev: pytest, pytest-asyncio |
+| Tests collected              | **976**                                                                                     |
+| Passing / failing / skipped  | **975 / 0 / 1** (skip = live arXiv test, network-gated)                                     |
+| Full-suite wall clock        | 16.5 s                                                                                      |
+| Source                       | 126 modules, 29,837 lines, 26 test files                                                    |
+| Tools                        | 126                                                                                         |
+| Risk tiers                   | READ 68 · LOW 33 · EXTERNAL 11 · DESTRUCTIVE 11 · PHYSICAL 3                                |
+| Tools requiring confirmation | 24                                                                                          |
+| Agents                       | 15                                                                                          |
+| API paths                    | 100 (106 route objects incl. method variants)                                               |
+| Intent handlers              | 36 (methods of `RulePlanner` with signature `(self, text, raw)`)                            |
+| Config fields                | 55                                                                                          |
+| Desktop app                  | 544K, `codesign --verify` valid and satisfies its Designated Requirement; self-test 7/9     |
+| Live bind                    | `127.0.0.1` only (verified: connection to the LAN IP fails)                                 |
+| Live auth                    | 10/10 probed state routes return 401 without a token; Host-header spoof returns 400         |
+| Unauthenticated routes       | 8 of 106 (enumerated in §4, risk CR3)                                                       |
 
 **The instruction document's stated baseline (968 collected / 967 passing) is
 already stale**; the true numbers are 976 / 975.
@@ -56,6 +56,7 @@ CLI / dashboard / Tk launcher / voice session / HTTP API
 ```
 
 Confirmed true, with evidence:
+
 - **The LLM is not in the loop.** `RulePlanner` is pure regex; `planner="rules"`;
   `ModelRouter` is unused in the request path. The spec's "LLM must never be the
   security boundary" currently holds because there is no LLM at all.
@@ -70,6 +71,7 @@ Confirmed true, with evidence:
   `decision: CONFIRM`, audit row `result=awaiting_confirmation`. Correct.
 
 Confirmed false — see §3 and §4:
+
 - There is **no verification stage** in the pipeline.
 - Not every execution goes through the permission engine.
 
@@ -83,45 +85,45 @@ RED = not implemented.
 
 ### GREEN (measured working, this session)
 
-| Capability | Evidence |
-|---|---|
-| Intent → plan → permission → execute → audit → respond | live demo sweep, 14/14 correct dispositions; `/command` CONFIRM observed live |
-| Pre-planning phrase guard (`delete everything`) | live `decision=BLOCK` |
-| Permission gate incl. PHYSICAL confirmation | live CONFIRM + `awaiting_confirmation` audit row |
-| Rate limiting / CORS / Host-header guard | live 401 / 400 responses |
-| File search, directory list, read, battery, time, system status | live values |
-| App launch/quit **dispatch** | ran (but see RED-Verification: success is unproven) |
-| Hybrid memory write + recall | live remember → recall round-trip |
-| Local maildir read/search/draft | `/integrations` → `local_maildir` active |
-| Local calendar + daily briefing | live "Your today is clear." |
-| Scheduler with ceiling enforcement | code-verified ceiling + re-evaluation; **needs live run to be GREEN under this rubric** |
-| Vision OCR (macOS Vision) | `/vision/capabilities` → present **and** responsive |
-| Text to speech | `macos_say`, live |
-| Desktop app build + signature | self-test 7/9, signature valid |
-| Microphone **state reporting** | four states, live-verified settling in 3.0 s |
+| Capability                                                      | Evidence                                                                                |
+| --------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| Intent → plan → permission → execute → audit → respond          | live demo sweep, 14/14 correct dispositions; `/command` CONFIRM observed live           |
+| Pre-planning phrase guard (`delete everything`)                 | live `decision=BLOCK`                                                                   |
+| Permission gate incl. PHYSICAL confirmation                     | live CONFIRM + `awaiting_confirmation` audit row                                        |
+| Rate limiting / CORS / Host-header guard                        | live 401 / 400 responses                                                                |
+| File search, directory list, read, battery, time, system status | live values                                                                             |
+| App launch/quit **dispatch**                                    | ran (but see RED-Verification: success is unproven)                                     |
+| Hybrid memory write + recall                                    | live remember → recall round-trip                                                       |
+| Local maildir read/search/draft                                 | `/integrations` → `local_maildir` active                                                |
+| Local calendar + daily briefing                                 | live "Your today is clear."                                                             |
+| Scheduler with ceiling enforcement                              | code-verified ceiling + re-evaluation; **needs live run to be GREEN under this rubric** |
+| Vision OCR (macOS Vision)                                       | `/vision/capabilities` → present **and** responsive                                     |
+| Text to speech                                                  | `macos_say`, live                                                                       |
+| Desktop app build + signature                                   | self-test 7/9, signature valid                                                          |
+| Microphone **state reporting**                                  | four states, live-verified settling in 3.0 s                                            |
 
 ### YELLOW (built; real dependency absent)
 
-| Capability | What is missing |
-|---|---|
-| Microphone capture | macOS consent (`denied` for an unbundled process) |
-| On-device STT | Developer ID signature (or whisper.cpp / cloud key) |
-| Screen capture | Screen Recording permission |
-| Home / robotics / car / watch | no gateway, adapter, or companion connected |
-| Remote email / calendar | no IMAP/SMTP or CalDAV credentials |
-| Cloud LLM planner | not configured (`llm_enabled: false`) — by design at this stage |
-| Vision content understanding | no vision-model endpoint configured |
+| Capability                    | What is missing                                                 |
+| ----------------------------- | --------------------------------------------------------------- |
+| Microphone capture            | macOS consent (`denied` for an unbundled process)               |
+| On-device STT                 | Developer ID signature (or whisper.cpp / cloud key)             |
+| Screen capture                | Screen Recording permission                                     |
+| Home / robotics / car / watch | no gateway, adapter, or companion connected                     |
+| Remote email / calendar       | no IMAP/SMTP or CalDAV credentials                              |
+| Cloud LLM planner             | not configured (`llm_enabled: false`) — by design at this stage |
+| Vision content understanding  | no vision-model endpoint configured                             |
 
 ### RED (not implemented)
 
-| Capability | Status |
-|---|---|
-| **Verification engine** (spec §7, §11) | **absent** — no OBSERVE / expected-vs-actual stage, no `UNKNOWN` state |
-| Continuous acoustic wake word | interface reserved, no engine |
-| Truthful machine-level audit for no-ops | not implemented (see CR1) |
-| Policy-gated dispatch for direct API handler calls | not implemented (see CR2) |
-| Immutable audit anchor | not implemented (see CR4) |
-| Version control / checkpointing | not a repository at all (see CR5) |
+| Capability                                         | Status                                                                 |
+| -------------------------------------------------- | ---------------------------------------------------------------------- |
+| **Verification engine** (spec §7, §11)             | **absent** — no OBSERVE / expected-vs-actual stage, no `UNKNOWN` state |
+| Continuous acoustic wake word                      | interface reserved, no engine                                          |
+| Truthful machine-level audit for no-ops            | not implemented (see CR1)                                              |
+| Policy-gated dispatch for direct API handler calls | not implemented (see CR2)                                              |
+| Immutable audit anchor                             | not implemented (see CR4)                                              |
+| Version control / checkpointing                    | not a repository at all (see CR5)                                      |
 
 ---
 
@@ -140,13 +142,15 @@ describe something the code does not do. Ordered by severity.
    name, not from observation.
 
 2. **Docs: hardware agents are "honest offline."**
-   True of the *sentence*, false of the *record*. Live:
+   True of the _sentence_, false of the _record_. Live:
+
    ```
    REPLY: No robot bridge is configured, so I could not move Robot arm 01.
           No motion command was sent.
    AUDIT: tool=command_robot_motion risk=confirmed result=success
      detail: {"ok": true}
    ```
+
    Nothing was sent; the log says success. Any consumer of `/audit`, the
    dashboard, a briefing, or another agent inherits a false claim.
 
@@ -156,7 +160,7 @@ describe something the code does not do. Ordered by severity.
    `commit_workspace` and calling it at `:1600`), the laptop_center routes
    (`:1924-1966`), vision/screen capture (`:1851-1898`), privacy delete (`:696`),
    memory forget (`:1197`, `:1810`), and a raw `DELETE FROM memories` (`:1220`).
-   `core/recovery.py:201-208` also dispatches an *alternative tool* with no
+   `core/recovery.py:201-208` also dispatches an _alternative tool_ with no
    policy call.
 
 4. **A DESTRUCTIVE commit is authorised by the request payload.**
@@ -170,7 +174,7 @@ describe something the code does not do. Ordered by severity.
 6. **`/auth/token` is unauthenticated and returns the real token.**
    Live: `{"auth_enabled":true,"token":"lQUMs3bz…"}` — matching the on-disk
    secret. Its only defences are a same-origin CORS rule and an `Origin` check.
-   `GET /dashboard` is *also* public and embeds the token in the HTML, so the
+   `GET /dashboard` is _also_ public and embeds the token in the HTML, so the
    `Origin` check is bypassable by any local process: verified by scraping
    `/dashboard` anonymously and finding the full token.
    Unauthenticated set: `GET /openapi.json`, `/docs`, `/docs/oauth2-redirect`,
@@ -201,16 +205,16 @@ describe something the code does not do. Ordered by severity.
 
 ## 5. Critical risks
 
-| # | Risk | Why it matters | Severity |
-|---|---|---|---|
-| CR1 | Success is fabricated at the structured layer: `verified=True` hardcoded, no-op hardware actions audited as `result=success` | The project's core rule is "never claim success unless measured". Prose is honest; the machine record is not, so every downstream consumer of `/audit`, `/metrics`, briefings and dashboards is being lied to | **CRITICAL** |
-| CR2 | Authenticated local callers can reach DESTRUCTIVE/PHYSICAL handlers through routes that skip `PermissionEngine.evaluate()`, with `authorized` taken from the request body | Bypasses confirmation, risk re-check and revocation for real mutating actions | **CRITICAL** |
-| CR3 | The API token is readable by any process on the machine (`/auth/token`, and embedded in `/dashboard`) | On a shared Mac, another user's process becomes JARVIS with destructive and physical reach. Loopback-only binding limits it to local, not to you | **CRITICAL** on shared hosts |
-| CR4 | Audit chain can be laundered by blanking one hash; no external anchor | Removes the tamper-evidence the audit system is advertised to provide | **HIGH** |
-| CR5 | No version control | The mandated loop's CHECKPOINT step, and RULE 12, are unimplementable; no rollback for any change made in later phases | **HIGH** |
-| CR6 | Confirmations not session-bound + global pending singleton + immortal-on-bad-timestamp | Cross-talk between concurrent callers; a "yes" from one channel can authorise another's action | **MEDIUM** |
-| CR7 | Scheduler writes no audit records (`runner.py:125,128`) and `BUILTIN_ACTIONS` skip the engine (`:49-56`) | Unattributed background execution | **MEDIUM** |
-| CR8 | Vision OCR remains intermittent (0.6 s vs >120 s under load) | Bounded and self-reporting, not fixed | **LOW**, known |
+| #   | Risk                                                                                                                                                                      | Why it matters                                                                                                                                                                                                | Severity                     |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------- |
+| CR1 | Success is fabricated at the structured layer: `verified=True` hardcoded, no-op hardware actions audited as `result=success`                                              | The project's core rule is "never claim success unless measured". Prose is honest; the machine record is not, so every downstream consumer of `/audit`, `/metrics`, briefings and dashboards is being lied to | **CRITICAL**                 |
+| CR2 | Authenticated local callers can reach DESTRUCTIVE/PHYSICAL handlers through routes that skip `PermissionEngine.evaluate()`, with `authorized` taken from the request body | Bypasses confirmation, risk re-check and revocation for real mutating actions                                                                                                                                 | **CRITICAL**                 |
+| CR3 | The API token is readable by any process on the machine (`/auth/token`, and embedded in `/dashboard`)                                                                     | On a shared Mac, another user's process becomes JARVIS with destructive and physical reach. Loopback-only binding limits it to local, not to you                                                              | **CRITICAL** on shared hosts |
+| CR4 | Audit chain can be laundered by blanking one hash; no external anchor                                                                                                     | Removes the tamper-evidence the audit system is advertised to provide                                                                                                                                         | **HIGH**                     |
+| CR5 | No version control                                                                                                                                                        | The mandated loop's CHECKPOINT step, and RULE 12, are unimplementable; no rollback for any change made in later phases                                                                                        | **HIGH**                     |
+| CR6 | Confirmations not session-bound + global pending singleton + immortal-on-bad-timestamp                                                                                    | Cross-talk between concurrent callers; a "yes" from one channel can authorise another's action                                                                                                                | **MEDIUM**                   |
+| CR7 | Scheduler writes no audit records (`runner.py:125,128`) and `BUILTIN_ACTIONS` skip the engine (`:49-56`)                                                                  | Unattributed background execution                                                                                                                                                                             | **MEDIUM**                   |
+| CR8 | Vision OCR remains intermittent (0.6 s vs >120 s under load)                                                                                                              | Bounded and self-reporting, not fixed                                                                                                                                                                         | **LOW**, known               |
 
 ---
 
@@ -247,6 +251,7 @@ exists to check it.
 ## 7. Files Phase 1 would modify
 
 Code:
+
 - `jarvis/tools/base.py` — `ok()`/`fail()` verified semantics
 - `jarvis/core/models.py` — `ActionResult.verified` → tri-state; `Verification` record
 - `jarvis/core/orchestrator.py` — verification stage; truthful audit outcome mapping
@@ -260,6 +265,7 @@ Code:
 - `jarvis/email/email_provider.py` + `jarvis/tools/email.py` — "sent" requires provider evidence
 
 Tests:
+
 - new `tests/test_verification.py`; regressions for each false-success above
 - updates in `tests/test_robotics.py`, `test_home.py`, `test_api.py`,
   `test_pipeline.py`, `test_coding.py`, `test_email_calendar.py`, `test_audit`
@@ -322,7 +328,7 @@ memory-as-permission, injection, credentials and failure modes. Its claims were
 
 ## 10.1 Confirmed by me, in this session
 
-**CR9 — the path guard keys off parameter *names*, so two tools walk past it.**
+**CR9 — the path guard keys off parameter _names_, so two tools walk past it.**
 `policy.py:208-219` inspects only params called `path`, `source`, `destination`.
 `search_files` declares `directory` (`tools/files.py:473`) and `read_file`'s
 sibling guards are fine; `files.py` contains just two `protection_reason` calls.
@@ -337,8 +343,8 @@ search_files               -> EXECUTE  low-risk action
 run_allowlisted_command    -> CONFIRM  level 2 (external) action requires confirmation
 ```
 
-And through the full pipeline, live: *"search for plist files in
-~/Library/LaunchAgents"* → `EXECUTE`, returning 6 matches from a directory the
+And through the full pipeline, live: _"search for plist files in
+~/Library/LaunchAgents"_ → `EXECUTE`, returning 6 matches from a directory the
 guard exists to refuse. (Counts only; the filenames are not reproduced here.)
 `run_allowlisted_command` is the same class of miss from the other side: its
 params are `command`/`args`, so a protected path arrives as an argument and is
@@ -382,7 +388,7 @@ now the first thing to fix, because unlike verification it is a live
 confidentiality hole rather than a truthfulness one:
 
 1. **Path guard by value, not by parameter name** — scan every string param for
-   a protected location, and treat any protected path appearing in *any* tool
+   a protected location, and treat any protected path appearing in _any_ tool
    argument (including `args`) as a refusal, matching `policy.py:132-136`.
 2. Verification stage (CR1) — SUCCESS / FAILED / UNKNOWN, no inherited `True`.
 3. Gate the authorisation-free dispatches (CR2), including `CommitBody.authorized`.

@@ -4,7 +4,7 @@ Report date: 2026-09-28. Continues Phases 9-22.
 
 No brief. The scope came from the project's own ledger of parked work: three tests in
 `tests/test_phase10_memory_deletion.py` were marked `xfail` in Phase 10 with the root cause
-named precisely and the reason *"this phase does not own that file"*. Twelve phases later
+named precisely and the reason _"this phase does not own that file"_. Twelve phases later
 nobody had owned them, which is how a known untruth survives: it gets documented instead
 of fixed. This phase fixed all three at their sources, plus the Phase 22 carry-over (22-H).
 
@@ -12,14 +12,14 @@ of fixed. This phase fixed all three at their sources, plus the Phase 22 carry-o
 
 ## 1. What was actually broken, and how it was known
 
-| Id | Defect | Root cause named in Phase 10 | Now |
-|---|---|---|---|
-| 23-A | `POST /memory/{id}/forget` answered `{'deleted': True}` — nothing else | `jarvis/api/app.py` had its own handler and never called the tool | route delegates to `forget_memory()` |
-| 23-B | checking a deletion wrote another copy of the deleted fact | `JarvisCore._remember_outcome()` echoes *every* command with actions, including the recall used to verify | memory-read-only commands are not echoed |
-| 23-C | deleted text stayed resident in the process | `RemoteEmbedder._cache` keyed by raw text, no eviction API | `forget_text()` / `forget_text_everywhere()`, called from `MemoryStore.forget` |
-| 23-D (22-H) | a robot command with no robot named inferred `amr_main` | `command_robot_motion` fell through to `gw.resolve("amr")` | asks when >1 machine can take the motion |
+| Id          | Defect                                                                 | Root cause named in Phase 10                                                                              | Now                                                                            |
+| ----------- | ---------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| 23-A        | `POST /memory/{id}/forget` answered `{'deleted': True}` — nothing else | `jarvis/api/app.py` had its own handler and never called the tool                                         | route delegates to `forget_memory()`                                           |
+| 23-B        | checking a deletion wrote another copy of the deleted fact             | `JarvisCore._remember_outcome()` echoes _every_ command with actions, including the recall used to verify | memory-read-only commands are not echoed                                       |
+| 23-C        | deleted text stayed resident in the process                            | `RemoteEmbedder._cache` keyed by raw text, no eviction API                                                | `forget_text()` / `forget_text_everywhere()`, called from `MemoryStore.forget` |
+| 23-D (22-H) | a robot command with no robot named inferred `amr_main`                | `command_robot_motion` fell through to `gw.resolve("amr")`                                                | asks when >1 machine can take the motion                                       |
 
-The interesting part is that all four were *invisible to the honest path*. The tool said
+The interesting part is that all four were _invisible to the honest path_. The tool said
 "Partly forgotten: … 1 other memory quotes the same wording word for word"; the HTTP route
 beside it said `deleted: true`. Same deletion, two claims, and the one a dashboard or a
 script would call was the less truthful one.
@@ -54,7 +54,7 @@ than because the route pre-checked.
 
 `_remember_outcome()` stores a session memory quoting the request and the tool's reply, for
 any command that ran something. That is what makes "what did I work on yesterday" work. It
-also meant that `do you remember ZQ9177?` — a *read*, whose whole purpose was to check
+also meant that `do you remember ZQ9177?` — a _read_, whose whole purpose was to check
 whether a fact was gone — stored a new row quoting the very text being checked, and asking
 again stored another.
 
@@ -71,7 +71,7 @@ rows holding ZQ9177 after recall #2  : 1
 ```
 
 and the guard on the other side, so this is not a suppression of the activity log: a
-command that *changes* something (`remember that …`) still echoes. That asymmetry is the
+command that _changes_ something (`remember that …`) still echoes. That asymmetry is the
 whole fix, and both directions are tested.
 
 ## 4. 23-C — the cache had to become evictable, which meant making it shared
@@ -83,7 +83,7 @@ constructed, which is exactly the shape of the bug.
 
 So the cache moved to module scope (`_SHARED_CACHE`), on the argument that an embedding is
 a function of text and model, not of object identity. That makes eviction honest:
-`forget_text_everywhere(text)` drops the exact key *and* any longer prompt containing it.
+`forget_text_everywhere(text)` drops the exact key _and_ any longer prompt containing it.
 `Embedder.forget_text()` is now part of the interface with a base implementation that
 returns 0 — the local hashing embedder genuinely holds no text, and it should be able to say
 so instead of being special-cased at the call site.
@@ -107,7 +107,7 @@ never named, which is Phase 22's defect on hardware that moves. It now returns a
 naming every robot capable of the action, and acts without asking only when exactly one
 machine can perform it (a choice the fleet cannot make is not a question worth asking).
 
-**Where it stops.** A *typed sentence* still does not reach that guard, because the planner
+**Where it stops.** A _typed sentence_ still does not reach that guard, because the planner
 hardcodes a default before the tool is called:
 
 ```python
@@ -116,7 +116,7 @@ params={"robot": self._robot_ref(text) or "amr_main", ...}   # planner.py:1884
 
 Measured live: `Jarvis, home the robot.` → confirmation prompt naming `robot=amr_main`,
 nothing executed until approved. The plan's §45 accepts "Require confirmation", and the
-prompt states which machine, so this is truthful — it is just not yet *unambiguous*. It is
+prompt states which machine, so this is truthful — it is just not yet _unambiguous_. It is
 recorded as **23-E** rather than fixed, for a reason worth stating: for `stop`, asking
 "which robot?" inserts a round trip between a person and a moving machine. Whether that
 trade is right — or whether an ambiguous `stop` should hit every capable robot at once — is
@@ -131,12 +131,12 @@ bent to them: `fail()` sets `.error`, not `.message`; `dict()` is needed on `sql
 a nested comprehension counted one robot twice and made an unambiguous action look
 ambiguous).
 
-| Group | Pins |
-|---|---|
+| Group    | Pins                                                                                                                                         |
+| -------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
 | 23-A (3) | the HTTP route returns the tool's `complete`/`report`/`remaining_copies`; its audit row is not a hardcoded `success`; an unknown id is a 404 |
-| 23-B (3) | a recall stores no new memory; a changing command still echoes; a forgotten fact stays forgotten across repeated verification |
-| 23-C (2) | deleting a memory evicts its cache entry, including substring hits; the local embedder exposes the same API and holds nothing |
-| 23-D (2) | an action two robots can do asks which; an action only one can do proceeds without a question |
+| 23-B (3) | a recall stores no new memory; a changing command still echoes; a forgotten fact stays forgotten across repeated verification                |
+| 23-C (2) | deleting a memory evicts its cache entry, including substring hits; the local embedder exposes the same API and holds nothing                |
+| 23-D (2) | an action two robots can do asks which; an action only one can do proceeds without a question                                                |
 
 The three `xfail` markers in `tests/test_phase10_memory_deletion.py` were **removed**, not
 relaxed: those tests now run and pass, and their section header records that they were
@@ -179,7 +179,7 @@ after the fact, not predicted:** run `36406299851` on `a01b4c6` finished
 
 **LIVE BROWSER DRIVE: NOT PERFORMED.** §2-§5 are HTTP against a launched `run.py serve`
 (scratch `JARVIS_HOME`, sandboxed `HOME`) plus pytest. The dashboard page was not opened,
-so no claim is made about how `remaining_copies` is *rendered* — only that the API returns
+so no claim is made about how `remaining_copies` is _rendered_ — only that the API returns
 it, which is what the dashboard reads.
 
 Server stopped (no listener on 8765); scratch homes and sandbox trees left under `/tmp`;

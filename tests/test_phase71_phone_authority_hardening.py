@@ -213,15 +213,19 @@ def test_expired_confirmation_rejected(core):
     core = JarvisCore()
     
     action_type = PlannedAction(step_id=1, tool="delete_file", device="laptop_main", params={}, reason="test")
+    # Expire the *confirmation* (not the session): is_expired() reads confirm_timeout
+    # at revalidation time, so a 1-second window plus a short sleep is the whole test.
+    # (The old version slept SESSION_TTL_SECONDS, an 8-hour figure, to test this.)
+    core.policy.settings.confirm_timeout = 1
     confirmation_id = core.policy._create_confirmation(
         spec=core.tools.get("delete_file"),
         action=action_type,
         session_id="session_test",
         request_id="req_1",
     )
-    
-    # Wait past TTL (using policy's expiry mechanism)
-    time.sleep(SESSION_TTL_SECONDS + 1)
+
+    # Wait past the confirmation TTL
+    time.sleep(2.0)
     
     result = asyncio.run(
         core.resolve_confirmation(confirmation_id, approve=True, session_id="another_session", 

@@ -1,0 +1,1262 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="jarvis-bootstrap" content="__JARVIS_BOOTSTRAP__" />
+    <title>Vantage — Operator</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #121418;
+        --panel: #1a1d23;
+        --panel-2: #22262e;
+        --text: #e6e8ec;
+        --muted: #9aa1ad;
+        --line: #2c313a;
+        --accent: #6ea8fe;
+        --ok: #4cc38a;
+        --warn: #e0a44a;
+        --bad: #e06a6a;
+      }
+      @media (prefers-color-scheme: light) {
+        :root {
+          color-scheme: light;
+          --bg: #f6f7f9;
+          --panel: #fff;
+          --panel-2: #f0f2f5;
+          --text: #1a1d23;
+          --muted: #5c6470;
+          --line: #d9dee6;
+          --accent: #2563eb;
+          --ok: #1f8a5b;
+          --warn: #9a6512;
+          --bad: #b03030;
+        }
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font:
+          14px/1.5 -apple-system,
+          BlinkMacSystemFont,
+          "Segoe UI",
+          sans-serif;
+      }
+      header {
+        display: flex;
+        align-items: baseline;
+        gap: 12px;
+        padding: 16px 22px;
+        border-bottom: 1px solid var(--line);
+      }
+      header h1 {
+        font-size: 17px;
+        margin: 0;
+        font-weight: 600;
+      }
+      header .spacer {
+        flex: 1;
+      }
+      header a {
+        color: var(--muted);
+        text-decoration: none;
+        font-size: 13px;
+      }
+      header a:hover {
+        color: var(--accent);
+      }
+      #status {
+        font-size: 12px;
+        color: var(--muted);
+      }
+      main {
+        max-width: 960px;
+        margin: 0 auto;
+        padding: 22px;
+        display: grid;
+        gap: 16px;
+      }
+      section {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 16px;
+      }
+      h2 {
+        font-size: 13px;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--muted);
+        margin: 0 0 12px;
+        font-weight: 600;
+      }
+      .chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+      button {
+        font: inherit;
+        font-size: 13px;
+        cursor: pointer;
+        color: var(--text);
+        background: var(--panel-2);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 8px 12px;
+      }
+      button:hover {
+        border-color: var(--accent);
+      }
+      button.primary {
+        background: var(--accent);
+        color: #0b1220;
+        border-color: var(--accent);
+        font-weight: 600;
+      }
+      form.run {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 8px;
+      }
+      form.run input {
+        font: inherit;
+        background: var(--panel-2);
+        color: var(--text);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 9px 12px;
+      }
+      .result {
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 12px;
+        margin-top: 10px;
+        background: var(--panel-2);
+      }
+      .result .tool {
+        font-size: 12px;
+        color: var(--muted);
+      }
+      .result .msg {
+        margin-top: 4px;
+      }
+      .badge {
+        display: inline-block;
+        font-size: 11px;
+        padding: 1px 8px;
+        border-radius: 999px;
+        border: 1px solid var(--line);
+        margin-right: 6px;
+      }
+      .badge.verified {
+        color: var(--ok);
+        border-color: var(--ok);
+      }
+      .badge.unverified {
+        color: var(--warn);
+        border-color: var(--warn);
+      }
+      .badge.failed {
+        color: var(--bad);
+        border-color: var(--bad);
+      }
+      .badge.confirm {
+        color: var(--warn);
+        border-color: var(--warn);
+      }
+      .muted {
+        color: var(--muted);
+      }
+      .err {
+        color: var(--bad);
+        font-size: 12px;
+        min-height: 16px;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Operator</h1>
+      <span id="status">connecting…</span>
+      <span class="spacer"></span>
+      <a href="/planner">Planner</a>
+      <a href="/operator" style="font-weight: 600">Operator</a>
+      <a href="/work">Work</a>
+      <a href="/dashboard">Dashboard</a>
+      <a href="/ai-connections">AI Providers</a>
+    </header>
+
+    <main>
+      <section>
+        <h2>Applications</h2>
+        <div class="m" id="apps-note">Checking what is installed…</div>
+        <ul
+          id="apps"
+          style="list-style: none; padding: 0; margin: 10px 0 0"
+        ></ul>
+      </section>
+
+      <section>
+        <h2>Quick actions</h2>
+        <div class="chips" id="chips">
+          <button data-cmd="open finder">Open Finder</button>
+          <button data-cmd="open my project in cursor">
+            Open project in editor
+          </button>
+          <button data-cmd="open https://github.com">Open github.com</button>
+          <button data-cmd="open the readme in TextEdit">
+            Open README in TextEdit
+          </button>
+          <button data-cmd="what is my battery">Check battery</button>
+          <button data-cmd="get running applications">
+            Running applications
+          </button>
+        </div>
+      </section>
+
+      <section>
+        <h2>Communications</h2>
+        <div class="err" id="comm-err"></div>
+        <div class="chips" id="contacts">
+          <span class="muted">Loading contacts…</span>
+        </div>
+        <div id="call-brief"></div>
+        <div id="call-actions" hidden style="margin-top: 10px">
+          <div class="m" id="call-avail"></div>
+          <button id="call-dial" style="margin-top: 6px">
+            Call now (FaceTime)
+          </button>
+          <textarea
+            id="call-notes"
+            rows="3"
+            placeholder="What was said? Action lines starting with - become tasks."
+            style="
+              width: 100%;
+              margin-top: 8px;
+              background: var(--panel-2);
+              color: var(--text);
+              border: 1px solid var(--line);
+              border-radius: 8px;
+              padding: 8px;
+              font: inherit;
+            "
+          ></textarea>
+          <button id="call-save" style="margin-top: 6px">
+            Save notes &amp; create tasks
+          </button>
+          <span class="m" id="call-note"></span>
+        </div>
+        <div id="outreach"></div>
+        <form class="run" id="contact-form" style="margin-top: 10px">
+          <input
+            id="contact-name"
+            placeholder="Contact name"
+            autocomplete="off"
+          />
+          <input
+            id="contact-address"
+            placeholder="email@example.com"
+            autocomplete="off"
+          />
+          <button type="submit">Add contact</button>
+        </form>
+      </section>
+
+      <section>
+        <h2>Inbox</h2>
+        <form class="run" id="inbox-form">
+          <input
+            id="inbox-query"
+            placeholder="Search mail (blank for recent)"
+            autocomplete="off"
+          />
+          <button type="submit">Search</button>
+        </form>
+        <div class="err" id="inbox-err"></div>
+        <ul id="inbox" style="list-style: none; padding: 0; margin: 10px 0 0">
+          <li class="muted">Loading…</li>
+        </ul>
+        <div id="inbox-message"></div>
+      </section>
+
+      <section>
+        <h2>Email drafts</h2>
+        <div class="err" id="draft-err"></div>
+        <ul
+          id="email-drafts"
+          style="list-style: none; padding: 0; margin: 10px 0 0"
+        >
+          <li class="muted">Loading…</li>
+        </ul>
+        <form class="run" id="draft-form" style="margin-top: 10px">
+          <input
+            id="draft-to"
+            placeholder="To (name or email)"
+            autocomplete="off"
+          />
+          <input id="draft-subject" placeholder="Subject" autocomplete="off" />
+          <button type="submit">Save draft</button>
+        </form>
+        <textarea
+          id="draft-body"
+          rows="3"
+          placeholder="Message…"
+          style="
+            width: 100%;
+            margin-top: 6px;
+            background: var(--panel-2);
+            color: var(--text);
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            padding: 8px;
+            font: inherit;
+          "
+        ></textarea>
+        <div class="m" style="margin-top: 6px">
+          Sending is irreversible, so it asks first. A message the mail server
+          rejects is reported as a failure, never as sent. A local outbox write
+          counts as queued, not delivered.
+        </div>
+      </section>
+
+      <section>
+        <h2>Professional posts</h2>
+        <div class="err" id="post-err"></div>
+        <div class="m" id="publish-note"></div>
+        <ul id="posts" style="list-style: none; padding: 0; margin: 10px 0 0">
+          <li class="muted">Loading…</li>
+        </ul>
+        <form class="run" id="post-form" style="margin-top: 10px">
+          <input
+            id="post-body"
+            placeholder="Draft a post…"
+            autocomplete="off"
+          />
+          <button class="primary" type="submit">Save draft</button>
+        </form>
+        <div style="margin-top: 10px">
+          <button id="recap-post">Draft a recap of this week</button>
+          <span class="m" id="recap-note"></span>
+        </div>
+      </section>
+
+      <section>
+        <h2>Ask the operator</h2>
+        <form class="run" id="run-form">
+          <input
+            id="cmd"
+            placeholder="Open my project in cursor · open report.pdf in Preview …"
+            autocomplete="off"
+          />
+          <button class="primary" type="submit">Run</button>
+        </form>
+        <label
+          class="m"
+          style="display: flex; gap: 6px; align-items: center; margin-top: 8px"
+        >
+          <input type="checkbox" id="speak-replies" />
+          Speak replies out loud
+        </label>
+        <div class="err" id="err"></div>
+        <div id="results"></div>
+      </section>
+    </main>
+
+    <script>
+      (function () {
+        const BOOTSTRAP =
+          (document.querySelector('meta[name="jarvis-bootstrap"]') || {})
+            .content || "";
+        let token = "";
+        const statusEl = document.getElementById("status");
+        const errEl = document.getElementById("err");
+        const results = document.getElementById("results");
+        let sessionId = "";
+
+        const el = (tag, props = {}, kids = []) => {
+          const n = document.createElement(tag);
+          Object.assign(n, props);
+          (Array.isArray(kids) ? kids : [kids]).forEach((k) =>
+            n.appendChild(
+              typeof k === "string" ? document.createTextNode(k) : k,
+            ),
+          );
+          return n;
+        };
+
+        async function establish() {
+          const r = await fetch("/auth/session", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ bootstrap: BOOTSTRAP }),
+          });
+          if (!r.ok) throw new Error("session failed (" + r.status + ")");
+          token = (await r.json()).session_token || "";
+          if (!token) throw new Error("no session token");
+        }
+
+        function verdictBadge(a) {
+          if (a.ok === false)
+            return el("span", { className: "badge failed" }, "failed");
+          if (a.verification === "success" || a.verified === true)
+            return el("span", { className: "badge verified" }, "verified");
+          return el("span", { className: "badge unverified" }, "not verified");
+        }
+
+        function render(resp) {
+          results.textContent = "";
+          const box = el("div", { className: "result" });
+          if (resp.needs_confirmation) {
+            box.appendChild(
+              el("div", {}, [
+                el("span", { className: "badge confirm" }, "needs approval"),
+                el(
+                  "span",
+                  { className: "msg" },
+                  resp.reply || "This needs your confirmation.",
+                ),
+              ]),
+            );
+          } else if (resp.actions && resp.actions.length) {
+            resp.actions.forEach((a) => {
+              box.appendChild(el("div", { className: "tool" }, a.tool));
+              box.appendChild(
+                el("div", {}, [
+                  verdictBadge(a),
+                  el("span", { className: "msg" }, a.message || a.error || ""),
+                ]),
+              );
+            });
+            if (resp.reply && resp.actions.length > 1)
+              box.appendChild(
+                el(
+                  "div",
+                  { className: "muted", style: "margin-top:6px" },
+                  resp.reply,
+                ),
+              );
+          } else {
+            box.appendChild(
+              el("div", { className: "msg" }, resp.reply || "Nothing to do."),
+            );
+          }
+          const meta = [];
+          if (resp.intent) meta.push("intent: " + resp.intent);
+          if (resp.decision) meta.push("decision: " + resp.decision);
+          if (resp.model_used) meta.push("model: " + resp.model_used);
+          if (meta.length)
+            box.appendChild(
+              el(
+                "div",
+                { className: "tool", style: "margin-top:6px" },
+                meta.join(" · "),
+              ),
+            );
+          results.appendChild(box);
+        }
+
+        async function run(text) {
+          errEl.textContent = "";
+          results.textContent = "";
+          const r = await fetch("/command", {
+            method: "POST",
+            headers: {
+              "X-JARVIS-Token": token,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              text,
+              source: "operator",
+              session_id: sessionId || undefined,
+            }),
+          });
+          if (!r.ok) throw new Error("HTTP " + r.status);
+          const resp = await r.json();
+          if (resp.session_id) sessionId = resp.session_id;
+          render(resp);
+
+          // Spoken feedback uses the real macOS voice (`/voice/speak`). If the
+          // voice is unavailable the reply is still shown; speech is an extra
+          // channel, never the only one, so a failure here is not an error.
+          if (resp.reply && document.getElementById("speak-replies").checked) {
+            fetch("/voice/speak", {
+              method: "POST",
+              headers: {
+                "X-JARVIS-Token": token,
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({ text: resp.reply }),
+            }).catch(() => {});
+          }
+        }
+
+        document
+          .getElementById("run-form")
+          .addEventListener("submit", async (ev) => {
+            ev.preventDefault();
+            const text = document.getElementById("cmd").value.trim();
+            if (!text) return;
+            try {
+              await run(text);
+            } catch (e) {
+              errEl.textContent = e.message;
+            }
+          });
+
+        document
+          .getElementById("chips")
+          .addEventListener("click", async (ev) => {
+            const btn = ev.target.closest("button[data-cmd]");
+            if (!btn) return;
+            document.getElementById("cmd").value = btn.dataset.cmd;
+            try {
+              await run(btn.dataset.cmd);
+            } catch (e) {
+              errEl.textContent = e.message;
+            }
+          });
+
+        async function loadContacts() {
+          const box = document.getElementById("contacts");
+          try {
+            const r = await fetch("/contacts", {
+              headers: { "X-JARVIS-Token": token },
+            });
+            const list = await r.json();
+            box.textContent = "";
+            if (!list.length) {
+              box.appendChild(
+                el("span", { className: "muted" }, "No contacts yet."),
+              );
+              return;
+            }
+            // One row per person, not two loose buttons each: with 27 contacts
+            // the old layout was a wall of buttons where the name was buried
+            // inside the label. The name is now the row, and the actions sit
+            // beside it.
+            list.forEach((c) => {
+              const row = el(
+                "div",
+                {
+                  style:
+                    "display:flex;gap:8px;align-items:baseline;padding:5px 0;border-bottom:1px solid rgba(255,255,255,0.06)",
+                },
+                [
+                  el("div", { className: "grow" }, [
+                    el("div", {}, c.name),
+                    c.address ? el("div", { className: "m" }, c.address) : "",
+                  ]),
+                ],
+              );
+              const b = el("button", {}, "Prepare call");
+              b.title = "Prepare call: " + c.name;
+              b.addEventListener("click", () => prepareCall(c.name));
+              const o = el("button", {}, "Draft outreach");
+              o.title = "Draft outreach: " + c.name;
+              o.addEventListener("click", () => draftOutreach(c.name));
+              row.appendChild(b);
+              row.appendChild(o);
+              box.appendChild(row);
+            });
+          } catch (e) {
+            box.textContent = "Could not load contacts.";
+          }
+        }
+
+        async function prepareCall(name) {
+          callContact = name;
+          document.getElementById("call-actions").hidden = false;
+          await loadCallAvailability();
+          const out = document.getElementById("call-brief");
+          document.getElementById("comm-err").textContent = "";
+          out.textContent = "Preparing…";
+          try {
+            const r = await fetch(
+              "/contacts/" + encodeURIComponent(name) + "/prepare-call",
+              { method: "POST", headers: { "X-JARVIS-Token": token } },
+            );
+            if (!r.ok) throw new Error("HTTP " + r.status);
+            const b = await r.json();
+            out.textContent = "";
+            const card = el("div", { className: "result" });
+            card.appendChild(
+              el("div", { className: "t" }, "Call brief: " + b.contact.name),
+            );
+            card.appendChild(
+              el("div", { className: "tool" }, b.contact.address),
+            );
+            (b.talking_points || []).forEach((p) =>
+              card.appendChild(el("div", { className: "msg" }, "• " + p)),
+            );
+            (b.open_tasks || []).forEach((t) =>
+              card.appendChild(
+                el("div", { className: "m" }, "task: " + t.title),
+              ),
+            );
+            (b.recent_email || []).forEach((m) =>
+              card.appendChild(
+                el("div", { className: "m" }, "email: " + m.subject),
+              ),
+            );
+            if (b.email_error)
+              card.appendChild(
+                el(
+                  "div",
+                  { className: "m", style: "color:var(--warn)" },
+                  "note: " + b.email_error,
+                ),
+              );
+            card.appendChild(
+              el(
+                "div",
+                { className: "m", style: "margin-top:6px" },
+                b.place_call
+                  ? b.place_call.supported
+                    ? b.place_call.reason || ""
+                    : b.place_call.reason ||
+                      "I cannot place a call on this machine."
+                  : "",
+              ),
+            );
+            out.appendChild(card);
+          } catch (e) {
+            out.textContent = "Could not prepare the call: " + e.message;
+          }
+        }
+
+        document
+          .getElementById("contact-form")
+          .addEventListener("submit", async (ev) => {
+            ev.preventDefault();
+            const name = document.getElementById("contact-name").value.trim();
+            const address = document
+              .getElementById("contact-address")
+              .value.trim();
+            if (!name || !address) return;
+            document.getElementById("comm-err").textContent = "";
+            try {
+              const r = await fetch("/contacts", {
+                method: "POST",
+                headers: {
+                  "X-JARVIS-Token": token,
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({ name, address, aliases: [] }),
+              });
+              if (!r.ok) throw new Error("HTTP " + r.status);
+              document.getElementById("contact-name").value = "";
+              document.getElementById("contact-address").value = "";
+              await loadContacts();
+            } catch (e) {
+              document.getElementById("comm-err").textContent =
+                "Could not add: " + e.message;
+            }
+          });
+
+        // Each row is a real check: whether the app is installed, whether it is
+        // running now, and only the actions that can actually work from there.
+        // Outreach reuses the contact's real context: open tasks and recent mail.
+        // The draft is saved to the mailbox's drafts folder; sending stays manual.
+        async function draftOutreach(name) {
+          const box = document.getElementById("outreach");
+          box.textContent = "Drafting…";
+          try {
+            const r = await fetch(
+              "/contacts/" + encodeURIComponent(name) + "/outreach",
+              {
+                method: "POST",
+                headers: {
+                  "X-JARVIS-Token": token,
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({}),
+              },
+            );
+            const data = await r.json();
+            if (!r.ok) throw new Error(data.detail || "HTTP " + r.status);
+            box.textContent = "";
+            box.appendChild(
+              el("div", { className: "t" }, "Outreach draft: " + name),
+            );
+            const pre = el(
+              "pre",
+              {
+                style:
+                  "white-space:pre-wrap;font:inherit;margin:8px 0;padding:10px;background:var(--panel-2);border-radius:8px",
+              },
+              data.draft.body,
+            );
+            box.appendChild(pre);
+            box.appendChild(
+              el(
+                "div",
+                { className: "m" },
+                data.saved
+                  ? "Saved to your mailbox drafts. Sending is a separate step."
+                  : "Not saved — check your mail setup.",
+              ),
+            );
+          } catch (e) {
+            box.textContent = "Could not draft: " + e.message;
+          }
+        }
+
+        let callContact = "";
+
+        async function loadCallAvailability() {
+          const box = document.getElementById("call-avail");
+          try {
+            const r = await fetch("/calls/availability", {
+              headers: { "X-JARVIS-Token": token },
+            });
+            const data = await r.json();
+            box.textContent = data.detail || "";
+            document.getElementById("call-dial").disabled = !data.available;
+          } catch (e) {
+            box.textContent = "Could not check for a calling app.";
+          }
+        }
+
+        document
+          .getElementById("call-dial")
+          .addEventListener("click", async () => {
+            const note = document.getElementById("call-note");
+            if (!callContact) return;
+            // Ringing somebody is not reversible, so it is a second deliberate act.
+            if (!window.confirm("Call " + callContact + " on FaceTime now?"))
+              return;
+            note.textContent = "Calling…";
+            try {
+              const r = await fetch(
+                "/contacts/" + encodeURIComponent(callContact) + "/call",
+                {
+                  method: "POST",
+                  headers: {
+                    "X-JARVIS-Token": token,
+                    "Content-Type": "application/json",
+                  },
+                  body: JSON.stringify({ confirm: true }),
+                },
+              );
+              const data = await r.json();
+              if (!r.ok) throw new Error(data.detail || "HTTP " + r.status);
+              note.textContent = data.note || "";
+            } catch (e) {
+              note.textContent = "Could not call: " + e.message;
+            }
+          });
+
+        document
+          .getElementById("call-save")
+          .addEventListener("click", async () => {
+            const note = document.getElementById("call-note");
+            if (!callContact) return;
+            note.textContent = "Saving…";
+            try {
+              const r = await fetch(
+                "/contacts/" + encodeURIComponent(callContact) + "/call-notes",
+                {
+                  method: "POST",
+                  headers: {
+                    "X-JARVIS-Token": token,
+                    "Content-Type": "application/json",
+                  },
+                  body: JSON.stringify({
+                    notes: document.getElementById("call-notes").value,
+                  }),
+                },
+              );
+              const data = await r.json();
+              if (!r.ok) throw new Error(data.detail || "HTTP " + r.status);
+              note.textContent = data.created_count
+                ? "Created " + data.created_count + " task(s) from your notes."
+                : data.note;
+            } catch (e) {
+              note.textContent = "Could not save: " + e.message;
+            }
+          });
+
+        async function loadInbox(query) {
+          const ul = document.getElementById("inbox");
+          const err = document.getElementById("inbox-err");
+          err.textContent = "";
+          try {
+            const r = await fetch(
+              "/email/search?query=" + encodeURIComponent(query || ""),
+              { headers: { "X-JARVIS-Token": token } },
+            );
+            const data = await r.json();
+            const msgs = data.results || [];
+            ul.textContent = "";
+            if (!msgs.length) {
+              ul.appendChild(
+                el("li", { className: "muted" }, "No messages matched."),
+              );
+              return;
+            }
+            msgs.forEach((m) => {
+              const row = el(
+                "li",
+                {
+                  style:
+                    "display:flex;gap:8px;align-items:baseline;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.06)",
+                },
+                [
+                  el("div", { className: "grow" }, [
+                    el("div", {}, m.subject || "(no subject)"),
+                    el(
+                      "div",
+                      { className: "m" },
+                      (m.from || "") + (m.date ? " · " + m.date : ""),
+                    ),
+                  ]),
+                ],
+              );
+              const open = el("button", {}, "Read");
+              open.addEventListener("click", () => readMessage(m.uid));
+              row.appendChild(open);
+              // The task-from-email workflow existed only as a chat sentence:
+              // the inbox could read a message and do nothing with it.
+              const toTask = el("button", {}, "Task");
+              toTask.addEventListener("click", async () => {
+                toTask.disabled = true;
+                err.textContent = "";
+                try {
+                  const rr = await fetch(
+                    "/email/" + encodeURIComponent(m.uid) + "/task",
+                    {
+                      method: "POST",
+                      headers: {
+                        "X-JARVIS-Token": token,
+                        "Content-Type": "application/json",
+                      },
+                      body: JSON.stringify({}),
+                    },
+                  );
+                  const data = await rr.json();
+                  if (!rr.ok)
+                    throw new Error(data.detail || "HTTP " + rr.status);
+                  err.textContent = "";
+                  const note = el(
+                    "li",
+                    { className: "m" },
+                    "Added task: " + ((data.task || {}).title || ""),
+                  );
+                  ul.insertBefore(note, ul.firstChild);
+                } catch (e) {
+                  err.textContent = "Could not make a task: " + e.message;
+                }
+                toTask.disabled = false;
+              });
+              row.appendChild(toTask);
+              ul.appendChild(row);
+            });
+          } catch (e) {
+            err.textContent = "Could not search mail: " + e.message;
+          }
+        }
+
+        async function readMessage(uid) {
+          const box = document.getElementById("inbox-message");
+          box.textContent = "Reading…";
+          try {
+            const r = await fetch("/email/" + encodeURIComponent(uid), {
+              headers: { "X-JARVIS-Token": token },
+            });
+            const data = await r.json();
+            if (!r.ok) throw new Error(data.detail || "HTTP " + r.status);
+            const m = data.message || {};
+            box.textContent = "";
+            box.appendChild(
+              el("div", { className: "t" }, m.subject || "(no subject)"),
+            );
+            box.appendChild(
+              el(
+                "div",
+                { className: "m" },
+                (m.from || "") + " → " + ((m.to || []).join(", ") || ""),
+              ),
+            );
+            const pre = el(
+              "pre",
+              {
+                style:
+                  "white-space:pre-wrap;font:inherit;margin:8px 0;padding:10px;background:var(--panel-2);border-radius:8px;max-height:320px;overflow:auto",
+              },
+              (m.body || "").slice(0, 4000),
+            );
+            box.appendChild(pre);
+          } catch (e) {
+            box.textContent = "Could not read the message: " + e.message;
+          }
+        }
+
+        document
+          .getElementById("inbox-form")
+          .addEventListener("submit", (ev) => {
+            ev.preventDefault();
+            loadInbox(document.getElementById("inbox-query").value.trim());
+          });
+
+        let drafts = [];
+
+        async function loadEmailDrafts() {
+          const ul = document.getElementById("email-drafts");
+          try {
+            const r = await fetch("/email-drafts", {
+              headers: { "X-JARVIS-Token": token },
+            });
+            const list = await r.json();
+            drafts = list;
+            ul.textContent = "";
+            const pending = list.filter((d) => d.state === "draft");
+            if (!pending.length) {
+              ul.appendChild(
+                el("li", { className: "muted" }, "No unsent drafts."),
+              );
+              return;
+            }
+            pending.forEach((d) => {
+              let to = d.to_addresses;
+              try {
+                to = JSON.parse(to || "[]").join(", ");
+              } catch (e) {}
+              const row = el(
+                "li",
+                {
+                  style:
+                    "display:flex;gap:8px;align-items:baseline;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.06)",
+                },
+                [
+                  el("div", { className: "grow" }, [
+                    el("div", {}, d.subject || "(no subject)"),
+                    el("div", { className: "m" }, to || "(no recipient)"),
+                  ]),
+                ],
+              );
+              const send = el("button", {}, "Send");
+              send.addEventListener("click", async () => {
+                if (
+                  !window.confirm(
+                    'Send "' +
+                      (d.subject || "(no subject)") +
+                      '" to ' +
+                      to +
+                      "?",
+                  )
+                )
+                  return;
+                send.disabled = true;
+                document.getElementById("draft-err").textContent = "";
+                try {
+                  const rr = await fetch(
+                    "/email-drafts/" + encodeURIComponent(d.draft_id) + "/send",
+                    {
+                      method: "POST",
+                      headers: {
+                        "X-JARVIS-Token": token,
+                        "Content-Type": "application/json",
+                      },
+                      body: JSON.stringify({ confirm: true }),
+                    },
+                  );
+                  const data = await rr.json();
+                  if (!rr.ok)
+                    throw new Error(data.detail || "HTTP " + rr.status);
+                  if (!data.ok)
+                    throw new Error(data.message || "the provider refused it");
+                  await loadEmailDrafts();
+                } catch (e) {
+                  document.getElementById("draft-err").textContent =
+                    "Not sent: " + e.message;
+                  send.disabled = false;
+                }
+              });
+              row.appendChild(send);
+              ul.appendChild(row);
+            });
+          } catch (e) {
+            document.getElementById("draft-err").textContent =
+              "Could not load drafts: " + e.message;
+          }
+        }
+
+        document
+          .getElementById("draft-form")
+          .addEventListener("submit", async (ev) => {
+            ev.preventDefault();
+            const err = document.getElementById("draft-err");
+            err.textContent = "";
+            const to = document.getElementById("draft-to").value.trim();
+            if (!to) return;
+            try {
+              const r = await fetch("/email-drafts", {
+                method: "POST",
+                headers: {
+                  "X-JARVIS-Token": token,
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                  to,
+                  subject: document.getElementById("draft-subject").value,
+                  body: document.getElementById("draft-body").value,
+                }),
+              });
+              const data = await r.json();
+              if (!r.ok) throw new Error(data.detail || "HTTP " + r.status);
+              document.getElementById("draft-to").value = "";
+              document.getElementById("draft-subject").value = "";
+              document.getElementById("draft-body").value = "";
+              await loadEmailDrafts();
+            } catch (e) {
+              err.textContent = "Could not save the draft: " + e.message;
+            }
+          });
+
+        async function loadApps() {
+          const ul = document.getElementById("apps");
+          const note = document.getElementById("apps-note");
+          try {
+            const r = await fetch("/apps/status", {
+              headers: { "X-JARVIS-Token": token },
+            });
+            if (!r.ok) throw new Error("HTTP " + r.status);
+            const data = await r.json();
+            const apps = data.apps || [];
+            const installed = apps.filter((a) => a.installed).length;
+            note.textContent =
+              installed +
+              " of " +
+              apps.length +
+              " known applications are installed here.";
+            ul.textContent = "";
+            apps.forEach((a) => {
+              const row = el(
+                "li",
+                {
+                  style:
+                    "display:flex;gap:8px;align-items:baseline;padding:5px 0;border-bottom:1px solid rgba(255,255,255,0.06)",
+                },
+                [
+                  el("div", { className: "grow" }, [
+                    el("span", {}, a.name),
+                    el("span", { className: "m" }, "  " + a.category),
+                  ]),
+                ],
+              );
+              const state = el(
+                "span",
+                {
+                  className: "m",
+                  style: a.installed ? "" : "opacity:0.5",
+                },
+                !a.installed
+                  ? "not installed"
+                  : a.running
+                    ? "running"
+                    : "not running",
+              );
+              row.appendChild(state);
+              if (a.installed) {
+                const act = el(
+                  "button",
+                  {},
+                  a.running ? "Bring forward" : "Open",
+                );
+                act.addEventListener("click", async () => {
+                  act.disabled = true;
+                  try {
+                    await fetch("/command", {
+                      method: "POST",
+                      headers: {
+                        "X-JARVIS-Token": token,
+                        "Content-Type": "application/json",
+                      },
+                      body: JSON.stringify({
+                        text: a.running
+                          ? "switch to " + a.name
+                          : "open " + a.name,
+                      }),
+                    });
+                    await loadApps();
+                  } catch (e) {
+                    document.getElementById("apps-note").textContent =
+                      "Could not " +
+                      (a.running ? "bring forward " : "open ") +
+                      a.name;
+                  }
+                });
+                row.appendChild(act);
+              }
+              ul.appendChild(row);
+            });
+          } catch (e) {
+            note.textContent = "Could not read application state: " + e.message;
+          }
+        }
+
+        async function loadPosts() {
+          const ul = document.getElementById("posts");
+          try {
+            const r = await fetch("/posts", {
+              headers: { "X-JARVIS-Token": token },
+            });
+            const data = await r.json();
+            const note = document.getElementById("publish-note");
+            if (data.publishing)
+              note.textContent = data.publishing.reason || "";
+            const drafts = data.drafts || [];
+            ul.textContent = "";
+            if (!drafts.length) {
+              ul.appendChild(
+                el("li", { className: "muted" }, "No drafts yet."),
+              );
+              return;
+            }
+            drafts.forEach((d) => {
+              const when = d.scheduled_for
+                ? new Date(d.scheduled_for).toLocaleString()
+                : "";
+              const li = el(
+                "li",
+                { className: "result", style: "margin-top:8px" },
+                [
+                  el("div", {}, [el("span", { className: "badge" }, d.status)]),
+                  el("div", { className: "msg" }, d.body),
+                  when
+                    ? el("div", { className: "m" }, "scheduled " + when)
+                    : "",
+                ],
+              );
+              // Scheduling was the missing half: the backend records a
+              // publication date and surfaces a reminder when it arrives, but
+              // nothing could ever set one, so the reminder path was dead.
+              const row = el("div", {
+                style: "display:flex;gap:6px;align-items:center;margin-top:6px",
+              });
+              const picker = el("input", { type: "datetime-local" });
+              picker.value = d.scheduled_for
+                ? new Date(d.scheduled_for).toISOString().slice(0, 16)
+                : "";
+              const saveWhen = el("button", {}, "Schedule");
+              saveWhen.addEventListener("click", async () => {
+                if (!picker.value) return;
+                await fetch("/posts/" + encodeURIComponent(d.draft_id), {
+                  method: "PATCH",
+                  headers: {
+                    "X-JARVIS-Token": token,
+                    "Content-Type": "application/json",
+                  },
+                  body: JSON.stringify({ scheduled_for: picker.value }),
+                });
+                await loadPosts();
+              });
+              const del = el("button", {}, "Delete");
+              del.addEventListener("click", async () => {
+                await fetch("/posts/" + encodeURIComponent(d.draft_id), {
+                  method: "DELETE",
+                  headers: { "X-JARVIS-Token": token },
+                });
+                await loadPosts();
+              });
+              const clear = el("button", {}, "Clear date");
+              clear.addEventListener("click", async () => {
+                await fetch("/posts/" + encodeURIComponent(d.draft_id), {
+                  method: "PATCH",
+                  headers: {
+                    "X-JARVIS-Token": token,
+                    "Content-Type": "application/json",
+                  },
+                  body: JSON.stringify({ clear_schedule: true }),
+                });
+                await loadPosts();
+              });
+              row.appendChild(picker);
+              row.appendChild(saveWhen);
+              if (d.scheduled_for) row.appendChild(clear);
+              row.appendChild(del);
+              li.appendChild(row);
+              ul.appendChild(li);
+            });
+          } catch (e) {
+            ul.textContent = "Could not load posts.";
+          }
+        }
+
+        document
+          .getElementById("recap-post")
+          .addEventListener("click", async () => {
+            const note = document.getElementById("recap-note");
+            note.textContent = "Looking at what you finished…";
+            try {
+              const r = await fetch("/posts/recap", {
+                method: "POST",
+                headers: {
+                  "X-JARVIS-Token": token,
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({ days: 7 }),
+              });
+              if (!r.ok) throw new Error("HTTP " + r.status);
+              const data = await r.json();
+              // Nothing completed is said plainly; no draft is invented.
+              note.textContent = data.created
+                ? "Drafted from " + data.completed_count + " completed task(s)."
+                : data.reason || "Nothing to recap yet.";
+              if (data.created) await loadPosts();
+            } catch (e) {
+              note.textContent = "Could not draft a recap: " + e.message;
+            }
+          });
+
+        document
+          .getElementById("post-form")
+          .addEventListener("submit", async (ev) => {
+            ev.preventDefault();
+            const text = document.getElementById("post-body").value.trim();
+            if (!text) return;
+            document.getElementById("post-err").textContent = "";
+            try {
+              const r = await fetch("/posts", {
+                method: "POST",
+                headers: {
+                  "X-JARVIS-Token": token,
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({ body: text, channel: "linkedin" }),
+              });
+              if (!r.ok) throw new Error("HTTP " + r.status);
+              document.getElementById("post-body").value = "";
+              await loadPosts();
+            } catch (e) {
+              document.getElementById("post-err").textContent =
+                "Could not save: " + e.message;
+            }
+          });
+
+        (async () => {
+          try {
+            await establish();
+            await Promise.all([
+              loadContacts(),
+              loadPosts(),
+              loadApps(),
+              loadEmailDrafts(),
+              loadInbox(""),
+            ]);
+            statusEl.textContent = "connected";
+          } catch (e) {
+            statusEl.textContent = "not connected";
+            errEl.textContent = e.message;
+          }
+        })();
+      })();
+    </script>
+  </body>
+</html>

@@ -1,6 +1,6 @@
 # Phase 46 — Buttons, not typing
 
-Asked for: *"make ui better with buttons and more features"*.
+Asked for: _"make ui better with buttons and more features"_.
 
 Closed 2026-10-03. Every number below was re-measured after the change; the ones that
 moved are marked, and the two that were already wrong in the README are corrected here
@@ -13,16 +13,16 @@ rather than quietly re-published.
 Both pages were opened in a real browser and captured before anything was edited
 (`phone-before-375.png`, `dash-before-1440.png`).
 
-| Measured before | Value |
-|---|---|
-| Phone page: controls on screen | 3 (`pair`, `refresh`, `send`) |
-| Phone page: named colour tokens | 0 — colours hard-coded (`#0d1117`, `#161b22`, `#238636`, `#6e2a2a`, `#30363d`, `#adbac7`) |
-| Phone page: `:hover` / `:focus-visible` / `prefers-reduced-motion` rules | 0 / 0 / 0 |
-| Dashboard: quick actions | 0 |
-| Dashboard: devices listed (this machine) | 13, of which 8 are residue of my own live test drives (`phone_pair_a`, `phone_twice`, `phone_perm`, `phone_tool`, `phone_remove`, `phone_gone`, `phone_hmac`, plus a `phone_main` key file) |
-| Dashboard: way to dismiss a device | none |
-| Dashboard: way to find one of 134 tools | read the table |
-| `/tools` payload | 134 entries, no `tags` field |
+| Measured before                                                          | Value                                                                                                                                                                                       |
+| ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Phone page: controls on screen                                           | 3 (`pair`, `refresh`, `send`)                                                                                                                                                               |
+| Phone page: named colour tokens                                          | 0 — colours hard-coded (`#0d1117`, `#161b22`, `#238636`, `#6e2a2a`, `#30363d`, `#adbac7`)                                                                                                   |
+| Phone page: `:hover` / `:focus-visible` / `prefers-reduced-motion` rules | 0 / 0 / 0                                                                                                                                                                                   |
+| Dashboard: quick actions                                                 | 0                                                                                                                                                                                           |
+| Dashboard: devices listed (this machine)                                 | 13, of which 8 are residue of my own live test drives (`phone_pair_a`, `phone_twice`, `phone_perm`, `phone_tool`, `phone_remove`, `phone_gone`, `phone_hmac`, plus a `phone_main` key file) |
+| Dashboard: way to dismiss a device                                       | none                                                                                                                                                                                        |
+| Dashboard: way to find one of 134 tools                                  | read the table                                                                                                                                                                              |
+| `/tools` payload                                                         | 134 entries, no `tags` field                                                                                                                                                                |
 
 So the honest reading of "make it better with buttons" was not taste. One text box and a
 wall of empty space, on the device a person is actually holding, with 134 capabilities
@@ -54,7 +54,7 @@ persists, so the row needed restoring, not just re-reading.
    processes gone in ~3 s, which is Phase 40b's shutdown hook doing its job), reopen it,
    and the record read `unpaired` / `online: true` again.
 3. Verified from the API, not from the file: `{'auth_state': 'unpaired', 'online': True,
-   'key_ref': ''}` — identical to a fresh `DEFAULT_DEVICES` row.
+'key_ref': ''}` — identical to a fresh `DEFAULT_DEVICES` row.
 
 The audit chain still contains the `device.revoke` success row for that call. It is left in
 place: it happened.
@@ -120,8 +120,8 @@ not a second path to a tool endpoint: permission, confirmation, verification and
 row all live on the `/command` path, and a second path is a second set of gates to keep in
 sync — which is how a UI ends up advertising a capability the system no longer grants.
 
-| Dashboard (9) | Phone (6) |
-|---|---|
+| Dashboard (9)                                                                                                          | Phone (6)                                                              |
+| ---------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
 | Battery · Storage · Open project · Find a file · Open a site · Explain something · What I remember · Screenshot · Time | Battery · Storage · Open project · Find a file · Open a site · Explain |
 
 A `{slot}` in a sentence is the one word a tap cannot know, so the page asks for it and
@@ -140,11 +140,11 @@ test_every_button_says_a_sentence_the_planner_routes[phone.html]
 
 Two candidates were then measured against the planner on this build:
 
-| sentence | parse result |
-|---|---|
-| `what is {subject}` → "what is a firewall" | `ask_question`, topic `a firewall` |
-| `explain {subject}` → "explain what a load balancer does" | `ask_question`, topic kept whole |
-| a free question: "what trains run from pune to mumbai" | `unknown` / `not_understood` |
+| sentence                                                  | parse result                       |
+| --------------------------------------------------------- | ---------------------------------- |
+| `what is {subject}` → "what is a firewall"                | `ask_question`, topic `a firewall` |
+| `explain {subject}` → "explain what a load balancer does" | `ask_question`, topic kept whole   |
+| a free question: "what trains run from pune to mumbai"    | `unknown` / `not_understood`       |
 
 The shipped button says `explain {subject}`: it survives a person's wording, and its prompt
 says what it wants (one topic, up to 8 words — the planner's own limit).
@@ -160,11 +160,11 @@ disabled unless **both** hold:
 
 Measured in a real browser, both gates separately:
 
-| Origin | `isSecureContext` | `mediaDevices` | `can_listen` | Button | Line shown |
-|---|---|---|---|---|---|
-| `127.0.0.1:8799` (fresh home) | true | present | true | enabled | "tap to speak, tap again to stop" |
-| `127.0.0.1:8799` + TCC marker | true | present | **false** | disabled | "the laptop has no working microphone." + *how to give this laptop ears* |
-| `172.20.169.185:8798` (LAN) | **false** | **absent** | true | disabled | "…this browser will not hand the page a microphone on an insecure address" |
+| Origin                        | `isSecureContext` | `mediaDevices` | `can_listen` | Button   | Line shown                                                                 |
+| ----------------------------- | ----------------- | -------------- | ------------ | -------- | -------------------------------------------------------------------------- |
+| `127.0.0.1:8799` (fresh home) | true              | present        | true         | enabled  | "tap to speak, tap again to stop"                                          |
+| `127.0.0.1:8799` + TCC marker | true              | present        | **false**    | disabled | "the laptop has no working microphone." + _how to give this laptop ears_   |
+| `172.20.169.185:8798` (LAN)   | **false**         | **absent**     | true         | disabled | "…this browser will not hand the page a microphone on an insecure address" |
 
 The third row is the state a real phone is in, and it is why the button exists now even
 though the laptop still has no working ears: the two causes need different fixes, and a
@@ -172,7 +172,7 @@ single "unavailable" would send someone to the wrong settings pane.
 
 The reason text comes from the server. `describe_stt()` gained `advice` — the same
 `ears_advice()` sentence Phase 43 wrote for the failed-transcription path, which was
-previously only reachable *after* an attempt, so a disabled button had nothing to say.
+previously only reachable _after_ an attempt, so a disabled button had nothing to say.
 
 **Then the browser rejected my own design.** The first version printed that sentence inline:
 measured at 375 px, `#micline` was **530 characters tall-rendered as 101 px of text** under a
@@ -204,32 +204,32 @@ The phone also gained what the dashboard already had and it did not: `:hover`,
 
 ## 6. Two more defects the browser found
 
-* **A revoked device read `OFFLINE`.** After the Forget button worked and the API confirmed
+- **A revoked device read `OFFLINE`.** After the Forget button worked and the API confirmed
   `auth_state: revoked`, the row still said OFFLINE — the card's state word only consulted
   `online`, so "not here right now" was printed over "untrusted until it pairs again". The
   revoked branch now comes first, and the test checks the **order**, not the presence of the
   word, because the fall-through is the bug.
-* **`108 routes` in the README matched no measurement.** Recounted three ways: 112 route
+- **`108 routes` in the README matched no measurement.** Recounted three ways: 112 route
   objects, 112 path+method pairs, 106 distinct paths. The published figure was neither. It
   now says 112 routes / 106 paths, with the convention written next to it.
 
 ## 7. Numbers, re-measured after the change
 
-| | before (published) | after (measured) | how |
-|---|---|---|---|
-| Test suite | 1856 passed · 0 failed | **1884 passed · 0 failed · 0 xfailed · 0 skipped** (53.2 s) | `JARVIS_HOME=$(mktemp -d) .venv/bin/python -m pytest -q` |
-| Phase 46 tests | 0 | **28** in one new module | `tests/test_phase46_buttons_not_typing.py` |
-| Test modules | 72 | **73** | `ls tests/test_*.py | wc -l` |
-| Phase reports | 47 | **48** (this file) | `ls audit/*.md | wc -l` |
-| Lines (py/html/js) | ~63.0k | **62,513** — 38,619 source · 23,894 tests | `wc -l` over `jarvis app dashboard tests` |
-| Tools | 134 | 134 (unchanged) | `build_default_registry()` |
-| Planner routes | 47 | 47 (unchanged) | `len(JarvisCore().planner._rules)` |
-| HTTP routes | "108" (unmatched) | **112 routes · 106 distinct paths** | `len(app.routes)` / distinct `r.path` |
-| Quick actions | 0 | **9 dashboard · 6 phone**, all routing to real tools | the two planner tests |
-| Phone controls at 375 px | 3 buttons | 6 quick actions + send + mic + 2 device buttons | browser snapshot |
-| Horizontal overflow at 375 px | not measured | **0** (`scrollWidth` 375 = `clientWidth` 375, disclosure open) | browser |
-| Console errors | not measured | **0** on both pages, both origins | browser |
-| Delivered bundle seal | valid | **valid** after rebuild (`valid on disk`, `satisfies its Designated Requirement`) | `codesign --verify --deep --strict` |
+|                               | before (published)     | after (measured)                                                                  | how                                                      |
+| ----------------------------- | ---------------------- | --------------------------------------------------------------------------------- | -------------------------------------------------------- |
+| Test suite                    | 1856 passed · 0 failed | **1884 passed · 0 failed · 0 xfailed · 0 skipped** (53.2 s)                       | `JARVIS_HOME=$(mktemp -d) .venv/bin/python -m pytest -q` |
+| Phase 46 tests                | 0                      | **28** in one new module                                                          | `tests/test_phase46_buttons_not_typing.py`               |
+| Test modules                  | 72                     | **73**                                                                            | `ls tests/test_*.py                                      | wc -l` |
+| Phase reports                 | 47                     | **48** (this file)                                                                | `ls audit/*.md                                           | wc -l` |
+| Lines (py/html/js)            | ~63.0k                 | **62,513** — 38,619 source · 23,894 tests                                         | `wc -l` over `jarvis app dashboard tests`                |
+| Tools                         | 134                    | 134 (unchanged)                                                                   | `build_default_registry()`                               |
+| Planner routes                | 47                     | 47 (unchanged)                                                                    | `len(JarvisCore().planner._rules)`                       |
+| HTTP routes                   | "108" (unmatched)      | **112 routes · 106 distinct paths**                                               | `len(app.routes)` / distinct `r.path`                    |
+| Quick actions                 | 0                      | **9 dashboard · 6 phone**, all routing to real tools                              | the two planner tests                                    |
+| Phone controls at 375 px      | 3 buttons              | 6 quick actions + send + mic + 2 device buttons                                   | browser snapshot                                         |
+| Horizontal overflow at 375 px | not measured           | **0** (`scrollWidth` 375 = `clientWidth` 375, disclosure open)                    | browser                                                  |
+| Console errors                | not measured           | **0** on both pages, both origins                                                 | browser                                                  |
+| Delivered bundle seal         | valid                  | **valid** after rebuild (`valid on disk`, `satisfies its Designated Requirement`) | `codesign --verify --deep --strict`                      |
 
 Live end-to-end through the new buttons, in a real browser:
 
@@ -249,29 +249,29 @@ phone slot       → tap Explain → prompt "Explain what? (one topic, up to 8 w
 
 ## 8. Open items
 
-* **46-A — `can_listen` is a claim about backends, not about hearing.** Measured the same
+- **46-A — `can_listen` is a claim about backends, not about hearing.** Measured the same
   day: a fresh home reports `can_listen: true` for `macos_speech`, and the delivered app
   reports `false` because a `.tcc_blocked` marker exists in its home. The first real attempt
   is what writes that marker, so a first tap on a machine that has never been asked can
   enable a button that then fails. The button self-corrects on the next status read; the
   initial state can still be wrong.
-* **46-B — one accent per surface.** The phone's primary action is green (`--go #238636`),
+- **46-B — one accent per surface.** The phone's primary action is green (`--go #238636`),
   the dashboard's is blue (`--accent #4c8dff`). Both are now named; neither was changed.
   Someone with an opinion about which is right should decide, not a phase that found it
   while fixing something else.
-* **46-C — eight test devices are still in `~/.jarvis-forge`.** They are mine, from live
+- **46-C — eight test devices are still in `~/.jarvis-forge`.** They are mine, from live
   drives against the user's app. The Forget button now exists and they can be cleared from
   the dashboard in eight taps; they were not deleted here because they are the user's data
   and the ask was a UI, not a cleanup.
-* **46-D — the ledger calls a host revoke `remove_phone`.** The HTTP route attributes the
+- **46-D — the ledger calls a host revoke `remove_phone`.** The HTTP route attributes the
   action to the tool that does that job, so the audit row for a laptop-targeted refusal
   names a phone tool. The `denied` result and the `detail.reason` are correct; the tool
   label reads wrong for the target. Renaming a registered tool is a state-carrying change
   (see the rename boundary), so it is recorded, not done.
-* **46-E — the mic still has no working backend on this machine** (43-A unchanged). The
+- **46-E — the mic still has no working backend on this machine** (43-A unchanged). The
   button is built, gated and explained; it needs either the Speech Recognition permission
   plus the marker deleted, or whisper.cpp, or a key.
-* **46-F — `tags` were not added to `/tools`.** The plan for this phase assumed a
+- **46-F — `tags` were not added to `/tools`.** The plan for this phase assumed a
   capability taxonomy would be needed to generate buttons. It wasn't: 9 buttons worth of
   sentences came from what was actually asked for, and annotating 134 tools to power a
   filter the filter box already solves without them would have been a taxonomy invented

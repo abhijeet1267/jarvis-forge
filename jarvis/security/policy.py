@@ -186,8 +186,15 @@ class PermissionEngine:
         return self._is_revoked(tool, device)
 
     # -- evaluation ----------------------------------------------------------
-    def evaluate(self, action: PlannedAction, session_id: str = "", request_id: str = "") -> PolicyResult:
-        """Evaluate a single planned action."""
+    def evaluate(self, action: PlannedAction, session_id: str = "", request_id: str = "",
+                requested_surface: str = "") -> PolicyResult:
+        """Evaluate a single planned action.
+
+        ``requested_surface`` is which surface raised the request. It is recorded
+        on the confirmation so that a later answer can be compared with it --
+        a narrow surface approving its own request is refused, and that rule
+        needs to know the request came from a phone.
+        """
         spec = self.tools.get(action.tool)
         if spec is None:
             return PolicyResult(PolicyDecision.BLOCK, f"unknown tool {action.tool!r}")
@@ -247,7 +254,8 @@ class PermissionEngine:
 
         if decision is PolicyDecision.CONFIRM:
             confirmation_id = self._create_confirmation(
-                spec, action, session_id=session_id, request_id=request_id
+                spec, action, session_id=session_id, request_id=request_id,
+                requested_surface=requested_surface,
             )
             return PolicyResult(
                 decision,
@@ -396,6 +404,7 @@ class PermissionEngine:
         action: PlannedAction,
         session_id: str,
         request_id: str,
+        requested_surface: str = "",
     ) -> str:
         confirmation_id = new_secret_id("CONF")
         
@@ -417,7 +426,14 @@ class PermissionEngine:
                 self._preview(spec, action),
                 utcnow().isoformat(),
                 session_id,
-                "phone" if "/" in request_id else "dashboard",
+                # The surface that raised the request, as the caller knows
+                # it. It used to be guessed from the request id --
+                # `"phone" if "/" in request_id` -- and a request id is
+                # `REQ-<hex>`, so the guess could never be "phone" and every
+                # confirmation was recorded as "dashboard" even when a phone
+                # had raised it. The value had no readers, so nothing broke;
+                # it was simply a fact that was wrong and unused.
+                requested_surface or "unknown",
             ),
         )
         log.info(
@@ -505,9 +521,14 @@ class PermissionEngine:
             log.info("confirmation expired before approval", extra_fields={"id": confirmation_id})
             return record
         
-        # Self-approval boundary: phone cannot approve its own requests
+        # Self-approval boundary: a device cannot approve its own requests.
+        # The check needs a real session identity on both sides: an empty approver
+        # session (a direct laptop/CLI approval with no session token) has no "who" to
+        # compare, and comparing "" == "" would deny the ordinary confirmation lifecycle.
+        # The surface-aware rule (a phone may not approve itself, a dashboard may) is
+        # enforced in the orchestrator; this is the engine-level fallback for raw calls.
         requested_session = record.get("requested_by_session", "")
-        if requested_session == approver_session:
+        if approver_session and requested_session == approver_session:
             log.warning(
                 "self-approval rejected",
                 extra_fields={

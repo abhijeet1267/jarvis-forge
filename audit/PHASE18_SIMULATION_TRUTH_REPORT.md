@@ -25,12 +25,12 @@ here. No new capability, no hardware, no simulator added.
 
 With the simulators on, through the real handlers:
 
-| Tool | `ok` | verification | `output.simulated` | ledger token |
-| --- | --- | --- | --- | --- |
-| `control_home_device` | True | success | True | `success` |
-| `run_home_routine` | True | success | True | `success` |
-| `run_experiment` | True | success | True | `success` |
-| `command_robot_motion` | True | success | True | `success` |
+| Tool                   | `ok` | verification | `output.simulated` | ledger token |
+| ---------------------- | ---- | ------------ | ------------------ | ------------ |
+| `control_home_device`  | True | success      | True               | `success`    |
+| `run_home_routine`     | True | success      | True               | `success`    |
+| `run_experiment`       | True | success      | True               | `success`    |
+| `command_robot_motion` | True | success      | True               | `success`    |
 
 Each of those replies contains the words "simulated; no real device was reached" or
 "no real robot was reached". A grep confirmed the blast radius is exactly these four
@@ -91,7 +91,7 @@ different claims and get different rules** — pinned by
 `test_a_simulated_car_read_is_still_a_successful_read` so the distinction stays a
 decision rather than an oversight.
 
-Also untouched: the watch/lab simulators' *delivery* semantics (Phase 10's
+Also untouched: the watch/lab simulators' _delivery_ semantics (Phase 10's
 `bears_authority` / `delivery_is_real`), and hardware itself, which remains
 **BLOCKED**. No fake device was created to exercise a state.
 
@@ -104,11 +104,11 @@ Real server on `127.0.0.1:8899`, `JARVIS_HOME=/tmp/p18home` (scratch),
 `POST /command` (approving where the tool asks), ledger read from `action_logs`, and
 the page's **own shipped `pipelineState`** executed over each real response by node:
 
-| Command | `verification` | ledger | page |
-| --- | --- | --- | --- |
-| turn on the study desk lamp. | `unknown` | `simulated` | SIMULATED |
-| run study mode. | `unknown` | `simulated` | SIMULATED |
-| send amr main home. | `unknown` | `simulated` | SIMULATED |
+| Command                      | `verification` | ledger      | page      |
+| ---------------------------- | -------------- | ----------- | --------- |
+| turn on the study desk lamp. | `unknown`      | `simulated` | SIMULATED |
+| run study mode.              | `unknown`      | `simulated` | SIMULATED |
+| send amr main home.          | `unknown`      | `simulated` | SIMULATED |
 
 ```
 distinct ledger tokens: ['awaiting_confirmation', 'simulated']
@@ -125,12 +125,12 @@ dashboard.
 `tests/test_phase18_simulation_truth.py` — **12 new tests**, written first. 8 of 12
 failed before the change, for the right reason:
 
-* 4 parametrised/solo actuation assertions ("wrote success … for a change its own
+- 4 parametrised/solo actuation assertions ("wrote success … for a change its own
   reply says never reached a real device"),
-* the audit-token test,
-* the ledger-through-the-pipeline test,
-* the job-step status test,
-* the dashboard test (SIMULATED had to stop depending on `allSuccess`).
+- the audit-token test,
+- the ledger-through-the-pipeline test,
+- the job-step status test,
+- the dashboard test (SIMULATED had to stop depending on `allSuccess`).
 
 Two passed immediately as **guards, not proofs**: the car-read distinction (§4) and
 the failure-outranks-simulated ordering — both assert behaviour that must survive the
@@ -138,7 +138,7 @@ change rather than behaviour the change introduces, and that is stated rather th
 blurred.
 
 One test was **wrong before it was right, and the measurement caught it**: I wrote the
-scheduler assertion expecting the job to *park* at `awaiting_approval`, reasoning that
+scheduler assertion expecting the job to _park_ at `awaiting_approval`, reasoning that
 every simulated tool is confirmation-gated so the runner's verification split was
 unreachable. Running it showed the job **executes** and returns
 `outcome='unverified'` — a better result than I argued for, and now the test asserts
@@ -152,14 +152,14 @@ Two pre-existing tests failed, and both were **markers pointing at this exact de
 not tests of intended behaviour:
 
 1. `tests/test_phase13_dashboard_truth.py::test_simulated_actuation_is_not_shown_as_verified`
-   asserted `verification == "success"` behind the message *"the backend
+   asserted `verification == "success"` behind the message _"the backend
    overstatement this test guards against has been fixed; this test can now be
-   simplified rather than deleted."* Simplified, as directed: it now asserts
+   simplified rather than deleted."_ Simplified, as directed: it now asserts
    `!= "success"` and still proves the renderer says SIMULATED.
 2. `tests/test_home.py::test_control_simulate_reports_simulated` carried
-   *"OPEN (Phase 10 §12, not yet fixed): a simulated actuation records
+   _"OPEN (Phase 10 §12, not yet fixed): a simulated actuation records
    verification=SUCCESS here … that assertion belongs with the gateway change, not
-   smuggled in here."* This phase **is** that gateway change, so the OPEN is closed
+   smuggled in here."_ This phase **is** that gateway change, so the OPEN is closed
    with the assertions it named (`verified is False`, `verification is UNKNOWN`,
    audit token `simulated`).
 
@@ -184,15 +184,15 @@ xfails.
 
 ## 9. Files modified
 
-| File | Change |
-| --- | --- |
-| `jarvis/tools/home.py` | simulated branches of `control_home_device`, `run_home_routine` → `Verification.UNKNOWN` |
-| `jarvis/tools/robotics.py` | `Verification` import; simulated branches of `command_robot_motion`, `run_experiment` → UNKNOWN |
-| `jarvis/core/orchestrator.py` | `_audit_token` returns `simulated`; fail-safe default preserved |
-| `dashboard/index.html` | `pipelineState` ordering (FAILED before SIMULATED, SIMULATED without `allSuccess`); `auditTone` gains `simulated` |
-| `tests/test_phase18_simulation_truth.py` | new, 12 tests |
-| `tests/test_phase13_dashboard_truth.py` | carried-FORWARD assertion simplified as its own message directed |
-| `tests/test_home.py` | Phase 10 §12 OPEN closed |
+| File                                     | Change                                                                                                            |
+| ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `jarvis/tools/home.py`                   | simulated branches of `control_home_device`, `run_home_routine` → `Verification.UNKNOWN`                          |
+| `jarvis/tools/robotics.py`               | `Verification` import; simulated branches of `command_robot_motion`, `run_experiment` → UNKNOWN                   |
+| `jarvis/core/orchestrator.py`            | `_audit_token` returns `simulated`; fail-safe default preserved                                                   |
+| `dashboard/index.html`                   | `pipelineState` ordering (FAILED before SIMULATED, SIMULATED without `allSuccess`); `auditTone` gains `simulated` |
+| `tests/test_phase18_simulation_truth.py` | new, 12 tests                                                                                                     |
+| `tests/test_phase13_dashboard_truth.py`  | carried-FORWARD assertion simplified as its own message directed                                                  |
+| `tests/test_home.py`                     | Phase 10 §12 OPEN closed                                                                                          |
 
 ---
 

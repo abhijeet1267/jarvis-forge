@@ -37,12 +37,12 @@ variable and always carries `query`).
 
 Two things make this worse than a missing feature:
 
-* **The content was in the sentence.** `… onboarding: request, review, approve` names three
+- **The content was in the sentence.** `… onboarding: request, review, approve` names three
   steps and the route dropped them. So it was not "we haven't built that yet", it was "you
   told me, and I still said no".
-* **The right answer already existed, in the tool.** `create_flowchart` returns *"Which
-  steps? Give me them in order, separated by commas."* and `create_architecture_diagram`
-  returns *"Which components? Use 'id:Label:tier' separated by commas."* Neither was ever
+- **The right answer already existed, in the tool.** `create_flowchart` returns _"Which
+  steps? Give me them in order, separated by commas."_ and `create_architecture_diagram`
+  returns _"Which components? Use 'id:Label:tier' separated by commas."_ Neither was ever
   reachable, because the gate refused the action before the handler ran. A schema field name
   out-vocalled a human sentence written months earlier.
 
@@ -59,14 +59,14 @@ if not items or any(len(t) < 2 or len(t.split()) > 4 for t in items):
     continue        # ask, rather than draw two steps of a three-step request
 ```
 
-That clause is not tidiness. Taking the tidy prefix of *"request, review, approve with review
-as a decision"* produced a **2-step flowchart from a 3-step request**, reported as done —
+That clause is not tidiness. Taking the tidy prefix of _"request, review, approve with review
+as a decision"_ produced a **2-step flowchart from a 3-step request**, reported as done —
 measured while writing this. It is the same defect this program has been closing since
 Phase 19 (a partial answer with nothing saying so), reimplemented by me in the fix. So the
 route now asks instead, and `test_a_list_it_cannot_read_cleanly_is_asked_about_not_trimmed`
 holds the line.
 
-**Grammar.** `_diagram_args()` maps names to the builder's `id:label` form *and* pulls the
+**Grammar.** `_diagram_args()` maps names to the builder's `id:label` form _and_ pulls the
 arrows out of the same list: `"api > worker, worker > database"` becomes three components
 and two links. Feeding that list in as components alone produced `2 component(s),
 0 link(s)` — the connections the user described, gone without a word.
@@ -120,13 +120,13 @@ left running as a test, so the next route cannot make the mistake quietly.
 
 ## 4. Two findings this phase made about itself
 
-* **A regression caught before it shipped**, described above (2 steps for a 3-step request).
+- **A regression caught before it shipped**, described above (2 steps for a 3-step request).
   Worth recording because the mechanism was quiet: my own tests passed on the cases they
   covered, and the flaw showed up only when I probed a sentence I had not written a test for.
-* **`research this idea` cost 41,247 ms** in this phase's acceptance run — arXiv held the
+- **`research this idea` cost 41,247 ms** in this phase's acceptance run — arXiv held the
   socket until the read timed out, and the command then answered honestly from the local
-  corpus (*"arXiv could not be reached: The read operation timed out"*) and was still
-  labelled VERIFIED (degraded). The *wording* has been fixed for phases; the *wait* has
+  corpus (_"arXiv could not be reached: The read operation timed out"_) and was still
+  labelled VERIFIED (degraded). The _wording_ has been fixed for phases; the _wait_ has
   not, because nothing bounds it. Carried as **29-B**, and it is the same shape as
   everything else here: the claim at the end is honest, and the cost of getting there is
   invisible to the person waiting. The 16 commands that touch no network summed **142 ms**
@@ -138,8 +138,8 @@ left running as a test, so the next route cannot make the mistake quietly.
 2 passed on the unfixed tree). 21 of the suite total are new; one existing test was retired
 rather than weakened:
 
-| Test | Was | Now |
-|---|---|---|
+| Test                                                                                | Was                                                                                            | Now                                                                                                                                                                                                                                                                                             |
+| ----------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `test_phase28_…::test_a_diagram_request_names_its_internal_parameter_parked_as_28B` | asserted the parked defect: the reply must contain `components` and the decision must be BLOCK | renamed `test_a_diagram_request_no_longer_answers_with_its_parameter_name`, asserting the closed behaviour (no schema wording, no action executed, a clarification asked). Phase 28's note said "asserted rather than hidden" — the point was always that it was there to be removed when fixed |
 
 The other two Phase 28 tests that touched diagrams needed no change; the corpus sweep in this
@@ -149,30 +149,30 @@ file is what keeps 28-B from coming back.
 
 ## 6. Re-measured
 
-| | |
-|---|---|
-| Suite | **1487 passed · 0 failed · 0 xfailed** (1487 collected), 53 modules. In the run that produced the latency numbers above it was 1486 passed + **1 skipped**: the same `test_research.py` network gate, because arXiv answered 429 then and not since. Both are reported because the count is not stable across a network |
-| Acceptance | 17 of 18 measured; median **5 ms**; **no command changed intent, state or audit token** — this phase touches sentences that were blocked, not the ones already routed |
-| Acceptance total | 41,389 ms, of which `research this idea` is 41,247 ms and the other sixteen are **142 ms** (§4) |
-| Safety matrix | 5 of 6 ok, `turn on heater` still FAIL (22-G, owner's call) |
-| Registry | 127 tools, 25 gated, tiers unchanged; unrouted-from-a-sentence: **28** (28-A) |
-| Figures | charts and diagrams regenerated; `chart-suite-growth.svg` ends at the Phase 29 point |
+|                  |                                                                                                                                                                                                                                                                                                                         |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Suite            | **1487 passed · 0 failed · 0 xfailed** (1487 collected), 53 modules. In the run that produced the latency numbers above it was 1486 passed + **1 skipped**: the same `test_research.py` network gate, because arXiv answered 429 then and not since. Both are reported because the count is not stable across a network |
+| Acceptance       | 17 of 18 measured; median **5 ms**; **no command changed intent, state or audit token** — this phase touches sentences that were blocked, not the ones already routed                                                                                                                                                   |
+| Acceptance total | 41,389 ms, of which `research this idea` is 41,247 ms and the other sixteen are **142 ms** (§4)                                                                                                                                                                                                                         |
+| Safety matrix    | 5 of 6 ok, `turn on heater` still FAIL (22-G, owner's call)                                                                                                                                                                                                                                                             |
+| Registry         | 127 tools, 25 gated, tiers unchanged; unrouted-from-a-sentence: **28** (28-A)                                                                                                                                                                                                                                           |
+| Figures          | charts and diagrams regenerated; `chart-suite-growth.svg` ends at the Phase 29 point                                                                                                                                                                                                                                    |
 
 ---
 
 ## 7. Carried forward
 
-* **29-A** optional parameters are still not extracted: a presentation gets a fixed outline,
-  not the content of *"a presentation about the quarterly results"*. Required parameters are
+- **29-A** optional parameters are still not extracted: a presentation gets a fixed outline,
+  not the content of _"a presentation about the quarterly results"_. Required parameters are
   now guarded structurally; this is the same sloppiness one level down.
-* **29-B** no bounded read timeout on the arXiv path (measured 41.2 s).
-* **29-C** the structural sweep covers `params={…}` literals only; a route assembling its
+- **29-B** no bounded read timeout on the arXiv path (measured 41.2 s).
+- **29-C** the structural sweep covers `params={…}` literals only; a route assembling its
   dict in a variable is covered by behaviour tests, not static ones.
-* **29-D** the bundle-freshness guard is skipped by every CI run: `dist/` is gitignored and
+- **29-D** the bundle-freshness guard is skipped by every CI run: `dist/` is gitignored and
   the workflow builds the bundle after the test step. Found while accounting for the
   runner's skip count in §8, which is the kind of bookkeeping that only looks like
   bookkeeping. Reasoning in §8.
-* Everything already open: 28-A (28 unreachable tools), 27-A…D, 26-B, the `ToolSpec.parameters`
+- Everything already open: 28-A (28 unreachable tools), 27-A…D, 26-B, the `ToolSpec.parameters`
   residual, 22-G, 23-E, mic/speech TCC, 15-F, 14-D, 16-F, hardware **BLOCKED**, LLM planner,
   unattended workflows.
 
@@ -191,8 +191,8 @@ Committed and pushed to `main` on `abhijeet1267/jarvis-forge`:
 
 Run `36814671141`, both jobs green:
 
-| job | result | pytest line | wall |
-| --- | --- | --- | --- |
+| job            | result  | pytest line                                   | wall                 |
+| -------------- | ------- | --------------------------------------------- | -------------------- |
 | `suite (3.11)` | success | `1481 passed, 6 skipped, 1 warning in 69.36s` | 04:20:48 → 04:22:23Z |
 | `suite (3.12)` | success | `1481 passed, 6 skipped, 1 warning in 84.89s` | 04:20:49 → 04:22:55Z |
 
@@ -230,7 +230,7 @@ executed all five and passed.
 
 That arithmetic carries a defect with it, recorded as **29-D**: the test whose whole purpose
 is to catch the built bundle shipping a stale `launcher.py` is skipped by every CI run,
-because `.github/workflows/ci.yml` builds the bundle at line 52 -- *after* `Test suite` at
+because `.github/workflows/ci.yml` builds the bundle at line 52 -- _after_ `Test suite` at
 line 44. The guard therefore only ever fires on a developer machine that built yesterday's
 bundle, which is exactly the "kept an older copy for a day" failure the test's own docstring
 says it exists to prevent. Moving the bundle step before the suite, or re-running that one

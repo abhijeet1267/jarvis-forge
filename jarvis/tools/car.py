@@ -77,7 +77,7 @@ async def get_car_status(ctx: ToolContext, metric: str = "all") -> Any:
         return ok(
             "get_car_status",
             f"Your car adapter is not connected, so I cannot read live telemetry yet ({reason}).",
-            device=ctx.device_id,
+            device=ctx.device_id, verified=True,
             connected=False,
             offline=gw.offline,
             mode=gw.mode,
@@ -99,6 +99,7 @@ async def get_car_status(ctx: ToolContext, metric: str = "all") -> Any:
         "get_car_status",
         message,
         device=ctx.device_id,
+        verified=True,
         connected=gw.connected,
         offline=gw.offline,
         mode=gw.mode,
@@ -159,7 +160,7 @@ async def get_car_telemetry(ctx: ToolContext, metric: str = "", metrics: str = "
     return ok(
         "get_car_telemetry",
         message,
-        device=ctx.device_id,
+        device=ctx.device_id, verified=True,
         connected=gw.connected,
         mode=gw.mode,
         source=available[0].source,
@@ -179,7 +180,7 @@ async def list_car_metrics(ctx: ToolContext) -> Any:
             "list_car_metrics",
             f"No car telemetry is available right now ({reason}). "
             "Connect an OBD-II adapter or a manufacturer vehicle API to see more.",
-            device=ctx.device_id,
+            device=ctx.device_id, verified=True,
             **caps,
         )
     return ok(
@@ -187,7 +188,7 @@ async def list_car_metrics(ctx: ToolContext) -> Any:
         f"This car reports {len(supported)} reading(s) over {caps['source']}: "
         + ", ".join(m["label"].lower() for m in supported)
         + f". {len(caps['not_reported'])} are not available from it.",
-        device=ctx.device_id,
+        device=ctx.device_id, verified=True,
         **caps,
     )
 
@@ -201,7 +202,7 @@ async def get_car_diagnostics(ctx: ToolContext) -> Any:
         return ok(
             "get_car_diagnostics",
             f"I cannot read the car's diagnostic codes ({reason}).",
-            device=ctx.device_id,
+            device=ctx.device_id, verified=True,
             connected=gw.connected,
             mode=gw.mode,
             **diag,
@@ -222,7 +223,7 @@ async def get_car_diagnostics(ctx: ToolContext) -> Any:
     return ok(
         "get_car_diagnostics",
         message,
-        device=ctx.device_id,
+        device=ctx.device_id, verified=True,
         connected=gw.connected,
         **diag,
     )
@@ -246,7 +247,7 @@ async def get_car_service_status(ctx: ToolContext) -> Any:
         return ok(
             "get_car_service_status",
             f"I cannot give you a car service summary ({reason}).",
-            device=ctx.device_id,
+            device=ctx.device_id, verified=True,
             connected=gw.connected,
             mode=gw.mode,
             source="unavailable",
@@ -258,7 +259,7 @@ async def get_car_service_status(ctx: ToolContext) -> Any:
     return ok(
         "get_car_service_status",
         message,
-        device=ctx.device_id,
+        device=ctx.device_id, verified=True,
         connected=gw.connected,
         mode=gw.mode,
         **service,

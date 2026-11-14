@@ -24,14 +24,14 @@ Every number below was measured on this machine today. The image is the one the 
 (600×200, "Project AMR status report" / "Battery 74 percent charging"); the helper is the same
 compiled Swift binary the product uses.
 
-| # | Claim being tested | Measurement | Verdict |
-| --- | --- | --- | --- |
-| 1 | "macOS Vision is intermittently unresponsive under load — 0.6 s standalone, exceeds any bound while other work runs" (`jarvis/vision/ocr.py`, since Phase 27) | 60 helper calls made **while a full 2,408-test suite ran in another process**: first 10.2 s, then 0.51 s, 0 calls over 15 s, 0 non-zero exits, load suite exited 0 | **Not reproducible.** The comment asserted a measurement that does not reproduce |
-| 2 | "the cold first call takes 7.4 s idle and over 20 s with the suite running" (the addendum's basis for the 45 s allowance) | cold first call in a fresh process: **7.32 s idle**, **9.47 s with 10 busy CPUs**, **10.2 s under live suite load** | Never approaches 45 s at any load this machine will generate. The allowance is harmless but it was not the fix |
-| 3 | "first **exec** of a freshly compiled binary is the slow step" (an assessment cost my earlier probes avoided by reusing a binary that had already run) | brand-new `JARVIS_HOME`s with a binary that had never been executed, while a full suite ran: build 1.88 / 2.01 s, **first exec 0.89 s and 1.21 s**, both `ok`, second exec 0.28–0.30 s (`/tmp/p65_firstexec_run.txt`) | **Falsified.** An earlier four-run batch of this experiment printed plausible numbers too, but its output was never saved, so it is not cited here |
-| 4 | "some test patched the global `subprocess.run` and left it patched, so every later real read is a fake timeout" | a pytest plugin compared `subprocess.run.__code__` with an untouched reference before each of the five real tests: **45 observations across nine instrumented sessions, `run_real: True` in 45 of 45** | **Falsified** in every captured run. The three places that patch it all restore it |
-| 5 | "the shared backend inherits another module's cooldown" | the same 45 observations: `cooling: 0.0` in 45/45, `stalls: 0` in 45/45, and `ever_ok: False` with `budget: 45.0` at the first real test of every session (the singleton is untouched until then) | Not the cause in any captured run |
-| 6 | **the cascade itself** — one exhausted budget on the backend the tools use silences the rest of the session | forced on demand: §3 | **Confirmed, deterministically** |
+| #   | Claim being tested                                                                                                                                            | Measurement                                                                                                                                                                                                           | Verdict                                                                                                                                            |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | "macOS Vision is intermittently unresponsive under load — 0.6 s standalone, exceeds any bound while other work runs" (`jarvis/vision/ocr.py`, since Phase 27) | 60 helper calls made **while a full 2,408-test suite ran in another process**: first 10.2 s, then 0.51 s, 0 calls over 15 s, 0 non-zero exits, load suite exited 0                                                    | **Not reproducible.** The comment asserted a measurement that does not reproduce                                                                   |
+| 2   | "the cold first call takes 7.4 s idle and over 20 s with the suite running" (the addendum's basis for the 45 s allowance)                                     | cold first call in a fresh process: **7.32 s idle**, **9.47 s with 10 busy CPUs**, **10.2 s under live suite load**                                                                                                   | Never approaches 45 s at any load this machine will generate. The allowance is harmless but it was not the fix                                     |
+| 3   | "first **exec** of a freshly compiled binary is the slow step" (an assessment cost my earlier probes avoided by reusing a binary that had already run)        | brand-new `JARVIS_HOME`s with a binary that had never been executed, while a full suite ran: build 1.88 / 2.01 s, **first exec 0.89 s and 1.21 s**, both `ok`, second exec 0.28–0.30 s (`/tmp/p65_firstexec_run.txt`) | **Falsified.** An earlier four-run batch of this experiment printed plausible numbers too, but its output was never saved, so it is not cited here |
+| 4   | "some test patched the global `subprocess.run` and left it patched, so every later real read is a fake timeout"                                               | a pytest plugin compared `subprocess.run.__code__` with an untouched reference before each of the five real tests: **45 observations across nine instrumented sessions, `run_real: True` in 45 of 45**                | **Falsified** in every captured run. The three places that patch it all restore it                                                                 |
+| 5   | "the shared backend inherits another module's cooldown"                                                                                                       | the same 45 observations: `cooling: 0.0` in 45/45, `stalls: 0` in 45/45, and `ever_ok: False` with `budget: 45.0` at the first real test of every session (the singleton is untouched until then)                     | Not the cause in any captured run                                                                                                                  |
+| 6   | **the cascade itself** — one exhausted budget on the backend the tools use silences the rest of the session                                                   | forced on demand: §3                                                                                                                                                                                                  | **Confirmed, deterministically**                                                                                                                   |
 
 What survives is narrow and it is the part that was always true: the guard converts one slow call
 into a 45 s refusal window for that backend, and the five tests that assert what the recogniser
@@ -41,19 +41,19 @@ reads all share that backend.
 
 Waiting for a loaded machine to misbehave is not a method. A pytest plugin (`/tmp/p65force.py`,
 deliberately not committed) raises `TimeoutExpired` **once**, on the first call made by the module
-singleton, *inside* `read_text`'s own `try` so the product records the stall exactly as it would in
+singleton, _inside_ `read_text`'s own `try` so the product records the stall exactly as it would in
 the wild, and lets every later call through.
 
-| | same forced condition | |
-| --- | --- | --- |
+|                            | same forced condition   |                                                                                                                                                          |
+| -------------------------- | ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | before this phase's change | **5 failed, 44 passed** | `test_ocr_reads_real_text`, `test_ocr_returns_bounding_boxes`, `test_find_text_locates_a_word`, `test_read_image_text_tool`, `test_find_image_text_tool` |
-| after | **1 failed, 48 passed** | only `test_ocr_reads_real_text`, and its failure line now prints the recogniser's own sentence |
+| after                      | **1 failed, 48 passed** | only `test_ocr_reads_real_text`, and its failure line now prints the recogniser's own sentence                                                           |
 
 Both rows were re-run for the record with the output saved (`/tmp/p65ab.txt`), the "before" row by
 checking out `HEAD~1`'s copy of `tests/test_vision.py` and restoring it immediately after. That
 second attempt is what makes the 5 → 1 claim citable rather than remembered.
 
-The first version of that plugin stalled the *first helper call anyone made* — which is the warm-up
+The first version of that plugin stalled the _first helper call anyone made_ — which is the warm-up
 fixture's throwaway instance — and **nothing else failed**. That accidental result is Phase 63's
 instance isolation working as designed, and it is why the plugin had to aim at the singleton
 specifically.
@@ -74,7 +74,7 @@ def reader(monkeypatch):
 
 Each of the five content tests now reads through a backend of its own: the same real helper binary,
 the same real PNG on disk, the same real Vision framework, the same budgets and the same guard —
-only the *scope* of the cooldown changes. **No assertion was altered, nothing is skipped, nothing
+only the _scope_ of the cooldown changes. **No assertion was altered, nothing is skipped, nothing
 is widened.** `monkeypatch` hands the real singleton back at teardown, so this cannot leak into
 another module the way Phase 33's stub handlers did.
 
@@ -152,13 +152,13 @@ neither was made here.
 Worth recording because the mechanism is the same one the phase is about: a number that reached a
 report without being read back from the executable artifact.
 
-| Published in draft | Truth, read from a file | How it was caught |
-| --- | --- | --- |
-| suite durations "116 / 142 / 168 / 95 s, thirteen runs" | the second clean suite was **81.20 s**, and the day holds **sixteen** runs, not thirteen | `grep -o "…in [0-9.]*s"` across every saved result file instead of trusting the earlier read |
-| "4 fresh homes, first exec 0.46–2.01 s" | that batch's output **was never saved**; the two runs that were give 0.89 s and 1.21 s | the evidence file did not exist, so the claim was replaced with what can be cited |
-| "9 instrumented full suites" | **45 observations across nine sessions**, with `run_real`/`cooling`/`stalls` tallied per field | a tally script over the logs rather than a remembered count |
-| Phase 64's "76,123 versioned lines" | **75,755** at that commit | two independent instruments asked to agree (see §6 of the Phase 64 report) |
-| a "142 s" Phase 64 suite, and "ten consecutive clean runs" | 81.20 s, and the streak is broken by the 168.72 s red run | the same sweep that fixed the durations |
+| Published in draft                                         | Truth, read from a file                                                                        | How it was caught                                                                            |
+| ---------------------------------------------------------- | ---------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| suite durations "116 / 142 / 168 / 95 s, thirteen runs"    | the second clean suite was **81.20 s**, and the day holds **sixteen** runs, not thirteen       | `grep -o "…in [0-9.]*s"` across every saved result file instead of trusting the earlier read |
+| "4 fresh homes, first exec 0.46–2.01 s"                    | that batch's output **was never saved**; the two runs that were give 0.89 s and 1.21 s         | the evidence file did not exist, so the claim was replaced with what can be cited            |
+| "9 instrumented full suites"                               | **45 observations across nine sessions**, with `run_real`/`cooling`/`stalls` tallied per field | a tally script over the logs rather than a remembered count                                  |
+| Phase 64's "76,123 versioned lines"                        | **75,755** at that commit                                                                      | two independent instruments asked to agree (see §6 of the Phase 64 report)                   |
+| a "142 s" Phase 64 suite, and "ten consecutive clean runs" | 81.20 s, and the streak is broken by the 168.72 s red run                                      | the same sweep that fixed the durations                                                      |
 
 The forced-stall A/B was also re-run with the output saved, and the "before" number obtained by
 checking out `HEAD~1`'s copy of the test file and restoring it immediately, so neither row in §3

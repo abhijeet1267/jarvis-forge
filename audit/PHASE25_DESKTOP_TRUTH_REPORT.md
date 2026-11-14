@@ -48,7 +48,7 @@ exists to catch, pointed at the audit trail itself: a claim about health, unobse
 
 ## 2. What was genuinely still broken
 
-Measuring the stale claim surfaced two live ones, both of a kind that a *successful* run
+Measuring the stale claim surfaced two live ones, both of a kind that a _successful_ run
 hides.
 
 ### 2.1 P0-D3 — the self-test could not run on the install that needs it
@@ -101,7 +101,7 @@ Two details worth the care:
 inside the very tree it came from still depended entirely on the pointer stamped at build
 time. Relocating the checkout would break an app that had never moved. Now walks the root
 plus three ancestors, pinned by tests for both layouts (an `/Applications` copy, which
-*must* use the recorded pointer, and a `dist/` copy, which must not need it).
+_must_ use the recorded pointer, and a `dist/` copy, which must not need it).
 
 ### 2.3 P1-D1 — the installer promised a prompt the app never shows
 
@@ -110,7 +110,7 @@ plus three ancestors, pinned by tests for both layouts (an `/Applications` copy,
 > First launch will ask for Microphone and Speech Recognition permission.
 
 Nothing in the tree calls `AVCaptureDevice.requestAccess`. The helper's own comment says
-why: it deliberately *queries* consent, because a CLI helper requesting it "either never
+why: it deliberately _queries_ consent, because a CLI helper requesting it "either never
 answers or aborts the process" — and `install_app.sh` told every new user to wait for a
 dialog that never comes, then to grant access to an app that never asked. The self-test
 measures `denied`/`blocked` with no prompt in sight.
@@ -130,24 +130,24 @@ A test pins this from both ends: the installer must not promise the prompt, and 
 helper must still only query. If someone later wires up a real request, that test fails
 **on purpose**, so the promise and the mechanism have to move together.
 
-## 3. What was *not* done
+## 3. What was _not_ done
 
 The app could be made to actually ask for microphone access — the bundle already declares
 `NSMicrophoneUsageDescription`, and macOS shows prompts from apps with a bundle identity.
-That was not attempted here, because the claim it would fix is a *wording* claim, the
+That was not attempted here, because the claim it would fix is a _wording_ claim, the
 current behaviour reports itself honestly, and a change to how TCC prompts are raised on
 someone's machine is not a documentation fix dressed as one. Left as an open item, with
 the reason.
 
 Publishing a prebuilt binary is likewise still out: the bundle is ad-hoc signed, which is
 fine for the machine that built it and not for distribution (Apple Developer identity,
-notarization, a stable bundle id for TCC). The README's *Downloads* section now says that
+notarization, a stable bundle id for TCC). The README's _Downloads_ section now says that
 instead of the stale "it doesn't work".
 
 ### 2.4 An undeclared build dependency, found by trying to put the build in CI
 
 The honest next step after "the bundle actually works" is to keep it working in CI. That
-attempt immediately raised the question of what the build *needs*: `build_app.py` shells
+attempt immediately raised the question of what the build _needs_: `build_app.py` shells
 out to `app/make_icon.py`, which does `from PIL import Image`, and the build **fails hard**
 if that subprocess returns non-zero. Pillow was in neither `requirements.txt` nor
 `pyproject.toml`. So `python build_app.py` — the command the README tells a reader to run —
@@ -162,7 +162,7 @@ than swallow a missing icon, and `requirements.txt` must name what `make_icon.py
 
 `tests/test_phase25_desktop_truth.py` — **17 tests**, 15 written alongside the fix and 3 red first
 (the self-test ordering, the reason-in-the-row, the not-waited-on controller); two more
-were added as the fix exposed them, and three of *my own* assertions were wrong and
+were added as the fix exposed them, and three of _my own_ assertions were wrong and
 corrected rather than the code bent to them:
 
 - `BUNDLE_ROOT` is `…/Contents`, not the `.app` — my fake bundle layout was one level off,
@@ -197,7 +197,7 @@ promise in the installer text, and **25-F** — the build's undeclared Pillow de
 declared and built on every push.
 
 Still open: microphone and speech-recognition consent, which only the machine's owner can
-grant — and the related choice about whether the app should *ask* rather than report ·
+grant — and the related choice about whether the app should _ask_ rather than report ·
 **22-G** thermal appliances need no confirmation when uniquely resolved · **23-E** the
 planner's `or "amr_main"` robot default · **15-F** arXiv's client refusal · **14-D** a
 partly-routable sentence answering one half without flagging the other · no `read_file`
@@ -215,7 +215,7 @@ fast-forward; nothing force-pushed. **CI, once the run existed:** `36467330920` 
 `774fb46` finished `success` on both matrix legs, and the new step is not decorative --
 its log shows the runner really building: `· rendering icon` → `codesign verify: ok` →
 `Built: /var/folders/.../Jarvis Forge.app`, with the step conclusion `success`. So the
-sentence in *Downloads* that tells a reader to run `python build_app.py` is now verified
+sentence in _Downloads_ that tells a reader to run `python build_app.py` is now verified
 on every push, on a clean checkout, rather than asserted from one machine.
 
 **LIVE BROWSER DRIVE: NOT PERFORMED.** The desktop evidence in §1-§2 is a real built

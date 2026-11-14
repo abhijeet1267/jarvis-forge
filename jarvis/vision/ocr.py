@@ -240,6 +240,13 @@ class OCRBackend:
             os.replace(temporary, target)
 
         log.info("ocr helper built", extra_fields={"path": str(self.binary_path)})
+        # Remember the helper we just built. Without this, `available()` said
+        # yes (the compile succeeded) while `_binary` stayed None, and the
+        # call that followed ran `subprocess.run([str(None), ...])` -- so the
+        # *first* recognition on a machine with no cached helper always
+        # failed, and only the second one worked. The bug was invisible
+        # whenever the helper was already built.
+        self._binary = self.binary_path
         return self.binary_path
 
     # -- public --------------------------------------------------------------

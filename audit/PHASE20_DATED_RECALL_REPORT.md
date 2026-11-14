@@ -41,7 +41,7 @@ if "yesterday" in text:
     query = "yesterday work"
 ```
 
-So "what did I work on yesterday" asked the index for the *phrase* "yesterday work" and
+So "what did I work on yesterday" asked the index for the _phrase_ "yesterday work" and
 returned whatever ranked best from any day, prefixed with "Here is what I remember".
 Phase 15's live sweep had already caught it doing exactly that; the store's
 `created_at` existed and was never used, never returned, never mentioned.
@@ -65,18 +65,18 @@ a more dangerous one.
 
 Two deliberate retrieval paths:
 
-* **With a window** — exact range, newest first; an optional topic narrows within the
+- **With a window** — exact range, newest first; an optional topic narrows within the
   range and a narrowing that hits nothing reports the range as empty rather than
   silently falling back to undated results.
-* **Without one** — the existing hybrid retrieval, unchanged.
+- **Without one** — the existing hybrid retrieval, unchanged.
 
 Every result now carries `created_at`, `source`, `scope` and **`is_echo`**
 (`source == "orchestrator"` or the content starts `"User asked:"`), and the reply says
 what it is showing:
 
-* empty day → `Nothing was recorded in memory on 2026-09-26.`
-* with results → `On <day> I recorded N thing(s). Most recent, which is my own activity
-  log rather than something you told me: …`
+- empty day → `Nothing was recorded in memory on 2026-09-26.`
+- with results → `On <day> I recorded N thing(s). Most recent, which is my own activity
+log rather than something you told me: …`
 
 The ToolSpec was widened (`since`/`until` declared; `query` no longer required) because
 a dated browse is a legitimate request, and demanding a search phrase for it is what
@@ -98,10 +98,10 @@ entirely on the read side, which is where this phase stayed.
 Real server on `127.0.0.1:8899`, scratch home, dashboard bootstrap → session →
 `POST /command`, same session:
 
-| Command | window | dates of returned items | reply |
-| --- | --- | --- | --- |
-| what did I work on yesterday? | `2026-09-26 → 2026-09-26` | *(none)* | `Nothing was recorded in memory on 2026-09-26.` |
-| what did I work on today? | `2026-09-27 → 2026-09-27` | `2026-09-27` | `On 2026-09-27 I recorded 4 thing(s). Most recent, which is my own activity log rather than something you told me: User asked: what did I work on yeste…` |
+| Command                       | window                    | dates of returned items | reply                                                                                                                                                     |
+| ----------------------------- | ------------------------- | ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| what did I work on yesterday? | `2026-09-26 → 2026-09-26` | _(none)_                | `Nothing was recorded in memory on 2026-09-26.`                                                                                                           |
+| what did I work on today?     | `2026-09-27 → 2026-09-27` | `2026-09-27`            | `On 2026-09-27 I recorded 4 thing(s). Most recent, which is my own activity log rather than something you told me: User asked: what did I work on yeste…` |
 
 Before this phase the first row answered with a today-dated echo and the words "Here is
 what I remember". It now states a fact about the day that was asked about, and when the
@@ -123,7 +123,7 @@ deleted in `finally`.
 
 **One of my tests was wrong and the full suite caught it**: I asserted every returned
 row was a non-echo. It passed alone and failed in the full run — the session-scoped
-store is by then full of *other tests'* activity echoes. Retargeted to the row it
+store is by then full of _other tests'_ activity echoes. Retargeted to the row it
 created. That failure is itself the best evidence in this report for 15-E: in a busy
 store, echoes dominate recall. Recorded rather than smoothed over.
 
@@ -147,12 +147,12 @@ and Phase 12 command-path suites that exercise recall.
 
 ## 7. Files modified
 
-| File | Change |
-| --- | --- |
-| `jarvis/memory/store.py` | `in_window(since, until, limit)` exact range query |
-| `jarvis/tools/memory_tools.py` | `search_memory` date windows, `created_at`/`is_echo` per result, echo-aware messages, widened `ToolSpec` |
-| `jarvis/core/planner.py` | `_recall` parses `yesterday`/`today` into a range instead of a search phrase |
-| `tests/test_phase20_dated_recall.py` | new, 10 tests |
+| File                                 | Change                                                                                                   |
+| ------------------------------------ | -------------------------------------------------------------------------------------------------------- |
+| `jarvis/memory/store.py`             | `in_window(since, until, limit)` exact range query                                                       |
+| `jarvis/tools/memory_tools.py`       | `search_memory` date windows, `created_at`/`is_echo` per result, echo-aware messages, widened `ToolSpec` |
+| `jarvis/core/planner.py`             | `_recall` parses `yesterday`/`today` into a range instead of a search phrase                             |
+| `tests/test_phase20_dated_recall.py` | new, 10 tests                                                                                            |
 
 ## 8. Carried forward
 

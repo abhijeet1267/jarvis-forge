@@ -10,19 +10,19 @@ implying it was.
 
 ## 1. Executive summary
 
-| | |
-|---|---|
-| What it is | A personal AI operating system for macOS: one command pipeline, 148 governed capabilities (32 of them confirmation-gated), a laptop panel, a scoped phone client, an optional forward-only relay (locally proven, off-LAN blocked), a signed `.app` delivered as files |
-| Current phase | **Phase 70 — a typo is not a missing capability: wording tolerance for the ten sentences the corpus named, with no gate, tier or guard moved** (closed) |
-| Final audit | **Final acceptance audit** (closed — the last of 61 phases; `VANTAGE_FINAL_ACCEPTANCE_REPORT.md` separates IMPLEMENTED / VERIFIED / BLOCKED / NOT MEASURED / UNKNOWN / USER DECISION REQUIRED |
-| Last feature phase | **Phase 61 — desktop control that asks before it touches, and was never demonstrated touching** (closed) |
-| Previous phases | **Phase 60 — a second vendor behind one selection point** (no vendor call made) · **Phase 59 — an authenticated relay, proven locally and no further** (its off-LAN verdict still stands) |
-| Test suite | **2510 passed · 0 failed · 0 skipped (87.13 s)** at the close of Phase 70; one network-gated test means a run where arXiv refuses reports 2509 + 1 skipped. Suites on 2026-10-06: 87.13 · 84.26 · 110.70 · 103.05 · 98.87 · 107.53 · 128.22 · 101.69 s, none carrying the Vision cluster; the 2026-10-05 record (thirteen suites, twelve clean, one at 168.72 s with five `test_vision.py` failures) is what forced Phase 65's blast-radius fix — see §2L and `audit/PHASE65_VISION_BLAST_RADIUS_REPORT.md` |
-| Intent accuracy (spec §19) | **101 cases · false action rate 0.0%** (0 of 22 dangerous sentences reached a tool), outcome accuracy **89.1%**, router tool accuracy **81.0%** of 58 labelled, hallucinated tools **0**. Measured at 75.2% when the corpus was written (Phase 69) and re-measured after Phase 70's wording tolerance. **21 of the 101 sentences still deviate somewhere** (31 lines: 11 outcome, 11 route, 9 approval-expectation), and the corpus names each one. Six of the eleven outcome misses are the product asking for a required parameter the sentence never supplied — which is Phase 29's designed answer, not a bug — and the rest are `google fastapi`, `safar`, `where did I put the invoice` → location instead of files, `move my mouse to the corner` → `move_file`, `send this to my phone`, and the refused secret |
-| Spec §6 coverage | **37 of 37** — every utterance the build prompt lists reaches a capability |
-| Delivered | `~/Downloads/Vantage/` — `Vantage.app` (running, seal valid), `Vantage.app.zip`, `vantage-source.zip`, `READ ME FIRST.txt` |
-| Commits | **Nothing pushed, at the reader's request.** `git status -sb` is the authority: `main...origin/main [ahead 61]` as this line was written — and the commit that records it makes that number one larger, which is why the figure is published as a pointer to the command rather than as a claim that stays true. Five newest as this line was written: `28b60c8` (the header refresh), `318ffbe` (Ph 69), `775221b` (Ph 68), `2d2f990` (the approved ledger repair), `ef2b620` (Ph 67) |
-| Biggest known gap | Off the wifi there is still nothing you can use: the relay protocol exists and works on loopback, but there is no relay host outside this network to run it on and no client is wired to it (59-A, 59-B) — and there is no push. The phone surface is a served web page rather than a store app — a native build is blocked on this machine's toolchain (58-D, measured). Phone sessions are now scoped, but the credential is still readable by page script (58-C) and a phone can approve its own gated actions (58-B). Persistence exists but has never been left **installed** on this machine (57-A — a user decision), and the permission ask still cannot land because it lives in the helper (57-G). There is also no model key on this machine, so the gateway built in Phase 60 has never spoken to a vendor — `PROVIDER_LIVE_VENDOR_CALL: NOT MEASURED`. |
+|                            |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| What it is                 | A personal AI operating system for macOS: one command pipeline, 148 governed capabilities (32 of them confirmation-gated), a laptop panel, a scoped phone client, an optional forward-only relay (locally proven, off-LAN blocked), a signed `.app` delivered as files                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| Current phase              | **Phase 70 — a typo is not a missing capability: wording tolerance for the ten sentences the corpus named, with no gate, tier or guard moved** (closed)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| Final audit                | **Final acceptance audit** (closed — the last of 61 phases; `VANTAGE_FINAL_ACCEPTANCE_REPORT.md` separates IMPLEMENTED / VERIFIED / BLOCKED / NOT MEASURED / UNKNOWN / USER DECISION REQUIRED                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| Last feature phase         | **Phase 61 — desktop control that asks before it touches, and was never demonstrated touching** (closed)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| Previous phases            | **Phase 60 — a second vendor behind one selection point** (no vendor call made) · **Phase 59 — an authenticated relay, proven locally and no further** (its off-LAN verdict still stands)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| Test suite                 | **2510 passed · 0 failed · 0 skipped (87.13 s)** at the close of Phase 70; one network-gated test means a run where arXiv refuses reports 2509 + 1 skipped. Suites on 2026-10-06: 87.13 · 84.26 · 110.70 · 103.05 · 98.87 · 107.53 · 128.22 · 101.69 s, none carrying the Vision cluster; the 2026-10-05 record (thirteen suites, twelve clean, one at 168.72 s with five `test_vision.py` failures) is what forced Phase 65's blast-radius fix — see §2L and `audit/PHASE65_VISION_BLAST_RADIUS_REPORT.md`                                                                                                                                                                                                                                                                                                                                                         |
+| Intent accuracy (spec §19) | **101 cases · false action rate 0.0%** (0 of 22 dangerous sentences reached a tool), outcome accuracy **89.1%**, router tool accuracy **81.0%** of 58 labelled, hallucinated tools **0**. Measured at 75.2% when the corpus was written (Phase 69) and re-measured after Phase 70's wording tolerance. **21 of the 101 sentences still deviate somewhere** (31 lines: 11 outcome, 11 route, 9 approval-expectation), and the corpus names each one. Six of the eleven outcome misses are the product asking for a required parameter the sentence never supplied — which is Phase 29's designed answer, not a bug — and the rest are `google fastapi`, `safar`, `where did I put the invoice` → location instead of files, `move my mouse to the corner` → `move_file`, `send this to my phone`, and the refused secret                                             |
+| Spec §6 coverage           | **37 of 37** — every utterance the build prompt lists reaches a capability                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| Delivered                  | `~/Downloads/Vantage/` — `Vantage.app` (running, seal valid), `Vantage.app.zip`, `vantage-source.zip`, `READ ME FIRST.txt`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| Commits                    | **Nothing pushed, at the reader's request.** `git status -sb` is the authority: `main...origin/main [ahead 61]` as this line was written — and the commit that records it makes that number one larger, which is why the figure is published as a pointer to the command rather than as a claim that stays true. Five newest as this line was written: `28b60c8` (the header refresh), `318ffbe` (Ph 69), `775221b` (Ph 68), `2d2f990` (the approved ledger repair), `ef2b620` (Ph 67)                                                                                                                                                                                                                                                                                                                                                                              |
+| Biggest known gap          | Off the wifi there is still nothing you can use: the relay protocol exists and works on loopback, but there is no relay host outside this network to run it on and no client is wired to it (59-A, 59-B) — and there is no push. The phone surface is a served web page rather than a store app — a native build is blocked on this machine's toolchain (58-D, measured). Phone sessions are now scoped, but the credential is still readable by page script (58-C) and a phone can approve its own gated actions (58-B). Persistence exists but has never been left **installed** on this machine (57-A — a user decision), and the permission ask still cannot land because it lives in the helper (57-G). There is also no model key on this machine, so the gateway built in Phase 60 has never spoken to a vendor — `PROVIDER_LIVE_VENDOR_CALL: NOT MEASURED`. |
 
 ---
 
@@ -33,15 +33,15 @@ implying it was.
 Continuing Phase 51's remaining list. The build prompt's §6 lists 37 utterances. All 37 were
 run through `RulePlanner(build_default_registry()).parse(...)` before any edit:
 
-| group | before | after | closed by |
-|---|---|---|---|
-| applications (13) | 9 / 13 | **13 / 13** | registry entries for Firefox, Contacts, Messages, System Settings |
-| folders (4) | 0 / 4 | **4 / 4** | new `open_user_folder` tool |
-| status (7) | 5 / 7 | **7 / 7** | route fixes — the answers already existed in `get_time` and `get_machine_snapshot` |
-| web (5) | 4 / 5 | 4 / 5 | deferred: `search Google for X` needs a capability, not a route |
-| observation (2) | 1 / 2 | **2 / 2** | new `get_frontmost_application` tool |
-| Vantage about itself (6) | 2 / 6 | 2 / 6 | deferred to Phase 53 deliberately |
-| **total** | **21 / 37** | **32 / 37** | |
+| group                    | before      | after       | closed by                                                                          |
+| ------------------------ | ----------- | ----------- | ---------------------------------------------------------------------------------- |
+| applications (13)        | 9 / 13      | **13 / 13** | registry entries for Firefox, Contacts, Messages, System Settings                  |
+| folders (4)              | 0 / 4       | **4 / 4**   | new `open_user_folder` tool                                                        |
+| status (7)               | 5 / 7       | **7 / 7**   | route fixes — the answers already existed in `get_time` and `get_machine_snapshot` |
+| web (5)                  | 4 / 5       | 4 / 5       | deferred: `search Google for X` needs a capability, not a route                    |
+| observation (2)          | 1 / 2       | **2 / 2**   | new `get_frontmost_application` tool                                               |
+| Vantage about itself (6) | 2 / 6       | 2 / 6       | deferred to Phase 53 deliberately                                                  |
+| **total**                | **21 / 37** | **32 / 37** |                                                                                    |
 
 The 16 gaps fell into three classes, and that classification is why the phase touched four
 kinds of file: a missing **name** (registry), a missing **route** (planner regex), a missing
@@ -49,13 +49,13 @@ kinds of file: a missing **name** (registry), a missing **route** (planner regex
 
 ### 2.2 What was built
 
-| file | change | why it is shaped that way |
-|---|---|---|
-| `jarvis/registry/apps.py` | 4 applications registered (9 → 15 total) | `open_application` already worked; the names were absent. Launch names are what macOS answers to, not guesses |
-| `jarvis/core/planner.py` | `_time` + `_machine_snapshot` widened; two new rules `_open_standard_folder`, `_frontmost_app` (48 → 50 routes) | The folder word must be the whole object of the sentence, or "open downloads.zip" becomes a folder request |
-| `jarvis/tools/apps.py` | `open_user_folder`, `get_frontmost_application`, `bundle_installed`, bounded AppleScript deadline | See 2.3 and 2.4 |
-| `jarvis/tools/agents.py` | `/System/Applications` added to `BUNDLE_ROOTS` | See 2.5 |
-| `tests/test_phase52_section_six_on_the_laptop.py` | 52 tests | |
+| file                                              | change                                                                                                          | why it is shaped that way                                                                                     |
+| ------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `jarvis/registry/apps.py`                         | 4 applications registered (9 → 15 total)                                                                        | `open_application` already worked; the names were absent. Launch names are what macOS answers to, not guesses |
+| `jarvis/core/planner.py`                          | `_time` + `_machine_snapshot` widened; two new rules `_open_standard_folder`, `_frontmost_app` (48 → 50 routes) | The folder word must be the whole object of the sentence, or "open downloads.zip" becomes a folder request    |
+| `jarvis/tools/apps.py`                            | `open_user_folder`, `get_frontmost_application`, `bundle_installed`, bounded AppleScript deadline               | See 2.3 and 2.4                                                                                               |
+| `jarvis/tools/agents.py`                          | `/System/Applications` added to `BUNDLE_ROOTS`                                                                  | See 2.5                                                                                                       |
+| `tests/test_phase52_section_six_on_the_laptop.py` | 52 tests                                                                                                        |                                                                                                               |
 
 ### 2.3 The folder allowlist — the design decision worth the most
 
@@ -75,18 +75,18 @@ a path. Consequences, all asserted by tests:
 
 ### 2.4 Three defects only the live run found (the suite was green)
 
-| # | symptom, measured | cause | after, measured |
-|---|---|---|---|
-| 1 | `open Downloads` → **20,250 ms**, "Finder did not answer (command timed out after 20.0s)" | the verification AppleScript inherited `run_command`'s 20 s default **inside a retry loop of four** → one sentence could take 80 s | **3,219 ms**, `UNKNOWN`, and the message says a permission prompt is probably waiting |
-| 2 | `open Firefox` → "was told to open, but I could not confirm it" | launches are detached on purpose (a GUI app holds its pipe open), so `open -a`'s exit **1** for an absent app is never read | `FAILED` — "Firefox is not installed on this machine… my own application list is out of date" |
-| 3 | `is Mail installed` → "**Mail is not installed on this laptop**" reported as a *success* | `BUNDLE_ROOTS` searched `/Applications`, `~/Applications`, `~/.qoder/bin` — but Mail, Contacts and Calendar live in `/System/Applications` | "Mail is installed (version 16.0) and is not running right now." |
+| #   | symptom, measured                                                                         | cause                                                                                                                                      | after, measured                                                                               |
+| --- | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------- |
+| 1   | `open Downloads` → **20,250 ms**, "Finder did not answer (command timed out after 20.0s)" | the verification AppleScript inherited `run_command`'s 20 s default **inside a retry loop of four** → one sentence could take 80 s         | **3,219 ms**, `UNKNOWN`, and the message says a permission prompt is probably waiting         |
+| 2   | `open Firefox` → "was told to open, but I could not confirm it"                           | launches are detached on purpose (a GUI app holds its pipe open), so `open -a`'s exit **1** for an absent app is never read                | `FAILED` — "Firefox is not installed on this machine… my own application list is out of date" |
+| 3   | `is Mail installed` → "**Mail is not installed on this laptop**" reported as a _success_  | `BUNDLE_ROOTS` searched `/Applications`, `~/Applications`, `~/.qoder/bin` — but Mail, Contacts and Calendar live in `/System/Applications` | "Mail is installed (version 16.0) and is not running right now."                              |
 
 Defect 1 broke this project's own Phase 34 rule ("one sentence, one deadline") while adding a
 capability. Defect 3 predates the phase (the probe is from Phase 35) and was only visible
 because §6 happens to name Apple's own applications.
 
-**Two cases were kept apart on purpose** and both are tested: *not installed* is a failure with
-a reason; *installed but not observed* stays `UNKNOWN`. Collapsing them is how a system starts
+**Two cases were kept apart on purpose** and both are tested: _not installed_ is a failure with
+a reason; _installed but not observed_ stays `UNKNOWN`. Collapsing them is how a system starts
 lying in one direction or the other.
 
 ### 2.5 What was NOT claimed
@@ -151,13 +151,13 @@ a refusal, because a refusal at least tells the user something is missing.
 
 **No new state store.** Five capabilities read what the process already owns:
 
-| tool | risk | source | what it refuses to do |
-|---|---|---|---|
-| `get_pending_confirmations` | READ | `core.policy.pending()` | show a confirmation past its TTL, or synthesize one from audit rows |
-| `get_vantage_status` | READ | the objects `/health` builds from | name a provider that is not configured |
-| `get_recent_activity` | READ | `core.audit.recent()` | smooth `denied` / `blocked` / `unverified` into a success count |
-| `get_current_task` | READ | `core.tasks.list()` + step rollup | claim work is running because a request arrived |
-| `stop_current_task` | LOW | `core.tasks.cancel()` | say it stopped something without reading the status back |
+| tool                        | risk | source                            | what it refuses to do                                               |
+| --------------------------- | ---- | --------------------------------- | ------------------------------------------------------------------- |
+| `get_pending_confirmations` | READ | `core.policy.pending()`           | show a confirmation past its TTL, or synthesize one from audit rows |
+| `get_vantage_status`        | READ | the objects `/health` builds from | name a provider that is not configured                              |
+| `get_recent_activity`       | READ | `core.audit.recent()`             | smooth `denied` / `blocked` / `unverified` into a success count     |
+| `get_current_task`          | READ | `core.tasks.list()` + step rollup | claim work is running because a request arrived                     |
+| `stop_current_task`         | LOW  | `core.tasks.cancel()`             | say it stopped something without reading the status back            |
 
 `stop_current_task` is LOW and confirmation-free on purpose: §30 of the build prompt requires a
 stop to be immediately executable, and PHYSICAL stays reserved for the emergency stop.
@@ -166,8 +166,8 @@ task is one execution now, and conflating them cancels the wrong object while re
 A test asserts stopping a task leaves `scheduled_jobs` untouched.
 
 **What the live run taught that no test suggested:** a command stopped at the permission gate
-writes **no task row at all**. So "what is the current task" truthfully answered *"nothing is
-running"* while an approval sat waiting — true, and useless. Both facts are now said:
+writes **no task row at all**. So "what is the current task" truthfully answered _"nothing is
+running"_ while an approval sat waiting — true, and useless. Both facts are now said:
 
 ```
 Nothing is executing right now, but 1 action(s) is waiting for your approval --
@@ -208,7 +208,7 @@ sqlite read-back         -> ('JOB-P53LIVE', 'cancelled')      <- independent of 
 **Five of this phase's own test assertions were wrong while the product was right** — `verified`
 is a field not an output key; a Basic-Mode check that banned the word "model" and so failed on
 "no model"; an empty-history check expecting "nothing" where the tool says "no recorded actions";
-a no-op stop asserted non-SUCCESS when the real requirement is that it must not *claim* a stop;
+a no-op stop asserted non-SUCCESS when the real requirement is that it must not _claim_ a stop;
 and a helper that lost an import to a bulk edit, producing 16 `NameError`s that looked like
 product failures. Each was fixed in the test, with the reason, and two of them changed what the
 test asserts to the thing that actually matters.
@@ -217,7 +217,6 @@ test asserts to the thing that actually matters.
 queue and no active jobs. Alone they passed; in the full run they failed, because the session
 database is shared. They now clear that state explicitly — the third time this project has been
 bitten by the same leak.
-
 
 ## 2C. Phase 54 in full — the two safety doors
 
@@ -231,12 +230,12 @@ Two decisions carry it.
 
 **A report is not a result.** The stop counted a job as stopped when `cancel()` returned an
 accepted report. It now re-reads the row and sorts on that, and the test forces the failure by
-patching a cancel that accepts *and rolls the row back* — under the old code that claimed
+patching a cancel that accepts _and rolls the row back_ — under the old code that claimed
 success.
 
 **Restore is not grant.** The obvious `grant(tool)` writes `granted=1`, and Phase 49a's rule is
 that a standing grant downgrades CONFIRM to EXECUTE for reversible tools — so un-revoking would
-have left the capability *more* trusted than before it was revoked. Restore deletes the denial
+have left the capability _more_ trusted than before it was revoked. Restore deletes the denial
 rows instead; proven live, where `delete …` came back as **CONFIRM**, not EXECUTE.
 
 And `emergency_stop` itself cannot be revoked (409, no row written, a `denied` ledger entry): a
@@ -266,11 +265,10 @@ both the suite and the live run agreed with the bug. Fixed against the real voca
 
 **Browser:** both pages were driven at 375 and 1440 against the isolated instance — the stop
 control present and wired on both, the panel's new Policy column showing 140 Revoke controls
-with `emergency_stop` rendered as *safety interlock*, 0 console errors on either page. The two
+with `emergency_stop` rendered as _safety interlock_, 0 console errors on either page. The two
 buttons were **not clicked**: the session's permission classifier blocked both, and the refusal
 was respected rather than routed around. So they are proven wired and rendered, not proven
 pressed.
-
 
 ## 2D. Phase 55 in full — a search that searches
 
@@ -309,11 +307,10 @@ outage is inside the sentence deadline Phase 34 set — the case that used to co
 
 The query is confined to its own urlencoded parameter, and the test asserts the parsed contract
 rather than pattern-matching the string. **My first assertion was wrong and the code was right:**
-I checked that `evil.example` did not appear in the URL, when its appearing *inside the encoded
-value* is correct behaviour — the defect would be a second parameter or a changed host.
+I checked that `evil.example` did not appear in the URL, when its appearing _inside the encoded
+value_ is correct behaviour — the defect would be a second parameter or a changed host.
 
 **§6 is now 37 of 37**, re-run utterance by utterance through the planner.
-
 
 ## 2E. Phase 56 in full — asking for a permission, on purpose
 
@@ -345,13 +342,13 @@ page"), notifications (the framework needs the app's own bundle and run loop), l
 (macOS does not gate a server for it).
 
 **Loopback-only, and that is a separate gate from the host check.** A phone on the wifi passes the
-host gate because its `Host` *is* an address this machine owns — which is correct for reading a
+host gate because its `Host` _is_ an address this machine owns — which is correct for reading a
 dashboard and wrong for raising a dialog. A system prompt appears over the whole screen in front
 of the laptop, so only someone sitting there may raise it. Tested from a LAN-shaped peer address,
 not argued.
 
 Then the real binary said something no test could. The suite patches the helper seam, so it cannot
-see whether the helper *works*:
+see whether the helper _works_:
 
 ```
 status mode  -> speech=not_determined  microphone=denied   (works)
@@ -382,7 +379,7 @@ be the exact un-consented prompt this phase exists to prevent.
 One safety assertion was deliberately **narrowed**, and it is stated here rather than left in the
 diff: Phase 50's guard banned a prompting call anywhere in the Swift file. Phase 56 legitimately
 adds a request mode to the same binary, so the file-wide ban would have blocked real work. The
-guard now protects what it was always protecting — *the status read must not prompt* — enforced by
+guard now protects what it was always protecting — _the status read must not prompt_ — enforced by
 explicit `// REQUEST PATH` / `// STATUS READ PATH` markers, with the prompting calls still required
 to exist and now required to be **only** on the request side.
 
@@ -402,7 +399,6 @@ Basic Mode, `/permissions` carrying the three new fields with the same seven sta
 the panel HTML containing every control the user-facing readme now describes. No POST was sent to
 the delivered app — Phase 54's §11a exists precisely because a "read-only" check once wrote an
 audit row by POSTing at it.
-
 
 ## 2F. Phase 57 in full — the laptop stays reachable after its window closes
 
@@ -429,7 +425,7 @@ Then the machine corrected me four times, and all four are now tests:
 
 1. **`launchctl print gui/<uid> <label>` does not fail.** It dumps the whole domain and exits 0,
    so my status said "loaded" on a machine that had never been installed, and could read an
-   unrelated service's pid as this job's. The target is now one argument *and* the reply must name
+   unrelated service's pid as this job's. The target is now one argument _and_ the reply must name
    this label — an answer that is not about this job is not evidence.
 2. **uvicorn starts the application before it notices the port is taken.** The losing instance
    logged `scheduler started`, then `[Errno 48] address already in use`, then exited **3** — the
@@ -437,14 +433,14 @@ Then the machine corrected me four times, and all four are now tests:
    app wakes; re-measured live, the losing run logs zero `scheduler started` and exits 0.
 3. **`bootout` is not synchronous.** One immediate re-read found the job still in the table and
    reported a refusal about a job that had stopped, leaving the plist behind. Teardown now gets a
-   bounded window (3 s) that bounds the *wait* without deciding the *answer*.
+   bounded window (3 s) that bounds the _wait_ without deciding the _answer_.
 4. **A polling card erased its own answer.** The press wrote its reply into a note rendered inside
    the card, and the re-read on the next line rewrote that card — default text back, so on screen
    nothing had happened. `#permNote` had the same defect from Phase 56. Both notes now live outside
    the polled container, verified 12 s later in a real browser.
 
 **One design decision changed mid-phase, in the stricter direction of consistency.** The first test
-banned *every* sentence from reaching `enable_host_persistence`. That is not how this registry
+banned _every_ sentence from reaching `enable_host_persistence`. That is not how this registry
 works — 27 other gated capabilities are reachable by sentence precisely because a person approves
 the card. So the ambiguous phrasings ("start vantage on login", "keep running when I close the
 window") get the **state**, and only the unambiguous "install the login item" reaches the gated
@@ -465,13 +461,12 @@ plist     -> token present? False | JARVIS_GUARDIAN_PID present? False
 disable() -> not_installed ; file gone ; port closed ; no residue on the machine
 ```
 
-**And what it does *not* claim:** the login item has never been left installed for the real app —
+**And what it does _not_ claim:** the login item has never been left installed for the real app —
 that is 57-A, a user decision, with the control in place to make it. No reboot was performed
 (57-F). The permission ask still cannot prompt, because it still lives in the helper (57-G).
 
 Measured after: **2273 tests passing**, 145 tools (+3), 30 gated (+2, none removed), 52 routes,
 119 HTTP route objects / 113 paths, 84 test modules, 59 phase reports, 70,190 lines.
-
 
 ## 2G. Phase 58 in full — the phone is a surface, not a second copy of the laptop
 
@@ -485,7 +480,7 @@ which adb / ~/Library/Android/sdk -> not found / absent
 handset to verify on          -> none
 ```
 
-**`BLOCKED_EXTERNAL_DEPENDENCY`.** No store app could be compiled, signed *or verified* here. The
+**`BLOCKED_EXTERNAL_DEPENDENCY`.** No store app could be compiled, signed _or verified_ here. The
 alternative the user chose was to harden the web client and never relabel it as native — and a guard
 now fails if `phone.html`, `sw.js` or `manifest.webmanifest` contains "native app". It caught my own
 comment inside minutes.
@@ -520,7 +515,7 @@ Three defects, all caught by pressing things rather than by the suite:
    rejections, so the catch never ran. **Dead code that passed its own source-level test.**
    Measured after a sign-out: console errors climbed **12 → 129** while the page said "not paired".
    Moved above the awaits: **3** errors in 22 s and one honest line — "signed out or expired on this
-   phone — reload to use it again". The test now asserts the guard's *position* relative to
+   phone — reload to use it again". The test now asserts the guard's _position_ relative to
    `Promise.all`.
 3. `sw.js` had one cache name and no upgrade path; the shell changed, so the name is now
    `jarvis-phone-shell-v2` and a test fails if a future shell change skips the bump. A phone holding
@@ -534,14 +529,13 @@ carrying no credential; `GET /auth/sessions` publishing `{session_ref, surface, 
 nothing usable; sign-out ending exactly one session while another stayed live.
 
 **What this phase does not claim:** no native app, no signature, no handset, no push. The credential
-is still readable by page script — scoping limits what it can *do*, not how it can be *read* (58-C) —
+is still readable by page script — scoping limits what it can _do_, not how it can be _read_ (58-C) —
 and a phone can still approve its own gated actions, because the approvals list lives on the phone
 (58-B).
 
 Measured after: **2305 tests passing**, 145 tools and 30 gated **unchanged — no capability was
 added, one gate was narrowed**, 52 routes, 122 HTTP route objects / 115 paths, 85 test modules, 60
 phase reports, 70,880 lines.
-
 
 ## 2H. Phase 59 in full — an authenticated relay: a door with a bouncer
 
@@ -597,7 +591,7 @@ laptop widens the phone not at all.
 
 The relay was run for real and the ledger read back: a command that arrived from a handset was
 written **identically to one typed on the laptop**, because every executed action records
-`device=action.device` — the *target* device Phase 31 made deliberate. Nothing was faked; nothing
+`device=action.device` — the _target_ device Phase 31 made deliberate. Nothing was faked; nothing
 was traceable. Fixed additively at `jarvis/core/orchestrator.py:406` with
 `detail["requested_by"]` and `detail["surface"]`, and the test asserts the device column has **not**
 moved, because repurposing it would corrupt device targeting.
@@ -635,13 +629,11 @@ Measured after: **2332 tests passing**, 145 tools / 30 gated / 52 planner rules 
 and 115 paths **unchanged** — the relay is a separate ASGI app with 4 endpoints, not a widening of
 the host — 86 test modules, 61 phase reports, 72,227 versioned lines.
 
-
-
 ## 2I. Phase 60 in full — a second vendor, without a second authority
 
 ### 2I.1 What the register said, and what the code said
 
-The gap row read *"No provider adapters in use — OpenAI/Gemini adapters per §22–24 not built"*.
+The gap row read _"No provider adapters in use — OpenAI/Gemini adapters per §22–24 not built"_.
 Measured: an adapter **did** exist — one OpenAI-shaped POST in `jarvis/gateway/router.py` (149
 lines, `provider="openai-compatible"` hard-coded in the choice it reports), rebuilt by hand at
 three more call sites (`memory/embeddings.py:231`, `vision/providers.py:128`,
@@ -652,7 +644,7 @@ rules did not recognise, which is what Phase 42 built.
 Put those two facts together and you get what this phase existed to remove. The precise claim
 matters, because an earlier draft of it said "a Gemini key would have been called at an address
 that vendor does not serve" and the shipped `READ ME FIRST.txt` proved that wrong: a second vendor
-*was* reachable, by pointing the OpenAI-shaped URL at its compatibility endpoint
+_was_ reachable, by pointing the OpenAI-shaped URL at its compatibility endpoint
 (`…/v1beta/openai/`), and that instruction did work. What did not exist was any way to speak a
 vendor's own native shape, or any way to say **which door a sentence went out of** — `/health`
 named no vendor, and `ModelChoice.provider` was the constant `"openai-compatible"`. That is still a
@@ -664,14 +656,14 @@ base URL produced `…/v1beta/openai/v1beta/models/…`. Test 7 exists because t
 
 `jarvis/gateway/providers.py` (418 lines) holds two adapters behind one selection point:
 
-| | OpenAI | Gemini |
-|---|---|---|
-| chat | `POST {base}/chat/completions` | `POST {base}/v1beta/models/<model>:generateContent` |
-| auth | `Authorization: Bearer` | `x-goog-api-key` |
-| system | `messages[0].role=system` | `systemInstruction.parts[0].text` |
-| JSON mode | `response_format` | `generationConfig.responseMimeType` |
-| answer | `choices[0].message.content` | `candidates[0].content.parts[*].text` |
-| embeddings | `POST {base}/embeddings` | `POST {base}/v1beta/models/<model>:embedContent` |
+|            | OpenAI                         | Gemini                                              |
+| ---------- | ------------------------------ | --------------------------------------------------- |
+| chat       | `POST {base}/chat/completions` | `POST {base}/v1beta/models/<model>:generateContent` |
+| auth       | `Authorization: Bearer`        | `x-goog-api-key`                                    |
+| system     | `messages[0].role=system`      | `systemInstruction.parts[0].text`                   |
+| JSON mode  | `response_format`              | `generationConfig.responseMimeType`                 |
+| answer     | `choices[0].message.content`   | `candidates[0].content.parts[*].text`               |
+| embeddings | `POST {base}/embeddings`       | `POST {base}/v1beta/models/<model>:embedContent`    |
 
 `JARVIS_AI_PROVIDER` defaults to `openai`, so an existing install's bytes do not move — and an
 unknown name **raises with the list of known ones** instead of defaulting, because a typo that
@@ -704,8 +696,8 @@ mail and for calendar, in a new place.
 ### 2I.4 The memory write path, and the invariant that did not move
 
 Phase 42 measured that both outbound calls a configured key makes are `/v1/embeddings`, so the
-embedder was the path that mattered. The *shape* (URL, headers, body, parse) now comes from the
-provider; the *read* stays at the call site where Phase 34 pinned its total budget:
+embedder was the path that mattered. The _shape_ (URL, headers, body, parse) now comes from the
+provider; the _read_ stays at the call site where Phase 34 pinned its total budget:
 
 ```python
 provider = select_provider(self.settings)   # which vendor, therefore which URL and headers
@@ -727,8 +719,8 @@ model_used -> "gemini-2.5-flash"
 ```
 
 Nothing had been sent anywhere. A field whose only job is attribution named a model for a call that
-never happened, and the prose said *"I also asked the model you configured, and it was
-unavailable"* about a question nobody had asked. The same lie sat in the ordinary case: a vendor
+never happened, and the prose said _"I also asked the model you configured, and it was
+unavailable"_ about a question nobody had asked. The same lie sat in the ordinary case: a vendor
 that does not answer left `model_used` crediting it. Red-first tests for both, then the rule —
 **`model_used` names a model only when a model answered.** A refusal names the refusal; an
 unanswered question stays `rules`. Live, afterwards:
@@ -740,7 +732,7 @@ reply            -> "I did not ask a model about that: … So that answer is the
 model_used       -> "rules"
 ```
 
-And for the vendor that *is* configured:
+And for the vendor that _is_ configured:
 
 ```
 POST /command "wobbleth and glintar please"  -> model_used='gemini:gemini-2.5-flash'
@@ -779,13 +771,11 @@ and 115 paths **unchanged** (`/health` gained three fields, not a route), 87 tes
 reports, 74,233 versioned lines. One silence-bounded `httpx` site became a total-budget read; the
 Phase 34 ratchet that counts them did not notice, because it counts numeric literals (60-E).
 
-
-
 ## 2J. Phase 61 in full — desktop control that asks, and only then touches
 
 ### 2J.1 Measured first
 
-The register said *"no Computer Use capability, §26 not started"*. The eyes already shipped —
+The register said _"no Computer Use capability, §26 not started"_. The eyes already shipped —
 `capture_screen`, `take_screenshot`, `get_frontmost_application`, `get_running_applications`,
 `vision_capabilities`, the OCR tools — and the hands did not: a grep for a click, keystroke or mouse
 event across `jarvis/tools` and `jarvis/agents` returns only comments promising the opposite
@@ -796,15 +786,15 @@ windows, clicking, typing"`.
 
 ### 2J.2 §26.2 is the design, not a footnote
 
-*Untrusted model output is data. It is never authority.* A Computer Use demo is precisely what that
+_Untrusted model output is data. It is never authority._ A Computer Use demo is precisely what that
 sentence guards against: whatever text was last on the screen becomes the hand that moves the
 cursor. So `jarvis/tools/desktop.py` adds three tools with deliberately asymmetric reach:
 
-| tool | tier | gate | reachable by a sentence |
-|---|---|---|---|
-| `get_desktop_control_state` | READ | none | **yes** — routed, because Phase 28's rule still holds |
-| `click_desktop` | DESTRUCTIVE | confirmation, `reversible=False` | **no** — no `examples`, no route |
-| `type_desktop_text` | DESTRUCTIVE | confirmation, `reversible=False` | **no** — same |
+| tool                        | tier        | gate                             | reachable by a sentence                               |
+| --------------------------- | ----------- | -------------------------------- | ----------------------------------------------------- |
+| `get_desktop_control_state` | READ        | none                             | **yes** — routed, because Phase 28's rule still holds |
+| `click_desktop`             | DESTRUCTIVE | confirmation, `reversible=False` | **no** — no `examples`, no route                      |
+| `type_desktop_text`         | DESTRUCTIVE | confirmation, `reversible=False` | **no** — same                                         |
 
 The absence of `examples` is the load-bearing part: examples are how the router learns what a tool
 is for. A test keeps the field empty, and two more sweep twelve phrasings ("click at 100 200",
@@ -813,7 +803,7 @@ resolve to an actuation.
 
 ### 2J.3 Refusal before send, injection, and the re-read that decides what may be claimed
 
-The OS permission is consulted *before* anything leaves the process, in three states
+The OS permission is consulted _before_ anything leaves the process, in three states
 (`DENIED`, `REQUIRES_MANUAL_SYSTEM_SETTINGS`, `NOT_DETERMINED`/`UNKNOWN`) whose wording is the
 permission's own. An unreadable permission is never read as a granted one. With the sender replaced
 by a recorder, the tests assert the call count is zero on every refusal path — and coordinates and
@@ -824,7 +814,7 @@ AppleScript concatenation is this platform's shell injection, so the three scrip
 `on run argv` programs that read values from arguments — `keystroke (item 1 of argv)` cannot change
 the program the way an interpolated `keystroke "…"` can. The test sends
 `" & do shell script "rm -rf ~` and asserts it appears in `args` and not in the script, **with a
-negative control** that builds the naive form and shows the payload *does* land in its source, so
+negative control** that builds the naive form and shows the payload _does_ land in its source, so
 the assertion is known to be able to fail.
 
 `click_desktop` reads the frontmost application before and after; if the after-read fails or returns
@@ -855,7 +845,7 @@ registry rows                               -> click/type DESTRUCTIVE + confirm 
    card. The module docstring carries this instead of the comforting version written first.
 2. **The proof therefore wrapped the sender.** Demonstrating a real click would move the user's
    pointer inside their applications, irreversibly, and that is their decision to ask for — not an
-   agent's verification step. So the measurement is *the code's decision to send* (5 decisions,
+   agent's verification step. So the measurement is _the code's decision to send_ (5 decisions,
    0 events). **No click and no keystroke has ever been executed by this code** (61-D).
 3. **The wrapper found a real weakness in the handler.** The after-read trusted any string as an
    application name, so the canned `"not sent: this recorder never runs anything"` was reported as
@@ -876,14 +866,12 @@ Browser verification: **NOT APPLICABLE** — no page changed, and no surface off
 That ordering is deliberate: 58-B (a phone can approve its own gated actions) has to be closed
 before any remote surface is allowed to approve a click.
 
-
-
 ## 2K. Phase 63 in full — a surface has to say who it is talking about
 
 Two open items with one theme, both Phase 50's subject rule applied to things that arrived after it.
 **60-C:** the panel badge said `model: cloud` when the gateway has had two selectable vendors since
-Phase 60 and the badge named neither. **61-A:** the desktop-control read answered whether *the
-process that asked* may click, and said so as though it were a fact about the product — while
+Phase 60 and the badge named neither. **61-A:** the desktop-control read answered whether _the
+process that asked_ may click, and said so as though it were a fact about the product — while
 Phase 61 had measured that same question answering `GRANTED` from a terminal and
 `REQUIRES_MANUAL_SYSTEM_SETTINGS` for the app.
 
@@ -913,7 +901,7 @@ both introduced by the fix:
    should have taken 45. It also passed a path that does not exist, which the helper is never asked
    about at all.
 
-The same mistake, made twice in one day: *asserting a property of a shared object by mutating it.*
+The same mistake, made twice in one day: _asserting a property of a shared object by mutating it._
 The test now asserts the opposite — a stall on one backend leaves `get_ocr_backend().cooling_down()`
 at zero and the shared `_binary` exactly as found — so a future move of that guard to module state,
 or another test reaching for the singleton, fails loudly instead of corrupting its neighbours.
@@ -924,25 +912,24 @@ Browser verification was **done**, not assumed, because a page changed: two isol
 no key, one with `ai_provider=gemini`), `dashboard/index.html` at 1440×900, badge text read from the
 live DOM (`model: rules (no key) · 148 tools` / `model: gemini · 148 tools`), bounding box ending at
 330 px with no horizontal overflow, 0 console errors. Configuring a base URL that is not reachable
-was deliberate: the badge reads `/health`, which reports a *selection*, and no model call was made
+was deliberate: the badge reads `/health`, which reports a _selection_, and no model call was made
 in this phase.
 
 Measured after: **2396 tests passing**, 148 tools / 32 gated / 52 planner rules / 122 route objects
 and 115 paths unchanged, 91 test modules, 65 reports, 75,515 versioned lines.
-
 
 ## 2L. Phase 64 in full — the API's shape is not for passersby
 
 **What was measured first.** The process the user is running right now (`Vantage.app`, pid 25197,
 bound to `0.0.0.0:8765`, `~/.jarvis-forge/lan_mode` = `true`):
 
-| Request | Result |
-| --- | --- |
-| `GET http://127.0.0.1:8765/openapi.json` | 200, **82,556 bytes**, no token |
-| `GET http://172.20.168.82:8765/openapi.json` | 200, **82,556 bytes** — this laptop's own Wi-Fi address |
-| `GET http://172.20.168.82:8765/docs` · `/redoc` | 200 · 200 |
-| `GET http://172.20.168.82:8765/health` · `/tools` | **401 · 401** |
-| `GET http://172.20.168.82:8765/` | 200, body carrying `"docs": "/docs"` |
+| Request                                           | Result                                                  |
+| ------------------------------------------------- | ------------------------------------------------------- |
+| `GET http://127.0.0.1:8765/openapi.json`          | 200, **82,556 bytes**, no token                         |
+| `GET http://172.20.168.82:8765/openapi.json`      | 200, **82,556 bytes** — this laptop's own Wi-Fi address |
+| `GET http://172.20.168.82:8765/docs` · `/redoc`   | 200 · 200                                               |
+| `GET http://172.20.168.82:8765/health` · `/tools` | **401 · 401**                                           |
+| `GET http://172.20.168.82:8765/`                  | 200, body carrying `"docs": "/docs"`                    |
 
 The credential gate held on every route this project wrote. The only thing that answered for free
 was the description of everything those routes can be asked to do, and `lan_mode` — the setting
@@ -952,7 +939,7 @@ machine owns — is what makes "for free" also mean "from the room".
 **The finding was nine phases old.** `audit/PHASE9_FINAL_REPORT.md` measured the same route at
 71,047 bytes, listed `/command`, `/confirm/{id}`, `/privacy/delete` and `/memory/export` among what
 it published, and filed it **P2**. Phase 59 closed these three paths **on the relay**, with a test
-named for it. Nobody re-listed the *host's* route objects after Phase 9 — each later phase measured
+named for it. Nobody re-listed the _host's_ route objects after Phase 9 — each later phase measured
 the routes it had added, and all of those require a token correctly. That is how a known defect
 survives: it is inherited as a fact about a different component.
 
@@ -1000,7 +987,7 @@ diff touches no tool, no gate, no persistence), route objects **122 → 118** an
 project wrote was removed. 92 test modules, 66 audit reports, 76,123 versioned lines.
 
 **Two things this phase found and did not touch, because they are the user's decision:** the 5
-`forged` rows in this machine's real ledger, which make `chain_intact: false` *correctly*
+`forged` rows in this machine's real ledger, which make `chain_intact: false` _correctly_
 (`chain_checked` 495 of `sampled` 500 on the live host), and **9 leftover `phone_*` pairing rows, 6
 of them still `paired`, all dated 2026-09-25** — held secrets for handsets that do not exist.
 Clearing either means deleting or revoking real state, which is not an agent's call to make quietly.
@@ -1017,23 +1004,23 @@ was to stop treating "it passed six times" as an explanation.
 **Four causes measured and falsified**, all on this machine, all with the real helper binary and
 the real PNG the tests draw:
 
-| Claim | Measurement | Verdict |
-| --- | --- | --- |
-| "Vision returns 0.6 s standalone and **exceeds any bound** while other work runs" (in `ocr.py` since Phase 27) | 60 helper calls while a full 2,408-test suite ran in another process: first 10.66 s, then 0.52 s, **0 over 15 s, 0 non-zero exits**, load suite exited 0 | does not reproduce |
-| cold initialisation can exceed the 45 s allowance | cold first call: **7.42 s idle**, **9.43 s with 10 busy CPUs**, **10.66 s under live suite load** | never near 45 s |
-| the first **exec** of a freshly compiled binary is the slow step (every earlier probe reused a binary that had already run) | 4 brand-new `JARVIS_HOME`s under suite load: build 0.70–0.73 s, first exec **0.46 / 0.46 / 0.52 / 2.01 s**, all `ok` | falsified |
-| a test leaked a patch onto the global `subprocess.run`, so every later real read was a fake timeout | plugin compared `subprocess.run.__code__` against an untouched reference before each of the five real tests, **9 instrumented full suites**: `run_real: True` every time; `cooling: 0.0`, `stalls: 0` before every one of them | falsified in every captured run |
+| Claim                                                                                                                       | Measurement                                                                                                                                                                                                                    | Verdict                         |
+| --------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------- |
+| "Vision returns 0.6 s standalone and **exceeds any bound** while other work runs" (in `ocr.py` since Phase 27)              | 60 helper calls while a full 2,408-test suite ran in another process: first 10.66 s, then 0.52 s, **0 over 15 s, 0 non-zero exits**, load suite exited 0                                                                       | does not reproduce              |
+| cold initialisation can exceed the 45 s allowance                                                                           | cold first call: **7.42 s idle**, **9.43 s with 10 busy CPUs**, **10.66 s under live suite load**                                                                                                                              | never near 45 s                 |
+| the first **exec** of a freshly compiled binary is the slow step (every earlier probe reused a binary that had already run) | 4 brand-new `JARVIS_HOME`s under suite load: build 0.70–0.73 s, first exec **0.46 / 0.46 / 0.52 / 2.01 s**, all `ok`                                                                                                           | falsified                       |
+| a test leaked a patch onto the global `subprocess.run`, so every later real read was a fake timeout                         | plugin compared `subprocess.run.__code__` against an untouched reference before each of the five real tests, **9 instrumented full suites**: `run_real: True` every time; `cooling: 0.0`, `stalls: 0` before every one of them | falsified in every captured run |
 
 **What did survive is the blast radius**, and it got a deterministic reproduction rather than a
 wait. A plugin raises `TimeoutExpired` **once**, on the first call made by the module singleton,
-*inside* `read_text`'s own `try`, so the product records the stall exactly as it would in the wild
+_inside_ `read_text`'s own `try`, so the product records the stall exactly as it would in the wild
 and every later call is allowed through:
 
-| same injected condition | before | after |
-| --- | --- | --- |
+| same injected condition               | before                  | after                   |
+| ------------------------------------- | ----------------------- | ----------------------- |
 | failures among the five content tests | **5 failed, 44 passed** | **1 failed, 48 passed** |
 
-The plugin's first version stalled the *first helper call anyone made*, which is the warm-up
+The plugin's first version stalled the _first helper call anyone made_, which is the warm-up
 fixture's throwaway instance, and **nothing else failed** — an accidental but welcome confirmation
 that Phase 63's instance isolation works.
 
@@ -1078,7 +1065,7 @@ would settle it is the next occurrence's own failure line, which can now speak.
 500 rows. `verify_chain()` walked `ORDER BY created_at ASC LIMIT 500` -- the **oldest** 500 of the
 same 525-row table. Two surfaces, one ledger, different halves: 25 rows were never chain-checked, 25
 were never counted, and neither fact appeared anywhere. The consequence that matters is directional:
-the unverified tail is where a tamper performed *later* lives, so the word "intact" was being produced
+the unverified tail is where a tamper performed _later_ lives, so the word "intact" was being produced
 by a walk that had not read the part an attacker would edit. Separately, two rows from an early build
 store a whole response sentence in the `result` column ("Your laptop battery is at 82% (charging)."),
 and because they are older than the newest-500 window, **no published number had ever shown them**.
@@ -1209,7 +1196,7 @@ stopped -- Phase 54's "a stop has to stop the thing it named", broken from the o
 with no attacker involved.
 
 The root cause was documented in the code and never connected to the read side.
-`TaskManager.refresh_status()` says: *"anything not recomputed there stayed `running` forever"* -- and
+`TaskManager.refresh_status()` says: _"anything not recomputed there stayed `running` forever"_ -- and
 it is called from eight orchestrator write paths, **no read path, and no process boundary**. `/tasks`,
 `/tasks/{id}`, the briefing (`briefing.py:86`) and the stop candidate all read the stored column. A
 process that died between `create()` and its first step write therefore left a row asserting it was
@@ -1233,7 +1220,7 @@ a state a person set, not a crash mark. Nothing was deleted: the twelve rows are
 which is what their own steps prove.
 
 **9 tests, red first as 8 failures and one pass** -- and that pass is the negative control, which
-asserts the stop *still* falls for the phantom when the sweep is absent, so the two symptom tests
+asserts the stop _still_ falls for the phantom when the sweep is absent, so the two symptom tests
 above cannot be vacuous. One of my own tests was order-dependent and is on the record: the startup
 test first swapped the `db_module._DB` singleton, passed alone, and failed in a full run, because
 `get_core()` had long since been built against the session database and the lifespan reconciled a
@@ -1284,8 +1271,8 @@ ran, and "delete everything → CONFIRM" was reported as a product hole. The pro
 sentence, and `safety_run.py` had been saying so since Phase 22. Corrected, the harness now scores
 two layers and labels which number came from which:
 
-* **route** — `RulePlanner.parse(say)` alone;
-* **pipeline** — `JarvisCore.handle(CommandRequest(...))`, the same coroutine `POST /command`
+- **route** — `RulePlanner.parse(say)` alone;
+- **pipeline** — `JarvisCore.handle(CommandRequest(...))`, the same coroutine `POST /command`
   awaits. Safety claims come from this layer only.
 
 ### The instrument was wrong twice before it was right
@@ -1318,7 +1305,7 @@ do not. That is 69-B, and it is the honest reason the outcome number is 75% and 
 
 `empty the trash and wipe free space` reached **EXECUTE**, on `check_storage`. Nothing dangerous
 happened — it is a READ-tier tool — and that is exactly why a permission-layer metric alone would
-have called it a pass: the gate was correct, the *answer* was not. A person who asks for a wipe and
+have called it a pass: the gate was correct, the _answer_ was not. A person who asks for a wipe and
 is handed `Storage: 19.8 GiB free of 228.3 GiB` has no way to tell whether the wipe was refused or
 performed. Root cause is one substring: `_storage` triggers on `\bfree space\b` and never looks at
 the verb.
@@ -1357,25 +1344,24 @@ Browser verification **NOT APPLICABLE** — no page changed.
 
 ### Left open
 
-* **69-B** — no fuzzy matching in the rules router: 18 of the 25 outcome misses are typo/short-form/
+- **69-B** — no fuzzy matching in the rules router: 18 of the 25 outcome misses are typo/short-form/
   paraphrase wording that routes nowhere. Fixing it means either an edit-distance pass over the
   trigger vocabulary or more triggers, and both change what sentences reach destructive tools, so it
   is a phase of its own rather than a line in this one.
-* **69-C** — `security/risk.py` `CONFIRM_PATTERNS` is computed and **discarded**: `_handle` acts on
+- **69-C** — `security/risk.py` `CONFIRM_PATTERNS` is computed and **discarded**: `_handle` acts on
   a Stage-0 hit only when it is BLOCK, so the four "risky but confirm-worthy phrasing" patterns
   gate nothing. It is not a hole in practice — `delete_file` is DESTRUCTIVE and confirms by tier —
   but the list reads like a second door and is not one. Reported, **not changed**, because deleting
   or wiring safety code is a decision for the owner.
-* **69-A** — `remember that my wifi password is hunter2` is refused by the sensitive-secret pattern,
-  which matches the *word* anywhere in the sentence. Storing a personal secret in a local plaintext
+- **69-A** — `remember that my wifi password is hunter2` is refused by the sensitive-secret pattern,
+  which matches the _word_ anywhere in the sentence. Storing a personal secret in a local plaintext
   memory table is arguably the right thing to refuse; the cost is that "remember that my wifi
   password is …" — a sentence the README's own examples invite — can never be saved. Left as a
   product decision, with the label kept as `run` in the corpus so the number still shows it.
-* **69-D** — `how much space is free` has never routed: the trigger wants `space free`/`space left`
+- **69-D** — `how much space is free` has never routed: the trigger wants `space free`/`space left`
   and the wording is `space is free`. It failed before this phase and still fails, so it is written
   down in a test rather than fixed under cover of the safety change (or quietly dropped from the
   over-correction list, which would have hidden it).
-
 
 ## 2R. Phase 70 in full — a typo is not a missing capability
 
@@ -1391,7 +1377,7 @@ router and false about the product, which is the same class of untruth Phase 30 
 ### Three mechanisms, one constraint
 
 1. **Transcription pause.** Measured before being handled: `open, safari` reaches nothing, `open
-   safari` reaches `open_application`. The comma is what a thumb or a speech engine leaves behind.
+safari` reaches `open_application`. The comma is what a thumb or a speech engine leaves behind.
    Applied **only** in the tolerant pass, never to the main chain, so a sentence that already works
    is byte-for-byte unaffected -- including the file lists and `", then"` sequence markers that
    normalising globally would have eaten.
@@ -1402,7 +1388,7 @@ router and false about the product, which is the same class of untruth Phase 30 
    pattern and miss the other.
 3. **One-edit spelling repair**, with the cue vocabulary derived from the registry (tool-name tokens,
    application names and aliases) rather than hand-written -- the same reasoning Phase 30 used to
-   avoid an alias table. Accepted only when *exactly one* cue is one edit away, and only if the
+   avoid an alias table. Accepted only when _exactly one_ cue is one edit away, and only if the
    resulting action's tool is **READ or LOW and not confirmation-gated**.
 
 That last clause is the whole design. `delete` is a token of `delete_file` (DESTRUCTIVE, gated) and
@@ -1412,7 +1398,7 @@ action the tidy wording already allowed; it cannot invent a new one.
 
 ### Two failures of my own, both found by running it
 
-* **`root` became `robot`.** The first version repaired any one-edit near-miss, and "run this command
+- **`root` became `robot`.** The first version repaired any one-edit near-miss, and "run this command
   as root" came back as a `get_robot_status` query about a machine nobody mentioned. It was caught by
   the phase's own invariant test, not by reading the code. The boundary now: an insertion or
   substitution is trusted only against a cue of six or more characters, while a **key-swap**
@@ -1420,11 +1406,11 @@ action the tidy wording already allowed; it cannot invent a new one.
   different one. Both halves are pinned, including `_edit_distance("opne","open") == 1` --
   transposition had to be added to the metric itself, or the commonest keyboard error stayed broken
   while rarer ones were fixed.
-* **I was about to override a decision that was right.** `test_phase30_..._one_name_word_is_not_
-  enough_to_reach_a_capability` registered `widget_gizmo` and refused to plan anything for "the
+- **I was about to override a decision that was right.** `test_phase30_..._one_name_word_is_not_
+enough_to_reach_a_capability` registered `widget_gizmo` and refused to plan anything for "the
   gizmo". My first short-form rule stripped stop words, so "the gizmo" became "gizmo" and routed --
   the test went red, and the easy move was to edit the test. The test was correct: a noun phrase with
-  an article is not a command. The rule now requires a *literally* one-word utterance, so "status" is
+  an article is not a command. The rule now requires a _literally_ one-word utterance, so "status" is
   considered and "the gizmo" never is, and **no existing assertion was changed**.
 
 ### What was measured before deciding, not after
@@ -1444,18 +1430,18 @@ flattered.
 
 ### The numbers, before and after, same instrument
 
-| metric | Phase 69 | Phase 70 |
-|---|---|---|
-| outcome accuracy | 75.2% | **89.1%** |
-| router tool accuracy | 59.0% (61) | **81.0%** (58) |
-| routing hit rate | 60.7% (61) | **82.8%** (58) |
-| gate-expectation accuracy | 69.7% (33) | **72.7%** (33) |
-| **false action rate** | **0.0%** (22 guard cases) | **0.0%** (22) |
-| hallucinated tools | 0 | 0 |
-| unintended executions | 0 | 0 |
-| typo deviations | 12 | **0** |
-| transcription deviations | 2 | **0** |
-| wake-word deviations | 0 | 0 |
+| metric                    | Phase 69                  | Phase 70       |
+| ------------------------- | ------------------------- | -------------- |
+| outcome accuracy          | 75.2%                     | **89.1%**      |
+| router tool accuracy      | 59.0% (61)                | **81.0%** (58) |
+| routing hit rate          | 60.7% (61)                | **82.8%** (58) |
+| gate-expectation accuracy | 69.7% (33)                | **72.7%** (33) |
+| **false action rate**     | **0.0%** (22 guard cases) | **0.0%** (22)  |
+| hallucinated tools        | 0                         | 0              |
+| unintended executions     | 0                         | 0              |
+| typo deviations           | 12                        | **0**          |
+| transcription deviations  | 2                         | **0**          |
+| wake-word deviations      | 0                         | 0              |
 
 The denominators shrank because three `tool` labels were removed with their relabelled cases; a
 percentage whose denominator moved is not comparable without saying so, which is why both are printed.
@@ -1470,22 +1456,22 @@ behaviour was touched, and the safety matrix still holds **6 of 6**.
 
 ### Still open after this phase
 
-* **70-A** — `google fastapi` and `search for X`-style brand verbs are not routed. Left deliberately:
+- **70-A** — `google fastapi` and `search for X`-style brand verbs are not routed. Left deliberately:
   `search_web`'s own docstring warns that "a new route that swallows them is a regression wearing a
   feature", and `google chrome` is a site, an app and a search string at once. Needs a decision about
   precedence, not a regex.
-* **70-B** — `where did I put the invoice` resolves to `get_location_summary` (a *wrong* answer,
+- **70-B** — `where did I put the invoice` resolves to `get_location_summary` (a _wrong_ answer,
   worse than none) because the location route runs before the file route. `read my email from
-  brahima` → `search_email` rather than `read_email`, same shape.
-* **70-C** — `move my mouse to the corner` proposes `move_file` (`source=my mouse,
-  destination=the corner`) behind a confirmation card. Gated, so nothing runs, and Phase 61's
+brahima` → `search_email` rather than `read_email`, same shape.
+- **70-C** — `move my mouse to the corner` proposes `move_file` (`source=my mouse,
+destination=the corner`) behind a confirmation card. Gated, so nothing runs, and Phase 61's
   computer-use hands stay unreachable -- but the card is nonsense, and a person has to read it to
   find that out.
-* **70-D** — six `run`-labelled sentences get a question because the tool needs a parameter the
+- **70-D** — six `run`-labelled sentences get a question because the tool needs a parameter the
   sentence does not supply (`write a file called todo.txt` wants content; `run tests in jarvis-forge`
   wants a workspace). This is Phase 29 working as designed; it is listed so the corpus's remaining
   misses are not read as routing defects.
-* **69-A** and **69-C** carried forward unchanged (the secret-refusal decision; `CONFIRM_PATTERNS`
+- **69-A** and **69-C** carried forward unchanged (the secret-refusal decision; `CONFIRM_PATTERNS`
   computed and discarded).
 
 ### Measured after
@@ -1498,7 +1484,6 @@ matters — a GUI launch is not contained by a temp data directory. Nothing was 
 `148 tools / 32 gated / 53 planner rules / 118 route objects / 111 paths / 32 tables`, safety matrix
 **6 of 6**, corpus false action rate **0.0%**. Browser verification **NOT APPLICABLE** — no page
 changed.
-
 
 ## 3. Working status of the whole product, as measured today
 
@@ -1518,34 +1503,34 @@ User → Intent → RulePlanner (53 routes) → PermissionEngine → [Confirmati
 
 ### 3.2 Surface inventory
 
-| thing | value | how measured |
-|---|---|---|
-| Tools | **148** (Phase 61 added three: one read, two confirmation-gated actuations) | `/health`, `/tools` |
-| Agents | **15** — calendar, car, coding, design, email, home, laptop, laptop_center, memory, phone, research, robotics, scheduler, vision, watch | `/health` |
-| Risk spread | READ 78 · LOW 38 · EXTERNAL 15 · DESTRUCTIVE 14 · PHYSICAL 3 | registry, counted this close |
-| Confirmation-gated | **32** of 148 — gates added in Phases 57 and 61, none removed (§7 of the Phase 57 report proves the direction) | registry |
-| RulePlanner routes | **53** — Phase 70 added the single-word capability route, so a bare `screenshot` is answered instead of interrogated | `len(core.planner._rules)` |
-| Registered applications | **15** | `AppRegistry` |
-| HTTP surface | **118 route objects / 111 paths** from **118 authored `@app.*` decorators** — Phase 64 unmounted the four routes FastAPI adds by itself (`/openapi.json`, `/docs`, `/redoc`, `/docs/oauth2-redirect`), each of which answered without a credential; the relay remains a **separate ASGI app** (`jarvis/relay.py`, 4 endpoints) that never mounted them | `python -c "import jarvis.api.app as a; print(len(a.app.routes))"` |
-| Database tables | **32** | read-only `sqlite_master` count on the delivered app's database |
-| Memories indexed | 52 / 52, coverage 1.0, hybrid retrieval | `/health` |
-| Scheduler | running, 30 s tick, 67 jobs | `/health` |
-| Test suite | **2510 passed, 0 failed, 0 skipped** at the Phase 70 close (87.13 s; the network-gated arXiv test passes when the network answers, and a run where it refuses reports 2509 passed + 1 skipped) | `pytest -q` |
-| Intent corpus (spec §19, Phase 69) | **101 cases · false action rate 0.0%** (0 of 22 `guard` sentences reached a tool) · outcome accuracy **75.2%** · router tool accuracy **59.0%** (61 labelled) · argument accuracy **100%** (2 labelled) · gate-expectation accuracy **69.7%** (33 labelled) · device targeting **100%** (4 labelled) · hallucinated tools **0** | `python benchmarks/intent_eval.py` |
-| Test modules / phase reports | 99 / 72 | `ls` |
-| Code volume | **78,390** versioned Python/HTML/JS/Swift lines — **43,936** shipped (`jarvis/` + `dashboard/` + `app/`) · **32,466** tests (`tests/`). Measured twice by two instruments that agree (`git ls-files -co … | xargs grep -c ''` and a `find`-based count over the same extensions); the shipped figure is stated with its path list because an earlier 44,489 came from a wider definition | `git ls-files -co --exclude-standard '*.py' '*.html' '*.js' '*.swift' \| xargs grep -c ''` |
+| thing                              | value                                                                                                                                                                                                                                                                                                                                                  | how measured                                                                                                                                                               |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Tools                              | **148** (Phase 61 added three: one read, two confirmation-gated actuations)                                                                                                                                                                                                                                                                            | `/health`, `/tools`                                                                                                                                                        |
+| Agents                             | **15** — calendar, car, coding, design, email, home, laptop, laptop_center, memory, phone, research, robotics, scheduler, vision, watch                                                                                                                                                                                                                | `/health`                                                                                                                                                                  |
+| Risk spread                        | READ 78 · LOW 38 · EXTERNAL 15 · DESTRUCTIVE 14 · PHYSICAL 3                                                                                                                                                                                                                                                                                           | registry, counted this close                                                                                                                                               |
+| Confirmation-gated                 | **32** of 148 — gates added in Phases 57 and 61, none removed (§7 of the Phase 57 report proves the direction)                                                                                                                                                                                                                                         | registry                                                                                                                                                                   |
+| RulePlanner routes                 | **53** — Phase 70 added the single-word capability route, so a bare `screenshot` is answered instead of interrogated                                                                                                                                                                                                                                   | `len(core.planner._rules)`                                                                                                                                                 |
+| Registered applications            | **15**                                                                                                                                                                                                                                                                                                                                                 | `AppRegistry`                                                                                                                                                              |
+| HTTP surface                       | **118 route objects / 111 paths** from **118 authored `@app.*` decorators** — Phase 64 unmounted the four routes FastAPI adds by itself (`/openapi.json`, `/docs`, `/redoc`, `/docs/oauth2-redirect`), each of which answered without a credential; the relay remains a **separate ASGI app** (`jarvis/relay.py`, 4 endpoints) that never mounted them | `python -c "import jarvis.api.app as a; print(len(a.app.routes))"`                                                                                                         |
+| Database tables                    | **32**                                                                                                                                                                                                                                                                                                                                                 | read-only `sqlite_master` count on the delivered app's database                                                                                                            |
+| Memories indexed                   | 52 / 52, coverage 1.0, hybrid retrieval                                                                                                                                                                                                                                                                                                                | `/health`                                                                                                                                                                  |
+| Scheduler                          | running, 30 s tick, 67 jobs                                                                                                                                                                                                                                                                                                                            | `/health`                                                                                                                                                                  |
+| Test suite                         | **2510 passed, 0 failed, 0 skipped** at the Phase 70 close (87.13 s; the network-gated arXiv test passes when the network answers, and a run where it refuses reports 2509 passed + 1 skipped)                                                                                                                                                         | `pytest -q`                                                                                                                                                                |
+| Intent corpus (spec §19, Phase 69) | **101 cases · false action rate 0.0%** (0 of 22 `guard` sentences reached a tool) · outcome accuracy **75.2%** · router tool accuracy **59.0%** (61 labelled) · argument accuracy **100%** (2 labelled) · gate-expectation accuracy **69.7%** (33 labelled) · device targeting **100%** (4 labelled) · hallucinated tools **0**                        | `python benchmarks/intent_eval.py`                                                                                                                                         |
+| Test modules / phase reports       | 99 / 72                                                                                                                                                                                                                                                                                                                                                | `ls`                                                                                                                                                                       |
+| Code volume                        | **78,390** versioned Python/HTML/JS/Swift lines — **43,936** shipped (`jarvis/` + `dashboard/` + `app/`) · **32,466** tests (`tests/`). Measured twice by two instruments that agree (`git ls-files -co …                                                                                                                                              | xargs grep -c ''`and a`find`-based count over the same extensions); the shipped figure is stated with its path list because an earlier 44,489 came from a wider definition | `git ls-files -co --exclude-standard '*.py' '*.html' '*.js' '*.swift' \| xargs grep -c ''` |
 
 ### 3.3 Permissions, as the OS reports them right now (`/permissions`)
 
-| capability | state |
-|---|---|
-| speech recognition | **GRANTED** |
-| screen recording | **GRANTED** |
-| microphone | NOT_DETERMINED |
-| accessibility | **REQUIRES_MANUAL_SYSTEM_SETTINGS** |
-| automation | UNKNOWN |
-| notifications | UNKNOWN |
-| local network | NOT_REQUIRED |
+| capability         | state                               |
+| ------------------ | ----------------------------------- |
+| speech recognition | **GRANTED**                         |
+| screen recording   | **GRANTED**                         |
+| microphone         | NOT_DETERMINED                      |
+| accessibility      | **REQUIRES_MANUAL_SYSTEM_SETTINGS** |
+| automation         | UNKNOWN                             |
+| notifications      | UNKNOWN                             |
+| local network      | NOT_REQUIRED                        |
 
 The card also prints **which process was asked** — `about_bundled_host: True`, read by Vantage
 running from `~/Downloads/Vantage/Vantage.app`. Same helper, same machine, terminal caller:
@@ -1560,6 +1545,7 @@ observed raising a dialog on this machine** — the helper aborts before prompti
 prompt itself was left to the person sitting at the laptop.
 
 Two consequences that are live behaviour, not caveats:
+
 - `show the current application` works from a terminal-launched server and will answer with the
   Accessibility permission name **from the bundle** until it is granted.
 - `open Downloads` cannot be confirmed by anyone here (Finder answers no AppleScript).
@@ -1591,15 +1577,15 @@ exactly the blind spot Phase 66 removed.
 
 On 2026-10-06 the user decided to clear them. Measured, in order, on the real ledger:
 
-| Step | `verify_chain()` |
-| --- | --- |
-| before | `ok=False`, checked 520 of 525, **5 breaks**, first bad `LEGACY-TEST` |
-| the 6 `result='forged'` rows deleted | `ok=False`, checked 513 of 519, **6 breaks**, reason `previous-hash mismatch (a record was removed or reordered)` — the arithmetic that shows why a deletion cannot stand on its own |
-| `seal_chain(force=True)`, 519 records re-hashed | **`ok=True`, checked 520 of 520, 0 breaks, 0 unverified** |
+| Step                                            | `verify_chain()`                                                                                                                                                                     |
+| ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| before                                          | `ok=False`, checked 520 of 525, **5 breaks**, first bad `LEGACY-TEST`                                                                                                                |
+| the 6 `result='forged'` rows deleted            | `ok=False`, checked 513 of 519, **6 breaks**, reason `previous-hash mismatch (a record was removed or reordered)` — the arithmetic that shows why a deletion cannot stand on its own |
+| `seal_chain(force=True)`, 519 records re-hashed | **`ok=True`, checked 520 of 520, 0 breaks, 0 unverified**                                                                                                                            |
 
 The re-seal wrote its own row, as Phase 66 designed it to: `audit chain re-sealed: 519 records
 re-hashed on 2026-10-06T03:18:53+00:00`. That row is the honest caveat — the chain now proves that
-nothing changed *after* that moment, not that nothing changed before it. The pre-repair database and
+nothing changed _after_ that moment, not that nothing changed before it. The pre-repair database and
 the exported rows are kept at `~/.jarvis-forge/repair-2026-10-05/` (`jarvis.db.pre-repair`,
 `.pre-repair-2`, `affected_rows.pre-repair.json`), and `~/.jarvis-forge/audit.jsonl`, the off-box
 mirror, still carries every original line including the six.
@@ -1632,19 +1618,19 @@ Swift helper and an x86_64 build on an arm64 machine. Not re-driven by ear today
 
 ### 3.7 What is **not** built or not reachable
 
-| gap | evidence | why it matters |
-|---|---|---|
-| ~~No emergency-stop route~~ | **closed in Phase 54** — `POST /emergency_stop` calls the registered tool, needs no confirmation, and re-reads the job rows before claiming a stop | menu-bar and lock-screen surfaces still need the native shell |
-| ~~No tool-level revoke surface~~ | **closed in Phase 54** — `POST /permissions/{tool}/revoke` and `/restore`, with the denial re-read after the write and `emergency_stop` itself refused | no expiry and no bulk form (54-C) |
-| ~~Vantage cannot describe itself~~ | **closed in Phase 53** — approvals, status, recent actions, current task and a verified stop are now answerable | was blocking phone-side approvals and task state |
-| No native mobile app | the phone client is a served web page (`/phone`). **Phase 58 could not change that and says so**: no Xcode, `iphoneos` SDK not locatable, **0 valid code-signing identities**, no `adb`, no Android SDK, no handset — `BLOCKED_EXTERNAL_DEPENDENCY`. What Phase 58 did instead: phone sessions are scoped at the moment the bootstrap is minted, sign-out exists, a session can be revoked one at a time, and a guard fails if any shipped phone file says "native app" | keychain/keystore, biometrics, push and a store build still need a toolchain and an identity that are not on this machine (58-D) |
-| No relay, no push, no biometrics | **Phase 59 built the relay, and only what this machine can prove of it**: `jarvis/relay.py` authenticates a paired device by PSK, forwards a named path list, overwrites typed identity with the device that signed, re-reads revocation per request, and returns the host's answer byte-for-byte or a `502`/`504` outage — 27 tests and a live end-to-end run, **every hop loopback**. Push still does not exist; Phase 58 added the receiving half of a notification (`/phone?focus=approvals`) and no way to send one | `OFF_LAN_REACHABILITY: BLOCKED_EXTERNAL_DEPENDENCY` — there is no relay host reachable from outside this network, no client is wired to it (59-B), sessions are in-memory (59-C), and a remote relay needs a different device-auth shape than the one that reads the host's own key directory (59-A). Remote-away-from-LAN use is still not possible today; and a phone can still approve its own gated actions (58-B) |
-| No provider adapters in use | **the row was wrong, and Phase 60 measured it**: an OpenAI-shaped adapter *did* exist (one POST, rebuilt by hand at four call sites) with no selection between vendors. `jarvis/gateway/providers.py` now holds both shapes behind `JARVIS_AI_PROVIDER` (`openai`, `gemini`), with each answer naming its vendor and model. `llm_enabled: false` on this machine still, because there is no key | `PROVIDER_LIVE_VENDOR_CALL: NOT MEASURED` — nothing has contacted a real vendor; vision and STT are still OpenAI-shaped (60-A); the panel still does not name the vendor (60-C) |
-| No Computer Use capability | **Phase 61 built the hands and kept them behind the card.** The eyes already shipped (`capture_screen`, `get_frontmost_application`, OCR); `jarvis/tools/desktop.py` adds `get_desktop_control_state` (READ, routed) and `click_desktop` / `type_desktop_text` (DESTRUCTIVE, gated, `reversible=False`, **no examples**, no route). Permissions are consulted before anything leaves the process; a keystroke reports UNVERIFIED because nothing here can read the field it went into | **no click and no keystroke has ever been executed** — demonstrating it would drive the user's pointer inside their own applications, which is theirs to ask for (61-D); no surface offers desktop control (61-C); the read answers for a process while a person reads it as the product (61-A) |
-| ~~No first-run permission **request** path~~ | **narrowed in Phase 56** — `POST /permissions/{capability}/request` exists, is loopback-only, refuses with a reason, and answers from a re-read. The **ask itself cannot succeed from the helper process** (the Speech framework aborts a non-bundle caller), so no dialog has been observed on this machine — 56-A | §3's wizard still needs the ask moved *into* the app process, which now exists but does not host it yet — 57-G |
-| ~~No host persistence~~ | **built in Phase 57** — `jarvis/persistence.py` writes a user LaunchAgent with no secret and no inherited watchdog, `GET /persistence` reports what launchd says, and enable/disable are confirmation-gated capabilities. Proven live: launchd started a Vantage answering `/health` with 145 tools and a running scheduler, with no window open — then it was removed and the machine was left as found | never left installed for the real app (57-A, a user decision); "loaded" does not yet read `last exit code` (57-B); no reboot was performed (57-F) |
-| `.app` ships no Python runtime | it uses this machine's interpreter (Phase 40) | "installable on another Mac" is not proven |
-| CI | **not measured this session** — no verdict claimed | |
+| gap                                          | evidence                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | why it matters                                                                                                                                                                                                                                                                                                                                                                                                         |
+| -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ~~No emergency-stop route~~                  | **closed in Phase 54** — `POST /emergency_stop` calls the registered tool, needs no confirmation, and re-reads the job rows before claiming a stop                                                                                                                                                                                                                                                                                                                                                                       | menu-bar and lock-screen surfaces still need the native shell                                                                                                                                                                                                                                                                                                                                                          |
+| ~~No tool-level revoke surface~~             | **closed in Phase 54** — `POST /permissions/{tool}/revoke` and `/restore`, with the denial re-read after the write and `emergency_stop` itself refused                                                                                                                                                                                                                                                                                                                                                                   | no expiry and no bulk form (54-C)                                                                                                                                                                                                                                                                                                                                                                                      |
+| ~~Vantage cannot describe itself~~           | **closed in Phase 53** — approvals, status, recent actions, current task and a verified stop are now answerable                                                                                                                                                                                                                                                                                                                                                                                                          | was blocking phone-side approvals and task state                                                                                                                                                                                                                                                                                                                                                                       |
+| No native mobile app                         | the phone client is a served web page (`/phone`). **Phase 58 could not change that and says so**: no Xcode, `iphoneos` SDK not locatable, **0 valid code-signing identities**, no `adb`, no Android SDK, no handset — `BLOCKED_EXTERNAL_DEPENDENCY`. What Phase 58 did instead: phone sessions are scoped at the moment the bootstrap is minted, sign-out exists, a session can be revoked one at a time, and a guard fails if any shipped phone file says "native app"                                                  | keychain/keystore, biometrics, push and a store build still need a toolchain and an identity that are not on this machine (58-D)                                                                                                                                                                                                                                                                                       |
+| No relay, no push, no biometrics             | **Phase 59 built the relay, and only what this machine can prove of it**: `jarvis/relay.py` authenticates a paired device by PSK, forwards a named path list, overwrites typed identity with the device that signed, re-reads revocation per request, and returns the host's answer byte-for-byte or a `502`/`504` outage — 27 tests and a live end-to-end run, **every hop loopback**. Push still does not exist; Phase 58 added the receiving half of a notification (`/phone?focus=approvals`) and no way to send one | `OFF_LAN_REACHABILITY: BLOCKED_EXTERNAL_DEPENDENCY` — there is no relay host reachable from outside this network, no client is wired to it (59-B), sessions are in-memory (59-C), and a remote relay needs a different device-auth shape than the one that reads the host's own key directory (59-A). Remote-away-from-LAN use is still not possible today; and a phone can still approve its own gated actions (58-B) |
+| No provider adapters in use                  | **the row was wrong, and Phase 60 measured it**: an OpenAI-shaped adapter _did_ exist (one POST, rebuilt by hand at four call sites) with no selection between vendors. `jarvis/gateway/providers.py` now holds both shapes behind `JARVIS_AI_PROVIDER` (`openai`, `gemini`), with each answer naming its vendor and model. `llm_enabled: false` on this machine still, because there is no key                                                                                                                          | `PROVIDER_LIVE_VENDOR_CALL: NOT MEASURED` — nothing has contacted a real vendor; vision and STT are still OpenAI-shaped (60-A); the panel still does not name the vendor (60-C)                                                                                                                                                                                                                                        |
+| No Computer Use capability                   | **Phase 61 built the hands and kept them behind the card.** The eyes already shipped (`capture_screen`, `get_frontmost_application`, OCR); `jarvis/tools/desktop.py` adds `get_desktop_control_state` (READ, routed) and `click_desktop` / `type_desktop_text` (DESTRUCTIVE, gated, `reversible=False`, **no examples**, no route). Permissions are consulted before anything leaves the process; a keystroke reports UNVERIFIED because nothing here can read the field it went into                                    | **no click and no keystroke has ever been executed** — demonstrating it would drive the user's pointer inside their own applications, which is theirs to ask for (61-D); no surface offers desktop control (61-C); the read answers for a process while a person reads it as the product (61-A)                                                                                                                        |
+| ~~No first-run permission **request** path~~ | **narrowed in Phase 56** — `POST /permissions/{capability}/request` exists, is loopback-only, refuses with a reason, and answers from a re-read. The **ask itself cannot succeed from the helper process** (the Speech framework aborts a non-bundle caller), so no dialog has been observed on this machine — 56-A                                                                                                                                                                                                      | §3's wizard still needs the ask moved _into_ the app process, which now exists but does not host it yet — 57-G                                                                                                                                                                                                                                                                                                         |
+| ~~No host persistence~~                      | **built in Phase 57** — `jarvis/persistence.py` writes a user LaunchAgent with no secret and no inherited watchdog, `GET /persistence` reports what launchd says, and enable/disable are confirmation-gated capabilities. Proven live: launchd started a Vantage answering `/health` with 145 tools and a running scheduler, with no window open — then it was removed and the machine was left as found                                                                                                                 | never left installed for the real app (57-A, a user decision); "loaded" does not yet read `last exit code` (57-B); no reboot was performed (57-F)                                                                                                                                                                                                                                                                      |
+| `.app` ships no Python runtime               | it uses this machine's interpreter (Phase 40)                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | "installable on another Mac" is not proven                                                                                                                                                                                                                                                                                                                                                                             |
+| CI                                           | **not measured this session** — no verdict claimed                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |                                                                                                                                                                                                                                                                                                                                                                                                                        |
 
 ---
 
@@ -1672,7 +1658,7 @@ compress, delete (DESTRUCTIVE, confirmed). Path guards live in `jarvis/security/
 a guard that can be talked out of it.
 
 **Web** — open a known site by name or full address (14 names, longest-match wins), open the
-*site* wording for a word that is also an app, open a browser by name, and afterwards ask the
+_site_ wording for a word that is also an app, open a browser by name, and afterwards ask the
 browser what it is showing — with `unverified` when it will not answer. **Never** a guessed
 domain.
 
@@ -1721,11 +1707,11 @@ shipped calls it a native app, because no toolchain on this machine could build 
 2. ~~An emergency-stop route and a tool-revoke handle~~ — **done in Phase 54**: both doors
    exist, are audited, and re-read the state they claim to have changed.
 3. ~~A web-search capability~~ — **done in Phase 55.** `search_web` asks a real search service,
-   and an outage is reported as an outage. §6 is 37 of 37. A *ranked* web index still needs a
+   and an outage is reported as an outage. §6 is 37 of 37. A _ranked_ web index still needs a
    keyed provider (55-B).
 4. ~~Host persistence~~ — **built in Phase 57.** A user LaunchAgent, no secret in the launch
    config, no inherited watchdog, one server per data directory, and the state read back from
-   launchd. What it deliberately does not do is *stay on*: installing it for real is 57-A, a user
+   launchd. What it deliberately does not do is _stay on_: installing it for real is 57-A, a user
    decision, and the panel control plus the confirmation card exist to make it.
 5. ~~A deliberate, user-initiated permission **request** path~~ — **built in Phase 56**: route,
    loopback-only guard, per-capability reasons, re-read authority, panel controls, audited.
@@ -1734,13 +1720,13 @@ shipped calls it a native app, because no toolchain on this machine could build 
    Read-only status remains, and asking is still never a side effect of a poll.
 6. **Native mobile shell** — **blocked on the toolchain, not on the code** (58-D): no Xcode, no
    iOS SDK, zero signing identities, no Android SDK, no handset. Phase 58 delivered the phone work
-   that *is* verifiable here: session surfaces fixed at issue time, sign-out, revoke-one, a working
+   that _is_ verifiable here: session surfaces fixed at issue time, sign-out, revoke-one, a working
    deep link, a cache version that upgrades. Still open on the phone: the credential is readable by
    page script (58-C), a phone can approve its own gated actions (58-B), no push (58-E).
    The **relay** landed in Phase 59 as a local proof, and what is left of it is not code: no
    relay host exists outside this network to run it on, and no client points at one (59-A, 59-B).
    **Provider adapters landed in Phase 60**, and the roadmap's own row about them was wrong in
-   both directions: an OpenAI-shaped adapter *did* already ship and *was* wired into the pipeline
+   both directions: an OpenAI-shaped adapter _did_ already ship and _was_ wired into the pipeline
    (`orchestrator.py` asks it about a sentence the rules miss, since Phase 42), but there was no
    selection between vendors at all. `jarvis/gateway/providers.py` now holds the OpenAI and Gemini
    shapes behind `JARVIS_AI_PROVIDER`, and the memory write path takes its URL from that provider.
@@ -1785,7 +1771,7 @@ phase report and indexed in `README.md`.
    re-verify the extracted archive's seal, and update `~/Downloads/Vantage/`.
 8. Report what failed as failure. `close Mail` timed out and that is in the Phase 51 report;
    the button tap that the session's permission classifier blocked is in the Phase 51 report as
-   *not performed*.
+   _not performed_.
 
 Standing rules that have not moved: no GitHub pushes; no secrets in commits; no fabricated
 hardware, account or verification state; `JARVIS_HOME=$(mktemp -d)` for every project Python
@@ -1796,14 +1782,14 @@ edited only additively.
 
 ## 7. Where to look for the detail
 
-| question | file |
-|---|---|
-| What the product is and how to use it | `README.md`, `~/Downloads/Vantage/READ ME FIRST.txt` |
-| Why each phase did what it did | `audit/PHASE*.md` and `audit/FINAL_AUDIT_*.md` (66 reports, newest first in the README table) |
-| The flake, found and fixed | `audit/FINAL_AUDIT_COLD_START_NOT_A_STALL.md` and `audit/PHASE63_A_SURFACE_NAMES_ITS_SUBJECT_REPORT.md` §4 — a cold Vision call measured against a steady-state budget; the first fix was incomplete and its test made things worse, both corrected |
-| The whole verdict, separated | `VANTAGE_FINAL_ACCEPTANCE_REPORT.md` — IMPLEMENTED / VERIFIED / BLOCKED / NOT MEASURED / UNKNOWN / USER DECISION REQUIRED, each with the command that measured it |
-| What is still open | the open-items block at the end of `README.md` |
-| Why a permission ask must not be a poll | `audit/PHASE50_*.md` (the read-only rule) and `audit/PHASE56_ASKING_ON_PURPOSE_REPORT.md` (the request path, and why a helper cannot use it) |
-| Suite size over time | `benchmarks/suite_history.json`, `assets/chart-suite-growth.svg` |
-| Safety and failure matrices | `audit/*.csv` (4 matrices) + Phase 22/31/32 reports |
-| This phase in the audit trail | `audit/PHASE52_SECTION_SIX_ON_THE_LAPTOP_REPORT.md` |
+| question                                | file                                                                                                                                                                                                                                                |
+| --------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| What the product is and how to use it   | `README.md`, `~/Downloads/Vantage/READ ME FIRST.txt`                                                                                                                                                                                                |
+| Why each phase did what it did          | `audit/PHASE*.md` and `audit/FINAL_AUDIT_*.md` (66 reports, newest first in the README table)                                                                                                                                                       |
+| The flake, found and fixed              | `audit/FINAL_AUDIT_COLD_START_NOT_A_STALL.md` and `audit/PHASE63_A_SURFACE_NAMES_ITS_SUBJECT_REPORT.md` §4 — a cold Vision call measured against a steady-state budget; the first fix was incomplete and its test made things worse, both corrected |
+| The whole verdict, separated            | `VANTAGE_FINAL_ACCEPTANCE_REPORT.md` — IMPLEMENTED / VERIFIED / BLOCKED / NOT MEASURED / UNKNOWN / USER DECISION REQUIRED, each with the command that measured it                                                                                   |
+| What is still open                      | the open-items block at the end of `README.md`                                                                                                                                                                                                      |
+| Why a permission ask must not be a poll | `audit/PHASE50_*.md` (the read-only rule) and `audit/PHASE56_ASKING_ON_PURPOSE_REPORT.md` (the request path, and why a helper cannot use it)                                                                                                        |
+| Suite size over time                    | `benchmarks/suite_history.json`, `assets/chart-suite-growth.svg`                                                                                                                                                                                    |
+| Safety and failure matrices             | `audit/*.csv` (4 matrices) + Phase 22/31/32 reports                                                                                                                                                                                                 |
+| This phase in the audit trail           | `audit/PHASE52_SECTION_SIX_ON_THE_LAPTOP_REPORT.md`                                                                                                                                                                                                 |

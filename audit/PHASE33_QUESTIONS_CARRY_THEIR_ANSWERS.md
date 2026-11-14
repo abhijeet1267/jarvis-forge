@@ -36,18 +36,18 @@ remembers; it is something a tool prints.
 
 Two measurements shaped the design rather than intuition:
 
-* the enumerators' **messages** do not contain the ids. `list_workspaces` says "1
+- the enumerators' **messages** do not contain the ids. `list_workspaces` says "1
   workspace(s) open." — the id lives only in the structured `output`. So the candidates have
-  to come from the result shape, which means the shape has to be *declared*, not parsed by
+  to come from the result shape, which means the shape has to be _declared_, not parsed by
   guesswork;
-* `search_memory` refuses an empty query. Some identifiers genuinely have no
+- `search_memory` refuses an empty query. Some identifiers genuinely have no
   no-argument source, and for those the plain question is still the honest answer. Building
   a listing tool to make an assertion come true would have been this program's oldest error
   wearing a new face.
 
 ## 2. What changed
 
-**`ToolSpec.provides_identifiers`** — declared on the *enumerator*, not on the dozens of
+**`ToolSpec.provides_identifiers`** — declared on the _enumerator_, not on the dozens of
 tools that consume the id:
 
 ```python
@@ -80,7 +80,7 @@ close the workspace -> Which workspace? Give me its id (WS-…).
 
 No action is emitted, the sentence still ends in a question, and the lookup is attributed in
 the ledger as `identifier_sources_used` -- the same attribution debt R-14 settled for a
-fallback that *answers* with another tool's result (26-B). A lookup that fails says "I asked
+fallback that _answers_ with another tool's result (26-B). A lookup that fails says "I asked
 list_workspaces and it could not tell me: …", and one that finds nothing says "I checked,
 and there is nothing of that kind right now." Silence is never padded and an empty shelf is
 never reported as a result.
@@ -97,7 +97,7 @@ missing identifier, so the offer is not a favour the new route does for itself.
     reply='p33-shelf-me0lki7h: 0 source file(s), 0 test file(s). Languages: unknown.'
 ```
 
-A request to *close* answered with a *description*, recorded as a success, with nothing in
+A request to _close_ answered with a _description_, recorded as a success, with nothing in
 the reply or the chain saying the two verbs differ. The coding route's default branch is an
 inspect and it claimed the sentence because the word "workspace" was in it. Fixed by
 applying Phase 31's rule to a default rather than only to an advertisement: a route that
@@ -143,7 +143,7 @@ research route, which asks for a topic. Recorded in §7 rather than worked aroun
    full run — the worst shape a test signal can have, because both results are defensible.
    Four phase files (30–33) now snapshot and restore `_specs` and `_handlers`, including the
    nested dicts, because Phase 32's synonym test and Phase 33's declaration test both mutate
-   those in place. This was found by running the new file *after* the old one, not by
+   those in place. This was found by running the new file _after_ the old one, not by
    reading either: a suite that passes in one order and fails in another is not measuring
    the code.
 4. **Verb substitution inside one domain was still live** after three phases of
@@ -169,36 +169,36 @@ times in a row green, after the ordering fix.
 
 ## 6. Re-measured
 
-| metric | before | after | how |
-| --- | --- | --- | --- |
-| capabilities answered with a question | 55 | 55 | registry walk (this phase answers them, it does not remove them) |
-| …of which the question now carries real candidates | **0** | **19** | same walk with one workspace open |
-| …still asking plainly, no zero-argument source exists | — | 36 | same walk |
-| tools declaring an identifier source | 0 | 7 | `grep -c provides_identifiers jarvis/tools/*.py` |
-| "close the workspace WS-…" | answered with an *inspect* and a file count | reaches `close_workspace` | measured live, then tested |
-| ledger rows attributing the informing read | 0 | present (`identifier_sources_used`) | `/audit` over HTTP |
-| §45 safety matrix | 6 of 6 | **6 of 6** | `python benchmarks/safety_run.py` |
-| §59 acceptance sweep | 17 of 18 | unchanged | `python benchmarks/acceptance_run.py` |
-| tools / agents / api routes / confirm-gated / tables | 127 / 15 / 104 / 27 / 32 | unchanged | `python assets/build_diagrams.py` |
-| suite | 1621 | 1642 | `python -m pytest -q` |
+| metric                                                | before                                      | after                               | how                                                              |
+| ----------------------------------------------------- | ------------------------------------------- | ----------------------------------- | ---------------------------------------------------------------- |
+| capabilities answered with a question                 | 55                                          | 55                                  | registry walk (this phase answers them, it does not remove them) |
+| …of which the question now carries real candidates    | **0**                                       | **19**                              | same walk with one workspace open                                |
+| …still asking plainly, no zero-argument source exists | —                                           | 36                                  | same walk                                                        |
+| tools declaring an identifier source                  | 0                                           | 7                                   | `grep -c provides_identifiers jarvis/tools/*.py`                 |
+| "close the workspace WS-…"                            | answered with an _inspect_ and a file count | reaches `close_workspace`           | measured live, then tested                                       |
+| ledger rows attributing the informing read            | 0                                           | present (`identifier_sources_used`) | `/audit` over HTTP                                               |
+| §45 safety matrix                                     | 6 of 6                                      | **6 of 6**                          | `python benchmarks/safety_run.py`                                |
+| §59 acceptance sweep                                  | 17 of 18                                    | unchanged                           | `python benchmarks/acceptance_run.py`                            |
+| tools / agents / api routes / confirm-gated / tables  | 127 / 15 / 104 / 27 / 32                    | unchanged                           | `python assets/build_diagrams.py`                                |
+| suite                                                 | 1621                                        | 1642                                | `python -m pytest -q`                                            |
 
 ## 7. Carried forward
 
-* **33-A** 36 of the 55 questions still ask for something with no declared source:
+- **33-A** 36 of the 55 questions still ask for something with no declared source:
   `memory_id` (no enumerator answers without a query), `query`, `title`, `path`, `claim`,
   `message`, `kind` — values a person legitimately has rather than ids the system issued.
   Offering those would mean reading the user's own data into a question, which is a privacy
   conversation, not a plumbing one.
-* **33-B** sentences claimed by a specific route never reach the offer: "forget paper" is
+- **33-B** sentences claimed by a specific route never reach the offer: "forget paper" is
   asked for a research topic by `_research`. The offer and the route's own questions are two
   mechanisms, and only the fallback-level one speaks it.
-* **33-C** the offer lists candidates but cannot act on the answer yet: "close the
+- **33-C** the offer lists candidates but cannot act on the answer yet: "close the
   workspace" → "shelf-x (WS-e3c…)" → the user still has to say the id back, or its name,
   which no route resolves. Matching a candidate by name in the follow-up turn is the next
-  step, and it needs the resolver to accept a *label* — which is precisely the thing Phase
+  step, and it needs the resolver to accept a _label_ — which is precisely the thing Phase
   31 made actuation refuse to do loosely. A read may match a label; an actuation still needs
   the confirmation that names the device.
-* Everything already open: 32-A…C, 31-A/31-B (closed in 32), 30-B…D, 29-A…D, 28-A narrowed,
+- Everything already open: 32-A…C, 31-A/31-B (closed in 32), 30-B…D, 29-A…D, 28-A narrowed,
   27-A…D, 26-B, the `ToolSpec.parameters` residual, 23-E, mic/speech TCC, 15-F, 14-D, 16-F,
   hardware **BLOCKED**, LLM planner, unattended workflows.
 
@@ -217,8 +217,8 @@ Committed and pushed to `main` on `abhijeet1267/jarvis-forge`:
 
 Run `36887074627`, both jobs green:
 
-| job | result | pytest line | wall |
-| --- | --- | --- | --- |
+| job            | result  | pytest line                                   | wall                 |
+| -------------- | ------- | --------------------------------------------- | -------------------- |
 | `suite (3.11)` | success | `1636 passed, 6 skipped, 1 warning in 84.33s` | 15:48:08 → 15:50:12Z |
 | `suite (3.12)` | success | `1636 passed, 6 skipped, 1 warning in 81.38s` | 15:48:07 → 15:49:54Z |
 
@@ -227,7 +227,7 @@ for in Phase 29 (five battery-gated, one `dist/`-gated), so none of this phase's
 skipped on either image.
 
 That equality is the point of this particular commit. The defect the phase found in its own
-test suite was *order*-dependent, not machine-dependent: a stub handler left installed by one
+test suite was _order_-dependent, not machine-dependent: a stub handler left installed by one
 file made another file pass alone and fail inside a full run. A single green local run of one
 file would have proved nothing about that, which is why §5 records three consecutive full-suite
 runs here rather than one, and why the runner's full-suite count matching the local count is

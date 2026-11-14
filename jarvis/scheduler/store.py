@@ -133,6 +133,59 @@ class ScheduleStore:
         )
         return job
 
+    def update(
+        self,
+        schedule_id: str,
+        *,
+        name: Optional[str] = None,
+        schedule_text: Optional[str] = None,
+        action: Optional[str] = None,
+        params: Optional[Dict[str, Any]] = None,
+        max_risk: Optional[int] = None,
+    ) -> Optional[ScheduledJob]:
+        """Edit a job in place, keeping its identity and its run history.
+
+        A changed schedule re-parses and re-computes ``next_run`` from *now* —
+        never from the old time — so an edit cannot leave a stale next run that
+        fires immediately. ``schedule_runs`` rows are untouched: an edit changes
+        what happens next, not what already happened.
+        """
+        job = self.get(schedule_id)
+        if job is None:
+            return None
+
+        sets: list = []
+        values: list = []
+        if name is not None and name.strip():
+            sets.append("name = ?"); values.append(name.strip())
+        if action is not None and action.strip():
+            sets.append("action = ?"); values.append(action.strip())
+        if params is not None:
+            sets.append("params = ?"); values.append(json.dumps(params, default=str))
+        if max_risk is not None:
+            sets.append("max_risk = ?"); values.append(int(max_risk))
+        if schedule_text is not None:
+            recurrence = parse_schedule(schedule_text)
+            if recurrence is None:
+                raise ValueError(
+                    f"I could not understand the schedule {schedule_text!r}. Try "
+                    '"every morning", "every Monday at 9 AM", or "at 8 PM".'
+                )
+            next_run = recurrence.next_after(datetime.now().astimezone())
+            sets.append("rrule = ?"); values.append(recurrence.to_rrule())
+            sets.append("next_run = ?")
+            values.append(next_run.isoformat() if next_run else None)
+
+        if not sets:
+            return job
+        values.append(schedule_id)
+        self.db.execute(
+            f"UPDATE scheduled_jobs SET {', '.join(sets)} WHERE schedule_id = ?",
+            tuple(values),
+        )
+        log.info("job edited", extra_fields={"schedule_id": schedule_id})
+        return self.get(schedule_id)
+
     # -- read ----------------------------------------------------------------
     @staticmethod
     def _row_to_job(row: Any) -> Optional[ScheduledJob]:

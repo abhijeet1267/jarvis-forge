@@ -242,22 +242,40 @@ def test_the_phone_page_never_carries_the_laptop_token(client):
 
 
 def test_the_phone_page_reads_the_credential_the_login_actually_returns(client):
-    """Page JS is untested code until something treats its field names as a contract.
+    """The page and the API must agree on the credential, or login succeeds and every
+    later call 401s.
 
-    Opened in a real browser, this page logged in successfully and then saw 401 on
-    every later call: it read `.token` while the API hands out `session_token`, so the
-    credential was silently dropped.
+    Phase 35's original defect was a field-name mismatch: the page read `.token` while the
+    API hands out `session_token`, so the credential was silently dropped. Phase 71 changed
+    *how* the credential travels -- the session token now rides in an HttpOnly cookie the
+    browser attaches automatically (never a JS-readable global), and the page reads
+    `session_token` from the response only as a "did login succeed" signal. Both halves are
+    checked: the page still references the real field name the API returns, and the
+    credential is delivered as a cookie the subsequent calls actually present.
     """
     import re
 
     body = client.get("/phone").text
     bootstrap = re.search(r'name="jarvis-bootstrap" content="([^"]+)"', body).group(1)
-    issued = client.post("/auth/session", json={"bootstrap": bootstrap},
-                         headers={"Sec-Fetch-Site": "same-origin"}).json()
+    response = client.post("/auth/session", json={"bootstrap": bootstrap},
+                           headers={"Sec-Fetch-Site": "same-origin"})
+    issued = response.json()
+    # The API's real credential field.
     key = next((k for k, v in issued.items()
                 if isinstance(v, str) and v and k.endswith("token")), None)
     assert key, issued
-    assert f").{key}" in body, f"the page never reads the {key!r} it was handed"
+    # The page references that exact field name, so a rename cannot silently desync them.
+    assert f".{key}" in body, f"the page never reads the {key!r} the API hands out"
+    # Phase 71: the credential is delivered as an HttpOnly cookie, so the browser sends it
+    # on later calls without the page holding it in a script-readable variable.
+    set_cookie = response.headers.get("set-cookie", "")
+    assert "HttpOnly" in set_cookie and "jarvis_session" in set_cookie, set_cookie
+    # ...and a call that presents *only* that cookie (no token header) is authorised: this
+    # is the `credentials: "include"` path the page relies on.
+    cookie_only = client.get("/tools")
+    assert cookie_only.status_code == 200, (
+        f"a cookie-only call 401s ({cookie_only.status_code}): the browser's credential was "
+        "not honoured, so the phone would see 401 on every later call")
 
 
 def test_a_phone_can_ask_to_be_paired_and_the_laptop_sees_it(client):
@@ -570,8 +588,21 @@ PAGE = Path(__file__).resolve().parents[1] / "dashboard" / "phone.html"
 
 def _run_page_helper(payload):
     """Feed a real API response through the shipped `rowsOf` and see what the phone gets."""
-    source = re.search(r"function rowsOf\(data, key\) \{.*?\n\}",
-                      PAGE.read_text(), re.S).group(0)
+    text = PAGE.read_text()
+    start = text.index("function rowsOf(data, key)")
+    # Extract the function by its braces, not by a column-0 closing brace: the reflowed
+    # page indents its functions, so "next \n}" no longer lands on the right spot.
+    open_brace = text.index("{", start)
+    depth, end = 0, None
+    for j in range(open_brace, len(text)):
+        if text[j] == "{":
+            depth += 1
+        elif text[j] == "}":
+            depth -= 1
+            if depth == 0:
+                end = j + 1
+                break
+    source = text[start:end]
     script = (source + "\nconsole.log(JSON.stringify(rowsOf("
               + json.dumps(payload) + ", 'x')));\n")
     proc = subprocess.run(["node", "-e", script], capture_output=True, text=True, timeout=60)

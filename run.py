@@ -155,6 +155,31 @@ def main() -> None:
     # `0.0.0.0` is a bind instruction; nobody can type it into a browser and reach this
     # machine. The phone URLs the app prints at startup carry the real addresses.
     display_host = "127.0.0.1" if settings.host in ("0.0.0.0", "::") else settings.host
+
+    # Fail LOUD, before the success banner, if something is already answering on the
+    # port. Without this, a stale backend (an earlier `run.py` or the packaged .app
+    # still bound to the port) makes THIS process print "Vantage core -> .../dashboard",
+    # then silently fail to bind and exit -- so the browser hits the OLD process, which
+    # may be a stale build and 404s on /dashboard. A clear, non-zero exit here means a
+    # second start can never masquerade as a successful start.
+    from jarvis.persistence import port_is_free
+    probe_host = "127.0.0.1" if settings.host in ("0.0.0.0", "::") else settings.host
+    if not port_is_free(probe_host, settings.port):
+        holder = ""
+        try:
+            import subprocess as _sp
+            out = _sp.run(["lsof", "-ti", f"tcp:{settings.port}", "-sTCP:LISTEN"],
+                          capture_output=True, text=True, timeout=3).stdout.strip()
+            holder = f" (pid {out.splitlines()[0]})" if out else ""
+        except Exception:
+            pass
+        print(f"\nVantage: REFUSED to start -- port {settings.port} is already in use{holder}.\n"
+              f"  A Vantage backend is already running there. It is the one your browser\n"
+              f"  will reach, and it is NOT this process. To start fresh:\n"
+              f"      lsof -ti :{settings.port} | xargs kill\n"
+              f"  then run `uv run run.py serve` again.\n", file=sys.stderr, flush=True)
+        raise SystemExit(1)
+
     print(f"Vantage core       -> {settings.scheme}://{display_host}:{settings.port}/dashboard",
           flush=True)
     print(f"Voice status      -> {settings.scheme}://{display_host}:{settings.port}"
@@ -189,6 +214,11 @@ def main() -> None:
     from jarvis.persistence import serve_with_claim
 
     def bind(*, host, port):
+        # Credentials in a query string must not reach the access log; the
+        # Google callback carries an authorization code in exactly that form.
+        from jarvis.log_safety import install as install_log_safety
+
+        install_log_safety()
         uvicorn.run(app, host=host, port=port, log_level="info", **ssl_kwargs)
 
     # Claim the data directory for the lifetime of this process, so a login item and a panel

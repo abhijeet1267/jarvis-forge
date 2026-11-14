@@ -356,6 +356,20 @@ class TaskManager:
             )
         return moved
 
+    def jobs_with_status(self, status: str, limit: int = 20) -> List[Dict[str, Any]]:
+        """Jobs in one named state, newest first.
+
+        `incomplete` is deliberately *not* included by callers that surface "needs
+        attention": a plan that stopped is worth seeing on the Work page, but this
+        machine holds twelve stale test jobs in that state, and a list of those
+        would bury the one that matters.
+        """
+        rows = self.db.query(
+            "SELECT * FROM tasks WHERE status = ? ORDER BY created_at DESC LIMIT ?",
+            (status, limit),
+        )
+        return [dict(r) for r in rows]
+
     def failed_jobs(self, limit: int = 20) -> List[Dict[str, Any]]:
         rows = self.db.query(
             "SELECT * FROM tasks WHERE status = 'failed' ORDER BY created_at DESC LIMIT ?",

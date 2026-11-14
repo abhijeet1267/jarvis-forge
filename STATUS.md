@@ -3,6 +3,28 @@
 **Version:** v1.8 · **Generated:** 24 September 2026
 **Location:** `/Users/abhijeetmiskin/AppData/aisys/jarvis-forge/`
 
+> **Current measured state — 12 October 2026** (this v1.8 section below is the
+> 24 September snapshot; the table there predates Phases 71-97 and its "976 tests"
+> figure is long stale). Re-measured on the current tree with
+> `.venv/bin/python -m pytest -q -p no:cacheprovider` (per-file, so a network hang
+> cannot poison the total; 2734 tests collected): **2714 passed, 0 failed, 20
+> skipped, 0 errors, 0 hanging.** Every test in the committed suite passes. The 20
+> skips are all genuine external prerequisites (none is a converted failure): the
+> Phase 91-97 WIP files' tests that need macOS Accessibility / permissions / a
+> microphone / a Playwright browser / an interactive desktop / a physical device,
+> two committed Phase 72 credential tests (the `keyring` package is not installed),
+> one optional live-OpenAI test (skips without an API key), and one Phase 97
+> browser-viewport test. Phase 97's WIP test file was rewritten against the real,
+> shipped phone→Mac workflow (`/auth/session` + the `"phone"` surface +
+> `PairingManager.request`/`approve` + revocation) rather than a parallel
+> `PhoneWorkflowBridge` that does not exist. The packaged `dist/Vantage.app`
+> (v0.2.0, `com.jarvisforge.app`, ad-hoc signed) launches and serves; the
+> AI-provider settings flow and phone cookie-auth were verified end-to-end in the
+> bundle. Phases 74-90 have **no** full-suite number in
+> `benchmarks/suite_history.json` — they are in progress and their reports record no
+> measured full-suite run, so no number is transcribed for them (the chart stops at
+> the newest phase that actually ran the suite: 71, 2510/2510).
+
 A permissioned, multi-agent personal AI operating system. Built from
 `JARVIS_Forge_Full_Working_Plan.md`.
 
@@ -13,32 +35,32 @@ plan. Where something does not work, it says so.
 
 ## 1. Health at a glance
 
-| Check | Result |
-|---|---|
-| Test suite | **976 collected → 975 passing, 1 skipped** (the live arXiv test skips itself when the network refuses) |
-| Server | **running** on `127.0.0.1:8765` |
-| Tools registered | **126** |
-| API endpoints | **100** paths |
-| Agents | **15** — laptop, laptop_center, memory, phone, email, calendar, scheduler, research, coding, design, vision, home, robotics, car, watch |
-| Audit chain | **intact** (161 records verified) |
-| API token | present, mode `0600` |
-| Desktop app | rebuilt 25 Sep (544K), **signature valid**; self-test **7/9** — the two failures are microphone consent and Developer-ID speech, both correctly named |
-| Voice — text to speech | **working** (`macos_say`) |
-| Voice — speech to text | fallback (`transcript`) — see §7 |
-| Email | **working** (local maildir; IMAP/SMTP when configured) |
-| Calendar | **working** (local SQLite; CalDAV when configured) |
-| Scheduler | **working** — recurring jobs, permission-ceiling enforced |
-| Memory retrieval | **hybrid** — keyword + vector, fused with RRF |
-| Research | **working** — arXiv (real), citations never fabricated |
-| Coding Agent | **working** — workspace-bounded, no delete path, no push |
-| Design Agent | **working** — real SVG/HTML/Markdown artifacts |
-| Vision Agent | real OCR + measurement, never acts — **OCR helper intermittent today** (see §8) |
-| Home / IoT | **honest offline** — 5 tools wired; gateway down ⇒ "No device was switched.", never a fake toggle |
-| Robotics | **honest offline** — 5 tools wired; gateway down ⇒ "no motion command was sent", never a fake move (PHYSICAL ⇒ confirmation) |
-| Car / vehicle | **honest offline** — 5 read-only tools wired; no adapter ⇒ "I cannot read live telemetry yet", never an invented number |
-| Watch / companion | **honest queue** — 6 tools + 4 companion routes wired; unpaired ⇒ "nothing was sent"; only the wearer's reply decides a confirmation |
-| Microphone | **3 real inputs present; capture blocked by macOS consent** — measured, not assumed (see §8) |
-| Source | 126 modules · ~29700 lines · 26 test files |
+| Check                  | Result                                                                                                                                                |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Test suite             | **976 collected → 975 passing, 1 skipped** (the live arXiv test skips itself when the network refuses)                                                |
+| Server                 | **running** on `127.0.0.1:8765`                                                                                                                       |
+| Tools registered       | **126**                                                                                                                                               |
+| API endpoints          | **100** paths                                                                                                                                         |
+| Agents                 | **15** — laptop, laptop_center, memory, phone, email, calendar, scheduler, research, coding, design, vision, home, robotics, car, watch               |
+| Audit chain            | **intact** (161 records verified)                                                                                                                     |
+| API token              | present, mode `0600`                                                                                                                                  |
+| Desktop app            | rebuilt 25 Sep (544K), **signature valid**; self-test **7/9** — the two failures are microphone consent and Developer-ID speech, both correctly named |
+| Voice — text to speech | **working** (`macos_say`)                                                                                                                             |
+| Voice — speech to text | fallback (`transcript`) — see §7                                                                                                                      |
+| Email                  | **working** (local maildir; IMAP/SMTP when configured)                                                                                                |
+| Calendar               | **working** (local SQLite; CalDAV when configured)                                                                                                    |
+| Scheduler              | **working** — recurring jobs, permission-ceiling enforced                                                                                             |
+| Memory retrieval       | **hybrid** — keyword + vector, fused with RRF                                                                                                         |
+| Research               | **working** — arXiv (real), citations never fabricated                                                                                                |
+| Coding Agent           | **working** — workspace-bounded, no delete path, no push                                                                                              |
+| Design Agent           | **working** — real SVG/HTML/Markdown artifacts                                                                                                        |
+| Vision Agent           | real OCR + measurement, never acts — **OCR helper intermittent today** (see §8)                                                                       |
+| Home / IoT             | **honest offline** — 5 tools wired; gateway down ⇒ "No device was switched.", never a fake toggle                                                     |
+| Robotics               | **honest offline** — 5 tools wired; gateway down ⇒ "no motion command was sent", never a fake move (PHYSICAL ⇒ confirmation)                          |
+| Car / vehicle          | **honest offline** — 5 read-only tools wired; no adapter ⇒ "I cannot read live telemetry yet", never an invented number                               |
+| Watch / companion      | **honest queue** — 6 tools + 4 companion routes wired; unpaired ⇒ "nothing was sent"; only the wearer's reply decides a confirmation                  |
+| Microphone             | **3 real inputs present; capture blocked by macOS consent** — measured, not assumed (see §8)                                                          |
+| Source                 | 126 modules · ~29700 lines · 26 test files                                                                                                            |
 
 ---
 
@@ -133,26 +155,26 @@ privacy and health panels.
 Captured from the running system on 19 Sep 2026, with the car and watch rows
 re-captured live on 23 Sep 2026 and the microphone row on 24 Sep 2026.
 
-| Command | Decision | Response |
-|---|---|---|
-| `what is my battery` | EXECUTE | "Your laptop battery is at 52% (charging)." |
-| `what time is it` | EXECUTE | "It is 22:33 on Saturday, 19 September 2026." |
-| `system status` | EXECUTE | "System looks healthy: 8 CPUs, load …" |
-| `find my report` | EXECUTE | "I found 229 file(s) matching 'report'. Most recent: …" |
-| `check my car` | EXECUTE | "Your car adapter is not connected, so I cannot read live telemetry yet (no car adapter or vehicle API is configured)." |
-| `check my car fuel` | EXECUTE | "I could not read those car values (no car adapter or vehicle API is configured)." |
-| `check my car diagnostics` | EXECUTE | "I cannot read the car's diagnostic codes (no car adapter or vehicle API is configured)." — never "no faults stored" |
-| `how is my watch` (unpaired) | EXECUTE | "Your watch is not paired yet (pairing state: unpaired), so there is nothing to report from it." |
-| `notify my watch "build finished"` (paired, no bridge) | EXECUTE | "Notification "build finished" is queued on the laptop, not delivered. Nothing has reached your watch yet." |
-| `ask my watch to confirm` | EXECUTE | "Confirmation prompt "copy_file on laptop_main | …" is queued on the laptop, not delivered. Answer it on the watch, or approve it here." |
-| `POST /watch/reply {decision: CONFIRM}` | — | "Copied watch-src.txt to /private/tmp/…/watch-dst.txt." — the file exists only after the wearer answered |
-| `listen_and_respond(2s)` (real voice path) | REJECT | "macOS has denied this app the microphone. Enable it in System Settings -> Privacy & Security -> Microphone, then restart it." — refused in **0.96s** warm (11.6s the first time ever, while the helper is compiled), and `ffmpeg` was never spawned; before this pass the same call launched capture, waited out a 17s timeout, then guessed at the cause |
-| `give me today's location summary` | EXECUTE | "Location history for today is not available: location tracking is disabled." |
-| `send an email to my teammate` | EXECUTE | "I can search your mail, read a message, summarise recent ones, draft a reply, or send something you have already drafted. For example: "check my unread emails"…" — re-captured 25 Sep: the local maildir is live, so the old "email is not configured yet" line would itself have been false |
-| `transfer this file to my phone` | EXECUTE | "I will not guess which file to send. Tell me the exact file, for example: "send /tmp/report.pdf to my phone"." |
-| `plan my day` | EXECUTE | "Your today is clear." — the local calendar answers; it does not claim a sync it has not done |
-| `delete everything` | **BLOCK** | "I will not do that automatically: blanket delete request." |
-| `stop everything` | EXECUTE | "Emergency stop engaged. Physical actions cancelled; safety controllers remain active." |
+| Command                                                | Decision  | Response                                                                                                                                                                                                                                                                                                                                                   |
+| ------------------------------------------------------ | --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `what is my battery`                                   | EXECUTE   | "Your laptop battery is at 52% (charging)."                                                                                                                                                                                                                                                                                                                |
+| `what time is it`                                      | EXECUTE   | "It is 22:33 on Saturday, 19 September 2026."                                                                                                                                                                                                                                                                                                              |
+| `system status`                                        | EXECUTE   | "System looks healthy: 8 CPUs, load …"                                                                                                                                                                                                                                                                                                                     |
+| `find my report`                                       | EXECUTE   | "I found 229 file(s) matching 'report'. Most recent: …"                                                                                                                                                                                                                                                                                                    |
+| `check my car`                                         | EXECUTE   | "Your car adapter is not connected, so I cannot read live telemetry yet (no car adapter or vehicle API is configured)."                                                                                                                                                                                                                                    |
+| `check my car fuel`                                    | EXECUTE   | "I could not read those car values (no car adapter or vehicle API is configured)."                                                                                                                                                                                                                                                                         |
+| `check my car diagnostics`                             | EXECUTE   | "I cannot read the car's diagnostic codes (no car adapter or vehicle API is configured)." — never "no faults stored"                                                                                                                                                                                                                                       |
+| `how is my watch` (unpaired)                           | EXECUTE   | "Your watch is not paired yet (pairing state: unpaired), so there is nothing to report from it."                                                                                                                                                                                                                                                           |
+| `notify my watch "build finished"` (paired, no bridge) | EXECUTE   | "Notification "build finished" is queued on the laptop, not delivered. Nothing has reached your watch yet."                                                                                                                                                                                                                                                |
+| `ask my watch to confirm`                              | EXECUTE   | "Confirmation prompt "copy_file on laptop_main                                                                                                                                                                                                                                                                                                             | …" is queued on the laptop, not delivered. Answer it on the watch, or approve it here." |
+| `POST /watch/reply {decision: CONFIRM}`                | —         | "Copied watch-src.txt to /private/tmp/…/watch-dst.txt." — the file exists only after the wearer answered                                                                                                                                                                                                                                                   |
+| `listen_and_respond(2s)` (real voice path)             | REJECT    | "macOS has denied this app the microphone. Enable it in System Settings -> Privacy & Security -> Microphone, then restart it." — refused in **0.96s** warm (11.6s the first time ever, while the helper is compiled), and `ffmpeg` was never spawned; before this pass the same call launched capture, waited out a 17s timeout, then guessed at the cause |
+| `give me today's location summary`                     | EXECUTE   | "Location history for today is not available: location tracking is disabled."                                                                                                                                                                                                                                                                              |
+| `send an email to my teammate`                         | EXECUTE   | "I can search your mail, read a message, summarise recent ones, draft a reply, or send something you have already drafted. For example: "check my unread emails"…" — re-captured 25 Sep: the local maildir is live, so the old "email is not configured yet" line would itself have been false                                                             |
+| `transfer this file to my phone`                       | EXECUTE   | "I will not guess which file to send. Tell me the exact file, for example: "send /tmp/report.pdf to my phone"."                                                                                                                                                                                                                                            |
+| `plan my day`                                          | EXECUTE   | "Your today is clear." — the local calendar answers; it does not claim a sync it has not done                                                                                                                                                                                                                                                              |
+| `delete everything`                                    | **BLOCK** | "I will not do that automatically: blanket delete request."                                                                                                                                                                                                                                                                                                |
+| `stop everything`                                      | EXECUTE   | "Emergency stop engaged. Physical actions cancelled; safety controllers remain active."                                                                                                                                                                                                                                                                    |
 
 Note the pattern: capabilities that are not connected say so explicitly rather
 than reporting a fake success.
@@ -162,12 +184,14 @@ than reporting a fake success.
 ## 5. What is done and working
 
 ### Interfaces
+
 - [x] **Voice** — wake word, TTS, STT, barge-in interruption, follow-up context
 - [x] **Text CLI** — interactive REPL with slash commands
 - [x] **Web dashboard** — devices, peripherals, tools, tasks, memory, audit, confirmations, voice, privacy, health panels
 - [x] **macOS desktop app** — double-click `.app`, control window, auto-opens dashboard, clean shutdown
 
 ### Phone / device (v0.6)
+
 - [x] **Pairing** — device requests, user approves, trust granted, revocable
 - [x] **Device identity** — 256-bit key, human-verifiable fingerprint, key material `0600`
 - [x] **Encrypted transfer** — TLS (openssl) + HMAC-SHA256 device auth
@@ -177,6 +201,7 @@ than reporting a fake success.
 - [x] **Cancellation, size limits, handshake timeout, transfer history**
 
 ### Email + Calendar (v0.7)
+
 - [x] **Email read** — search, read, summarise; unread filtering
 - [x] **Email draft** — composes and saves; **never sends**
 - [x] **Email send** — Level 3, always confirmed, never inferred
@@ -188,6 +213,7 @@ than reporting a fake success.
 - [x] **Two backends each** — local by default, remote when configured
 
 ### Scheduler + briefing (v0.8)
+
 - [x] **Recurring jobs** — "every morning", "every Monday at 9 AM", "every 30 minutes"
 - [x] **One-off reminders** — "remind me at 8 PM to …"
 - [x] **Permission ceiling per job** — a schedule cannot raise its own authority
@@ -197,6 +223,7 @@ than reporting a fake success.
 - [x] **Background loop** — runs while the server is up
 
 ### Advanced memory (v0.9)
+
 - [x] **Vector memory** — dependency-free lexical embeddings, no model download
 - [x] **Hybrid retrieval** — keyword + vector fused with reciprocal rank fusion
 - [x] **Keyword fallback** — search still works if vectors are unavailable
@@ -207,6 +234,7 @@ than reporting a fake success.
 - [x] **Startup backfill** — pre-v0.9 memories get vectors automatically
 
 ### Home / IoT Agent (v1.5)
+
 - [x] **Status, device list, sensor readings** — `get_home_status`, `list_home_devices`,
       `get_home_reading` (Level 0)
 - [x] **Control + routines** — `control_home_device`, `run_home_routine` (Level 1, reversible)
@@ -218,6 +246,7 @@ than reporting a fake success.
       map to real home tools
 
 ### Robotics / sensor-fleet Agent (v1.6)
+
 - [x] **Status, fleet list, telemetry** — `get_robot_status`, `list_robots`,
       `get_robot_telemetry` (Level 0)
 - [x] **Motion + experiments** — `command_robot_motion`, `run_experiment`
@@ -232,6 +261,7 @@ than reporting a fake success.
       is untouched
 
 ### Car / vehicle Agent (v1.7)
+
 - [x] **Status, telemetry, capabilities, diagnostics, service** — `get_car_status`,
       `get_car_telemetry`, `list_car_metrics`, `get_car_diagnostics`,
       `get_car_service_status` (all Level 0)
@@ -252,7 +282,7 @@ than reporting a fake success.
       never report "no faults stored"
 - [x] **Honest reachability** — offline by default ⇒ "Your car adapter is not
       connected, so I cannot read live telemetry yet"; values from the last live read
-      are labelled *last known*, and a source that goes silent mid-session keeps its
+      are labelled _last known_, and a source that goes silent mid-session keeps its
       reason instead of pretending to be current
 - [x] **Deterministic in tests** — `JARVIS_CAR_SIMULATE` exposes a partial, clearly
       labelled vehicle; `JARVIS_CAR_OBD` / `JARVIS_CAR_API_URL` take real transports
@@ -262,6 +292,7 @@ than reporting a fake success.
       agents
 
 ### Watch / companion Agent (v1.8)
+
 - [x] **Status, outbox, notification, haptics, confirmation, routines** —
       `get_watch_status`, `get_watch_outbox`, `send_watch_notification`,
       `vibrate_watch`, `ask_watch_confirmation`, `run_watch_routine`
@@ -269,7 +300,7 @@ than reporting a fake success.
       `/watch/reply` (all token-protected); a smartwatch is not something this
       process can dial, so nothing pretends otherwise
 - [x] **Delivery is staged because the stages differ** — `queued → delivered →
-      displayed → replied`. Taking an item proves the companion holds it, not that
+displayed → replied`. Taking an item proves the companion holds it, not that
       the screen showed it
 - [x] **"Never shown" ≠ "said no"** — `ack(displayed=false)` records a note and
       leaves the prompt unanswered; dismissing is an explicit DISMISSED reply
@@ -298,6 +329,7 @@ than reporting a fake success.
       as a verb ("watch this folder") and "what is my battery" stay unclaimed
 
 ### Vision Agent (v1.3)
+
 - [x] **Real OCR** — macOS Vision framework via a cached Swift helper, with
       bounding boxes and confidences
 - [x] **Image measurement** — size, format, dominant colours, brightness, contrast
@@ -307,12 +339,13 @@ than reporting a fake success.
       vision stops at PROPOSE. Asserted structurally by a test.
 - [x] **Degrades instead of stalling** — a recogniser that misses its 20 s bound
       is left alone for 45 s, each timed-out read says "no text was read", and
-      `/health` reports *present* and *answering* separately (a cached binary is
+      `/health` reports _present_ and _answering_ separately (a cached binary is
       not a working one)
 - [x] **Honest about content** — with no vision model configured, JARVIS says it
       can measure and read text but cannot describe what is depicted
 
 ### Design Agent (v1.2)
+
 - [x] **Architecture / system diagrams** — real, parseable SVG (verified by tests)
 - [x] **Flowcharts** — SVG, with decision diamonds
 - [x] **UI concepts** — self-contained HTML wireframes, work offline
@@ -325,6 +358,7 @@ than reporting a fake success.
 - [x] **Permissioned integrations** — none enabled by default
 
 ### Coding Agent (v1.1)
+
 - [x] **Workspace boundary** — every path checked; escapes, traversal and
       symlinks leaving the root are refused
 - [x] **Inspect and search** — structure, languages, test files, code search
@@ -337,6 +371,7 @@ than reporting a fake success.
 - [x] **Commit only when authorised**, and **push is not implemented**
 
 ### Research Agent (v1.0)
+
 - [x] **Approved sources** — arXiv (real API, no key) + local corpus; offline fallback
 - [x] **Never fabricates citations** — a paper enters only via a real backend or
       explicit user addition; citing an unstored id returns 404, never a guess
@@ -350,6 +385,7 @@ than reporting a fake success.
 - [x] **Graph links** — papers connect to projects as `paper` nodes
 
 ### Core pipeline
+
 - [x] **Orchestrator** — `Intent → Plan → Permission → Tool → Execution → Verification → Memory → Response`
 - [x] **Planner** — deterministic rule engine, **works offline with no API key**
 - [x] **Recovery** — retry if safe → alternative tool → escalate → record
@@ -357,31 +393,34 @@ than reporting a fake success.
 
 ### 126 tools across 15 agents
 
-| Tier | Tools |
-|---|---|
-| **0 read** | `get_time`, `system_status`, `battery_status`, `list_apps`, `list_directory`, `read_file`, `search_files`, `get_car_status`, `get_car_telemetry`, `list_car_metrics`, `get_car_diagnostics`, `get_car_service_status`, `laptop_snapshot`, `laptop_processes`, `laptop_project_status`, `get_location_summary`, `list_devices`, `get_device_status`, `get_device_capabilities`, `ping_device`, `get_transfer_status`, `search_email`, `read_email`, `summarize_email`, `list_events`, `search_events`, `next_event`, `find_free_time`, `daily_schedule`, `list_schedules`, `get_schedule`, `daily_briefing`, `list_papers`, `cite_paper`, `compare_papers`, `extract_paper_methods`, `extract_paper_datasets`, `extract_paper_limitations`, `find_research_gaps`, `research_brief`, `inspect_workspace`, `list_workspaces`, `search_code`, `coding_report`, `analyze_design`, `design_integrations`, `list_design_assets`, `read_design_asset`, `inspect_image`, `read_image_text`, `find_image_text`, `capture_screen`, `compare_images`, `vision_capabilities`, `get_home_status`, `list_home_devices`, `get_home_reading`, `get_robot_status`, `list_robots`, `get_robot_telemetry`, `get_watch_status`, `get_watch_outbox` |
-| **1 low** | `open_app`, `close_app`, `take_screenshot`, `compress_path`, `cancel_transfer`, `draft_email`, `pause_schedule`, `resume_schedule`, `search_papers`, `add_paper`, `add_research_note`, `link_paper_to_project`, `open_workspace`, `close_workspace`, `propose_code_change`, `create_architecture_diagram`, `create_flowchart`, `create_ui_concept`, `create_documentation`, `create_presentation`, `link_asset_to_project`, `control_home_device`, `run_home_routine`, `build_agent_prompt`, `send_watch_notification`, `vibrate_watch`, `ask_watch_confirmation`, `run_watch_routine` |
-| **2 external** (confirm) | `copy_file`, `move_file`, `run_allowlisted_command`, `send_to_device`, `register_phone`, `create_event`, `update_event`, **`schedule_task`**, `run_schedule_now`, **`apply_code_change`**, `run_workspace_tests` |
-| **3 destructive** (confirm) | `delete_file` (Trash), `approve_pairing`, `remove_phone`, `send_email`, `cancel_event`, `cancel_schedule`, `forget_memory`, `clear_memory_scope`, `forget_paper`, `delete_design_asset` |
-| **4 physical** | `emergency_stop` (always allowed, never gated) · `command_robot_motion`, `run_experiment` (confirmation-gated) |
-| **memory agent** | `remember_fact`, `search_memory`, `create_project`, `add_project_node`, `explain_failures`, `project_summary` |
+| Tier                        | Tools                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **0 read**                  | `get_time`, `system_status`, `battery_status`, `list_apps`, `list_directory`, `read_file`, `search_files`, `get_car_status`, `get_car_telemetry`, `list_car_metrics`, `get_car_diagnostics`, `get_car_service_status`, `laptop_snapshot`, `laptop_processes`, `laptop_project_status`, `get_location_summary`, `list_devices`, `get_device_status`, `get_device_capabilities`, `ping_device`, `get_transfer_status`, `search_email`, `read_email`, `summarize_email`, `list_events`, `search_events`, `next_event`, `find_free_time`, `daily_schedule`, `list_schedules`, `get_schedule`, `daily_briefing`, `list_papers`, `cite_paper`, `compare_papers`, `extract_paper_methods`, `extract_paper_datasets`, `extract_paper_limitations`, `find_research_gaps`, `research_brief`, `inspect_workspace`, `list_workspaces`, `search_code`, `coding_report`, `analyze_design`, `design_integrations`, `list_design_assets`, `read_design_asset`, `inspect_image`, `read_image_text`, `find_image_text`, `capture_screen`, `compare_images`, `vision_capabilities`, `get_home_status`, `list_home_devices`, `get_home_reading`, `get_robot_status`, `list_robots`, `get_robot_telemetry`, `get_watch_status`, `get_watch_outbox` |
+| **1 low**                   | `open_app`, `close_app`, `take_screenshot`, `compress_path`, `cancel_transfer`, `draft_email`, `pause_schedule`, `resume_schedule`, `search_papers`, `add_paper`, `add_research_note`, `link_paper_to_project`, `open_workspace`, `close_workspace`, `propose_code_change`, `create_architecture_diagram`, `create_flowchart`, `create_ui_concept`, `create_documentation`, `create_presentation`, `link_asset_to_project`, `control_home_device`, `run_home_routine`, `build_agent_prompt`, `send_watch_notification`, `vibrate_watch`, `ask_watch_confirmation`, `run_watch_routine`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| **2 external** (confirm)    | `copy_file`, `move_file`, `run_allowlisted_command`, `send_to_device`, `register_phone`, `create_event`, `update_event`, **`schedule_task`**, `run_schedule_now`, **`apply_code_change`**, `run_workspace_tests`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| **3 destructive** (confirm) | `delete_file` (Trash), `approve_pairing`, `remove_phone`, `send_email`, `cancel_event`, `cancel_schedule`, `forget_memory`, `clear_memory_scope`, `forget_paper`, `delete_design_asset`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| **4 physical**              | `emergency_stop` (always allowed, never gated) · `command_robot_motion`, `run_experiment` (confirmation-gated)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| **memory agent**            | `remember_fact`, `search_memory`, `create_project`, `add_project_node`, `explain_failures`, `project_summary`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 
 Agents: **laptop**, **laptop_center**, **memory**, **phone**, **email**, **calendar**, **scheduler**, **research**, **coding**, **design**, **vision**, **home**, **robotics**, **car**, **watch**.
 
 ### Memory
+
 - [x] Three scopes: short-term / long-term / project
 - [x] **Project-state graph** — links components, experiments, failures, fixes
 - [x] BM25-style recall with stopword removal and stemming
 
 ### Safety
+
 - [x] **Permission engine is the only authoriser** — agents cannot bypass it
 - [x] Three outcomes: `EXECUTE` / `CONFIRM` / `BLOCK`
-- [x] **Phrasing guard** — "delete everything", `sudo rm -rf /`, "unlock the door" refused *before* planning
+- [x] **Phrasing guard** — "delete everything", `sudo rm -rf /`, "unlock the door" refused _before_ planning
 - [x] **Path guard** — system roots, credentials, and persistence paths (`~/.zshrc`, `~/Library/LaunchAgents`)
 - [x] **No unrestricted shell** — explicit argv, interpreters excluded by default
 - [x] Approvals expire; IDs carry 128 bits
 
 ### Security
+
 - [x] **Token auth** on every endpoint (auto-generated, `0600`)
 - [x] **Strict CORS** — never `*`
 - [x] **DNS-rebinding protection** — loopback `Host` check
@@ -389,11 +428,13 @@ Agents: **laptop**, **laptop_center**, **memory**, **phone**, **email**, **calen
 - [x] **Tamper-evident audit log** — hash-chained with `verify_chain()`
 
 ### Privacy
+
 - [x] **Redaction always on** — credentials stripped before the audit log or a model prompt
 - [x] **Privacy mode** — masks identifiers, collapses `$HOME` → `~`
 - [x] **Data export** (redacted by default) and **scoped deletion** requiring confirmation
 
 ### Resilience & observability
+
 - [x] **Recoveries are always reported**, never hidden behind a clean success
 - [x] `/metrics`, `/failures`, audit chain state
 - [x] **`/health.peripherals`** — each hardware-facing gateway reports its own
@@ -410,34 +451,34 @@ Agents: **laptop**, **laptop_center**, **memory**, **phone**, **email**, **calen
 
 **954 tests — 953 passing, 1 skipping itself when arXiv is unreachable.**
 
-| Test file | Tests | Covers |
-|---|---|---|
-| `test_api.py` | 67 | Every endpoint, auth, CORS, host check, streaming, and the `/health` peripheral report (including that a broken gateway cannot take health down) |
-| `test_security.py` | 52 | Rate limiting, confirmation expiry, protected paths, allowlist, audit tampering |
-| `test_voice.py` | 58 | Wake word, TTS, STT, session, follow-ups, barge-in, and measured microphone consent (installed ≠ permitted ≠ unreadable, plus non-blocking probe semantics) |
-| `test_pipeline.py` | 28 | Full loop, safety suite, recovery integration |
-| `test_planner.py` | 27 | Intent mapping, path case, search routing |
-| `test_recovery.py` | 22 | Retry policy, destructive-action safety, fallbacks |
-| `test_privacy.py` | 22 | Redaction, export, deletion scoping |
-| `test_risk.py` | 18 | Risk classification, command guard |
-| `test_paths.py` | 15 | Protected vs safe paths |
-| `test_policy.py` | 13 | Permission decisions, grants, revocations |
-| `test_registry.py` | 6 | Tool, device and app registries |
-| `test_memory.py` | 6 | Memory store and project graph |
-| `test_transfer.py` | 17 | TLS transfer, checksums, overwrite, revocation, state machine |
-| `test_phone.py` | 38 | Pairing lifecycle, tool surface, policy guards, planner routing |
-| `test_email_calendar.py` | 52 | Mailbox read/draft/send, recipient resolution, calendar CRUD, ICS round-trip, policy gating |
-| `test_scheduler.py` | 48 | Schedule parsing, RRULE round-trip, job lifecycle, the no-escalation rule, briefing sections |
-| `test_memory_advanced.py` | 60 | Embeddings, cosine, vector index, RRF fusion, keyword fallback, memory types, expiry, controls |
-| `test_research.py` | 50 | Paper store, the no-fabricated-citation rule, claim provenance, extraction, gaps, briefs |
-| `test_coding.py` | 46 | Workspace boundary, escape/symlink refusal, propose-then-apply, no delete path, commit authorisation |
-| `test_design.py` | 50 | SVG/HTML/Markdown validity, asset store containment, design analysis, integration policy |
-| `test_vision.py` | 48 | Real OCR, image measurement, image diff, the guarantee that vision has no action tools, and OCR timeout/cooldown (a stalled recogniser reports "no text was read" instead of stalling every later question) |
-| `test_home.py` | 29 | Home gateway domain, read/write tools (offline, simulated, online-unverified), planner routing, e2e honest-offline |
-| `test_robotics.py` | 30 | Robotics gateway domain, read/write tools (offline, simulated, online-unverified), name resolve/ambiguity, planner routing (robot motion vs file move), e2e honest-offline + PHYSICAL confirmation |
-| `test_car.py` | 84 | J1979 decoders vs hand-computed vectors, DTC bit layout, PID-support probing, an ELM327 session over a real socket, manufacturer-API capability gating, last-known labelling, read-only guarantee, non-probing `posture()` for polled endpoints, planner routing, e2e honest-offline |
-| `test_watch.py` | 65 | Staged delivery never collapsed, unshown ≠ declined, queued prompts unanswerable, simulate delivers but cannot approve, bridge confirmed-vs-unconfirmed vs unreachable (incl. a real localhost server), pairing gate, wrist tap resolving a live confirmation and moving a file, confirmation-channel wiring, planner routing, tool surface |
-| `test_laptop_center.py` | 25 | Machine snapshot / processes / projects, handoff-prompt composition, planner anti-theft rules |
+| Test file                 | Tests | Covers                                                                                                                                                                                                                                                                                                                                      |
+| ------------------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `test_api.py`             | 67    | Every endpoint, auth, CORS, host check, streaming, and the `/health` peripheral report (including that a broken gateway cannot take health down)                                                                                                                                                                                            |
+| `test_security.py`        | 52    | Rate limiting, confirmation expiry, protected paths, allowlist, audit tampering                                                                                                                                                                                                                                                             |
+| `test_voice.py`           | 58    | Wake word, TTS, STT, session, follow-ups, barge-in, and measured microphone consent (installed ≠ permitted ≠ unreadable, plus non-blocking probe semantics)                                                                                                                                                                                 |
+| `test_pipeline.py`        | 28    | Full loop, safety suite, recovery integration                                                                                                                                                                                                                                                                                               |
+| `test_planner.py`         | 27    | Intent mapping, path case, search routing                                                                                                                                                                                                                                                                                                   |
+| `test_recovery.py`        | 22    | Retry policy, destructive-action safety, fallbacks                                                                                                                                                                                                                                                                                          |
+| `test_privacy.py`         | 22    | Redaction, export, deletion scoping                                                                                                                                                                                                                                                                                                         |
+| `test_risk.py`            | 18    | Risk classification, command guard                                                                                                                                                                                                                                                                                                          |
+| `test_paths.py`           | 15    | Protected vs safe paths                                                                                                                                                                                                                                                                                                                     |
+| `test_policy.py`          | 13    | Permission decisions, grants, revocations                                                                                                                                                                                                                                                                                                   |
+| `test_registry.py`        | 6     | Tool, device and app registries                                                                                                                                                                                                                                                                                                             |
+| `test_memory.py`          | 6     | Memory store and project graph                                                                                                                                                                                                                                                                                                              |
+| `test_transfer.py`        | 17    | TLS transfer, checksums, overwrite, revocation, state machine                                                                                                                                                                                                                                                                               |
+| `test_phone.py`           | 38    | Pairing lifecycle, tool surface, policy guards, planner routing                                                                                                                                                                                                                                                                             |
+| `test_email_calendar.py`  | 52    | Mailbox read/draft/send, recipient resolution, calendar CRUD, ICS round-trip, policy gating                                                                                                                                                                                                                                                 |
+| `test_scheduler.py`       | 48    | Schedule parsing, RRULE round-trip, job lifecycle, the no-escalation rule, briefing sections                                                                                                                                                                                                                                                |
+| `test_memory_advanced.py` | 60    | Embeddings, cosine, vector index, RRF fusion, keyword fallback, memory types, expiry, controls                                                                                                                                                                                                                                              |
+| `test_research.py`        | 50    | Paper store, the no-fabricated-citation rule, claim provenance, extraction, gaps, briefs                                                                                                                                                                                                                                                    |
+| `test_coding.py`          | 46    | Workspace boundary, escape/symlink refusal, propose-then-apply, no delete path, commit authorisation                                                                                                                                                                                                                                        |
+| `test_design.py`          | 50    | SVG/HTML/Markdown validity, asset store containment, design analysis, integration policy                                                                                                                                                                                                                                                    |
+| `test_vision.py`          | 48    | Real OCR, image measurement, image diff, the guarantee that vision has no action tools, and OCR timeout/cooldown (a stalled recogniser reports "no text was read" instead of stalling every later question)                                                                                                                                 |
+| `test_home.py`            | 29    | Home gateway domain, read/write tools (offline, simulated, online-unverified), planner routing, e2e honest-offline                                                                                                                                                                                                                          |
+| `test_robotics.py`        | 30    | Robotics gateway domain, read/write tools (offline, simulated, online-unverified), name resolve/ambiguity, planner routing (robot motion vs file move), e2e honest-offline + PHYSICAL confirmation                                                                                                                                          |
+| `test_car.py`             | 84    | J1979 decoders vs hand-computed vectors, DTC bit layout, PID-support probing, an ELM327 session over a real socket, manufacturer-API capability gating, last-known labelling, read-only guarantee, non-probing `posture()` for polled endpoints, planner routing, e2e honest-offline                                                        |
+| `test_watch.py`           | 65    | Staged delivery never collapsed, unshown ≠ declined, queued prompts unanswerable, simulate delivers but cannot approve, bridge confirmed-vs-unconfirmed vs unreachable (incl. a real localhost server), pairing gate, wrist tap resolving a live confirmation and moving a file, confirmation-channel wiring, planner routing, tool surface |
+| `test_laptop_center.py`   | 25    | Machine snapshot / processes / projects, handoff-prompt composition, planner anti-theft rules                                                                                                                                                                                                                                               |
 
 ---
 
@@ -445,18 +486,18 @@ Agents: **laptop**, **laptop_center**, **memory**, **phone**, **email**, **calen
 
 Each of these was confirmed against the running server:
 
-| Attack | Result |
-|---|---|
-| Cross-origin POST from `evil.example.com` | **401 blocked** |
-| Unauthenticated `/audit`, `/metrics` | **401 blocked** |
-| DNS-rebinding `Host` header | **400 blocked** |
-| `Access-Control-Allow-Origin` for a foreign origin | **none** (never `*`) |
-| "delete everything" / `sudo rm -rf /` | **BLOCK** |
-| Writing `~/.zshrc` or a LaunchAgent | **BLOCK** |
-| `python3 -c '…'` via the command tool | **refused** (interpreters off the allowlist) |
-| Unauthenticated `POST /watch/reply` (the approval path) | **401 blocked** |
-| Answering a confirmation the watch was never given | **refused** — "has not reached your watch, so there is nothing to answer yet" |
-| A watch tool trying to approve its own prompt | **no such tool exists** — asserted by `test_no_tool_can_resolve_a_confirmation` |
+| Attack                                                  | Result                                                                          |
+| ------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| Cross-origin POST from `evil.example.com`               | **401 blocked**                                                                 |
+| Unauthenticated `/audit`, `/metrics`                    | **401 blocked**                                                                 |
+| DNS-rebinding `Host` header                             | **400 blocked**                                                                 |
+| `Access-Control-Allow-Origin` for a foreign origin      | **none** (never `*`)                                                            |
+| "delete everything" / `sudo rm -rf /`                   | **BLOCK**                                                                       |
+| Writing `~/.zshrc` or a LaunchAgent                     | **BLOCK**                                                                       |
+| `python3 -c '…'` via the command tool                   | **refused** (interpreters off the allowlist)                                    |
+| Unauthenticated `POST /watch/reply` (the approval path) | **401 blocked**                                                                 |
+| Answering a confirmation the watch was never given      | **refused** — "has not reached your watch, so there is nothing to answer yet"   |
+| A watch tool trying to approve its own prompt           | **no such tool exists** — asserted by `test_no_tool_can_resolve_a_confirmation` |
 
 ---
 
@@ -464,14 +505,14 @@ Each of these was confirmed against the running server:
 
 These are environment or platform constraints, not unfinished code.
 
-| Limitation | Why | Workaround |
-|---|---|---|
-| **Speech recognition** uses the `transcript` fallback | Apple only grants Speech Recognition to an app signed with a real **Developer ID**; ad-hoc signing is refused (measured) | Sign with a Developer ID, or install `whisper.cpp`, or set `JARVIS_STT_BACKEND=openai_whisper` |
-| **Microphone capture** is blocked by consent, not by code | Measured on this machine: 3 real inputs (`MacBook Air Microphone`, `Microsoft Teams Audio`, `MJAudioRecorder`) all idle, `ffmpeg` installed — and AVFoundation still reports `denied` for an unbundled process, so `ffmpeg -f avfoundation` stalls waiting for a prompt a CLI cannot show | The microphone state is now *probed* (`mic_state.swift`) rather than inferred, so `describe_audio()` says **blocked** instead of the old `which("ffmpeg")`-based **available**. Probing runs on a background thread (a first reading can mean compiling Swift plus macOS's ~8 s assessment of a new binary), is warmed at server startup, and `/voice/status` answers from cache in **~2 ms**; capture waits for the first reading so it cannot slip past the probe into an ffmpeg hang. Four states, never collapsed: **granted**, **blocked**, **measuring** (an answer is on its way), **unknown** (this machine cannot answer at all). Launch the signed `.app` and approve the prompt; the state re-reads itself, so the dashboard flips to `ready` without a restart |
-| **Screenshots** fail here | Screen Recording permission not granted | Grant it in System Settings |
-| **Vision OCR stalls under load** | macOS Vision intermittently never returns: the same image measured at 0.6 s standalone and beyond 120 s while other work ran. A 60 s wait per question made that invisible | Bounded to 20 s (`JARVIS_OCR_TIMEOUT`, clamped 1–120 s), and a stalled recogniser is **left alone for 45 s** instead of every later question paying the wait again. A timed-out read returns "no text was read" — never guessed text — and `vision_capabilities` / `/health` now report *present* and *answering* as two separate facts, because a cached binary is not a working one |
-| Audit records written before the hash chain existed | They have no hash | Sealed automatically at startup via `seal_chain()`. Sealing protects against *future* edits only — you cannot retroactively protect data that was never hashed |
-| Two legacy audit rows show as `legacy_message` | Early builds stored a message in the `result` field | Labelled honestly rather than misreported |
+| Limitation                                                | Why                                                                                                                                                                                                                                                                                       | Workaround                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| --------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Speech recognition** uses the `transcript` fallback     | Apple only grants Speech Recognition to an app signed with a real **Developer ID**; ad-hoc signing is refused (measured)                                                                                                                                                                  | Sign with a Developer ID, or install `whisper.cpp`, or set `JARVIS_STT_BACKEND=openai_whisper`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| **Microphone capture** is blocked by consent, not by code | Measured on this machine: 3 real inputs (`MacBook Air Microphone`, `Microsoft Teams Audio`, `MJAudioRecorder`) all idle, `ffmpeg` installed — and AVFoundation still reports `denied` for an unbundled process, so `ffmpeg -f avfoundation` stalls waiting for a prompt a CLI cannot show | The microphone state is now _probed_ (`mic_state.swift`) rather than inferred, so `describe_audio()` says **blocked** instead of the old `which("ffmpeg")`-based **available**. Probing runs on a background thread (a first reading can mean compiling Swift plus macOS's ~8 s assessment of a new binary), is warmed at server startup, and `/voice/status` answers from cache in **~2 ms**; capture waits for the first reading so it cannot slip past the probe into an ffmpeg hang. Four states, never collapsed: **granted**, **blocked**, **measuring** (an answer is on its way), **unknown** (this machine cannot answer at all). Launch the signed `.app` and approve the prompt; the state re-reads itself, so the dashboard flips to `ready` without a restart |
+| **Screenshots** fail here                                 | Screen Recording permission not granted                                                                                                                                                                                                                                                   | Grant it in System Settings                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| **Vision OCR stalls under load**                          | macOS Vision intermittently never returns: the same image measured at 0.6 s standalone and beyond 120 s while other work ran. A 60 s wait per question made that invisible                                                                                                                | Bounded to 20 s (`JARVIS_OCR_TIMEOUT`, clamped 1–120 s), and a stalled recogniser is **left alone for 45 s** instead of every later question paying the wait again. A timed-out read returns "no text was read" — never guessed text — and `vision_capabilities` / `/health` now report _present_ and _answering_ as two separate facts, because a cached binary is not a working one                                                                                                                                                                                                                                                                                                                                                                                      |
+| Audit records written before the hash chain existed       | They have no hash                                                                                                                                                                                                                                                                         | Sealed automatically at startup via `seal_chain()`. Sealing protects against _future_ edits only — you cannot retroactively protect data that was never hashed                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| Two legacy audit rows show as `legacy_message`            | Early builds stored a message in the `result` field                                                                                                                                                                                                                                       | Labelled honestly rather than misreported                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 
 ---
 
@@ -479,14 +520,14 @@ These are environment or platform constraints, not unfinished code.
 
 Each returns a clear refusal rather than faking success:
 
-| Component | Status |
-|---|---|
-| Watch Agent | v1.8 agent wired; no companion paired or bridge connected by default (honest "queued … nothing has reached your watch") |
-| Home automation | v1.5 agent wired; gateway offline by default (honest "No device was switched.") |
-| Car actuation | v1.7 is read-only telemetry by design (plan Phase 10); no unlock / horn / ignition tool exists |
-| Car telemetry | v1.7 agent wired; no adapter or vehicle API connected by default (honest "I cannot read live telemetry yet") |
-| Robotics | v1.6 agent wired; gateway offline by default (honest "no motion command was sent"); PHYSICAL risk ⇒ confirmation |
-| Continuous acoustic wake word | interface reserved, no engine wired |
+| Component                     | Status                                                                                                                  |
+| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| Watch Agent                   | v1.8 agent wired; no companion paired or bridge connected by default (honest "queued … nothing has reached your watch") |
+| Home automation               | v1.5 agent wired; gateway offline by default (honest "No device was switched.")                                         |
+| Car actuation                 | v1.7 is read-only telemetry by design (plan Phase 10); no unlock / horn / ignition tool exists                          |
+| Car telemetry                 | v1.7 agent wired; no adapter or vehicle API connected by default (honest "I cannot read live telemetry yet")            |
+| Robotics                      | v1.6 agent wired; gateway offline by default (honest "no motion command was sent"); PHYSICAL risk ⇒ confirmation        |
+| Continuous acoustic wake word | interface reserved, no engine wired                                                                                     |
 
 ---
 
@@ -523,36 +564,36 @@ jarvis-forge/
 └── tests/                 # 954 tests
 ```
 
-**Design rule:** the model decides *what* should happen, the tool decides *how*,
-and the permission engine decides *whether it is allowed*. Agents execute tools;
+**Design rule:** the model decides _what_ should happen, the tool decides _how_,
+and the permission engine decides _whether it is allowed_. Agents execute tools;
 they can never authorise them.
 
 ---
 
 ## 11. Build history
 
-| Version | What was added |
-|---|---|
-| v0.1 | Core: orchestrator, tool registry, permission engine, laptop agent, memory, audit log |
-| v0.2 | Voice: wake word, TTS, STT, barge-in, SSE streaming |
-| v0.3 | Packaged as a macOS desktop app with a control window |
-| v0.4 | Security + accuracy hardening: token auth, strict CORS, DNS-rebinding guard, rate limiting, command allowlist split, protected persistence paths, audit hash chain, recency-ranked search, BM25 recall |
-| v0.5 | Recovery (§47) and Privacy (§49): retry/fallback/failure log, redaction, privacy mode, data export and deletion, task lifecycle, metrics |
-| v0.6 | Phone Agent + secure device transfer: pairing, device identity, TLS transport, HMAC auth, checksum-verified transfer |
-| v0.7 | Email + Calendar: read/search/draft/send with confirmation, recipient resolution, local + remote backends, iCalendar |
-| v0.8 | Scheduler + daily briefing: recurrence parsing, per-job risk ceiling, no silent escalation, configurable briefing |
-| v0.9 | Advanced memory: dependency-free vector embeddings, hybrid RRF retrieval, memory types, lifecycle and user controls |
-| v1.0 | Research Agent: approved sources (arXiv), references, extraction, comparison, typed claim provenance, research briefs |
-| v1.1 | Coding Agent: workspace boundary, inspect/search, propose-then-apply with backups, no delete path, authorised-only commit |
-| v1.2 | Design Agent: real SVG diagrams, self-contained HTML mockups and decks, Markdown docs, asset store, permissioned integrations |
-| v1.3 | Vision Agent: real OCR (macOS Vision), image measurement, screen capture, image diff; vision never acts |
-| v1.5 | Home / IoT Agent: status, device list, sensor readings, control + routines; gateway offline by default with honest "No device was switched." (simulated/online via env) |
-| v1.6 | Robotics / sensor-fleet Agent: status, fleet list, telemetry, motion + experiments; gateway offline by default with honest "no motion command was sent" (simulated/online via env); PHYSICAL risk ⇒ confirmation-gated |
-| LCC | Laptop Control Center (see `JARVIS_Forge_Laptop_Control_Center_Work.md`): machine snapshot, process list, project status and agent-handoff prompt composition — read-only, fixed argv |
-| v1.7 | Car / vehicle Agent: read-only telemetry over OBD-II (Mode B) and a manufacturer vehicle API (Mode A); real J1979 decoding, capability taken from the car's own PID bitmasks or the API's JSON, offline by default with honest "I cannot read live telemetry yet"; no actuation path exists |
-| v1.8 | Watch / companion Agent: outbox the companion calls into, staged delivery (queued → delivered → displayed → replied), notifications, haptics, quick routines, and watch-side confirmations — the wearer's reply is the only thing that can decide a pending approval. Wires `JARVIS_CONFIRM_CHANNEL=watch`, a setting that had existed with nothing behind it |
-| Honesty-drift pass (25 Sep) | Re-measured the claims the previous day's own report made about itself. Three rows in §4 quoted responses the system no longer gives (email/calendar/transfer said "not configured" after their local backends went live — by then the *refusal* was the false statement), and `NOT_IMPLEMENTED` still carried those three dead keys; it is now `UNAVAILABLE_REASONS`, holding only the phone case, worded as "no phone is paired" rather than "agent not built". Rebuilt the desktop bundle, which had shipped the pre-fix launcher. Then found and fixed a regression the microphone probe itself introduced: probing synchronously made `/voice/status` compile Swift inside the request, so the app's own 3-second health check timed out on every cold start — measurement moved to a background thread, warmed at startup, and cached reads now answer in ~2 ms. Added a drift guard for the bundled launcher (it immediately caught one), split the probe's fourth state (`measuring`, an answer on its way) from `unknown` (this machine cannot answer), and covered all six ways the probe can fail |
-| Hardware-truth pass | Attended the machine instead of the plan: enumerated real Bluetooth range, USB, serial and LAN state, then measured microphone consent through AVFoundation. Found and fixed a health lie — `describe_audio()` called a microphone *available* because `which("ffmpeg")` succeeded, while the first capture attempt stalls forever. Capture now refuses before spawning `ffmpeg`, consent is attributed to the process that was actually asked, and "cannot measure" reads as *unknown* rather than *broken* (dashboard, launcher and `/voice/status` all had to stop collapsing the two states). Re-checking this pass's own documentation then caught a second trap: the freshly compiled helper answered `unknown` on its first exec because macOS spends ~8 s assessing an unseen binary, past the 5 s steady-state budget — the first run now gets 45 s and a clean home answers correctly in 3.4 s |
+| Version                     | What was added                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| v0.1                        | Core: orchestrator, tool registry, permission engine, laptop agent, memory, audit log                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| v0.2                        | Voice: wake word, TTS, STT, barge-in, SSE streaming                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| v0.3                        | Packaged as a macOS desktop app with a control window                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| v0.4                        | Security + accuracy hardening: token auth, strict CORS, DNS-rebinding guard, rate limiting, command allowlist split, protected persistence paths, audit hash chain, recency-ranked search, BM25 recall                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| v0.5                        | Recovery (§47) and Privacy (§49): retry/fallback/failure log, redaction, privacy mode, data export and deletion, task lifecycle, metrics                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| v0.6                        | Phone Agent + secure device transfer: pairing, device identity, TLS transport, HMAC auth, checksum-verified transfer                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| v0.7                        | Email + Calendar: read/search/draft/send with confirmation, recipient resolution, local + remote backends, iCalendar                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| v0.8                        | Scheduler + daily briefing: recurrence parsing, per-job risk ceiling, no silent escalation, configurable briefing                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| v0.9                        | Advanced memory: dependency-free vector embeddings, hybrid RRF retrieval, memory types, lifecycle and user controls                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| v1.0                        | Research Agent: approved sources (arXiv), references, extraction, comparison, typed claim provenance, research briefs                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| v1.1                        | Coding Agent: workspace boundary, inspect/search, propose-then-apply with backups, no delete path, authorised-only commit                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| v1.2                        | Design Agent: real SVG diagrams, self-contained HTML mockups and decks, Markdown docs, asset store, permissioned integrations                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| v1.3                        | Vision Agent: real OCR (macOS Vision), image measurement, screen capture, image diff; vision never acts                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| v1.5                        | Home / IoT Agent: status, device list, sensor readings, control + routines; gateway offline by default with honest "No device was switched." (simulated/online via env)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| v1.6                        | Robotics / sensor-fleet Agent: status, fleet list, telemetry, motion + experiments; gateway offline by default with honest "no motion command was sent" (simulated/online via env); PHYSICAL risk ⇒ confirmation-gated                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| LCC                         | Laptop Control Center (see `JARVIS_Forge_Laptop_Control_Center_Work.md`): machine snapshot, process list, project status and agent-handoff prompt composition — read-only, fixed argv                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| v1.7                        | Car / vehicle Agent: read-only telemetry over OBD-II (Mode B) and a manufacturer vehicle API (Mode A); real J1979 decoding, capability taken from the car's own PID bitmasks or the API's JSON, offline by default with honest "I cannot read live telemetry yet"; no actuation path exists                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| v1.8                        | Watch / companion Agent: outbox the companion calls into, staged delivery (queued → delivered → displayed → replied), notifications, haptics, quick routines, and watch-side confirmations — the wearer's reply is the only thing that can decide a pending approval. Wires `JARVIS_CONFIRM_CHANNEL=watch`, a setting that had existed with nothing behind it                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| Honesty-drift pass (25 Sep) | Re-measured the claims the previous day's own report made about itself. Three rows in §4 quoted responses the system no longer gives (email/calendar/transfer said "not configured" after their local backends went live — by then the _refusal_ was the false statement), and `NOT_IMPLEMENTED` still carried those three dead keys; it is now `UNAVAILABLE_REASONS`, holding only the phone case, worded as "no phone is paired" rather than "agent not built". Rebuilt the desktop bundle, which had shipped the pre-fix launcher. Then found and fixed a regression the microphone probe itself introduced: probing synchronously made `/voice/status` compile Swift inside the request, so the app's own 3-second health check timed out on every cold start — measurement moved to a background thread, warmed at startup, and cached reads now answer in ~2 ms. Added a drift guard for the bundled launcher (it immediately caught one), split the probe's fourth state (`measuring`, an answer on its way) from `unknown` (this machine cannot answer), and covered all six ways the probe can fail |
+| Hardware-truth pass         | Attended the machine instead of the plan: enumerated real Bluetooth range, USB, serial and LAN state, then measured microphone consent through AVFoundation. Found and fixed a health lie — `describe_audio()` called a microphone _available_ because `which("ffmpeg")` succeeded, while the first capture attempt stalls forever. Capture now refuses before spawning `ffmpeg`, consent is attributed to the process that was actually asked, and "cannot measure" reads as _unknown_ rather than _broken_ (dashboard, launcher and `/voice/status` all had to stop collapsing the two states). Re-checking this pass's own documentation then caught a second trap: the freshly compiled helper answered `unknown` on its first exec because macOS spends ~8 s assessing an unseen binary, past the 5 s steady-state budget — the first run now gets 45 s and a clean home answers correctly in 3.4 s                                                                                                                                                                                                     |
 
 ---
 
@@ -571,8 +612,8 @@ they can never authorise them.
 11. ~~Car Agent~~ — done in v1.7 (read-only telemetry; actuation deliberately not built, per plan Phase 10)
 12. ~~Watch Agent~~ — done in v1.8 (companion outbox, staged delivery, watch-side confirmations)
 
-The plan's build order is complete through v1.8. What is left is *attaching real
-hardware and accounts* to surfaces that already refuse honestly without them: a
+The plan's build order is complete through v1.8. What is left is _attaching real
+hardware and accounts_ to surfaces that already refuse honestly without them: a
 paired watch, an OBD-II adapter or vehicle API, a home gateway, a robot bridge,
 IMAP/SMTP and CalDAV credentials, and a Developer ID signature for on-device
 speech recognition.

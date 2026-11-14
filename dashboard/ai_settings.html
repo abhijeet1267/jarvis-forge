@@ -1,0 +1,554 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Vantage — AI Provider Settings</title>
+    <style>
+      /* Minimal dark-mode design using existing token set */
+      :root {
+        --bg: #f5f7fa;
+        --panel: #ffffff;
+        --ink: #1b2230;
+        --muted: #6b7688;
+        --line: #e2e7ef;
+        --accent: #2f6df6;
+        --ok: #16a34a;
+        --warn: #d97706;
+        --bad: #dc2626;
+        --radius: 10px;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #0d1117;
+          --panel: #161b22;
+          --ink: #e6edf3;
+          --muted: #9198a1;
+          --line: #21262d;
+          --accent: #4c8dff;
+          --ok: #3fb950;
+          --warn: #d29922;
+          --bad: #f85149;
+          --radius: 10px;
+        }
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        padding: 0;
+        background: var(--bg);
+        color: var(--ink);
+        font:
+          14px -apple-system,
+          system-ui,
+          sans-serif;
+      }
+      .container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 24px;
+      }
+      .header {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        margin-bottom: 24px;
+      }
+      .title {
+        font-size: 20px;
+        font-weight: 600;
+      }
+      .section {
+        background: var(--panel);
+        border-radius: var(--radius);
+        padding: 20px;
+        margin-bottom: 16px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+      }
+      .section-title {
+        font-size: 16px;
+        font-weight: 600;
+        margin-bottom: 12px;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+        gap: 16px;
+      }
+      .card {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        padding: 16px;
+      }
+      .card-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 8px;
+      }
+      .card-title {
+        font-weight: 600;
+        font-size: 14px;
+      }
+      .card-status {
+        font-size: 12px;
+        padding: 2px 8px;
+        border-radius: 4px;
+        background: var(--line);
+        color: var(--muted);
+      }
+      .card-status.ok {
+        background: #dcfce7;
+        color: #166534;
+      }
+      .card-status.error {
+        background: #fee2e2;
+        color: #991b1b;
+      }
+      .card-body {
+        font-size: 12px;
+        color: var(--muted);
+        margin-top: 8px;
+      }
+      .badge {
+        display: inline-block;
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-size: 11px;
+        margin-right: 4px;
+      }
+      .badge.local {
+        background: #dbeafe;
+        color: #1e40af;
+      }
+      .badge.cloud {
+        background: #fed7aa;
+        color: #9a3412;
+      }
+      .actions {
+        display: flex;
+        gap: 8px;
+        margin-top: 12px;
+      }
+      .button {
+        padding: 6px 12px;
+        border-radius: 6px;
+        border: none;
+        cursor: pointer;
+        font-size: 12px;
+        background: var(--line);
+        color: var(--ink);
+      }
+      .button.primary {
+        background: var(--accent);
+        color: white;
+      }
+      .button:hover {
+        opacity: 0.9;
+      }
+      .form-group {
+        margin-bottom: 12px;
+      }
+      .label {
+        display: block;
+        font-size: 12px;
+        font-weight: 500;
+        margin-bottom: 4px;
+      }
+      .input {
+        width: 100%;
+        padding: 8px;
+        border-radius: 6px;
+        border: 1px solid var(--line);
+        background: var(--bg);
+        color: var(--ink);
+        font-size: 13px;
+      }
+      input[type="password"],
+      input[type="text"] {
+        outline: none;
+      }
+      .hidden {
+        display: none;
+      }
+      .modal {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.5);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 1000;
+      }
+      .modal-content {
+        background: var(--panel);
+        padding: 24px;
+        border-radius: var(--radius);
+        max-width: 500px;
+        width: 90%;
+        max-height: 90vh;
+        overflow-y: auto;
+      }
+      .modal-title {
+        font-size: 16px;
+        font-weight: 600;
+        margin-bottom: 16px;
+      }
+      .progress {
+        width: 100%;
+        height: 4px;
+        background: var(--line);
+        border-radius: 2px;
+        overflow: hidden;
+        margin-top: 8px;
+      }
+      .progress-bar {
+        height: 100%;
+        background: var(--accent);
+        width: 0%;
+        transition: width 0.3s;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">
+        <span class="title">AI Provider Settings</span>
+        <button id="testAll" class="button primary">Test All Providers</button>
+      </div>
+
+      <!-- Overview Section -->
+      <div class="section">
+        <div class="section-title">Provider Overview</div>
+        <div class="grid" id="providerCards">
+          <!-- Cards populated via JS -->
+        </div>
+      </div>
+
+      <!-- Routing Policy -->
+      <div class="section">
+        <div class="section-title">Routing Policy</div>
+        <div class="form-group">
+          <label class="label">Mode</label>
+          <select id="routingMode" class="input">
+            <option value="local-first">
+              Local First (Apple → Groq → 9Router)
+            </option>
+            <option value="fast">Fast Mode (Speed prioritized)</option>
+            <option value="balanced">Balanced (Best balance)</option>
+            <option value="deep">Deep Reasoning (Quality over speed)</option>
+            <option value="private-only">Private Only (Local only)</option>
+            <option value="custom">Custom Order</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="label">Privacy</label>
+          <select id="privacyMode" class="input">
+            <option value="local-first">Local First</option>
+            <option value="approved-cloud">Approved Cloud Only</option>
+            <option value="normal">Normal</option>
+            <option value="every-upload-confirm">Confirm Every Upload</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="label">Cost Controls</label>
+          <label
+            ><input type="checkbox" id="freeFirst" checked /> Free First</label
+          >
+          <label style="margin-left: 12px"
+            ><input type="checkbox" id="paidAllowed" /> Allow Paid AI</label
+          >
+        </div>
+      </div>
+
+      <!-- Security Section -->
+      <div class="section">
+        <div class="section-title">Security & Audit</div>
+        <div id="securityStatus"></div>
+      </div>
+    </div>
+
+    <!-- Add/Edit Key Modal -->
+    <div id="credentialModal" class="modal hidden">
+      <div class="modal-content">
+        <div class="modal-title" id="modalTitle">Add API Key</div>
+        <div class="form-group">
+          <label class="label">Provider</label>
+          <select id="apiKeyProvider" class="input"></select>
+        </div>
+        <div class="form-group">
+          <label class="label">API Key</label>
+          <input
+            type="password"
+            id="apiKeyInput"
+            class="input"
+            placeholder="Enter API key"
+          />
+        </div>
+        <div class="form-group">
+          <label class="label">Label (optional)</label>
+          <input
+            type="text"
+            id="apiKeyLabel"
+            class="input"
+            placeholder="Key label"
+          />
+        </div>
+        <div class="form-group">
+          <label class="label">Default Model</label>
+          <select id="apiKeyModel" class="input"></select>
+        </div>
+        <div class="progress">
+          <div class="progress-bar" id="keyProgress"></div>
+        </div>
+        <div class="actions">
+          <button class="button primary" id="saveApiKey">Save Securely</button>
+          <button class="button" id="cancelApiEdit">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // State
+      const STATE = {
+        providers: {},
+        routing: {},
+        security: {},
+      };
+
+      const PROVIDERS = [
+        {
+          id: "apple",
+          name: "Apple Foundation Models",
+          local: true,
+          status: "unknown",
+        },
+        { id: "groq", name: "Groq", local: false, status: "unknown" },
+        { id: "ninerouter", name: "9Router", local: false, status: "unknown" },
+        { id: "openai", name: "OpenAI", local: false, status: "unknown" },
+        { id: "gemini", name: "Gemini", local: false, status: "unknown" },
+        {
+          id: "chatgpt",
+          name: "ChatGPT Account",
+          local: false,
+          status: "unknown",
+        },
+        {
+          id: "shree",
+          name: "Shree AI",
+          local: false,
+          status: "blocked",
+          reason: "No official API verified",
+        },
+      ];
+
+      // Initialize
+      async function init() {
+        await loadProviders();
+        await loadSettings();
+        renderProviders();
+        updateSecurityStatus();
+      }
+
+      // Load providers from server
+      async function loadProviders() {
+        const response = await fetch("/api/ai/providers");
+        if (response.ok) {
+          STATE.providers = await response.json();
+        }
+      }
+
+      // Load settings
+      async function loadSettings() {
+        const response = await fetch("/api/ai/settings");
+        if (response.ok) {
+          STATE.routing = await response.json();
+
+          // Populate selects
+          document.getElementById("routingMode").value =
+            STATE.routing.mode || "local-first";
+          document.getElementById("privacyMode").value =
+            STATE.routing.privacy || "local-first";
+          document.getElementById("freeFirst").checked =
+            STATE.routing.free_first !== false;
+          document.getElementById("paidAllowed").checked =
+            STATE.routing.allow_paid === true;
+        }
+      }
+
+      // Render provider cards
+      function renderProviders() {
+        const container = document.getElementById("providerCards");
+
+        PROVIDERS.forEach((p) => {
+          const providerState = STATE.providers[p.id] || {};
+          const statusClass =
+            providerState.status === "connected"
+              ? "ok"
+              : providerState.status === "error"
+                ? "error"
+                : "";
+
+          const card = `
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">${p.name}</div>
+          <span class="badge ${p.local ? "local" : "cloud"}">
+            ${p.local ? "LOCAL" : "CLOUD"}
+          </span>
+          <span class="card-status ${statusClass}">${providerState.status || "Not Configured"}</span>
+        </div>
+        <div class="card-body">
+          ${providerState.model ? `<div>Model: ${providerState.model}</div>` : ""}
+          ${providerState.latency ? `<div>Latency: ${providerState.latency}ms</div>` : ""}
+        </div>
+        <div class="actions">
+          <button class="button test-provider" data-id="${p.id}">Test</button>
+          <button class="button edit-key" data-id="${p.id}">Manage Keys</button>
+          ${!providerState.configured ? '<button class="button primary connect" data-id="' + p.id + '">Connect</button>' : ""}
+        </div>
+      </div>
+    `;
+
+          container.innerHTML += card;
+        });
+
+        // Attach event listeners
+        document.querySelectorAll(".test-provider").forEach((btn) => {
+          btn.addEventListener("click", () => testProvider(btn.dataset.id));
+        });
+
+        document.querySelectorAll(".edit-key").forEach((btn) => {
+          btn.addEventListener("click", () =>
+            openKeyModal(btn.dataset.id, "edit"),
+          );
+        });
+
+        document.querySelectorAll(".connect").forEach((btn) => {
+          btn.addEventListener("click", () =>
+            openKeyModal(btn.dataset.id, "add"),
+          );
+        });
+      }
+
+      // Update security status
+      function updateSecurityStatus() {
+        const div = document.getElementById("securityStatus");
+        div.innerHTML = `
+    <div style="font-size:13px;color:var(--muted)">
+      ✓ Secret redaction enabled<br/>
+      ✓ API keys stored securely (never in browser)<br/>
+      ✓ Cloud consent required for external transfer<br/>
+      ✓ Audit logging enabled<br/>
+    </div>
+  `;
+      }
+
+      // Test provider
+      async function testProvider(providerId) {
+        const response = await fetch(`/api/ai/providers/${providerId}/test`);
+        const result = await response.json();
+
+        if (result.success) {
+          alert(`✓ ${providerId} connection verified (${result.latency}ms)`);
+        } else {
+          alert(`✗ ${providerId}: ${result.error}`);
+        }
+      }
+
+      // Open key modal
+      function openKeyModal(providerId, mode) {
+        document.getElementById("modalTitle").textContent =
+          mode === "add" ? "Add API Key" : "Replace API Key";
+        document.getElementById("apiKeyProvider").value = providerId;
+        document.getElementById("apiKeyInput").value = "";
+        document.getElementById("credentialModal").classList.remove("hidden");
+      }
+
+      // Save API key
+      document
+        .getElementById("saveApiKey")
+        .addEventListener("click", async () => {
+          const providerId = document.getElementById("apiKeyProvider").value;
+          const apiKey = document.getElementById("apiKeyInput").value;
+          const model = document.getElementById("apiKeyModel").value;
+
+          document.getElementById("keyProgress").style.width = "50%";
+
+          try {
+            const response = await fetch(
+              `/api/ai/providers/${providerId}/keys`,
+              {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ api_key: apiKey, model }),
+              },
+            );
+
+            const result = await response.json();
+            document.getElementById("keyProgress").style.width = "100%";
+
+            if (result.success) {
+              document
+                .getElementById("credentialModal")
+                .classList.add("hidden");
+              await loadProviders();
+              renderProviders();
+            } else {
+              alert(result.error);
+            }
+          } catch (e) {
+            console.error(e);
+          }
+        });
+
+      // Cancel button
+      document.getElementById("cancelApiEdit").addEventListener("click", () => {
+        document.getElementById("credentialModal").classList.add("hidden");
+      });
+
+      // Save settings changes
+      document
+        .querySelectorAll("#routingMode, #privacyMode")
+        .forEach((select) => {
+          select.addEventListener("change", async (e) => {
+            await fetch("/api/ai/settings", {
+              method: "PUT",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ mode: e.target.value }),
+            });
+          });
+        });
+
+      // Toggle free/paid
+      document
+        .getElementById("freeFirst")
+        .addEventListener("change", async (e) => {
+          await fetch("/api/ai/settings", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ free_first: e.target.checked }),
+          });
+        });
+
+      document
+        .getElementById("paidAllowed")
+        .addEventListener("change", async (e) => {
+          await fetch("/api/ai/settings", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ allow_paid: e.target.checked }),
+          });
+        });
+
+      // Start
+      init();
+    </script>
+  </body>
+</html>

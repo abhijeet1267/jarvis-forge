@@ -24,7 +24,7 @@ severity:
    **126 failed / 875 passed**, not the documented 975 passing. Repairing that single line
    in a clean copy yields **3 failed / 997 passed in 14 s**. Until it is repaired, every
    "working" claim in `STATUS.md` is unproducible, and this is verifiable live: `POST
-   /command` returns `"That did not work: <tool> raised: name 'Verification' is not defined"`.
+/command` returns `"That did not work: <tool> raised: name 'Verification' is not defined"`.
 
 2. **Authentication is defeated by its own bootstrap surface.** Two routes publish the live
    master token to an unauthenticated local caller: `GET /auth/token` (no auth dependency;
@@ -35,11 +35,11 @@ severity:
    the table.
 
 3. **The last-resort safety control does nothing and says it worked.** `emergency_stop` —
-   the *only* risk-4 tool deliberately exempted from confirmation — iterates device
+   the _only_ risk-4 tool deliberately exempted from confirmation — iterates device
    capabilities (`robot_motion`, `actuators`, `experiments`) that **no registered device
    advertises**. Measured: `cancelled_actions=0`, `ok=True`,
    `verification=Verification.SUCCESS`, reply `"Emergency stop engaged. Physical actions
-   cancelled; safety controllers remain active."` Neither `RobotGateway` nor `HomeGateway`
+cancelled; safety controllers remain active."` Neither `RobotGateway` nor `HomeGateway`
    exposes a stop method at all. A user who says "emergency stop" while a robot moves
    receives a fabricated safety confirmation.
 
@@ -82,28 +82,28 @@ The recommended next phase is therefore **not** a new integration. It is a bound
 
 Full detail and literal command output: `PHASE9_BASELINE.md`.
 
-| Dimension | Claimed | Measured | Verdict |
-|---|---|---|---|
-| Repository path | `…/AppData/aisys/jarvis-forge` | `…/AppData/jarv/jarvis-forge` | **wrong** |
-| Git repository | implied | **absent** — `fatal: not a git repository` | **false** |
-| Agents | 15 | **15** (`JarvisCore().agents`) | **TRUE** |
-| Tools | 126 | **126** specs, 126 registry entries, 0 duplicates | **TRUE** |
-| API paths | 100 | **100** unique / 106 routes (GET 58, POST 48, HEAD 4) | **TRUE** |
-| Source LOC | ~29,700 | **29,975** (`jarvis/`) | **TRUE ±1%** |
-| Risk tiers | — | 0:68 · 1:33 · 2:11 · 3:11 · 4:3 | measured |
-| Confirm-gated | — | **24 of 126**; `reversible=False` on 11 | measured |
-| DB tables | — | **32** tables, 5 indexes | measured |
-| Settings | — | **55** `JARVIS_*` fields; `.env.example` advertises 60 | measured |
-| Version | v1.8 | `pyproject` and `GET /` both say **0.1.0** | **contradiction** |
-| Server running | yes | **no** — `curl … /health` → `HTTP=000`, nothing listening | **false** |
-| Tests passing | 975 + 1 skipped | **875 passed, 126 failed, 1 skipped** | **FALSE** |
-| Stale bytecode | — | **306** `.pyc` files embed the dead `aisys` path; caches from 3.11/3.13/pytest 8.4.2/9.1.1 | hazard |
+| Dimension       | Claimed                        | Measured                                                                                   | Verdict           |
+| --------------- | ------------------------------ | ------------------------------------------------------------------------------------------ | ----------------- |
+| Repository path | `…/AppData/aisys/jarvis-forge` | `…/AppData/jarv/jarvis-forge`                                                              | **wrong**         |
+| Git repository  | implied                        | **absent** — `fatal: not a git repository`                                                 | **false**         |
+| Agents          | 15                             | **15** (`JarvisCore().agents`)                                                             | **TRUE**          |
+| Tools           | 126                            | **126** specs, 126 registry entries, 0 duplicates                                          | **TRUE**          |
+| API paths       | 100                            | **100** unique / 106 routes (GET 58, POST 48, HEAD 4)                                      | **TRUE**          |
+| Source LOC      | ~29,700                        | **29,975** (`jarvis/`)                                                                     | **TRUE ±1%**      |
+| Risk tiers      | —                              | 0:68 · 1:33 · 2:11 · 3:11 · 4:3                                                            | measured          |
+| Confirm-gated   | —                              | **24 of 126**; `reversible=False` on 11                                                    | measured          |
+| DB tables       | —                              | **32** tables, 5 indexes                                                                   | measured          |
+| Settings        | —                              | **55** `JARVIS_*` fields; `.env.example` advertises 60                                     | measured          |
+| Version         | v1.8                           | `pyproject` and `GET /` both say **0.1.0**                                                 | **contradiction** |
+| Server running  | yes                            | **no** — `curl … /health` → `HTTP=000`, nothing listening                                  | **false**         |
+| Tests passing   | 975 + 1 skipped                | **875 passed, 126 failed, 1 skipped**                                                      | **FALSE**         |
+| Stale bytecode  | —                              | **306** `.pyc` files embed the dead `aisys` path; caches from 3.11/3.13/pytest 8.4.2/9.1.1 | hazard            |
 
 **On the "audit chain intact" claim — verified true.** Appending 25 records gave
 `{"ok": true, "checked": 25, "head": "a582433a…"}`; a single `UPDATE action_logs SET
 result='tampered'` produced `{"ok": false, "reason": "record hash mismatch (a record was
 edited)"}`. Tamper detection works. §5/§6 explain why the chain is nonetheless unreliable
-as a *truth* record — it faithfully logs `success` for statements that were never observed.
+as a _truth_ record — it faithfully logs `success` for statements that were never observed.
 
 ---
 
@@ -116,24 +116,24 @@ Full detail: `PHASE9_TEST_AUDIT.md`.
 126 failed, 875 passed, 1 skipped, 1 warning in 22.07s
 ```
 
-* **105 of 126** failures share one message: `NameError: name 'Verification' is not defined`.
+- **105 of 126** failures share one message: `NameError: name 'Verification' is not defined`.
   The other 21 are the same defect observed through the orchestrator (`assert False` on
   actions that should have succeeded).
-* Root cause is one line — `jarvis/tools/base.py:16`
+- Root cause is one line — `jarvis/tools/base.py:16`
   imports `ActionResult` but not `Verification`, which is used at runtime on lines 103, 110
   and 117. It fails **closed**: tools crash rather than lie. That is why this is a
   correctness P0 and not a safety bypass, and why the audit could continue instead of halting.
-* Causality measured, not argued: injecting the single name at runtime clears **122** of
+- Causality measured, not argued: injecting the single name at runtime clears **122** of
   126 failures; applying the one-line source fix in a clean copy gives
   **3 failed / 997 passed / 2 skipped in 14.14 s**.
-* **The 3 residual failures are stale tests**, all reading a field that moved from
+- **The 3 residual failures are stale tests**, all reading a field that moved from
   `result.output["verified"]` to `result.verified` —
   `tests/test_home.py:228`, `tests/test_home.py:241`, `tests/test_robotics.py:221`. Their
   titles (`*_reports_simulated`, `*_online_unverified_not_claimed_done`) mean the abort
   leaves **three honesty guarantees in the actuation domain silently untested**. Fixing the
   import turns the suite green while still not testing them.
-* One test skips when `dist/` is absent — correctly-behaved environment skip.
-* Methodological note recorded for auditability: runtime injection is **not** a faithful
+- One test skips when `dist/` is absent — correctly-behaved environment skip.
+- Methodological note recorded for auditability: runtime injection is **not** a faithful
   stand-in for the source fix (injection run: 59 failures in 481 s vs source fix: 3 failures
   in 14 s). All headline numbers come from the source-fixed clean copy.
 
@@ -149,30 +149,30 @@ Full claim-by-claim ledger: `PHASE9_STATUS_DRIFT.csv` — **287 checkable claims
 from `STATUS.md`, each with its `STATUS.md:LINE`, the observed value, a classification and a
 severity.
 
-| classification | count | share |
-|---|---|---|
-| **TRUE** | **179** | 62.4% |
-| **STALE** | **52** | 18.1% |
-| **FALSE** | **44** | 15.3% |
-| ENVIRONMENT | 10 | 3.5% |
-| UNVERIFIED | 2 | 0.7% |
+| classification | count   | share |
+| -------------- | ------- | ----- |
+| **TRUE**       | **179** | 62.4% |
+| **STALE**      | **52**  | 18.1% |
+| **FALSE**      | **44**  | 15.3% |
+| ENVIRONMENT    | 10      | 3.5%  |
+| UNVERIFIED     | 2       | 0.7%  |
 
 **Roughly 38% of `STATUS.md`'s checkable claims do not describe the current tree.**
-Independently of the ledger, this audit re-confirmed the structural subset that *is*
+Independently of the ledger, this audit re-confirmed the structural subset that _is_
 accurate: 15 agents, 126 tools, 100 API paths, 24 confirm-gated tools, the 68/33/11/11/3
 risk split, 32 tables, ~29,975 LOC, and the audit hash chain (which verifies and detects
 tampering). The arithmetic is trustworthy; the health reporting is not.
 
 The worst FALSE rows, with each mechanism already established earlier in this report:
 
-| `STATUS.md` | claim | reality | cross-ref |
-|---|---|---|---|
-| `:18`, `:87`, `:411`, `:67` | 975 passing + 1 skipped | **126 failed / 875 passed / 1 skipped**; 1,002 collected, not the 976/954 implied | §3 |
-| `:28-38`, `:138-155` | per-agent "works" and "honest offline behaviour" | live `POST /command` answers `"That did not work: get_time raised: name 'Verification' is not defined"` — including `emergency_stop` at `:155` | §3, §6 |
-| `:39`, `:278`, `:281`, `:458` | a watch cannot approve its own confirmation; simulated wearers cannot authorise | measured escape — a simulated watch's `CONFIRM` executed a real deletion | §5 RT-1 |
-| `:385` | "token auth on every endpoint" | `/auth/token` returns the live token unauthenticated; `/docs`, `/openapi.json`, `/redoc`, `/dashboard` also open | §10 API-0 |
-| `:377`, `:353`, `:527` | permission engine adjudicates execution; pipeline includes a Verification stage | `resolve_confirmation()` never re-enters `evaluate()`, so revoked grants still execute; the Verification field has no consumer | §5 RT-2, §6 |
-| `:25`, `:59`, `:122`, `:168` | desktop app usable, self-test passes, signature valid, 544K | app **exits 1** on a dead launcher pointer; self-test unreachable; `spctl` rejects; bundle is 588K | §11 |
+| `STATUS.md`                   | claim                                                                           | reality                                                                                                                                        | cross-ref   |
+| ----------------------------- | ------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- | ----------- |
+| `:18`, `:87`, `:411`, `:67`   | 975 passing + 1 skipped                                                         | **126 failed / 875 passed / 1 skipped**; 1,002 collected, not the 976/954 implied                                                              | §3          |
+| `:28-38`, `:138-155`          | per-agent "works" and "honest offline behaviour"                                | live `POST /command` answers `"That did not work: get_time raised: name 'Verification' is not defined"` — including `emergency_stop` at `:155` | §3, §6      |
+| `:39`, `:278`, `:281`, `:458` | a watch cannot approve its own confirmation; simulated wearers cannot authorise | measured escape — a simulated watch's `CONFIRM` executed a real deletion                                                                       | §5 RT-1     |
+| `:385`                        | "token auth on every endpoint"                                                  | `/auth/token` returns the live token unauthenticated; `/docs`, `/openapi.json`, `/redoc`, `/dashboard` also open                               | §10 API-0   |
+| `:377`, `:353`, `:527`        | permission engine adjudicates execution; pipeline includes a Verification stage | `resolve_confirmation()` never re-enters `evaluate()`, so revoked grants still execute; the Verification field has no consumer                 | §5 RT-2, §6 |
+| `:25`, `:59`, `:122`, `:168`  | desktop app usable, self-test passes, signature valid, 544K                     | app **exits 1** on a dead launcher pointer; self-test unreachable; `spctl` rejects; bundle is 588K                                             | §11         |
 
 Also classified STALE or FALSE: the version identity (v1.8 in `STATUS.md` vs `0.1.0` in
 `pyproject.toml` and in the live `GET /` response) and the presentation of the server on
@@ -187,8 +187,8 @@ than a FALSE claim (§13).
 Full ledger with per-attack setup/expected/actual: `PHASE9_SECURITY_REDTEAM.md`.
 22 attacks executed; **19 held, 3 escapes confirmed.**
 
-**Permission bypass — one found (P0).** Not through the engine. Through the *approval
-periphery*: a simulated, unpaired watch's fabricated `CONFIRM` button press reaches
+**Permission bypass — one found (P0).** Not through the engine. Through the _approval
+periphery_: a simulated, unpaired watch's fabricated `CONFIRM` button press reaches
 `resolve_confirmation(approve=True)` and executes a real risk-3 deletion. Measured both
 unpaired and paired:
 
@@ -216,14 +216,15 @@ the stored row, never from caller input), expiry (`confirm_timeout=1s` → `BLOC
 `state=expired`, nothing executed), guessability (`CONF-` + `secrets.token_hex(16)` = 128
 bits; random id → `"I have no record…"`).
 Broken:
-* **RT-2 (P1)** `resolve_confirmation()` (`orchestrator.py:310-407`) never re-enters
+
+- **RT-2 (P1)** `resolve_confirmation()` (`orchestrator.py:310-407`) never re-enters
   `policy.evaluate()`. Revoking a permission, or the device going offline, after a
   confirmation is created does **not** stop execution — measured `after_revoke_executed=True`.
   The scheduler gets this right (`runner.py:83-84` re-evaluates every run); the interactive
   path does not.
-* **RT-7 (P1)** `revoke()` **silently fails to revoke**. It omits `granted_at`, whose default
+- **RT-7 (P1)** `revoke()` **silently fails to revoke**. It omits `granted_at`, whose default
   is second-granularity `datetime('now')`, and `_is_revoked()` reads `ORDER BY granted_at DESC
-  LIMIT 1` — a non-deterministic key. A grant and its revocation in the same second tie
+LIMIT 1` — a non-deterministic key. A grant and its revocation in the same second tie
   forever, and the grant row wins:
   ```
   {'granted': 1, 'granted_at': '2026-09-25 15:22:27'}
@@ -233,7 +234,7 @@ Broken:
   Forcing the revoke 1.2 s later makes it work (`decision -> BLOCK`), isolating the tie as
   the entire mechanism. A risk-3 destructive tool can be left permanently auto-executing,
   with the documented kill switch reporting success.
-* **RT-3 (P1)** *"Tools cannot silently elevate their own risk tier"* is **false**. Mutating
+- **RT-3 (P1)** _"Tools cannot silently elevate their own risk tier"_ is **false**. Mutating
   `delete_file`'s spec to `risk=0, requires_confirmation=False` in the process-wide registry
   changed the verdict to `EXECUTE`. The classifier trusts mutable registry objects. Needs
   in-process code, so it is containment rather than a remote escape.
@@ -263,14 +264,14 @@ Full 99-row ledger (47 PASS / 23 WEAK / 29 FAIL): `PHASE9_HONESTY_MATRIX.csv`.
 
 **False-success paths — systemic, not incidental.** The tri-state field is decorative:
 
-* `ActionResult.audit_result` — **zero callers** outside `models.py`, despite its docstring
+- `ActionResult.audit_result` — **zero callers** outside `models.py`, despite its docstring
   claiming prose and record "cannot diverge".
-* `unverified()` — **zero call sites** across 126 tools.
-* **152 of 171** `ok()` call sites pass no `verified=`, so `base.py:102-103` defaults them to
+- `unverified()` — **zero call sites** across 126 tools.
+- **152 of 171** `ok()` call sites pass no `verified=`, so `base.py:102-103` defaults them to
   `Verification.SUCCESS`.
-* `orchestrator.py:133` sets the audit status from `result.ok`; `:284/:291/:297` set step and
+- `orchestrator.py:133` sets the audit status from `result.ok`; `:284/:291/:297` set step and
   job completion from `result.ok`.
-* `agents/laptop.py:38-40` and `agents/laptop_center.py:41-43` then assign
+- `agents/laptop.py:38-40` and `agents/laptop_center.py:41-43` then assign
   `result.verified = True` unconditionally over 21–25 tools — the exact bug `base.py:90-99`
   documents as fixed. Because `ActionResult` has no `validate_assignment`, the model
   validator that claims `verified`/`verification` cannot diverge is bypassed, and divergence
@@ -278,14 +279,14 @@ Full 99-row ledger (47 PASS / 23 WEAK / 29 FAIL): `PHASE9_HONESTY_MATRIX.csv`.
 
 Consequences, all measured:
 
-| case | user sees | record says |
-|---|---|---|
-| **`emergency_stop`** (P0) | `"Emergency stop engaged. Physical actions cancelled…"` | `ok=True`, `SUCCESS`, `cancelled_actions=0` |
-| unreachable CalDAV (P1) | `"Nothing scheduled for today."`, `"You have nothing coming up."`, and **`find_free_time` invents `"The first free 60-minute slot is 20:49–21:49."`** | `SUCCESS` × 4 tools |
-| IMAP `status != "OK"` | `"I found no messages matching 'invoice'."` | `SUCCESS` |
-| failed scheduled job | `"probe-job: failed — the permission engine blocked…"` | `ok=True`, `audit=success` |
-| `run_home_routine`, offline | `"Nothing was changed."` | `SUCCESS` |
-| no STT engine | rejected as `"empty input"` | `ok=True, confidence=1.0` — "I have no microphone" conflated with "you said nothing" |
+| case                        | user sees                                                                                                                                             | record says                                                                          |
+| --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| **`emergency_stop`** (P0)   | `"Emergency stop engaged. Physical actions cancelled…"`                                                                                               | `ok=True`, `SUCCESS`, `cancelled_actions=0`                                          |
+| unreachable CalDAV (P1)     | `"Nothing scheduled for today."`, `"You have nothing coming up."`, and **`find_free_time` invents `"The first free 60-minute slot is 20:49–21:49."`** | `SUCCESS` × 4 tools                                                                  |
+| IMAP `status != "OK"`       | `"I found no messages matching 'invoice'."`                                                                                                           | `SUCCESS`                                                                            |
+| failed scheduled job        | `"probe-job: failed — the permission engine blocked…"`                                                                                                | `ok=True`, `audit=success`                                                           |
+| `run_home_routine`, offline | `"Nothing was changed."`                                                                                                                              | `SUCCESS`                                                                            |
+| no STT engine               | rejected as `"empty input"`                                                                                                                           | `ok=True, confidence=1.0` — "I have no microphone" conflated with "you said nothing" |
 
 The calendar case has a crisp root cause: `calendar_provider.py:431-436` returns `[]` on
 HTTP≥400 **and** on any exception, so the tool's own `except` arms
@@ -300,6 +301,7 @@ the others should copy** — its `_last_known` is populated only by a real read,
 never-read metric is reported unavailable.
 
 **Simulation leaks.**
+
 1. Home and robotics seed a **fabricated world as "last known state"**: `home/gateway.py:110`
    hardcodes `23.0 °C`, `robotics/gateway.py:148` hardcodes `battery=84.0%`/`91.0%`. Nothing
    was ever observed, so "last known" is false. Measured:
@@ -351,8 +353,8 @@ failures row       : {recovered: 1, strategy: retry, attempts: 1,
                       note: 'succeeded on retry 1', error: 'gateway connection reset'}
 ```
 
-The two statements are contradictory in one message: *"No device was switched"* and
-*"Recovered automatically — succeeded"*. The action that failed was replaced by an action
+The two statements are contradictory in one message: _"No device was switched"_ and
+_"Recovered automatically — succeeded"_. The action that failed was replaced by an action
 that reports performing nothing, and the ledger records a recovery. This is the clearest
 single demonstration of the §6 systemic problem: **`.ok` means "the handler answered", not
 "the world changed"**, yet recovery, the audit line and task status all read it as the
@@ -360,19 +362,19 @@ latter.
 
 Other recovery findings, per `PHASE9_RECOVERY_AUDIT.md`:
 
-| ID | problem | severity |
-|---|---|---|
-| R-2 | The retry guard sits at risk ≥ 3, so **44 tools below it auto-retry** on a regex over error *text*; a real 30 s subprocess timeout string matches. Measured 3 executions of one call and 4 duplicate memory rows. Affected set includes `move_file`, `run_allowlisted_command`, `create_event`, `send_to_device`, `vibrate_watch` | **P1** |
-| R-5 | `ok()` defaults to `Verification.SUCCESS`; **155 of 171** sites claim an observed external effect, 13 of them while their own message says the thing did not happen | **P1** |
-| R-7 | `laptop.py:38-40` / `laptop_center.py:41-43` overwrite `verified=True`, defeating real observations at `files.py:287/312/349` and leaving `verified=True` alongside `verification=UNKNOWN` | **P1** |
-| R-6 / R-10 | The fallback path is **unauthorised by design but dead in practice**: an injected pair executed `delete_file` (verdict was CONFIRM) with 0 confirmations, audited as `compress_path/success`; all *shipped* pairs are param-incompatible and fail with `invalid parameters` | **P1** design / **P4** current reachability |
-| R-11 | The confirmation and scheduler paths write **no failure rows at all**, so `/metrics` understates | **P2** |
-| R-12 | Recovery notes say `"not retried"` after two retries actually ran | **P2** |
-| R-13 | The user is told about recovery only on success — silent on failure | **P2** |
-| R-14 | `POST /tasks/{id}/retry` returns a fabricated `running` state | **P2** |
+| ID         | problem                                                                                                                                                                                                                                                                                                                           | severity                                    |
+| ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------- |
+| R-2        | The retry guard sits at risk ≥ 3, so **44 tools below it auto-retry** on a regex over error _text_; a real 30 s subprocess timeout string matches. Measured 3 executions of one call and 4 duplicate memory rows. Affected set includes `move_file`, `run_allowlisted_command`, `create_event`, `send_to_device`, `vibrate_watch` | **P1**                                      |
+| R-5        | `ok()` defaults to `Verification.SUCCESS`; **155 of 171** sites claim an observed external effect, 13 of them while their own message says the thing did not happen                                                                                                                                                               | **P1**                                      |
+| R-7        | `laptop.py:38-40` / `laptop_center.py:41-43` overwrite `verified=True`, defeating real observations at `files.py:287/312/349` and leaving `verified=True` alongside `verification=UNKNOWN`                                                                                                                                        | **P1**                                      |
+| R-6 / R-10 | The fallback path is **unauthorised by design but dead in practice**: an injected pair executed `delete_file` (verdict was CONFIRM) with 0 confirmations, audited as `compress_path/success`; all _shipped_ pairs are param-incompatible and fail with `invalid parameters`                                                       | **P1** design / **P4** current reachability |
+| R-11       | The confirmation and scheduler paths write **no failure rows at all**, so `/metrics` understates                                                                                                                                                                                                                                  | **P2**                                      |
+| R-12       | Recovery notes say `"not retried"` after two retries actually ran                                                                                                                                                                                                                                                                 | **P2**                                      |
+| R-13       | The user is told about recovery only on success — silent on failure                                                                                                                                                                                                                                                               | **P2**                                      |
+| R-14       | `POST /tasks/{id}/retry` returns a fabricated `running` state                                                                                                                                                                                                                                                                     | **P2**                                      |
 
 **Verified as holding:** retries are bounded (attempt counts measured, no loops), failed
-verifications do not become successes on the *primary* path (an offline `control_home_device`
+verifications do not become successes on the _primary_ path (an offline `control_home_device`
 correctly self-reports `Verification.UNKNOWN` when it is the only attempt — shown above),
 failure records **are** persisted to the `failures` table and readable via `/failures` and
 `/metrics`, and recovery **is** visible to the user. The defect is what "visible" asserts,
@@ -412,7 +414,7 @@ search_memory('MH12XY9345')  ->  SENTENCE STILL RECOVERABLE: True
                     plate is MH12XY9345"}
 ```
 
-The echo quotes the user's wording *and* the tool's confirmation, so the secret appears twice
+The echo quotes the user's wording _and_ the tool's confirmation, so the secret appears twice
 in one surviving row. `GET /memory/search`, the `search_memory` tool, `GET /memory` and
 `GET /memory/export` all return it (`PHASE9_MEMORY_AUDIT.md`). No deletion path purges
 echoes, and the recall used to verify deletion itself writes a further echo — the leak is
@@ -436,7 +438,7 @@ no VACUUM); project-graph nodes/edges keep the text and resurface via `explain_f
 `project_summary` (`ProjectGraph` exposes no delete API, `graph_edges` has no FK);
 expired memories stay retrievable (no read-time filter, no scheduler wiring); retrieval
 windows are silently lossy (BM25 sees only the newest 1000 rows; vector only 5000 with no
-`ORDER BY`, so a *newest* memory was proven unfindable); `delete('everything')` leaves
+`ORDER BY`, so a _newest_ memory was proven unfindable); `delete('everything')` leaves
 `sessions`, all of `audit.jsonl`, and prior export files.
 
 Held: row and vector deletion is clean and atomic **for the row it targets**; **scoped deletion
@@ -458,15 +460,16 @@ SSRF surface); `vision↔action` (`ACTION_TOOLS=[]`, no action leak, remote uplo
 from tools).
 
 **Problem pairs:**
-* **`laptop↔robotics` — broken.** `emergency_stop` is the only ungated tier-4 tool and it
+
+- **`laptop↔robotics` — broken.** `emergency_stop` is the only ungated tier-4 tool and it
   cancels nothing (§6). Independently confirmed by two probes.
-* **`coding↔shell` — real overlap.** Coding handlers call laptop's
+- **`coding↔shell` — real overlap.** Coding handlers call laptop's
   `run_allowlisted_command` from inside themselves. Measured: `commit -m` is self-blocked by
   the `-m` interpreter flag, while `runner=ls/echo/cat` yields `"Tests passed"` — a green
   result from a command that cannot run tests.
-* **`laptop↔watch` — soft.** Watch routines re-enter `core.handle()`, so they do re-pass the
+- **`laptop↔watch` — soft.** Watch routines re-enter `core.handle()`, so they do re-pass the
   engine, but they pass through the full planner rather than a scoped routine authority.
-* **`memory↔privacy` — worst boundary.** Memory tools never import `security/privacy.py`
+- **`memory↔privacy` — worst boundary.** Memory tools never import `security/privacy.py`
   (§6 export finding).
 
 **Structural:** `allowed_devices == ['laptop_main']` on **all 126** specs, so the engine's
@@ -481,33 +484,33 @@ by nothing else — correct today, but it means a single tag string bypasses all
 
 Full probe-by-probe: `PHASE9_API_SECURITY.md`.
 
-| control | result |
-|---|---|
-| 401 without token; 401 wrong token; header and `Bearer` both accepted | **PASS** |
-| `POST /confirm/{id}`, `POST /command`, `POST /privacy/delete` all 401 unauthenticated | **PASS** |
-| constant-time token compare; 0600 token file created with `O_CREAT,0o600` then `chmod` | **PASS** |
-| `Host: evil.example.com` → 400; `10.0.0.5:8765` → 400 (DNS rebinding held) | **PASS** |
-| CORS default-deny; no `access-control-allow-origin` on 12/12 sampled responses | **PASS** |
-| malformed JSON → 422 structured; empty body → 422; `text:""` → 422 with reason | **PASS** |
-| rate limit: 150-burst → 118×200 then 32×429, clean knee, no pre-knee inflation | **PASS** |
-| security headers `x-content-type-options: nosniff`, `x-frame-options: DENY` | **PASS** |
-| **`GET /auth/token` → 200 with the live token, no credentials, no `Origin` header; leaked token then authorised `POST /command`** | **P0 FAIL** |
-| **`GET /dashboard` → 200 unauthenticated, 22,775 bytes, with the live token embedded in the HTML** (no `Origin` guard at all) | **P0 FAIL** |
-| **`GET /openapi.json` → 200 unauthenticated: 71,047 bytes, 96 paths including `/command`, `/confirm/{id}`, `/privacy/delete`, `/memory/export`; `/docs` and `/redoc` also open** | **P2** |
-| no request body cap: 2 MB `/command` accepted, 4071 ms of planner CPU; ≥2 MB → broken pipe not 413 | **P2** |
-| `Host: 0.0.0.0:8765` allowlisted | **P3** |
-| no CSP / referrer-policy; `/` leaks name+version unauthenticated | **P4** |
-| no `/home/status`, `/robotics/status`, `/car/status`, `/vision/status` routes (404) — peripheral truth reachable only via tools | **P3** |
+| control                                                                                                                                                                          | result      |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- |
+| 401 without token; 401 wrong token; header and `Bearer` both accepted                                                                                                            | **PASS**    |
+| `POST /confirm/{id}`, `POST /command`, `POST /privacy/delete` all 401 unauthenticated                                                                                            | **PASS**    |
+| constant-time token compare; 0600 token file created with `O_CREAT,0o600` then `chmod`                                                                                           | **PASS**    |
+| `Host: evil.example.com` → 400; `10.0.0.5:8765` → 400 (DNS rebinding held)                                                                                                       | **PASS**    |
+| CORS default-deny; no `access-control-allow-origin` on 12/12 sampled responses                                                                                                   | **PASS**    |
+| malformed JSON → 422 structured; empty body → 422; `text:""` → 422 with reason                                                                                                   | **PASS**    |
+| rate limit: 150-burst → 118×200 then 32×429, clean knee, no pre-knee inflation                                                                                                   | **PASS**    |
+| security headers `x-content-type-options: nosniff`, `x-frame-options: DENY`                                                                                                      | **PASS**    |
+| **`GET /auth/token` → 200 with the live token, no credentials, no `Origin` header; leaked token then authorised `POST /command`**                                                | **P0 FAIL** |
+| **`GET /dashboard` → 200 unauthenticated, 22,775 bytes, with the live token embedded in the HTML** (no `Origin` guard at all)                                                    | **P0 FAIL** |
+| **`GET /openapi.json` → 200 unauthenticated: 71,047 bytes, 96 paths including `/command`, `/confirm/{id}`, `/privacy/delete`, `/memory/export`; `/docs` and `/redoc` also open** | **P2**      |
+| no request body cap: 2 MB `/command` accepted, 4071 ms of planner CPU; ≥2 MB → broken pipe not 413                                                                               | **P2**      |
+| `Host: 0.0.0.0:8765` allowlisted                                                                                                                                                 | **P3**      |
+| no CSP / referrer-policy; `/` leaks name+version unauthenticated                                                                                                                 | **P4**      |
+| no `/home/status`, `/robotics/status`, `/car/status`, `/vision/status` routes (404) — peripheral truth reachable only via tools                                                  | **P3**      |
 
 Two unauthenticated routes disclose the master credential, and a third publishes the complete
-API contract to use it with. `/auth/token` at least *tries* to gate on `Origin`; `/dashboard`
+API contract to use it with. `/auth/token` at least _tries_ to gate on `Origin`; `/dashboard`
 has no such guard because it is meant to be navigated to directly.
 
 **Local privilege escalation and defence-in-depth collapse**, not a remote takeover: the
 socket is loopback-bound and a cross-origin browser read is genuinely blocked by the
 `Origin`+CORS+`Host` combination. But any other process on the machine can, in two plain
 `curl` calls, obtain the full attack surface and the credential — and then drive all 126
-tools, *including approving its own confirmations* via `POST /confirm/{id}`.
+tools, _including approving its own confirmations_ via `POST /confirm/{id}`.
 
 ---
 
@@ -518,7 +521,7 @@ Full report: `PHASE9_DESKTOP_AUDIT.md` (739 lines).
 **The bundle does not launch.** `dist/Jarvis Forge.app` is 588 KB and contains **zero**
 `jarvis/` files — no PyInstaller, no embedded interpreter. It is a shim, `launcher.py`, and
 two pointer files. `launcher.py` matches the repo copy byte-for-byte
-(SHA-256 `accd4b35…695772`) — the *code* is current. But `Resources/project_path.txt`
+(SHA-256 `accd4b35…695772`) — the _code_ is current. But `Resources/project_path.txt`
 contains `/Users/abhijeetmiskin/AppData/aisys/jarvis-forge`, which does not exist, and
 `resolve_project_dir()`'s ancestor fallback reaches only `dist/`, not the checkout four
 levels up. Measured against the real `MacOS/JarvisForge`: **exit 1**,
@@ -529,7 +532,7 @@ and the `"self-test 7/9"` / `"signature valid"` claims in `STATUS.md:25` and
 `BASELINE_REPORT.md:34` are unreproducible. Because no code is bundled, the app imports the
 repo live and **carries the `Verification` NameError by reference** — reproduced on both
 candidate interpreters (3.11.16 and 3.13.12), across 171 call sites in 19 files.
-Source/bundle code drift is structurally impossible here; *pointer* drift is total.
+Source/bundle code drift is structurally impossible here; _pointer_ drift is total.
 
 Signature: ad-hoc, `TeamIdentifier=not set`; `codesign --verify` **fails** on a stray
 cpython-3.13 `.pyc` inside `Resources/` (which also breaks the seal);
@@ -544,16 +547,16 @@ executed per the brief.
 Full matrix: `PHASE9_HARDWARE_MATRIX.csv`. Every row distinguishes
 not-configured / configured-unreachable / connected / simulated / last-known / live.
 
-| device | measured state |
-|---|---|
-| **microphone** | `capture_available=false`, `capture_state="blocked"`, **macOS denied permission** to `"unbundled process (python)"`; 2 input devices enumerated (Microsoft Teams Audio, MacBook Air Microphone), both `in_use=false`. Helper warms ~4 s after listen. → *not usable; ENVIRONMENT* |
-| **screen** | `capture_screen` and `take_screenshot` both `ok=false`, `Verification.FAILED`, with correct Screen-Recording-permission guidance (275 ms / 71 ms). → *blocked; ENVIRONMENT* |
-| **watch** | `mode="simulate"`, `transport="simulated"`, `paired=false`, `auth_state="unpaired"`, `online=false`, `battery_reported_by="never reported"`, outbox all zero. Routines `arrive_home, emergency, leave_home, sleep, study`. → *not paired* — **and see RT-1** |
-| **home** | gateway offline → `"…showing last known state and not controlling anything"`, honest wording, but **hardcoded 23.0/24.0 °C fixture values presented as history** |
-| **robotics** | no bridge configured → `"…offline and showing last known state, not commanding anything"`; `command_robot_motion` refuses; **but battery 84.0%/91.0% are constants**, and `emergency_stop` is a no-op |
-| **car** | no adapter or vehicle API → all five tools say plainly `"I cannot read live telemetry yet"`; **the honest exemplar** — `_last_known` populated only by real reads |
-| **fleet** | 5 devices registered (`laptop_main`, `phone_main`, `watch_main`, `home_gateway`, `car_main`); `list_devices` → `"I know 5 devices; 0 are paired."` |
-| **LLM** | `llm_enabled=false` — planner is fully local/rule-based; no network model was reachable during the audit |
+| device         | measured state                                                                                                                                                                                                                                                                    |
+| -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **microphone** | `capture_available=false`, `capture_state="blocked"`, **macOS denied permission** to `"unbundled process (python)"`; 2 input devices enumerated (Microsoft Teams Audio, MacBook Air Microphone), both `in_use=false`. Helper warms ~4 s after listen. → _not usable; ENVIRONMENT_ |
+| **screen**     | `capture_screen` and `take_screenshot` both `ok=false`, `Verification.FAILED`, with correct Screen-Recording-permission guidance (275 ms / 71 ms). → _blocked; ENVIRONMENT_                                                                                                       |
+| **watch**      | `mode="simulate"`, `transport="simulated"`, `paired=false`, `auth_state="unpaired"`, `online=false`, `battery_reported_by="never reported"`, outbox all zero. Routines `arrive_home, emergency, leave_home, sleep, study`. → _not paired_ — **and see RT-1**                      |
+| **home**       | gateway offline → `"…showing last known state and not controlling anything"`, honest wording, but **hardcoded 23.0/24.0 °C fixture values presented as history**                                                                                                                  |
+| **robotics**   | no bridge configured → `"…offline and showing last known state, not commanding anything"`; `command_robot_motion` refuses; **but battery 84.0%/91.0% are constants**, and `emergency_stop` is a no-op                                                                             |
+| **car**        | no adapter or vehicle API → all five tools say plainly `"I cannot read live telemetry yet"`; **the honest exemplar** — `_last_known` populated only by real reads                                                                                                                 |
+| **fleet**      | 5 devices registered (`laptop_main`, `phone_main`, `watch_main`, `home_gateway`, `car_main`); `list_devices` → `"I know 5 devices; 0 are paired."`                                                                                                                                |
+| **LLM**        | `llm_enabled=false` — planner is fully local/rule-based; no network model was reachable during the audit                                                                                                                                                                          |
 
 Nothing in this audit had hardware attached, so **no claim about real device behaviour is
 made**; all delivery/verification paths for absent hardware were assessed from code plus
@@ -565,23 +568,23 @@ forced-failure probes, and are labelled as such.
 
 Full detail: `PHASE9_PERFORMANCE.md`. Measure-only; nothing optimised.
 
-| | value |
-|---|---|
-| server startup → serving | **321.8 / 732.6 ms** fresh home; **46.2 ms** warm |
-| tool registry construction | **0.8–1.1 ms** |
-| `GET /health` | median **2.8 ms**, p95 4.3 ms (n=15) |
-| `GET /tools` (126 specs) | median **1.0 ms** |
-| `GET /devices` | median **0.7 ms** |
-| `GET /dashboard` | median **1.2 ms** |
-| first request after cold bind | 64.7 ms, then 1.2–1.9 ms steady |
-| `POST /command` "what time is it" | median **5.0 ms** |
-| "what is my battery" | median **29.0 ms** |
-| memory retrieval in-pipeline | median **4.5 ms** |
-| `"find my report"` (filesystem search) | **303 ms** |
-| **`vision_capabilities`** | **2226 ms** — slowest local operation, synchronous probe behind a UI tile |
-| **2 MB `POST /command`** | **4071 ms** for an unusable payload |
-| rate-limit knee | 118×200 then 32×429; flat to the knee; recovers |
-| clean shutdown | SIGTERM handled, port released |
+|                                        | value                                                                     |
+| -------------------------------------- | ------------------------------------------------------------------------- |
+| server startup → serving               | **321.8 / 732.6 ms** fresh home; **46.2 ms** warm                         |
+| tool registry construction             | **0.8–1.1 ms**                                                            |
+| `GET /health`                          | median **2.8 ms**, p95 4.3 ms (n=15)                                      |
+| `GET /tools` (126 specs)               | median **1.0 ms**                                                         |
+| `GET /devices`                         | median **0.7 ms**                                                         |
+| `GET /dashboard`                       | median **1.2 ms**                                                         |
+| first request after cold bind          | 64.7 ms, then 1.2–1.9 ms steady                                           |
+| `POST /command` "what time is it"      | median **5.0 ms**                                                         |
+| "what is my battery"                   | median **29.0 ms**                                                        |
+| memory retrieval in-pipeline           | median **4.5 ms**                                                         |
+| `"find my report"` (filesystem search) | **303 ms**                                                                |
+| **`vision_capabilities`**              | **2226 ms** — slowest local operation, synchronous probe behind a UI tile |
+| **2 MB `POST /command`**               | **4071 ms** for an unusable payload                                       |
+| rate-limit knee                        | 118×200 then 32×429; flat to the knee; recovers                           |
+| clean shutdown                         | SIGTERM handled, port released                                            |
 
 **Performance is not the constraint.** Only two numbers matter: the unbounded request body
 (P2, because it converts a size question into 4 s of CPU per request) and the 2.2 s vision
@@ -634,48 +637,48 @@ integration readiness → user value → complexity, not preference.
 
 ### P0 — security / correctness defects (system can perform an unsafe or false action)
 
-| ID | problem | evidence | components | risk | user impact | complexity | deps | recommended phase |
-|---|---|---|---|---|---|---|---|---|
-| **P0-1** | Missing `Verification` import makes every tool success path raise `NameError`; suite reports 126 failures | `base.py:16` vs `:103/:110/:117`; reproduced **3 failed/997 passed** after one line | `jarvis/tools/base.py`, all 126 tools | high | assistant cannot complete any successful action | **trivial (1 line)** | none | **Phase 10 step 1** |
-| **P0-2** | The master token is disclosed by **two** unauthenticated routes: `GET /auth/token` (its `Origin` check is skipped when the header is absent) and `GET /dashboard` (token embedded, no guard at all). The leaked token then authorises `POST /command`. `GET /openapi.json` additionally publishes 96 paths to anonymous local callers | `app.py:326-339` `if origin and …`; measured 200 + working `POST /command`; `/dashboard` 200/22,775 B with 1 token occurrence | `jarvis/api/app.py`, `security/auth.py`, `dashboard/` | **critical** | any local process drives all 126 tools and self-approves confirmations | small — make `/auth/token` require `Protected` and hand the dashboard a single-use bootstrap secret instead of the master token | P0-1 to retest | **Phase 10 step 1** |
-| **P0-3** | `emergency_stop` cancels nothing yet reports `SUCCESS` with "Physical actions cancelled" | `system.py:231-249`; measured `cancelled_actions=0`; no device advertises the 3 capability strings; no stop method on either gateway | `tools/system.py`, `robotics/gateway.py`, `home/gateway.py` | **critical (physical safety)** | user believes a moving robot was stopped | medium (needs a real stop path, or must report `UNKNOWN`/not-implemented) | gateway API | **Phase 10 step 1** |
-| **P0-4** | Simulated/unpaired watch can authorise a real destructive action | `gateway.py:115-118,382,440-446` + `app.py:2058-2069`; measured file moved to Trash twice, `reply_error=""` | `watch/gateway.py`, `api/app.py` | **critical** | fake device grants real authority | **small (one guard)** | none | **Phase 10 step 1** |
-| **P0-5** | `forget_memory` deletes only 1 of the 2 rows that store a fact; the auto-written session echo keeps it retrievable | `orchestrator.py:451-460`; measured: `"Forgotten: …"` + `SUCCESS`, then `search_memory` still returns the sentence verbatim | `core/orchestrator.py`, `memory/store.py`, `tools/memory_tools.py` | high | "forget" is a partial no-op that reports unqualified success | medium — purge echoes, or cascade delete by provenance | P0-1 | **Phase 10 step 2** |
+| ID       | problem                                                                                                                                                                                                                                                                                                                               | evidence                                                                                                                             | components                                                         | risk                           | user impact                                                            | complexity                                                                                                                      | deps           | recommended phase   |
+| -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------ | ------------------------------ | ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | -------------- | ------------------- |
+| **P0-1** | Missing `Verification` import makes every tool success path raise `NameError`; suite reports 126 failures                                                                                                                                                                                                                             | `base.py:16` vs `:103/:110/:117`; reproduced **3 failed/997 passed** after one line                                                  | `jarvis/tools/base.py`, all 126 tools                              | high                           | assistant cannot complete any successful action                        | **trivial (1 line)**                                                                                                            | none           | **Phase 10 step 1** |
+| **P0-2** | The master token is disclosed by **two** unauthenticated routes: `GET /auth/token` (its `Origin` check is skipped when the header is absent) and `GET /dashboard` (token embedded, no guard at all). The leaked token then authorises `POST /command`. `GET /openapi.json` additionally publishes 96 paths to anonymous local callers | `app.py:326-339` `if origin and …`; measured 200 + working `POST /command`; `/dashboard` 200/22,775 B with 1 token occurrence        | `jarvis/api/app.py`, `security/auth.py`, `dashboard/`              | **critical**                   | any local process drives all 126 tools and self-approves confirmations | small — make `/auth/token` require `Protected` and hand the dashboard a single-use bootstrap secret instead of the master token | P0-1 to retest | **Phase 10 step 1** |
+| **P0-3** | `emergency_stop` cancels nothing yet reports `SUCCESS` with "Physical actions cancelled"                                                                                                                                                                                                                                              | `system.py:231-249`; measured `cancelled_actions=0`; no device advertises the 3 capability strings; no stop method on either gateway | `tools/system.py`, `robotics/gateway.py`, `home/gateway.py`        | **critical (physical safety)** | user believes a moving robot was stopped                               | medium (needs a real stop path, or must report `UNKNOWN`/not-implemented)                                                       | gateway API    | **Phase 10 step 1** |
+| **P0-4** | Simulated/unpaired watch can authorise a real destructive action                                                                                                                                                                                                                                                                      | `gateway.py:115-118,382,440-446` + `app.py:2058-2069`; measured file moved to Trash twice, `reply_error=""`                          | `watch/gateway.py`, `api/app.py`                                   | **critical**                   | fake device grants real authority                                      | **small (one guard)**                                                                                                           | none           | **Phase 10 step 1** |
+| **P0-5** | `forget_memory` deletes only 1 of the 2 rows that store a fact; the auto-written session echo keeps it retrievable                                                                                                                                                                                                                    | `orchestrator.py:451-460`; measured: `"Forgotten: …"` + `SUCCESS`, then `search_memory` still returns the sentence verbatim          | `core/orchestrator.py`, `memory/store.py`, `tools/memory_tools.py` | high                           | "forget" is a partial no-op that reports unqualified success           | medium — purge echoes, or cascade delete by provenance                                                                          | P0-1           | **Phase 10 step 2** |
 
 ### P1 — reliability defects (works but can fail unpredictably or mislead)
 
-| ID | problem | evidence | components | impact | complexity | phase |
-|---|---|---|---|---|---|---|
-| P1-1 | `revoke()` silently fails on a `granted_at` second tie; grant/revoke with `device=None` never matches | `policy.py:84-93,96-104,226-233`; measured tie→`EXECUTE` forever, 1.2 s offset→`BLOCK` | `security/policy.py` | destructive tool permanently auto-executes; kill switch broken | small (`ORDER BY granted_at DESC, rowid DESC` + explicit timestamp + NULL-wildcard) | 10 |
-| P1-2 | `resolve_confirmation()` never re-runs the engine | `orchestrator.py:310-407`; measured `after_revoke_executed=True` | `core/orchestrator.py` | revoked/offline actions still execute | small (check-only re-entry) | 10 |
-| P1-3 | Audit line, step status and job "done" derive from `result.ok`; `audit_result` has 0 callers; `unverified()` 0 call sites; 152/171 `ok()` pass no `verified=` | `orchestrator.py:133,284,291,297`; `models.py:266`; AST scan | `core/orchestrator.py`, `core/models.py`, all tools | record asserts success the prose hedges | **large (touches every handler)** | 10-11 |
-| P1-4 | `laptop.py:38-40` / `laptop_center.py:41-43` re-hardcode `verified=True`; no `validate_assignment`, so the promised invariant is bypassed | measured `verified=True` with `verification="unknown"` | `agents/laptop*.py`, `core/models.py` | the historical false-success bug, reintroduced for 25 tools | small | 10 |
-| P1-5 | Offline ≠ empty for calendar and email; `find_free_time` fabricates a bookable slot | `calendar_provider.py:431-436`, `email_provider.py:394-395`; measured 4 false tool outputs | `integrations/*_provider.py`, `tools/calendar.py`, `tools/email.py` | assistant lies about your day | small-medium (raise/propagate instead of `[]`) | 10 |
-| P1-6 | Tier-0 `export_memories(include_sensitive=True)` emits `secret` memories unredacted; `set_memory_category` control is dead code; `RemoteEmbedder` POSTs raw secret content off-box | measured planted API key in output; `category_enabled` 0 callers; `embeddings.py:203-219` | `tools/memory_controls.py`, `security/privacy.py`, `memory/embeddings.py` | credential/PII disclosure without confirmation | medium | 10 |
-| P1-7 | Risk tier mutable at runtime and trusted by the classifier | measured `delete_file` 3→0 flips verdict to `EXECUTE` | `security/risk.py`, `registry/tools.py` | in-process containment failure | small (freeze specs / validate against DB) | 10 |
-| P1-8 | Home/robotics present hardcoded values as "last known state" | `home/gateway.py:110`, `robotics/gateway.py:148`; measured `battery=84.0% … (last known state)` | `home/gateway.py`, `robotics/gateway.py` | fabricated world model | medium (adopt `car/gateway.py` `_last_known` pattern) | 10-11 |
-| P1-9 | 3 stale tests abort on a moved field, leaving 3 actuation honesty guarantees untested | `test_home.py:228,241`, `test_robotics.py:221` `KeyError:'verified'` | `tests/` | green suite would hide untested safety properties | trivial | 10 |
-| **P1-10** | **Recovery declares success from `.ok` alone, so a no-op retry becomes "Recovered automatically — succeeded"**, with `recovered=1` written to the ledger | `recovery.py:28` (no `Verification` import), `:169`, `:209`; reproduced: 2 invocations, reply contains both "No device was switched" and "succeeded on retry 1" | `core/recovery.py`, `core/orchestrator.py` | the user is told a failed action was repaired | small — gate both checks on `verification is Verification.SUCCESS` | 10 |
-| P1-11 | Retry guard sits at risk ≥ 3, so **44 tools auto-retry** on a regex over error *text*; includes `move_file`, `run_allowlisted_command`, `create_event`, `send_to_device`, `vibrate_watch`. Measured 3 executions and 4 duplicate memory rows for one call | `PHASE9_RECOVERY_AUDIT.md` R-2 | `core/recovery.py` | duplicate side effects; retries keyed off string matching | medium — gate on risk tier *and* idempotency, not error text | 10 |
-| P1-12 | Fallback path is unauthorised by design (executed a CONFIRM-verdict `delete_file` with 0 confirmations, audited as `compress_path/success`) but dead in practice because every shipped pair is param-incompatible | R-6 / R-10 | `core/recovery.py` | latent P0 the moment a compatible pair is added | medium | 10 |
-| P1-13 | Confirmation and scheduler failures write no `failures` rows; notes say "not retried" after 2 retries ran; user told only on success; `POST /tasks/{id}/retry` returns a fabricated `running` | R-11…R-14 | `core/recovery.py`, `api/app.py`, `core/tasks.py` | `/metrics` understates; recovery is misreported in both directions | small-medium | 10-11 |
+| ID        | problem                                                                                                                                                                                                                                                   | evidence                                                                                                                                                        | components                                                                | impact                                                             | complexity                                                                          | phase |
+| --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- | ------------------------------------------------------------------ | ----------------------------------------------------------------------------------- | ----- |
+| P1-1      | `revoke()` silently fails on a `granted_at` second tie; grant/revoke with `device=None` never matches                                                                                                                                                     | `policy.py:84-93,96-104,226-233`; measured tie→`EXECUTE` forever, 1.2 s offset→`BLOCK`                                                                          | `security/policy.py`                                                      | destructive tool permanently auto-executes; kill switch broken     | small (`ORDER BY granted_at DESC, rowid DESC` + explicit timestamp + NULL-wildcard) | 10    |
+| P1-2      | `resolve_confirmation()` never re-runs the engine                                                                                                                                                                                                         | `orchestrator.py:310-407`; measured `after_revoke_executed=True`                                                                                                | `core/orchestrator.py`                                                    | revoked/offline actions still execute                              | small (check-only re-entry)                                                         | 10    |
+| P1-3      | Audit line, step status and job "done" derive from `result.ok`; `audit_result` has 0 callers; `unverified()` 0 call sites; 152/171 `ok()` pass no `verified=`                                                                                             | `orchestrator.py:133,284,291,297`; `models.py:266`; AST scan                                                                                                    | `core/orchestrator.py`, `core/models.py`, all tools                       | record asserts success the prose hedges                            | **large (touches every handler)**                                                   | 10-11 |
+| P1-4      | `laptop.py:38-40` / `laptop_center.py:41-43` re-hardcode `verified=True`; no `validate_assignment`, so the promised invariant is bypassed                                                                                                                 | measured `verified=True` with `verification="unknown"`                                                                                                          | `agents/laptop*.py`, `core/models.py`                                     | the historical false-success bug, reintroduced for 25 tools        | small                                                                               | 10    |
+| P1-5      | Offline ≠ empty for calendar and email; `find_free_time` fabricates a bookable slot                                                                                                                                                                       | `calendar_provider.py:431-436`, `email_provider.py:394-395`; measured 4 false tool outputs                                                                      | `integrations/*_provider.py`, `tools/calendar.py`, `tools/email.py`       | assistant lies about your day                                      | small-medium (raise/propagate instead of `[]`)                                      | 10    |
+| P1-6      | Tier-0 `export_memories(include_sensitive=True)` emits `secret` memories unredacted; `set_memory_category` control is dead code; `RemoteEmbedder` POSTs raw secret content off-box                                                                        | measured planted API key in output; `category_enabled` 0 callers; `embeddings.py:203-219`                                                                       | `tools/memory_controls.py`, `security/privacy.py`, `memory/embeddings.py` | credential/PII disclosure without confirmation                     | medium                                                                              | 10    |
+| P1-7      | Risk tier mutable at runtime and trusted by the classifier                                                                                                                                                                                                | measured `delete_file` 3→0 flips verdict to `EXECUTE`                                                                                                           | `security/risk.py`, `registry/tools.py`                                   | in-process containment failure                                     | small (freeze specs / validate against DB)                                          | 10    |
+| P1-8      | Home/robotics present hardcoded values as "last known state"                                                                                                                                                                                              | `home/gateway.py:110`, `robotics/gateway.py:148`; measured `battery=84.0% … (last known state)`                                                                 | `home/gateway.py`, `robotics/gateway.py`                                  | fabricated world model                                             | medium (adopt `car/gateway.py` `_last_known` pattern)                               | 10-11 |
+| P1-9      | 3 stale tests abort on a moved field, leaving 3 actuation honesty guarantees untested                                                                                                                                                                     | `test_home.py:228,241`, `test_robotics.py:221` `KeyError:'verified'`                                                                                            | `tests/`                                                                  | green suite would hide untested safety properties                  | trivial                                                                             | 10    |
+| **P1-10** | **Recovery declares success from `.ok` alone, so a no-op retry becomes "Recovered automatically — succeeded"**, with `recovered=1` written to the ledger                                                                                                  | `recovery.py:28` (no `Verification` import), `:169`, `:209`; reproduced: 2 invocations, reply contains both "No device was switched" and "succeeded on retry 1" | `core/recovery.py`, `core/orchestrator.py`                                | the user is told a failed action was repaired                      | small — gate both checks on `verification is Verification.SUCCESS`                  | 10    |
+| P1-11     | Retry guard sits at risk ≥ 3, so **44 tools auto-retry** on a regex over error _text_; includes `move_file`, `run_allowlisted_command`, `create_event`, `send_to_device`, `vibrate_watch`. Measured 3 executions and 4 duplicate memory rows for one call | `PHASE9_RECOVERY_AUDIT.md` R-2                                                                                                                                  | `core/recovery.py`                                                        | duplicate side effects; retries keyed off string matching          | medium — gate on risk tier _and_ idempotency, not error text                        | 10    |
+| P1-12     | Fallback path is unauthorised by design (executed a CONFIRM-verdict `delete_file` with 0 confirmations, audited as `compress_path/success`) but dead in practice because every shipped pair is param-incompatible                                         | R-6 / R-10                                                                                                                                                      | `core/recovery.py`                                                        | latent P0 the moment a compatible pair is added                    | medium                                                                              | 10    |
+| P1-13     | Confirmation and scheduler failures write no `failures` rows; notes say "not retried" after 2 retries ran; user told only on success; `POST /tasks/{id}/retry` returns a fabricated `running`                                                             | R-11…R-14                                                                                                                                                       | `core/recovery.py`, `api/app.py`, `core/tasks.py`                         | `/metrics` understates; recovery is misreported in both directions | small-medium                                                                        | 10-11 |
 
 ### P2 — integration gaps (architecture ready, real connection missing)
 
-| ID | problem | evidence | complexity | phase |
-|---|---|---|---|---|
-| P2-1 | No calendar/email account configured, and their providers fail silently — so a *live* integration would currently amplify §P1-5 rather than fix it | `JARVIS_CALENDAR_URL` unset; measured dead-provider behaviour | medium | 11 |
-| P2-2 | No home gateway reachable — 17-device fleet is fixture data | `home/gateway.py:97-134` | medium | 11 |
-| P2-3 | No robot bridge; `RobotGateway`/`HomeGateway` expose **no stop method**, blocking P0-3 | grep of both gateways | medium | 11 (gates P0-3 completion) |
-| P2-4 | No watch companion; `auth_state=unpaired` on a real device | `/watch/status` | medium | 11 |
-| P2-5 | No car adapter / vehicle API | all five car tools | medium | 11 |
-| P2-6 | No LLM backend (`llm_enabled=false`) — planner is rule-only; embedding path untested live | `/health`, `embeddings.py` | medium | 11 |
-| P2-7 | Microphone + Screen Recording TCC permissions denied to the unbundled python host; the bundled app would need its own identity, but the app does not launch (P2-8) | `/voice/status` `permission=denied` | small (grant + bundle) | 11 |
-| P2-8 | Desktop launcher pointer dead → app exits 1; ad-hoc signature rejected by `spctl` | `Resources/project_path.txt`; `codesign`/`spctl` output | small (rebuild + re-sign) | 10 |
-| P2-9 | Standing grants can reach risk-4 `command_robot_motion` and permanent `delete_file`; reversibility not tied to `trash_on_delete`; `delete_file` declares `reversible=True` while `permanent=true` does `rmtree` | `policy.py:152-158`, `files.py:335-350,534-545`, `risk.py:76` ignores params | medium | 10-11 |
-| P2-10 | No request body size cap (2 MB → 4.07 s CPU) | `PHASE9_API_SECURITY.md` API-1 | small | 10 |
-| P2-11 | `allowed_devices=['laptop_main']` on all 126 specs — engine device scoping discriminates nothing | measured distribution | medium | 11 |
-| P2-12 | No `/home/status`, `/robotics/status`, `/car/status`, `/vision/status` endpoints; monitors must re-implement probing | all 404 | small | 11 |
+| ID    | problem                                                                                                                                                                                                         | evidence                                                                     | complexity                | phase                      |
+| ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- | ------------------------- | -------------------------- |
+| P2-1  | No calendar/email account configured, and their providers fail silently — so a _live_ integration would currently amplify §P1-5 rather than fix it                                                              | `JARVIS_CALENDAR_URL` unset; measured dead-provider behaviour                | medium                    | 11                         |
+| P2-2  | No home gateway reachable — 17-device fleet is fixture data                                                                                                                                                     | `home/gateway.py:97-134`                                                     | medium                    | 11                         |
+| P2-3  | No robot bridge; `RobotGateway`/`HomeGateway` expose **no stop method**, blocking P0-3                                                                                                                          | grep of both gateways                                                        | medium                    | 11 (gates P0-3 completion) |
+| P2-4  | No watch companion; `auth_state=unpaired` on a real device                                                                                                                                                      | `/watch/status`                                                              | medium                    | 11                         |
+| P2-5  | No car adapter / vehicle API                                                                                                                                                                                    | all five car tools                                                           | medium                    | 11                         |
+| P2-6  | No LLM backend (`llm_enabled=false`) — planner is rule-only; embedding path untested live                                                                                                                       | `/health`, `embeddings.py`                                                   | medium                    | 11                         |
+| P2-7  | Microphone + Screen Recording TCC permissions denied to the unbundled python host; the bundled app would need its own identity, but the app does not launch (P2-8)                                              | `/voice/status` `permission=denied`                                          | small (grant + bundle)    | 11                         |
+| P2-8  | Desktop launcher pointer dead → app exits 1; ad-hoc signature rejected by `spctl`                                                                                                                               | `Resources/project_path.txt`; `codesign`/`spctl` output                      | small (rebuild + re-sign) | 10                         |
+| P2-9  | Standing grants can reach risk-4 `command_robot_motion` and permanent `delete_file`; reversibility not tied to `trash_on_delete`; `delete_file` declares `reversible=True` while `permanent=true` does `rmtree` | `policy.py:152-158`, `files.py:335-350,534-545`, `risk.py:76` ignores params | medium                    | 10-11                      |
+| P2-10 | No request body size cap (2 MB → 4.07 s CPU)                                                                                                                                                                    | `PHASE9_API_SECURITY.md` API-1                                               | small                     | 10                         |
+| P2-11 | `allowed_devices=['laptop_main']` on all 126 specs — engine device scoping discriminates nothing                                                                                                                | measured distribution                                                        | medium                    | 11                         |
+| P2-12 | No `/home/status`, `/robotics/status`, `/car/status`, `/vision/status` endpoints; monitors must re-implement probing                                                                                            | all 404                                                                      | small                     | 11                         |
 
 ### P3 — product improvements (not required for correctness)
 
@@ -719,8 +722,8 @@ Suggested sequencing inside Phase 10:
 3. P0-2, P0-4, P1-1, P1-2, P1-4, P1-7 — the authority cluster. Each is small, local,
    independently testable, and all were measured with concrete exploits, so each gets a
    regression test that fails today.
-4. P0-3 `emergency_stop` — decide honestly between *implementing a real stop path* (needs
-   P2-3's gateway method) and *reporting `Verification.UNKNOWN` / not-implemented*. It must
+4. P0-3 `emergency_stop` — decide honestly between _implementing a real stop path_ (needs
+   P2-3's gateway method) and _reporting `Verification.UNKNOWN` / not-implemented_. It must
    not keep claiming cancellation. If a robot is reachable, prefer the real path first.
 5. P0-5 + P1-3 + P1-4 + **P1-10…P1-13** + P1-5 + P1-6 + P1-8 — the truthfulness cluster.
    **P1-10 is the highest-value item in this group per unit of effort**: recovery currently
@@ -800,44 +803,44 @@ written. Scratch scripts and fixtures live only in `/tmp`. All servers were term
 
 ## 18. Evidence index
 
-| artifact | covers | lines |
-|---|---|---|
-| `audit/PHASE9_BASELINE.md` | Phase 1 — identity, size, env, counts, config, DB | 277 |
-| `audit/PHASE9_TEST_AUDIT.md` | Phase 2 — suite truth, P0 root cause, causality experiments, stale tests, contamination | 279 |
-| `audit/PHASE9_STATUS_DRIFT.csv` | Phase 3 — **287 checkable claims**: 179 TRUE, 52 STALE, **44 FALSE**, 10 ENVIRONMENT, 2 UNVERIFIED | — |
-| `audit/PHASE9_SECURITY_REDTEAM.md` | Phase 4 — 22 attacks, RT-1…RT-9 with exploits and smallest repairs | 433 |
-| `audit/PHASE9_HONESTY_MATRIX.csv` | Phase 5 — 99 tool/action rows (47 PASS / 23 WEAK / 29 FAIL) + 33 findings | 133 |
-| `audit/PHASE9_RECOVERY_AUDIT.md` | Phase 6 — 7 executed experiments, R-1…R-17; recovery-promotes-no-op reproduced | 616 |
-| `audit/PHASE9_MEMORY_AUDIT.md` | Phase 7 — 11 executed experiments, 20-row leak table | 603 |
-| `audit/PHASE9_AGENT_BOUNDARIES.csv` | Phase 8 — 15 agents + 10 cross-agent rows, 31 findings | 59 |
-| `audit/PHASE9_API_SECURITY.md` | Phase 9 — auth/host/CORS/headers/robustness/limits + API-0 | 320 |
-| `audit/PHASE9_DESKTOP_AUDIT.md` | Phase 10 — bundle layout, launcher pointer, signature, drift | 739 |
-| `audit/PHASE9_HARDWARE_MATRIX.csv` | Phase 11 — per-device state with 6-way distinction | 29 |
-| `audit/PHASE9_PERFORMANCE.md` | Phase 12 — startup, endpoint, pipeline, limit measurements | 141 |
-| `audit/PHASE9_DOCUMENTATION_DRIFT.md` | Phase 13 — 76 findings across 5 documents | 356 |
+| artifact                              | covers                                                                                             | lines |
+| ------------------------------------- | -------------------------------------------------------------------------------------------------- | ----- |
+| `audit/PHASE9_BASELINE.md`            | Phase 1 — identity, size, env, counts, config, DB                                                  | 277   |
+| `audit/PHASE9_TEST_AUDIT.md`          | Phase 2 — suite truth, P0 root cause, causality experiments, stale tests, contamination            | 279   |
+| `audit/PHASE9_STATUS_DRIFT.csv`       | Phase 3 — **287 checkable claims**: 179 TRUE, 52 STALE, **44 FALSE**, 10 ENVIRONMENT, 2 UNVERIFIED | —     |
+| `audit/PHASE9_SECURITY_REDTEAM.md`    | Phase 4 — 22 attacks, RT-1…RT-9 with exploits and smallest repairs                                 | 433   |
+| `audit/PHASE9_HONESTY_MATRIX.csv`     | Phase 5 — 99 tool/action rows (47 PASS / 23 WEAK / 29 FAIL) + 33 findings                          | 133   |
+| `audit/PHASE9_RECOVERY_AUDIT.md`      | Phase 6 — 7 executed experiments, R-1…R-17; recovery-promotes-no-op reproduced                     | 616   |
+| `audit/PHASE9_MEMORY_AUDIT.md`        | Phase 7 — 11 executed experiments, 20-row leak table                                               | 603   |
+| `audit/PHASE9_AGENT_BOUNDARIES.csv`   | Phase 8 — 15 agents + 10 cross-agent rows, 31 findings                                             | 59    |
+| `audit/PHASE9_API_SECURITY.md`        | Phase 9 — auth/host/CORS/headers/robustness/limits + API-0                                         | 320   |
+| `audit/PHASE9_DESKTOP_AUDIT.md`       | Phase 10 — bundle layout, launcher pointer, signature, drift                                       | 739   |
+| `audit/PHASE9_HARDWARE_MATRIX.csv`    | Phase 11 — per-device state with 6-way distinction                                                 | 29    |
+| `audit/PHASE9_PERFORMANCE.md`         | Phase 12 — startup, endpoint, pipeline, limit measurements                                         | 141   |
+| `audit/PHASE9_DOCUMENTATION_DRIFT.md` | Phase 13 — 76 findings across 5 documents                                                          | 356   |
 
 Key source evidence, by claim:
 
-| claim in this report | evidence |
-|---|---|
-| P0-1 import defect | `jarvis/tools/base.py:16` vs `:103,:110,:117`; `jarvis/core/models.py:210` |
-| P0-2 token disclosure | `jarvis/api/app.py:326-339`; measured 200 + working `/command` |
-| P0-3 emergency stop | `jarvis/tools/system.py:231-249`; measured `cancelled_actions=0` + `SUCCESS` |
-| P0-4 watch approval | `jarvis/watch/gateway.py:115-118,382,440-446`; `jarvis/api/app.py:2058-2069` |
-| P0-5 memory echo | `jarvis/core/orchestrator.py:451-460` |
-| P1-1 revoke tie | `jarvis/security/policy.py:84-93,96-104,226-233`; `db/database.py` `permissions` DDL |
-| P1-2 no re-evaluation | `jarvis/core/orchestrator.py:310-407` (no `evaluate` call) vs `jarvis/scheduler/runner.py:83-84` |
-| P1-3 write-only verification | `orchestrator.py:133,284,291,297`; `models.py:266`; `base.py:115-117` |
-| P1-4 verified hardcode | `jarvis/agents/laptop.py:36-40`; `jarvis/agents/laptop_center.py:41-43` |
+| claim in this report            | evidence                                                                                                                                                            |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| P0-1 import defect              | `jarvis/tools/base.py:16` vs `:103,:110,:117`; `jarvis/core/models.py:210`                                                                                          |
+| P0-2 token disclosure           | `jarvis/api/app.py:326-339`; measured 200 + working `/command`                                                                                                      |
+| P0-3 emergency stop             | `jarvis/tools/system.py:231-249`; measured `cancelled_actions=0` + `SUCCESS`                                                                                        |
+| P0-4 watch approval             | `jarvis/watch/gateway.py:115-118,382,440-446`; `jarvis/api/app.py:2058-2069`                                                                                        |
+| P0-5 memory echo                | `jarvis/core/orchestrator.py:451-460`                                                                                                                               |
+| P1-1 revoke tie                 | `jarvis/security/policy.py:84-93,96-104,226-233`; `db/database.py` `permissions` DDL                                                                                |
+| P1-2 no re-evaluation           | `jarvis/core/orchestrator.py:310-407` (no `evaluate` call) vs `jarvis/scheduler/runner.py:83-84`                                                                    |
+| P1-3 write-only verification    | `orchestrator.py:133,284,291,297`; `models.py:266`; `base.py:115-117`                                                                                               |
+| P1-4 verified hardcode          | `jarvis/agents/laptop.py:36-40`; `jarvis/agents/laptop_center.py:41-43`                                                                                             |
 | P1-10 recovery promotes a no-op | `jarvis/core/recovery.py:28` (no `Verification` in imports), `:169` `if retry_result.ok`, `:209` `if alt_result.ok`; reproduced with a forced first-attempt failure |
-| P1-5 offline-as-empty | `jarvis/integrations/calendar_provider.py:431-436`; `email_provider.py:394-395` |
-| P1-6 unredacted export | `jarvis/tools/memory_controls.py:141-192,316-326`; `security/privacy.py:81-135` unreferenced |
-| P1-7 mutable risk tier | `jarvis/security/risk.py:76-105` |
-| P1-8 fabricated last-known | `jarvis/home/gateway.py:97-134`; `robotics/gateway.py:141-166`; control: `car/gateway.py:268-275` |
-| path guard correctness | `jarvis/security/paths.py:131-137,141-177`; `policy.py:208-223` |
-| confirmation model | `jarvis/core/models.py:27-34`; `policy.py:334-359` |
-| desktop launcher | `dist/Jarvis Forge.app/Contents/Resources/project_path.txt`; `app/launcher.py` |
-| audit chain | `jarvis/security/audit.py` `verify_chain`; measured tamper detection |
+| P1-5 offline-as-empty           | `jarvis/integrations/calendar_provider.py:431-436`; `email_provider.py:394-395`                                                                                     |
+| P1-6 unredacted export          | `jarvis/tools/memory_controls.py:141-192,316-326`; `security/privacy.py:81-135` unreferenced                                                                        |
+| P1-7 mutable risk tier          | `jarvis/security/risk.py:76-105`                                                                                                                                    |
+| P1-8 fabricated last-known      | `jarvis/home/gateway.py:97-134`; `robotics/gateway.py:141-166`; control: `car/gateway.py:268-275`                                                                   |
+| path guard correctness          | `jarvis/security/paths.py:131-137,141-177`; `policy.py:208-223`                                                                                                     |
+| confirmation model              | `jarvis/core/models.py:27-34`; `policy.py:334-359`                                                                                                                  |
+| desktop launcher                | `dist/Jarvis Forge.app/Contents/Resources/project_path.txt`; `app/launcher.py`                                                                                      |
+| audit chain                     | `jarvis/security/audit.py` `verify_chain`; measured tamper detection                                                                                                |
 
 ---
 
@@ -852,11 +855,11 @@ remains load-bearing.
 
 Every occurrence below is wrong:
 
-| location | false statement |
-|---|---|
-| `PHASE9_FINAL_REPORT.md` §17 | "`JARVIS_HOME` to a fresh `mktemp -d`; `~/.jarvis-forge` was never read or written" |
-| `PHASE9_BASELINE.md` §1.9 | "the user's real `~/.jarvis-forge` was never written to" |
-| `PHASE9_SECURITY_REDTEAM.md` §4.0 | "The user's real `~/.jarvis-forge` was never written." |
+| location                              | false statement                                                                      |
+| ------------------------------------- | ------------------------------------------------------------------------------------ |
+| `PHASE9_FINAL_REPORT.md` §17          | "`JARVIS_HOME` to a fresh `mktemp -d`; `~/.jarvis-forge` was never read or written"  |
+| `PHASE9_BASELINE.md` §1.9             | "the user's real `~/.jarvis-forge` was never written to"                             |
+| `PHASE9_SECURITY_REDTEAM.md` §4.0     | "The user's real `~/.jarvis-forge` was never written."                               |
 | `PHASE9_STATUS_DRIFT.csv` method note | "the user's real ~/.jarvis-forge was only read (read-only sqlite) and never written" |
 
 **What actually happened.** Some Phase 9 executions — specifically subagent runs that did not
@@ -865,15 +868,15 @@ hash-verified snapshot (`/tmp/jarvis-preserved-20260926/`, sha256
 `2b98bc9ffd397ec8d2b3e90c9f173a15`, byte-identical to the source, `PRAGMA integrity_check:
 ok`, 0 processes holding the file):
 
-| table | rows created during the audit (still present) | pre-existing rows that survived |
-|---|---|---|
-| `action_logs` | 299 | 162 |
-| `sessions` | 265 | 134 |
-| `confirmations` | 166 | 26 |
-| `messages` | 550 | 331 |
-| `failures` | 35 | 4 |
-| `graph_nodes` | 25 | 0 |
-| `projects` | 15 | 1 |
+| table           | rows created during the audit (still present) | pre-existing rows that survived |
+| --------------- | --------------------------------------------- | ------------------------------- |
+| `action_logs`   | 299                                           | 162                             |
+| `sessions`      | 265                                           | 134                             |
+| `confirmations` | 166                                           | 26                              |
+| `messages`      | 550                                           | 331                             |
+| `failures`      | 35                                            | 4                               |
+| `graph_nodes`   | 25                                            | 0                               |
+| `projects`      | 15                                            | 1                               |
 
 299 records were also appended to the real `audit.jsonl`. Six `privacy_delete(scope=memories)`
 operations reported `success` and cumulatively removed 174 memory rows (36, 32, 32, 14, 28, 32).
@@ -896,7 +899,7 @@ surrounding guarantee the operator believed in ("my data is untouched") did not 
 
 ## C-2 — "Audit chain intact" (§2) was verified against the wrong store. FALSE for the real ledger.
 
-Original §2 wording: *"the audit chain claim is verified true … tamper detection works."* That
+Original §2 wording: _"the audit chain claim is verified true … tamper detection works."_ That
 was measured on a **freshly-migrated throwaway** `JARVIS_HOME`. On the user's **real** ledger,
 the project's own verifier reports:
 
@@ -908,7 +911,7 @@ verify_chain() -> {"ok": false, "checked": 0,
 
 Cause, located: `audit.jsonl` record 0 (timestamp `2026-09-18T18:51:07`, predating the audit)
 is a **legacy record with no `prev_hash` and no `record_hash` field at all**. `verify_chain()`
-classifies a *missing* hash as an *edited* record and aborts with `checked: 0`, so it assesses
+classifies a _missing_ hash as an _edited_ record and aborts with `checked: 0`, so it assesses
 **none** of the 459 subsequent records. One further discontinuity exists inside the audit-day
 segment (1 of 298 consecutive boundaries) and is not yet characterised.
 
@@ -937,9 +940,10 @@ segment (1 of 298 consecutive boundaries) and is not yet characterised.
 > snapshot/restore fixture in `tests/test_security.py` plus a chain walk that reports every
 > break instead of stopping. Measured on the preserved snapshot, before → after:
 > `ok=False, checked=0 of 461` → `ok=False, checked=456 of 461, breaks=5,
-> first_bad_log_id=LEGACY-TEST`.
+first_bad_log_id=LEGACY-TEST`.
 
 Consequences for this report:
+
 1. The §2 "audit chain intact" line must be read as **UNVERIFIED ON REAL DATA / FAILING**.
 2. The tamper-detection result stands only as a property of freshly-created chains.
 3. A new defect is added, filed in Phase 10 as **P0-6**: the verifier cannot distinguish a
@@ -947,7 +951,7 @@ Consequences for this report:
    "audit integrity" claim and `test_unhashed_legacy_records_are_reported_not_silently_passed`
    both point at known-but-unfixed handling here.
 
-Note that every conclusion in §§5–8 that relied on reading *this machine's* audit or memory
+Note that every conclusion in §§5–8 that relied on reading _this machine's_ audit or memory
 state, rather than a throwaway store, inherits from C-1 and must be re-checked before being
 relied on. All quantitative counts in §2 (agents, tools, endpoints, LOC, tables, risk tiers)
 were taken against isolated stores and are unaffected.

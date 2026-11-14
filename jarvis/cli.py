@@ -208,6 +208,25 @@ class Repl:
 
 
 def main(voice: bool = False) -> None:  # pragma: no cover - entrypoint
+    # Check if wizard should be shown (first run, no persisted state)
+    try:
+        from .wizard import should_show_wizard
+        
+        if should_show_wizard():
+            print("\n" + "=" * 60)
+            print("VANTAGE FIRST-RUN SETUP")
+            print("=" * 60 + "\n")
+            print("Welcome to Vantage! This brief setup will configure essential permissions.\n")
+            
+            import asyncio
+            from .wizard import FirstRunWizard
+            
+            asyncio.run(FirstRunWizard().run(show_help=False))
+    
+    except Exception as e:
+        # Non-critical - continue with normal startup even if wizard fails
+        pass
+    
     repl = Repl(voice=voice)
     try:
         asyncio.run(repl.run())

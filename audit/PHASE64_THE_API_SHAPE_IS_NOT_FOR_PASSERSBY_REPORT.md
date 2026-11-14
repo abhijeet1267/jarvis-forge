@@ -12,15 +12,15 @@ closed on the host.
 Against the process the user is actually running (`Vantage.app`, pid 25197, bound to
 `0.0.0.0:8765`, `~/.jarvis-forge/lan_mode` = `true`):
 
-| Request | Result |
-| --- | --- |
-| `GET http://127.0.0.1:8765/openapi.json` | **200**, 82,556 bytes |
-| `GET http://172.20.168.82:8765/openapi.json` | **200**, 82,556 bytes |
-| `GET http://172.20.168.82:8765/docs` | **200**, 1,011 bytes |
-| `GET http://172.20.168.82:8765/redoc` | **200** |
-| `GET http://172.20.168.82:8765/health` | 401 |
-| `GET http://172.20.168.82:8765/tools` | 401 |
-| `GET http://172.20.168.82:8765/` | 200, 93 bytes, body carries `"docs": "/docs"` |
+| Request                                      | Result                                        |
+| -------------------------------------------- | --------------------------------------------- |
+| `GET http://127.0.0.1:8765/openapi.json`     | **200**, 82,556 bytes                         |
+| `GET http://172.20.168.82:8765/openapi.json` | **200**, 82,556 bytes                         |
+| `GET http://172.20.168.82:8765/docs`         | **200**, 1,011 bytes                          |
+| `GET http://172.20.168.82:8765/redoc`        | **200**                                       |
+| `GET http://172.20.168.82:8765/health`       | 401                                           |
+| `GET http://172.20.168.82:8765/tools`        | 401                                           |
+| `GET http://172.20.168.82:8765/`             | 200, 93 bytes, body carries `"docs": "/docs"` |
 
 `172.20.168.82` is this laptop's own Wi-Fi address, so the request needed no spoofed header and
 no token. `host_allowed` accepts it because `lan_mode` is on — that is precisely what lets a phone
@@ -41,8 +41,8 @@ exactly these three paths **on the relay**, with a test named for it
 after Phase 9 nobody re-listed the host's own route objects — and each phase measured the routes
 it had added, all of which correctly require a token.
 
-That is the shape of the miss: the defect was not unknown, it was *inherited as a known fact
-about a different component*.
+That is the shape of the miss: the defect was not unknown, it was _inherited as a known fact
+about a different component_.
 
 ---
 
@@ -75,20 +75,20 @@ narrower rule for the component whose position is outside the house.
 Red first: the file was written before `doc_routes` existed and failed collection with
 `ImportError: cannot import name 'doc_routes'`.
 
-| Test | What it refuses to let happen |
-| --- | --- |
-| `..._mounts_no_route_that_publishes_its_own_shape` | Asserts on **route objects**, not status codes — a 404 can also come from a handler that exists. |
-| `..._request_for_the_blueprints_is_a_404` | The four paths, anonymously. |
-| `..._404_is_a_refusal_and_not_a_dead_app` | `/` → 200 and `/health` → 401 in the same test, so "everything 404s" cannot pass by the app failing to start. |
-| `..._index_does_not_advertise_a_page_it_does_not_serve` | The public index pointing at `/docs`. |
-| `..._shape_stays_closed_to_a_credential_that_could_have_read_it` | A token holder no longer gets the schema either, and still gets 148 tools. |
-| `..._switch_is_off_unless_a_person_turns_it_on` | `Settings.api_docs` defaults to `False`. |
-| `..._env_var_actually_reaches_the_setting` | A misspelled `env_prefix` would pass the default-value test and fail this one. |
-| `..._off_values_are_the_names_fastapi_reads` | Exact keys. A typo'd keyword is not an error to FastAPI — it is a default that still mounts the route. |
-| `..._opted_in_host_serves_the_shape_it_declined_by_default` | The switch really opens it. Built as a **separate** app, not by reloading `jarvis.api.app`: reloading would swap the shared `app` for every later test — Phase 33's stub handlers, Phase 63's shared OCR backend. |
-| `..._fastapi_app_built_without_the_helper_still_leaks_its_shape` | **Negative control.** Without it, `doc_routes` returning `{}` and returning the off-values look identical. |
-| `..._relay_and_the_host_decline_the_same_three_paths` | Phase 59's rule and Phase 64's, compared as route objects so the two cannot drift apart silently. |
-| `..._every_mounted_route_is_one_this_project_wrote` | The class, not the list: `app.routes` minus the paths written in `app.py` is empty. Its own control is that a bare `FastAPI()` returns exactly the three blueprints. |
+| Test                                                             | What it refuses to let happen                                                                                                                                                                                     |
+| ---------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `..._mounts_no_route_that_publishes_its_own_shape`               | Asserts on **route objects**, not status codes — a 404 can also come from a handler that exists.                                                                                                                  |
+| `..._request_for_the_blueprints_is_a_404`                        | The four paths, anonymously.                                                                                                                                                                                      |
+| `..._404_is_a_refusal_and_not_a_dead_app`                        | `/` → 200 and `/health` → 401 in the same test, so "everything 404s" cannot pass by the app failing to start.                                                                                                     |
+| `..._index_does_not_advertise_a_page_it_does_not_serve`          | The public index pointing at `/docs`.                                                                                                                                                                             |
+| `..._shape_stays_closed_to_a_credential_that_could_have_read_it` | A token holder no longer gets the schema either, and still gets 148 tools.                                                                                                                                        |
+| `..._switch_is_off_unless_a_person_turns_it_on`                  | `Settings.api_docs` defaults to `False`.                                                                                                                                                                          |
+| `..._env_var_actually_reaches_the_setting`                       | A misspelled `env_prefix` would pass the default-value test and fail this one.                                                                                                                                    |
+| `..._off_values_are_the_names_fastapi_reads`                     | Exact keys. A typo'd keyword is not an error to FastAPI — it is a default that still mounts the route.                                                                                                            |
+| `..._opted_in_host_serves_the_shape_it_declined_by_default`      | The switch really opens it. Built as a **separate** app, not by reloading `jarvis.api.app`: reloading would swap the shared `app` for every later test — Phase 33's stub handlers, Phase 63's shared OCR backend. |
+| `..._fastapi_app_built_without_the_helper_still_leaks_its_shape` | **Negative control.** Without it, `doc_routes` returning `{}` and returning the off-values look identical.                                                                                                        |
+| `..._relay_and_the_host_decline_the_same_three_paths`            | Phase 59's rule and Phase 64's, compared as route objects so the two cannot drift apart silently.                                                                                                                 |
+| `..._every_mounted_route_is_one_this_project_wrote`              | The class, not the list: `app.routes` minus the paths written in `app.py` is empty. Its own control is that a bare `FastAPI()` returns exactly the three blueprints.                                              |
 
 One of my assertions was wrong and the code was right: I wrote `tools["tools"]` for `/tools`,
 which returns a **list** of specs (`async def tools(...) -> List[Dict[str, Any]]`), and the test
@@ -145,19 +145,19 @@ with one authenticated `GET /health` → 200; its process is `launcher.py`, whic
 
 ## 5. Numbers, re-measured
 
-| Measure | Before | After |
-| --- | --- | --- |
-| Tests passing (full suite) | 2,396 | **2,408** |
-| Test modules | 91 | **92** |
-| Mounted route objects | 122 | **118** |
-| Distinct mounted paths | 115 | **111** |
-| `@app.*` decorators in `jarvis/api/app.py` | 118 | **118** |
-| Tools / confirmation-gated | 148 / 32 | 148 / 32 |
-| Risk split (read/low/external/destructive/physical) | 78/38/15/14/3 | unchanged |
-| Planner rules · DB tables | 52 · 32 | 52 · 32 (tables re-counted on a fresh home: 32) |
-| Versioned lines (`git ls-files -co … \| xargs grep -c ''`) | 75,515 | **75,755** |
-| — shipped (`jarvis/ dashboard/ app/ assets/ run.py`) | 44,238 | **44,273** |
-| — tests | 30,659 | **30,864** |
+| Measure                                                    | Before        | After                                           |
+| ---------------------------------------------------------- | ------------- | ----------------------------------------------- |
+| Tests passing (full suite)                                 | 2,396         | **2,408**                                       |
+| Test modules                                               | 91            | **92**                                          |
+| Mounted route objects                                      | 122           | **118**                                         |
+| Distinct mounted paths                                     | 115           | **111**                                         |
+| `@app.*` decorators in `jarvis/api/app.py`                 | 118           | **118**                                         |
+| Tools / confirmation-gated                                 | 148 / 32      | 148 / 32                                        |
+| Risk split (read/low/external/destructive/physical)        | 78/38/15/14/3 | unchanged                                       |
+| Planner rules · DB tables                                  | 52 · 32       | 52 · 32 (tables re-counted on a fresh home: 32) |
+| Versioned lines (`git ls-files -co … \| xargs grep -c ''`) | 75,515        | **75,755**                                      |
+| — shipped (`jarvis/ dashboard/ app/ assets/ run.py`)       | 44,238        | **44,273**                                      |
+| — tests                                                    | 30,659        | **30,864**                                      |
 
 **Correction, added at the Phase 65 close.** This row first read 76,123 / 44,271 / 31,231. Those
 numbers came from a tool result that did not reflect the file on disk -- the same display-unreliability
@@ -200,7 +200,7 @@ assumed, and what left the surface is exactly the four routes FastAPI supplies o
    deleting a row is not reversible at all, and one of those ids could be the user's real phone
    from a month ago. **User's decision**, with the exact list above.
 3. **Not measurable on this machine:** whether anyone ever read those pages. No access log records
-   `GET /docs`, and no evidence was sought. What this phase claims is *reachability*, which was
+   `GET /docs`, and no evidence was sought. What this phase claims is _reachability_, which was
    measured from this laptop's own LAN address; it does not claim prior exfiltration, and nothing
    in the 82,556 bytes was a credential.
 4. **64-A, left open deliberately:** the four closed routes are named in tests, and the

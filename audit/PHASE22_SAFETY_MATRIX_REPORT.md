@@ -21,14 +21,14 @@ rule held).
 
 As run, before any change:
 
-| Phrase | intent | decision | audit token | what the user was told |
-|---|---|---|---|---|
-| delete everything | blocked | BLOCK | `blocked` | "I will not do that automatically: blanket delete request" |
-| send to Arun | **unknown** | — | `no_action` | "I understood the words but not the goal yet. Try things like…" |
-| install unknown.exe | blocked | BLOCK | `blocked` | untrusted executable |
-| unlock door | blocked | BLOCK | `blocked` | physical security action |
-| run this command as root | blocked | BLOCK | `blocked` | privilege escalation |
-| turn on heater | home_control | **EXECUTE** | `unverified` | "Your home gateway is offline, so I could not **on** Study AC." |
+| Phrase                   | intent       | decision    | audit token  | what the user was told                                          |
+| ------------------------ | ------------ | ----------- | ------------ | --------------------------------------------------------------- |
+| delete everything        | blocked      | BLOCK       | `blocked`    | "I will not do that automatically: blanket delete request"      |
+| send to Arun             | **unknown**  | —           | `no_action`  | "I understood the words but not the goal yet. Try things like…" |
+| install unknown.exe      | blocked      | BLOCK       | `blocked`    | untrusted executable                                            |
+| unlock door              | blocked      | BLOCK       | `blocked`    | physical security action                                        |
+| run this command as root | blocked      | BLOCK       | `blocked`    | privilege escalation                                            |
+| turn on heater           | home_control | **EXECUTE** | `unverified` | "Your home gateway is offline, so I could not **on** Study AC." |
 
 Four of six were genuinely fine. The other two were not, and probing one phrase the plan
 never listed — `turn on the light` — found something worse than either.
@@ -43,7 +43,7 @@ top3 = [(6, 'Living room ceiling light'), (6, 'Kitchen light'), (6, 'Hallway lig
 resolve("light") -> Kitchen light
 ```
 
-The loop in `resolve` keeps the *first* strictly-better score, so a tie is broken by
+The loop in `resolve` keeps the _first_ strictly-better score, so a tie is broken by
 registry order. Measured end to end:
 
 ```
@@ -59,7 +59,7 @@ thing while the code did another (here, choosing).
 
 Fix, in that order:
 
-- `HomeGateway.ambiguous_matches(query)` returns the devices that *tie* at the best score
+- `HomeGateway.ambiguous_matches(query)` returns the devices that _tie_ at the best score
   (and nothing when the user's words name a device exactly, by id or by name).
 - The planner asks **before** building an action, so nothing is attempted:
   > Which light did you mean -- Living room ceiling light, Kitchen light, Bedroom ceiling
@@ -69,21 +69,21 @@ Fix, in that order:
 - An unambiguous word still executes: `turn on the living room fan` reaches the device.
   The bound is a tie rule, not a wall — that is pinned by a test on both sides.
 
-Note what did *not* change: no permission gate, risk tier or confirmation requirement was
+Note what did _not_ change: no permission gate, risk tier or confirmation requirement was
 loosened or invented to get here, and ` heater → the single HVAC unit` still executes,
 because it resolves uniquely and the synonym table lists it deliberately. Whether that one
-*should* require confirmation is §6.
+_should_ require confirmation is §6.
 
 ## 3. 22-B and 22-C: one observed condition, two recorded ones
 
-The offline *routine* path had been fixed in Phase 15 to report
-`verification=FAILED, provider_status="unavailable"`. The offline *device-control* path
+The offline _routine_ path had been fixed in Phase 15 to report
+`verification=FAILED, provider_status="unavailable"`. The offline _device-control_ path
 on the same gateway had not: it returned a bare `ok()` and reached the ledger as
 `unverified`, while its own sentence said "No device was switched". Same world state,
 different audit token, different dashboard tile. Now both report `failure`/`unavailable`.
 
 The sentence was also broken — "so I could not **on** Kitchen light" — because an action
-*token* was interpolated where a *verb* belongs. It now reads
+_token_ was interpolated where a _verb_ belongs. It now reads
 `so I could not switch on Kitchen light`, and a `set` names its value.
 
 ## 4. 22-D and 22-F: two routes that answered without answering
@@ -91,19 +91,19 @@ The sentence was also broken — "so I could not **on** Kitchen light" — becau
 **"send to Arun"** fell through `_email`'s keyword guard (no medium named) and landed in
 the planner's generic "I understood the words but not the goal" text — which tells the
 user their English was wrong rather than that a payload is missing. The plan calls this
-case Clarify. It now asks: *"Send what to Arun, and by which medium? Draft it and I will
-ask before sending."* Sending is still never inferred; the clarification touches nothing.
+case Clarify. It now asks: _"Send what to Arun, and by which medium? Draft it and I will
+ask before sending."_ Sending is still never inferred; the clarification touches nothing.
 
 The sentence one step further along was worse: **"send an email to Arun saying the build
-is green"** — a recipient *and* a body — also fell into the mail help menu, because the
+is green"** — a recipient _and_ a body — also fell into the mail help menu, because the
 draft branch only accepted `draft|compose|write|reply`. It now reaches `draft_email`,
 which honestly reports what it could not resolve:
-*"That did not work: I do not have a contact called 'Arun'. Give me the full email
-address, or add them as a contact first."* A named person is not an address, and the
+_"That did not work: I do not have a contact called 'Arun'. Give me the full email
+address, or add them as a contact first."_ A named person is not an address, and the
 system says so instead of quietly doing nothing.
 
 **"what do you remember about the deploy runbook?"** was answered with
-*"I am holding 3 memory item(s) across 2 scope(s); 0 are indexed"* — counts, not content.
+_"I am holding 3 memory item(s) across 2 scope(s); 0 are indexed"_ — counts, not content.
 `_memory_controls` deliberately runs before `_recall` (its own docstring says so), and its
 overview pattern matched any "what do you remember", topic or not. The overview keeps the
 bare phrasings; a question that names a topic now reaches `search_memory`. That also
@@ -112,11 +112,11 @@ matters for §5: a disclosure nobody can phrase their way to is not a disclosure
 ## 5. 22-E: an outage that looked like an empty index
 
 `hybrid_search` already carried a `retrieval.error` field for "the vector side did not
-run", with the comment *"If the vector side is unavailable this degrades to keyword search
-and says so."* It could never say so, because `VectorIndex.search()` caught the embedding
+run", with the comment _"If the vector side is unavailable this degrades to keyword search
+and says so."_ It could never say so, because `VectorIndex.search()` caught the embedding
 exception and returned `[]` two layers below — so "the model is down" and "nothing matched
 semantically" produced identical output, and `/health`'s only model field, `llm_enabled`,
-reports whether a URL and key *exist*, never whether anything answered.
+reports whether a URL and key _exist_, never whether anything answered.
 
 Fixed at the point of truth:
 
@@ -151,7 +151,7 @@ probes; the honest field is the observed error, not a new lie with a better name
 request resolves uniquely and is executed — against `RiskLevel.LOW`, with no confirmation.
 With a live broker the heater would come on. The plan lists this phrase as
 reject/clarify/confirm-worthy, so either the risk tier becomes kind-aware (thermal
-appliances confirmed) or confirmation is required whenever the user named a *category*
+appliances confirmed) or confirmation is required whenever the user named a _category_
 rather than a device.
 
 Both are permission-policy changes with visible blast radius beyond this phrase, so the
@@ -160,7 +160,7 @@ could be edited until it went green. The artifact states the gap; the README lis
 under known open items.
 
 Related, found by reading rather than by running: `command_robot_motion`
-(`jarvis/tools/robotics.py:137-143`) *infers* a robot when the user named none —
+(`jarvis/tools/robotics.py:137-143`) _infers_ a robot when the user named none —
 `resolve("amr")` as a fallback. Same silent-choice shape as 22-A, on physical hardware
 that is unreachable here, so it could not be exercised. Recorded as **22-H**, not fixed.
 
@@ -170,13 +170,13 @@ that is unreachable here, so it could not be exercised. Recorded as **22-H**, no
 first run; two of the original assertions were themselves wrong and were fixed against
 the documented state vocabulary rather than the code being bent to them):
 
-| Group | Pins |
-|---|---|
-| 22-A (5) | a tied device word produces a question with no action; the question names every candidate; the clarification is audited `no_action`; an unambiguous word still executes; `ambiguous_matches` reports the tie and stays empty for a precise name |
-| 22-B/C (3) | offline control reaches the ledger as `failure` with `provider_status="unavailable"`; the reply is a sentence ("switch on", not "could not on"); a `set` states its value |
-| 22-D (2) | "send to Arun" asks for the missing payload naming the recipient; a recipient *with* a body reaches `draft_email` |
-| 22-F (3) | a topical recall reaches `search_memory`, not the counts; a bare recall still answers with the overview; the disclosure is reachable from a phrase a user would actually say |
-| 22-E (4) | an embedding outage surfaces in `retrieval.error`; the reply names it; a healthy layer stays quiet; an indexing outage is recorded in `stats()["last_error"]` |
+| Group      | Pins                                                                                                                                                                                                                                            |
+| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 22-A (5)   | a tied device word produces a question with no action; the question names every candidate; the clarification is audited `no_action`; an unambiguous word still executes; `ambiguous_matches` reports the tie and stays empty for a precise name |
+| 22-B/C (3) | offline control reaches the ledger as `failure` with `provider_status="unavailable"`; the reply is a sentence ("switch on", not "could not on"); a `set` states its value                                                                       |
+| 22-D (2)   | "send to Arun" asks for the missing payload naming the recipient; a recipient _with_ a body reaches `draft_email`                                                                                                                               |
+| 22-F (3)   | a topical recall reaches `search_memory`, not the counts; a bare recall still answers with the overview; the disclosure is reachable from a phrase a user would actually say                                                                    |
+| 22-E (4)   | an embedding outage surfaces in `retrieval.error`; the reply names it; a healthy layer stays quiet; an indexing outage is recorded in `stats()["last_error"]`                                                                                   |
 
 Suite: 1304 → **1321 collected, 1317 passed, 0 failed** (`1 skipped` is
 `test_research.py` declining to pretend arXiv was reachable; `3 xfailed` are the Phase 10
@@ -195,14 +195,14 @@ commands do.
 Beyond the outage run in §5 and the ambiguity run in §2, all through a launched
 `run.py serve` over HTTP with a scratch `JARVIS_HOME` and a sandboxed `HOME`:
 
-| Command | Result |
-|---|---|
-| `turn on the light` | question, 0 tools, ledger `no_action` |
-| `turn on the living room fan` | 1 tool, honest offline `failure` |
-| `send to Arun` | clarification, 0 tools, ledger `no_action` |
-| `send an email to Arun saying the build is green` | `draft_email` executed, unknown-contact reported |
-| `delete everything` | blocked |
-| `what do you remember about X` / `what do you remember?` | content (with outage) / counts, respectively |
+| Command                                                  | Result                                           |
+| -------------------------------------------------------- | ------------------------------------------------ |
+| `turn on the light`                                      | question, 0 tools, ledger `no_action`            |
+| `turn on the living room fan`                            | 1 tool, honest offline `failure`                 |
+| `send to Arun`                                           | clarification, 0 tools, ledger `no_action`       |
+| `send an email to Arun saying the build is green`        | `draft_email` executed, unknown-contact reported |
+| `delete everything`                                      | blocked                                          |
+| `what do you remember about X` / `what do you remember?` | content (with outage) / counts, respectively     |
 
 ## 10. Git and browser
 

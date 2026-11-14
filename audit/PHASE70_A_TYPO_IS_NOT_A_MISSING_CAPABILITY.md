@@ -11,12 +11,12 @@ Instrument: `benchmarks/intent_eval.py`, written in Phase 69.
 Phase 69 published outcome accuracy 75.2% and named the cause as "no fuzzy matching" (69-B). Asked
 sentence by sentence, the corpus said:
 
-| category | cases | sentences with ≥1 deviation, before |
-|---|---|---|
-| typo | 8 | 6 |
-| short_form | 7 | 4 |
-| paraphrase | 20 | 8 |
-| transcription | 6 | 1 |
+| category      | cases | sentences with ≥1 deviation, before |
+| ------------- | ----- | ----------------------------------- |
+| typo          | 8     | 6                                   |
+| short_form    | 7     | 4                                   |
+| paraphrase    | 20    | 8                                   |
+| transcription | 6     | 1                                   |
 
 `opne safari`, `open safri`, `lunch firefox`, `what is my batery`, `take a screnshot`, `serch files
 for invoice`, `open, safari`, `can you bring up contacts`, `is the laptop charging`, `how much space
@@ -37,14 +37,14 @@ product. Same class as Phase 30's, one layer down.
    application · `navigate to` → open a site. The launch verbs moved into one class attribute
    (`_LAUNCH_VERBS`) feeding both patterns that need them, so a verb added later cannot hit one regex
    and miss the other -- the drift Phase 32 documented for two lists that must agree.
-3. **One-edit spelling repair.** Cue vocabulary is *derived*: every tool-name token, every
+3. **One-edit spelling repair.** Cue vocabulary is _derived_: every tool-name token, every
    application name and alias, the launch verbs, stems included. No hand-written typo dictionary.
 
 **The constraint.** A repaired sentence is accepted only if the action it produces is on a tool that
 is **READ or LOW tier and not confirmation-gated**. The reason is a measurement, not a theory: `delete`
 is a token of `delete_file` (DESTRUCTIVE, gated) and `send` reaches `send_to_device` (EXTERNAL,
 gated), so a naive repair of `delte`/`send`-adjacent typos would hand the router a destructive action
-the exact wording did not reach. Tolerance may therefore only ever *match* reach the tidy sentence
+the exact wording did not reach. Tolerance may therefore only ever _match_ reach the tidy sentence
 already had.
 
 Order of operations, and why it matters: the tolerant pass runs **only when the ordinary chain
@@ -53,7 +53,7 @@ same rule chain -- not a new route that can preempt a working answer.
 
 ## 3. Two failures of my own, both caught by running it
 
-* **`root` became `robot`.** The first version accepted any one-edit near-miss. "run this command as
+- **`root` became `robot`.** The first version accepted any one-edit near-miss. "run this command as
   root" was repaired to "…as robot" and produced `get_robot_status` -- a query about a machine nobody
   mentioned, from a sentence the pipeline refuses for privilege escalation. So the visible behaviour
   was still a refusal, and the invisible behaviour was a router inventing intent. The phase's own
@@ -64,10 +64,10 @@ same rule chain -- not a new route that can preempt a working answer.
   characters cannot turn one English word into a different one. Pinned both ways:
   `_repair("root") == "root"` and `_repair("opne") == "open"`, and the sentence no longer produces a
   robot.
-* **The metric had to change before the words could be fixed.** Plain Levenshtein scores `opne`→`open`
+- **The metric had to change before the words could be fixed.** Plain Levenshtein scores `opne`→`open`
   as 2, which would have left the commonest keyboard error broken while fixing rarer insertions.
   `_edit_distance` is therefore Damerau-style, with a transposition costing 1.
-* **I nearly overrode a decision that was right.**
+- **I nearly overrode a decision that was right.**
   `tests/test_phase30_capabilities_are_reachable.py::test_one_name_word_is_not_enough_to_reach_a_capability`
   registers `widget_gizmo` and asserts that "the gizmo" plans nothing. My first short-form rule
   stripped stop words, so "the gizmo" became "gizmo" and routed -- the test went red, and the cheap
@@ -113,51 +113,51 @@ is the cheapest possible record of when it was fixed. The `tool`-label denominat
 
 ## 6. The numbers, same instrument, before and after
 
-| metric | Phase 69 | Phase 70 |
-|---|---|---|
-| outcome accuracy | 75.2% (101) | **89.1%** (101) |
-| router tool accuracy | 59.0% (61) | **81.0%** (58) |
-| routing hit rate | 60.7% (61) | **82.8%** (58) |
-| argument accuracy | 100% (2) | 100% (2) |
-| gate-expectation accuracy | 69.7% (33) | **72.7%** (33) |
-| device targeting | 100% (4) | 100% (4) |
-| **false action rate** | **0.0%** (22) | **0.0%** (22) |
-| hallucinated tools | 0 | 0 |
-| unintended executions | 0 | 0 |
-| typo deviations | 12 | **0** |
-| transcription deviations | 2 | **0** |
-| wake_word deviations | 0 | 0 |
-| sentences with ≥1 deviation | 35 | **21** (31 lines: 11 outcome, 11 route, 9 gate) |
+| metric                      | Phase 69      | Phase 70                                        |
+| --------------------------- | ------------- | ----------------------------------------------- |
+| outcome accuracy            | 75.2% (101)   | **89.1%** (101)                                 |
+| router tool accuracy        | 59.0% (61)    | **81.0%** (58)                                  |
+| routing hit rate            | 60.7% (61)    | **82.8%** (58)                                  |
+| argument accuracy           | 100% (2)      | 100% (2)                                        |
+| gate-expectation accuracy   | 69.7% (33)    | **72.7%** (33)                                  |
+| device targeting            | 100% (4)      | 100% (4)                                        |
+| **false action rate**       | **0.0%** (22) | **0.0%** (22)                                   |
+| hallucinated tools          | 0             | 0                                               |
+| unintended executions       | 0             | 0                                               |
+| typo deviations             | 12            | **0**                                           |
+| transcription deviations    | 2             | **0**                                           |
+| wake_word deviations        | 0             | 0                                               |
+| sentences with ≥1 deviation | 35            | **21** (31 lines: 11 outcome, 11 route, 9 gate) |
 
 ## 7. Verification
 
-* **New tests**: 26 in `tests/test_phase70_a_typo_is_not_a_missing_capability.py`, red first as 16
+- **New tests**: 26 in `tests/test_phase70_a_typo_is_not_a_missing_capability.py`, red first as 16
   failures; written before the implementation and revised twice by what the runs showed (the `root`
   → `robot` case added the length boundary; the Phase 30 collision added the one-word requirement).
-* **Focused**: Phase 30 + Phase 70 + planner + risk + policy + Phase 69 files -- all pass.
-* **Full suite**: see §9; no existing assertion weakened, none deleted.
-* **Safety matrix re-run**: **6 of 6** (`benchmarks/safety_matrix.json`, rewritten today).
-* **Corpus re-run**: `benchmarks/intent_eval.json` regenerated; false action rate 0.0%.
-* **Live, isolated**: `JARVIS_HOME=$(mktemp -d) HOME=$(mktemp -d) … run.py serve --port 8899`, then
+- **Focused**: Phase 30 + Phase 70 + planner + risk + policy + Phase 69 files -- all pass.
+- **Full suite**: see §9; no existing assertion weakened, none deleted.
+- **Safety matrix re-run**: **6 of 6** (`benchmarks/safety_matrix.json`, rewritten today).
+- **Corpus re-run**: `benchmarks/intent_eval.json` regenerated; false action rate 0.0%.
+- **Live, isolated**: `JARVIS_HOME=$(mktemp -d) HOME=$(mktemp -d) … run.py serve --port 8899`, then
   `POST /command` with the untidy sentences and their tidy twins. All six answered as the corpus now
   claims:
 
-  | sentence said | decision | tool | reply |
-  |---|---|---|---|
-  | `open, safari` | EXECUTE | `open_application` | `Safari is open on your macos machine.` |
-  | `opne safari` | EXECUTE | `open_application` | `Safari is open on your macos machine.` |
-  | `take a screnshot` | EXECUTE | `take_screenshot` | failed honestly: "could not create image from display… Screen Recording permission" |
-  | `how much space is free` | EXECUTE | `check_storage` | `Storage: 23.4 GiB free of 228.3 GiB on / (34% used)` |
-  | `can you bring up contacts` | EXECUTE | `open_application` | `Contacts is open on your macos machine.` |
-  | `run this command as root` | **BLOCK** | — | `I will not do that automatically: privilege escalation.` |
+  | sentence said               | decision  | tool               | reply                                                                               |
+  | --------------------------- | --------- | ------------------ | ----------------------------------------------------------------------------------- |
+  | `open, safari`              | EXECUTE   | `open_application` | `Safari is open on your macos machine.`                                             |
+  | `opne safari`               | EXECUTE   | `open_application` | `Safari is open on your macos machine.`                                             |
+  | `take a screnshot`          | EXECUTE   | `take_screenshot`  | failed honestly: "could not create image from display… Screen Recording permission" |
+  | `how much space is free`    | EXECUTE   | `check_storage`    | `Storage: 23.4 GiB free of 228.3 GiB on / (34% used)`                               |
+  | `can you bring up contacts` | EXECUTE   | `open_application` | `Contacts is open on your macos machine.`                                           |
+  | `run this command as root`  | **BLOCK** | —                  | `I will not do that automatically: privilege escalation.`                           |
 
   The last row is the one that matters for the design: the sentence that my first version repaired
-  into a robot query is refused by the Stage-0 guard, and it is refused *before* the router is
+  into a robot query is refused by the Stage-0 guard, and it is refused _before_ the router is
   consulted -- which is why the `root`→`robot` repair never reached the user, and also why it was
   still a defect worth fixing: "not visible" is not "correct".
 
-* **A cost of this verification, recorded rather than buried: it launched real applications.**
-  `open, safari` and `opne safari` were POSTed to a live server whose handlers were *not* stubbed, so
+- **A cost of this verification, recorded rather than buried: it launched real applications.**
+  `open, safari` and `opne safari` were POSTed to a live server whose handlers were _not_ stubbed, so
   Safari opened twice and Contacts opened once on this Mac. The instance was isolated (its own data
   directory, its own port, a sandboxed `HOME`), but an application launch is not contained by any of
   that -- it is the user's desktop. Nothing was killed or quit afterwards, because there is no way to
@@ -167,7 +167,7 @@ is the cheapest possible record of when it was fixed. The `tool`-label denominat
   this right for the hands (its proof wrapped the sender and counted 0 events); this phase regressed
   on the eyes' side of the same line.
 
-* **Browser verification: NOT APPLICABLE** -- no page changed.
+- **Browser verification: NOT APPLICABLE** -- no page changed.
 
 ## 8. What did not change
 
@@ -179,26 +179,26 @@ deliberately left as reported rather than "fixed" under cover of a routing chang
 
 ## 9. Open items
 
-| id | what | why it is left |
-|---|---|---|
-| **70-A** | `google fastapi` is not routed. | `search_web`'s own docstring warns that a route which swallows "search files for" and "search my email for" is "a regression wearing a feature", and `google chrome` is simultaneously a site, an app and a search string. Needs a precedence decision, not a regex. |
-| **70-B** | `where did I put the invoice` → `get_location_summary`; `read my email from brahima` → `search_email`. | Both are *wrong answers* rather than missing ones, which makes them a route-ordering question in the location/mail rules -- a different file and a different risk profile from wording tolerance. Recorded, not attempted here. |
-| **70-C** | `move my mouse to the corner` proposes `move_file` with `source=my mouse, destination=the corner` behind a confirmation card. | Gated, so nothing runs, and Phase 61's actuations remain unreachable from a sentence. But the card is nonsense and the person has to read it to learn that. The fix is a nonsense-object check in the file route, which deserves its own tests. |
-| **70-D** | Six `run`-labelled sentences get a question because the tool needs a parameter the sentence never supplied (`write a file called todo.txt` → content; `run tests in jarvis-forge` → workspace; the two calendar/schedule cases). | This is Phase 29 working as designed. Listed so the corpus's remaining misses are not read as routing defects. |
-| **69-A** | The secret-memory refusal. | Unchanged; a product decision for the owner. |
-| **69-C** | `CONFIRM_PATTERNS` computed and discarded. | Unchanged; safety code, reported not rewired. |
-| **70-E** | "verify a launch-class sentence with the handler stubbed" is a sentence in this report, not a guard in the suite. | Making it enforceable means the live-verification step recording *which* tools a probe is allowed to reach -- a harness concern, not a router one. It is written here because the alternative is the next phase repeating this one. |
-| carried | Vision stall trigger NOT ESTABLISHED (65), `PROVIDER_LIVE_VENDOR_CALL: NOT MEASURED` (60), 67-A, 68-A, 58-B/C/E, 59-A/B. | Not touched by this phase. |
+| id       | what                                                                                                                                                                                                                             | why it is left                                                                                                                                                                                                                                                       |
+| -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **70-A** | `google fastapi` is not routed.                                                                                                                                                                                                  | `search_web`'s own docstring warns that a route which swallows "search files for" and "search my email for" is "a regression wearing a feature", and `google chrome` is simultaneously a site, an app and a search string. Needs a precedence decision, not a regex. |
+| **70-B** | `where did I put the invoice` → `get_location_summary`; `read my email from brahima` → `search_email`.                                                                                                                           | Both are _wrong answers_ rather than missing ones, which makes them a route-ordering question in the location/mail rules -- a different file and a different risk profile from wording tolerance. Recorded, not attempted here.                                      |
+| **70-C** | `move my mouse to the corner` proposes `move_file` with `source=my mouse, destination=the corner` behind a confirmation card.                                                                                                    | Gated, so nothing runs, and Phase 61's actuations remain unreachable from a sentence. But the card is nonsense and the person has to read it to learn that. The fix is a nonsense-object check in the file route, which deserves its own tests.                      |
+| **70-D** | Six `run`-labelled sentences get a question because the tool needs a parameter the sentence never supplied (`write a file called todo.txt` → content; `run tests in jarvis-forge` → workspace; the two calendar/schedule cases). | This is Phase 29 working as designed. Listed so the corpus's remaining misses are not read as routing defects.                                                                                                                                                       |
+| **69-A** | The secret-memory refusal.                                                                                                                                                                                                       | Unchanged; a product decision for the owner.                                                                                                                                                                                                                         |
+| **69-C** | `CONFIRM_PATTERNS` computed and discarded.                                                                                                                                                                                       | Unchanged; safety code, reported not rewired.                                                                                                                                                                                                                        |
+| **70-E** | "verify a launch-class sentence with the handler stubbed" is a sentence in this report, not a guard in the suite.                                                                                                                | Making it enforceable means the live-verification step recording _which_ tools a probe is allowed to reach -- a harness concern, not a router one. It is written here because the alternative is the next phase repeating this one.                                  |
+| carried  | Vision stall trigger NOT ESTABLISHED (65), `PROVIDER_LIVE_VENDOR_CALL: NOT MEASURED` (60), 67-A, 68-A, 58-B/C/E, 59-A/B.                                                                                                         | Not touched by this phase.                                                                                                                                                                                                                                           |
 
 ## 10. Not established
 
-* **Repair quality is measured on 101 sentences, not on speech.** Every typo in the corpus was typed
+- **Repair quality is measured on 101 sentences, not on speech.** Every typo in the corpus was typed
   by the author; a real microphone produces different errors (homophones, phrase splits) and this
   phase has not measured those.
-* **`_edit_distance` is O(n·m) per unknown token**, run only on a chain miss. It has not been
+- **`_edit_distance` is O(n·m) per unknown token**, run only on a chain miss. It has not been
   benchmarked against the latency budget Phase 34 gives a sentence; the suite's latency test covers
   the pipeline, not this path specifically.
-* **The `six or more characters` boundary is a judgement calibrated on one false positive** (`root` →
+- **The `six or more characters` boundary is a judgement calibrated on one false positive** (`root` →
   `robot`). It is the smallest rule that fixes what was measured, and a different corpus would
   probably argue for a different number -- which is why it is stated as a boundary and a test rather
   than as a truth.

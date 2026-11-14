@@ -1,17 +1,17 @@
 # Phase 59 — an authenticated relay: a door with a bouncer, not a second laptop
 
-| | |
-|---|---|
-| Phase | 59 (the roadmap's authenticated relay, built and verified to the limit of what this machine can prove — see §11) |
-| Date | 2026-10-05 |
-| Starting commit | `d0f24f8` (Phase 58 close-out) |
-| Ending commit | `a71852d` (the work) → the close-out commit named in §15 |
-| Tests before | 2305 passed · 0 failed · 0 skipped |
-| Tests after | **2332 passed · 0 failed · 0 skipped** (76.9 s) |
-| Tools / gated | 145 / 30 → **145 / 30** — no capability added, no gate loosened |
-| Planner routes | 52 → **52** |
-| Host HTTP surface | 122 route objects / 115 paths → **unchanged** (the relay is a separate ASGI app: 4 endpoints) |
-| Push status | **nothing pushed; local commits only** |
+|                   |                                                                                                                  |
+| ----------------- | ---------------------------------------------------------------------------------------------------------------- |
+| Phase             | 59 (the roadmap's authenticated relay, built and verified to the limit of what this machine can prove — see §11) |
+| Date              | 2026-10-05                                                                                                       |
+| Starting commit   | `d0f24f8` (Phase 58 close-out)                                                                                   |
+| Ending commit     | `a71852d` (the work) → the close-out commit named in §15                                                         |
+| Tests before      | 2305 passed · 0 failed · 0 skipped                                                                               |
+| Tests after       | **2332 passed · 0 failed · 0 skipped** (76.9 s)                                                                  |
+| Tools / gated     | 145 / 30 → **145 / 30** — no capability added, no gate loosened                                                  |
+| Planner routes    | 52 → **52**                                                                                                      |
+| Host HTTP surface | 122 route objects / 115 paths → **unchanged** (the relay is a separate ASGI app: 4 endpoints)                    |
+| Push status       | **nothing pushed; local commits only**                                                                           |
 
 ---
 
@@ -32,7 +32,7 @@ Two things already existed, and both are in the opposite direction from what thi
 (challenge → proof, and a server that picks the destination filename) — but loopback-only, file
 transfer only, and deliberately not wired into the orchestrator. `jarvis/watch/gateway.py` has a
 `BridgeTransport` that POSTs notifications to a URL from `JARVIS_WATCH_BRIDGE`, and it explicitly
-refuses to let anything that transport delivered decide a confirmation. Neither is a path *into*
+refuses to let anything that transport delivered decide a confirmation. Neither is a path _into_
 the laptop from elsewhere. So the honest measurement was: **the wire authentication exists; nothing
 outside the laptop is allowed to use it.** The relay reuses the pairing secret from that same store
 rather than inventing a second credential system, and it deliberately signs **more** than the
@@ -56,7 +56,7 @@ relay  ──(that same header, unchanged; device_id from what signed)───�
 Four properties are load-bearing, and each has a test rather than a comment:
 
 1. the relay never holds the master token and never holds a session of its own — it carries the
-   credential the *client* presented;
+   credential the _client_ presented;
 2. identity comes from what you can sign, not from what you type — `device_id` in a forwarded body
    is overwritten with the device that passed the handshake, because `CommandBody.device_id` is
    otherwise a string the caller makes up;
@@ -80,7 +80,7 @@ proof = HMAC-SHA256(secret, "<challenge>\n<device_id>\n<unix_time>")
 
 with challenges single-use, TTL 60 s, a ±120 s timestamp window, and a cap of 512 tracked
 challenges. No new cryptography — same PSK file, same HMAC, same `hmac.compare_digest`, and the
-mint time is handed *to* the client so it signs the relay's clock rather than its own.
+mint time is handed _to_ the client so it signs the relay's clock rather than its own.
 
 A wrong proof **burns the challenge**: `redeem` pops the record before it verifies anything, so an
 attacker holding a challenge gets one guess and then has to ask for a new one. The proof over a
@@ -102,14 +102,14 @@ duplicate actuation).
 
 The host's answer comes back **byte-identical**, including its status code — a refusal, a pending
 confirmation and a verification of UNKNOWN look exactly the way they do on the laptop because they
-*are* the laptop's answers. The relay's only invented vocabulary is the two outage codes.
+_are_ the laptop's answers. The relay's only invented vocabulary is the two outage codes.
 
 ## 5. Authorization stays the laptop's, and the narrow surface survives the hop
 
 The credential that leaves the relay is the one the client presented, in canonical `X-JARVIS-Token`
 casing, and the relay **refuses to forward at all** rather than substituting one of its own
 (`401 no_host_credential`). Nothing about Phase 58's scoping is laundered by inserting a hop:
-a phone-minted session that goes through the relay is still a phone session, and the *host* is the
+a phone-minted session that goes through the relay is still a phone session, and the _host_ is the
 one that refuses it — seen live in §8, where `/relay/health` came back as the host's own
 
 > `This phone is not allowed to reach /health. The laptop can; this session cannot.`
@@ -121,7 +121,7 @@ different owners, both shut.
 
 The relay was run for real, and the ledger was read back. A command that arrived through the relay
 from a handset was written **identically to one typed on the laptop**: every executed action records
-`device=action.device`, which is the *target* device Phase 31 made deliberate. Nothing had been
+`device=action.device`, which is the _target_ device Phase 31 made deliberate. Nothing had been
 faked. Nothing was traceable either.
 
 The fix is additive, because repurposing the device column would corrupt device targeting. The
@@ -137,7 +137,7 @@ a stub sender and an injectable clock, each pairing its own uniquely-named devic
 revocation cannot break another's session:
 
 - **authentication** — a paired device opens a session; an unknown device gets no challenge; a
-  *pending* device is not authorised; a wrong proof is rejected and still burns the challenge; a
+  _pending_ device is not authorised; a wrong proof is rejected and still burns the challenge; a
   challenge cannot be replayed; a stale timestamp is rejected; a session expires; a missing or
   forged session never reaches the host; sign-out ends one session and not the other; revoking a
   device ends its sessions **and** blocks new ones.
@@ -152,7 +152,7 @@ revocation cannot break another's session:
   `/env`, `/token` route; the relay answers only for the endpoints it defines.
 - **provenance** — the audit test in §6, which runs the real orchestrator.
 
-Two of these were written *after* a live run corrected me. `FastAPI` was imported inside
+Two of these were written _after_ a live run corrected me. `FastAPI` was imported inside
 `build_relay_app`, so `request: Request` was resolved against the function's locals and every
 proxied call answered **422** — the fix was a module-level import with a comment saying why. And
 listing the running relay's routes found `/openapi.json` being served: the surface test exists now,
@@ -240,12 +240,12 @@ not performed: router configuration, port forwarding, tunneling to a third-party
 ```
 
 A local test presented as off-LAN proof is the exact failure mode this phase was briefed to avoid,
-so the claim stops here. What is *ready* for that proof: the protocol, the service, the running
+so the claim stops here. What is _ready_ for that proof: the protocol, the service, the running
 process (`python -m jarvis.relay --host <base> --port <n>`), and the test suite. When a real relay
 host exists, the same checks run against it and §11 changes from BLOCKED to a measurement.
 
 **One design decision that off-LAN use forces, recorded rather than decided here:** as built, the
-relay authenticates devices against the *host's* `<home>/devices` key store, so the process must
+relay authenticates devices against the _host's_ `<home>/devices` key store, so the process must
 share that directory with the laptop — true in every test and in the live run, and false for a
 relay sitting in another country. Remote deployment needs a different device-authentication shape
 (the relay holding a verifier that cannot be replayed against the host, or the host answering an
@@ -261,20 +261,20 @@ would have been a screenshot of an unchanged page, so it was not performed and i
 
 ## 13. Numbers, re-measured after the work
 
-| | before (Phase 58 close) | after (measured now) |
-|---|---|---|
-| Tests | 2305 · 0 failed · 0 skipped | **2332 · 0 failed · 0 skipped** (76.9 s) |
-| Test modules | 85 | **86** |
-| Tools / confirmation-gated | 145 / 30 | **145 / 30** |
-| Risk split (read/low/external/destructive/physical) | 77 / 38 / 15 / 12 / 3 | **77 / 38 / 15 / 12 / 3** |
-| Planner rules | 52 | **52** |
-| Host HTTP routes / paths | 122 / 115 | **122 / 115** |
-| Relay HTTP endpoints | none | **4** (`/relay/challenge`, `/relay/session` POST, `/relay/session` DELETE, `/relay/{path}` forward) |
-| Versioned Python/HTML/JS/Swift | 70.9k | **72,227** lines |
-| Shipped code (`jarvis/` + `dashboard/` + `app/` + `assets/` + `run.py`) | 42.2k | **42,937** lines |
-| Tests | 28.7k | **28,689** lines |
-| `audit/` reports | 60 | **61** (this file) |
-| New file | — | `jarvis/relay.py`, 462 lines |
+|                                                                         | before (Phase 58 close)     | after (measured now)                                                                                |
+| ----------------------------------------------------------------------- | --------------------------- | --------------------------------------------------------------------------------------------------- |
+| Tests                                                                   | 2305 · 0 failed · 0 skipped | **2332 · 0 failed · 0 skipped** (76.9 s)                                                            |
+| Test modules                                                            | 85                          | **86**                                                                                              |
+| Tools / confirmation-gated                                              | 145 / 30                    | **145 / 30**                                                                                        |
+| Risk split (read/low/external/destructive/physical)                     | 77 / 38 / 15 / 12 / 3       | **77 / 38 / 15 / 12 / 3**                                                                           |
+| Planner rules                                                           | 52                          | **52**                                                                                              |
+| Host HTTP routes / paths                                                | 122 / 115                   | **122 / 115**                                                                                       |
+| Relay HTTP endpoints                                                    | none                        | **4** (`/relay/challenge`, `/relay/session` POST, `/relay/session` DELETE, `/relay/{path}` forward) |
+| Versioned Python/HTML/JS/Swift                                          | 70.9k                       | **72,227** lines                                                                                    |
+| Shipped code (`jarvis/` + `dashboard/` + `app/` + `assets/` + `run.py`) | 42.2k                       | **42,937** lines                                                                                    |
+| Tests                                                                   | 28.7k                       | **28,689** lines                                                                                    |
+| `audit/` reports                                                        | 60                          | **61** (this file)                                                                                  |
+| New file                                                                | —                           | `jarvis/relay.py`, 462 lines                                                                        |
 
 ## 14. Open items
 
@@ -297,8 +297,8 @@ would have been a screenshot of an unchanged page, so it was not performed and i
 
 ## 15. Delivery
 
-Work commit `a71852d` — *Forward through a door that keeps every decision inside the laptop*.
-Close-out commit `cdadab7` — *Record the Phase 59 redeploy, and stop a two-day-old stray host*.
+Work commit `a71852d` — _Forward through a door that keeps every decision inside the laptop_.
+Close-out commit `cdadab7` — _Record the Phase 59 redeploy, and stop a two-day-old stray host_.
 The hash was filled in after that commit existed, not before: an earlier phase wrote a hash into a
 report before the commit did, and that is a fabrication with a good intention behind it. The edit
 that fills it is committed by the next phase's close, so the tree is never left dirty for it.
@@ -306,17 +306,17 @@ that fills it is committed by the next phase's close, so the tree is never left 
 Rebuilt from this tree and re-deployed at the close, the old copy moved aside and removed only
 after the new one answered:
 
-| check | result |
-|---|---|
-| `codesign --verify --deep --strict` on the deployed bundle | valid on disk, satisfies its Designated Requirement |
-| same, after extracting `Vantage.app.zip` into a temp dir | valid — the archive, not just the folder — and `Contents/Resources/app/jarvis/relay.py` present inside it |
-| `GET /health` on the delivered app | `status ok`, **145 tools**, 15 agents, `llm_enabled: false` |
-| `GET /tools` | 145 entries |
-| `GET /persistence` | `supported: true`, `installed: false`, `loaded: false`, `pid: 0` — the machine left as found, 57-A still a user decision |
-| `GET /devices` | 13 rows, unchanged by this phase |
-| `GET /health` with no token | **401** — the shipped gate is the shipped gate |
-| archives | `Vantage.app.zip` 1,158,613 B and `vantage-source.zip` 2,489,043 B, both rebuilt; the source archive contains `jarvis/relay.py` and this report, and no `.env`, token, key file or database |
-| the relay against the **user's real** host | **not run, deliberately.** Pointing a forward-door process at `~/.jarvis-forge` would open a path into the real device key store to test something already proven on an isolated home (§8). |
+| check                                                      | result                                                                                                                                                                                      |
+| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `codesign --verify --deep --strict` on the deployed bundle | valid on disk, satisfies its Designated Requirement                                                                                                                                         |
+| same, after extracting `Vantage.app.zip` into a temp dir   | valid — the archive, not just the folder — and `Contents/Resources/app/jarvis/relay.py` present inside it                                                                                   |
+| `GET /health` on the delivered app                         | `status ok`, **145 tools**, 15 agents, `llm_enabled: false`                                                                                                                                 |
+| `GET /tools`                                               | 145 entries                                                                                                                                                                                 |
+| `GET /persistence`                                         | `supported: true`, `installed: false`, `loaded: false`, `pid: 0` — the machine left as found, 57-A still a user decision                                                                    |
+| `GET /devices`                                             | 13 rows, unchanged by this phase                                                                                                                                                            |
+| `GET /health` with no token                                | **401** — the shipped gate is the shipped gate                                                                                                                                              |
+| archives                                                   | `Vantage.app.zip` 1,158,613 B and `vantage-source.zip` 2,489,043 B, both rebuilt; the source archive contains `jarvis/relay.py` and this report, and no `.env`, token, key file or database |
+| the relay against the **user's real** host                 | **not run, deliberately.** Pointing a forward-door process at `~/.jarvis-forge` would open a path into the real device key store to test something already proven on an isolated home (§8). |
 
 `READ ME FIRST.txt` gained an "Off the wifi" section that says what the relay is, what was proved,
 and what it does not do — including that no phone button points at it yet. It is still
@@ -333,16 +333,16 @@ Nothing was pushed.
 
 ## 16. Exit criteria, checked one by one
 
-| the phase had to show | state |
-|---|---|
-| a relay that authenticates before forwarding | **IMPLEMENTED and VERIFIED live** (§3, §8) |
-| identity taken from what the client can sign, not from what it types | **IMPLEMENTED and VERIFIED live** — a body claiming `laptop_main` was forwarded as `p59_demo` and the ledger agreed |
+| the phase had to show                                                                               | state                                                                                                                                     |
+| --------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| a relay that authenticates before forwarding                                                        | **IMPLEMENTED and VERIFIED live** (§3, §8)                                                                                                |
+| identity taken from what the client can sign, not from what it types                                | **IMPLEMENTED and VERIFIED live** — a body claiming `laptop_main` was forwarded as `p59_demo` and the ledger agreed                       |
 | the host's permission, confirmation, verification and audit rules unchanged and still authoritative | **VERIFIED** — 145 tools / 30 gated / 52 rules unchanged; a refusal through the relay is the host's own refusal with the host's own words |
-| the master token never given to the relay by a client | **VERIFIED** — the relay refuses to forward rather than substitute a credential; a test greps the relay's whole conversation for it |
-| an outage that never masquerades as an empty Vantage state | **IMPLEMENTED and VERIFIED live** — `502 host_unavailable` with the connect error quoted, GET and POST alike |
-| bounded timeouts, one attempt per request | **IMPLEMENTED and tested** (12 s default; `test_one_request_is_one_attempt`) |
-| audit rows that say who asked | **IMPLEMENTED and VERIFIED live** — additive, with the device column left alone (§6) |
-| replay and stale-timestamp protection | **IMPLEMENTED and VERIFIED live** (§3, §8) |
-| no local test presented as off-LAN proof | **HONORED** — §11 is labelled `BLOCKED_EXTERNAL_DEPENDENCY` and names the missing dependency |
-| browser verification | **NOT APPLICABLE** — no page changed (§12) |
-| commit locally, nothing pushed | **DONE** — `a71852d` plus this close-out commit |
+| the master token never given to the relay by a client                                               | **VERIFIED** — the relay refuses to forward rather than substitute a credential; a test greps the relay's whole conversation for it       |
+| an outage that never masquerades as an empty Vantage state                                          | **IMPLEMENTED and VERIFIED live** — `502 host_unavailable` with the connect error quoted, GET and POST alike                              |
+| bounded timeouts, one attempt per request                                                           | **IMPLEMENTED and tested** (12 s default; `test_one_request_is_one_attempt`)                                                              |
+| audit rows that say who asked                                                                       | **IMPLEMENTED and VERIFIED live** — additive, with the device column left alone (§6)                                                      |
+| replay and stale-timestamp protection                                                               | **IMPLEMENTED and VERIFIED live** (§3, §8)                                                                                                |
+| no local test presented as off-LAN proof                                                            | **HONORED** — §11 is labelled `BLOCKED_EXTERNAL_DEPENDENCY` and names the missing dependency                                              |
+| browser verification                                                                                | **NOT APPLICABLE** — no page changed (§12)                                                                                                |
+| commit locally, nothing pushed                                                                      | **DONE** — `a71852d` plus this close-out commit                                                                                           |

@@ -53,7 +53,7 @@ Red first: 5 failed, then 2, then 1, each for a different real reason recorded b
 - A machine without the library still gets the address: `__import__` blocked for `qrcode`,
   `pairing_qr_png` returns `None` rather than raising.
 - The panel draws an image when one is available, and shows `http://172.20.169.34:8765/phone`
-  as text — asserting explicitly that the loopback URL is *not* what it offers.
+  as text — asserting explicitly that the loopback URL is _not_ what it offers.
 - `/health.phone_urls` equals `Settings.reachable_urls()`, so the panel and the host gate
   cannot disagree.
 
@@ -104,27 +104,27 @@ swap.
 
 ## 7. Re-measured
 
-| | before | after |
-|---|---|---|
-| tests | 1718 | **1724 passed · 0 failed · 0 skipped** |
-| test modules | 60 | **61** |
-| reports | 39 | **40** |
-| API routes | 108 | 108 (`phone_urls` is a field, not a route) |
+|                         | before                                             | after                                                                                    |
+| ----------------------- | -------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| tests                   | 1718                                               | **1724 passed · 0 failed · 0 skipped**                                                   |
+| test modules            | 60                                                 | **61**                                                                                   |
+| reports                 | 39                                                 | **40**                                                                                   |
+| API routes              | 108                                                | 108 (`phone_urls` is a field, not a route)                                               |
 | connecting from a phone | type an address, if a server happens to be running | the laptop shows the address and a scan code; the app was started and verified listening |
 
 ## 8. Carried forward
 
-* **38-A** the scan code only appears if `qrcode` is installed (`pip install qrcode`); without
+- **38-A** the scan code only appears if `qrcode` is installed (`pip install qrcode`); without
   it the panel shows the address alone. Deliberate, but it means the "just scan it" experience
   is opt-in on each machine.
-* **38-B** the address changes when the router reassigns it. A scan code absorbs that today;
+- **38-B** the address changes when the router reassigns it. A scan code absorbs that today;
   nothing advertises the laptop via mDNS yet, which is what would make the connection survive
   an IP change without the laptop being opened again.
-* **38-C** `refresh()` catches every exception into a status line — the reason finding 4.3 was
+- **38-C** `refresh()` catches every exception into a status line — the reason finding 4.3 was
   invisible for as long as it was. Narrowing that catch is a real robustness item.
-* **38-D** the app died when its bundle was rebuilt underneath it; the build should refuse to
+- **38-D** the app died when its bundle was rebuilt underneath it; the build should refuse to
   run against a live install rather than rely on the operator's care.
-* Unchanged from before: 37-A…E, 36-A…E, 35-A…C, 34-A…C, and the `-rs` CI change that would
+- Unchanged from before: 37-A…E, 36-A…E, 35-A…C, 34-A…C, and the `-rs` CI change that would
   name the runner's six skips.
 
 ## 9. Git
@@ -142,4 +142,3 @@ three `pytest.skip` sites, all gated on the optional `qrcode` package, and the r
 no-library fallback by skipping the code-drawing tests — consistent with the design, though
 stated as consistency rather than proof: the workflow still runs `python -m pytest -q`, so no
 skip reason reaches the log, which remains the standing `-rs` open item.
-

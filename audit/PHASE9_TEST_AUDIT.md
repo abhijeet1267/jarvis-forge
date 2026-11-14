@@ -12,12 +12,12 @@ $ .venv/bin/python -m pytest -q -p no:cacheprovider
 126 failed, 875 passed, 1 skipped, 1 warning in 22.07s
 ```
 
-| | Claimed in brief / STATUS.md | Measured | Delta |
-|---|---|---|---|
-| passing | 975 | **875** | **−100** |
-| skipped | 1 | 1 | 0 |
-| failing | 0 (implied) | **126** | **+126** |
-| collected | 976 | **1002** | +26 |
+|           | Claimed in brief / STATUS.md | Measured | Delta    |
+| --------- | ---------------------------- | -------- | -------- |
+| passing   | 975                          | **875**  | **−100** |
+| skipped   | 1                            | 1        | 0        |
+| failing   | 0 (implied)                  | **126**  | **+126** |
+| collected | 976                          | **1002** | +26      |
 
 The suite does not pass. The claim "975 passing + 1 skipped" is **FALSE against the
 current tree**. Per the brief, failures were classified before any fix was attempted.
@@ -87,7 +87,7 @@ still exercise working code.
 The irony is load-bearing for the audit's conclusions: this is the exact function whose
 docstring was written to stop tools from falsely claiming success —
 
-> `verified` used to be hardcoded `True` and placed *after* `**output`, so a tool reporting
+> `verified` used to be hardcoded `True` and placed _after_ `**output`, so a tool reporting
 > `verified=dst.exists()` wrote into the output dict and the field silently claimed success
 > anyway — which is how an offline robot command with no bridge ended up audited as a success.
 > — `jarvis/tools/base.py:90-99`
@@ -124,12 +124,12 @@ $ cd /tmp/p9shadow && .../jarvis-forge/.venv/bin/python -m pytest -q -p no:cache
 3 failed, 997 passed, 2 skipped, 1 warning in 14.14s
 ```
 
-| Configuration | Result | Wall time |
-|---|---|---|
-| real tree, as found | 126 failed, 875 passed, 1 skipped | 22.1 s |
-| real tree + runtime injection | 59 failed, 942 passed, 1 skipped | 8.2 s |
-| **clean copy + source fix** | **3 failed, 997 passed, 2 skipped** | **14.1 s** |
-| clean copy, unfixed (reproducibility check) | 126 failed, 874 passed, 2 skipped | 21.7 s |
+| Configuration                               | Result                              | Wall time  |
+| ------------------------------------------- | ----------------------------------- | ---------- |
+| real tree, as found                         | 126 failed, 875 passed, 1 skipped   | 22.1 s     |
+| real tree + runtime injection               | 59 failed, 942 passed, 1 skipped    | 8.2 s      |
+| **clean copy + source fix**                 | **3 failed, 997 passed, 2 skipped** | **14.1 s** |
+| clean copy, unfixed (reproducibility check) | 126 failed, 874 passed, 2 skipped   | 21.7 s     |
 
 **Attribution: 123 of the 126 failures are caused by the one missing import.**
 The real tree was never modified; `/tmp/p9shadow` held all experiments.
@@ -165,15 +165,15 @@ leave three honesty properties silently untested.
 
 ## 2.6 Contamination found in the audit process itself (methodological finding)
 
-The in-place injection run produced a *different* failure set (59) than the clean-copy
+The in-place injection run produced a _different_ failure set (59) than the clean-copy
 run (3), and the two are almost disjoint — only 4 node IDs overlap. The cause was
 investigated rather than waved away:
 
-* Not test ordering: `test_api.py` alone fails 37/67 with the injected name, yet passes
+- Not test ordering: `test_api.py` alone fails 37/67 with the injected name, yet passes
   67/67 when the same run also calls `get_settings()`/`get_token_store()` during
   `pytest_runtest_setup`. A `--assert=plain` rerun still gave 59, ruling out pytest's
   assertion-rewrite cache as the mechanism.
-* The 8-minute wall time of the clean-copy-with-injection run (481 s) against 14 s for the
+- The 8-minute wall time of the clean-copy-with-injection run (481 s) against 14 s for the
   source-fixed run shows late injection leaves a large amount of code taking exception
   paths that the real import never would.
 
@@ -190,7 +190,7 @@ attribution.
 `/Users/abhijeetmiskin/AppData/aisys/jarvis-forge`, under at least three distinct
 interpreter/pytest combinations (`cpython-311-pytest-8.4.2`,
 `cpython-313-pytest-9.1.1`, `cpython-313`). Tracebacks in the current 3.11 run still
-*display* the old path, e.g.:
+_display_ the old path, e.g.:
 
 ```console
 /Users/abhijeetmiskin/AppData/aisys/jarvis-forge/tests/test_api.py:42: AssertionError
@@ -205,29 +205,29 @@ valid, and the failure would be reported against a path that does not exist. Sev
 
 ## 2.8 Suite-shape observations
 
-* Collection is stable at **1002 tests**; the "1 skipped" becomes "2 skipped" in a copy
+- Collection is stable at **1002 tests**; the "1 skipped" becomes "2 skipped" in a copy
   with `dist/` excluded, i.e. one skip is the desktop-bundle test standing down when the
   bundle is absent — a correctly-behaved environment skip.
-* The single warning is a third-party deprecation, not project code:
+- The single warning is a third-party deprecation, not project code:
   `StarletteDeprecationWarning: Using httpx with starlette.testclient is deprecated`.
-* `pytest --collect-only -q` and `pytest -q` agree on 1002, so there are no
+- `pytest --collect-only -q` and `pytest -q` agree on 1002, so there are no
   collection errors hiding behind the failures.
-* Test runtime is dominated by one file: the suite runs in ~14 s fixed / ~22 s broken,
+- Test runtime is dominated by one file: the suite runs in ~14 s fixed / ~22 s broken,
   and the two privacy/voice suites account for most of the fixed-run cost (70 s when
   forced to run in isolation under one probe configuration — re-measured in Phase 12).
 
 ## 2.9 Verdict on "test truth"
 
-| Question | Answer |
-|---|---|
-| Does the suite pass today? | **No.** 126 failed / 875 passed / 1 skipped. |
-| Is that a real regression? | **Yes — one real code defect** (missing import), worth 123 failures. Fails closed. |
+| Question                           | Answer                                                                                                                      |
+| ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| Does the suite pass today?         | **No.** 126 failed / 875 passed / 1 skipped.                                                                                |
+| Is that a real regression?         | **Yes — one real code defect** (missing import), worth 123 failures. Fails closed.                                          |
 | Are there environment limitations? | 1 test skips when `dist/` is absent (correct behaviour). No dependency failures; all pinned deps import cleanly under 3.11. |
-| Stale tests? | **Yes, 3**, all reading a field that moved (`output["verified"]` → `.verified`). |
-| Flaky? | Not in the product suite. The instability observed was in the *audit method* (2.6), and was eliminated. |
-| Documentation mismatch? | **Yes** — "975 passing, 1 skipped" is not true of this tree. |
-| Dependency problem? | None detected. The tree needs 3.11; `python3` on PATH is 3.14 and caches exist from 3.13. |
-| Unknowns | None material to the count. |
+| Stale tests?                       | **Yes, 3**, all reading a field that moved (`output["verified"]` → `.verified`).                                            |
+| Flaky?                             | Not in the product suite. The instability observed was in the _audit method_ (2.6), and was eliminated.                     |
+| Documentation mismatch?            | **Yes** — "975 passing, 1 skipped" is not true of this tree.                                                                |
+| Dependency problem?                | None detected. The tree needs 3.11; `python3` on PATH is 3.14 and caches exist from 3.13.                                   |
+| Unknowns                           | None material to the count.                                                                                                 |
 
 ## 2.10 Proposed repair — NOT applied (Phase 15 compliance)
 

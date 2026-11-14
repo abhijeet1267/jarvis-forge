@@ -210,11 +210,76 @@ class CapabilityRegistry:
     
     def can_handle_request(self, provider_id: str, model: str,
                           required_capabilities: List[CapabilityType]) -> bool:
-        """Check if a provider/model can handle all required capabilities."""
+        """Check if a provider/model can handle all required capabilities.
+
+        Conservative by design and **not** wired as a request gate: this reads
+        only the *declared* profiles (``DEFAULT_CAPABILITIES`` plus anything
+        explicitly ``update_model_capabilities``-ed). A provider that is
+        genuinely serving traffic may have no declared profile here, so this
+        can report a working model as unable to chat -- which is why a gate
+        built on it would refuse real requests, and why the live path never
+        consults it for that. Real, observed capability evidence is reported
+        separately by :meth:`capability_report`, from the route-health ledger
+        that records every actual completion.
+        """
         for cap in required_capabilities:
             if not self.supports_capability(provider_id, model, cap):
                 return False
         return True
+
+    def capability_report(self, provider_id: str, model: str) -> Dict[str, Any]:
+        """What a provider/model's capability is, **as evidenced**, not as assumed.
+
+        A capability has three honest states, and conflating them is what made
+        this subsystem dangerous to wire up as a gate:
+
+        * ``verified`` -- a completion to this exact provider/model succeeded
+          and was recorded in the route-health ledger (real runtime evidence,
+          not a claim). This is the only tier that counts as proof the model
+          can actually do the thing.
+        * ``declared`` -- a static profile names the capability but no success
+          has been observed for it. It is an expectation, not evidence.
+        * ``unknown`` -- neither: no success observed, no profile claims it.
+
+        Only ``TEXT`` is derivable from evidence, because a successful
+        completion is exactly a successful text request. Everything else has
+        no completion to prove it, so it stays declared/unknown rather than
+        being inferred -- claiming a model can do tool-calling or vision just
+        because it answered once would be the "name in a registry means the
+        model can do it" error this report exists to prevent.
+        """
+        from ..gateway.route_health import get_route_health
+
+        entry = get_route_health().snapshot(provider_id, model)
+        last_success = entry.get("last_success_at")
+        profile = self.get_capabilities(provider_id, model)
+
+        # The declared tier is everything the static profile asserts. Some of it
+        # is stored in the capability dict; the rest as boolean fields
+        # (tool-calling, streaming) or the context window. All of it is a
+        # *declaration*, not evidence -- none of it becomes "verified" here.
+        declared = dict(profile.capabilities)
+        if profile.supports_tools:
+            declared.setdefault(CapabilityType.TOOL_CALLING, "supported")
+        if profile.supports_streaming:
+            declared.setdefault(CapabilityType.STREAMING, "supported")
+        if profile.context_window_tokens > 0:
+            declared.setdefault(CapabilityType.LONG_CONTEXT, "supported")
+
+        report: Dict[str, Any] = {
+            "provider_id": provider_id,
+            "model": model,
+            "capabilities": {},
+            "last_success_at": last_success,
+        }
+        for cap in CapabilityType:
+            if cap is CapabilityType.TEXT and last_success:
+                report["capabilities"][cap.value] = "verified"
+            elif cap in declared:
+                report["capabilities"][cap.value] = "declared"
+            else:
+                report["capabilities"][cap.value] = "unknown"
+        return report
     
     def update_model_capabilities(self, provider_id: str, model: str,
                                  capabilities: Dict[CapabilityType, str],
@@ -354,34 +419,48 @@ try:
     import keyring
     
     class KeychainStorage:
-        """macOS Keychain-based credential storage."""
-        
+        """macOS Keychain-based credential storage.
+
+        `keyring.set_password` / `delete_password` return ``None`` on success and *raise*
+        on failure -- so success is the absence of an exception, not a truthy return value.
+        Reporting the raw ``None`` as the result (the old behaviour) made a successful store
+        read as a failure and 500'd, and a successful delete read as 404. The store is the
+        source of truth for "did it persist": return True only when the backend accepted it.
+        """
+
         SERVICE_PREFIX = "vantage.ai."
-        
+
+        @classmethod
+        def service(cls, provider_id: str) -> str:
+            return f"{cls.SERVICE_PREFIX}{provider_id}"
+
         @classmethod
         def store(cls, provider_id: str, secret: str) -> bool:
-            """Store a secret in the keychain."""
+            """Store a secret. True only if the backend accepted it."""
             try:
-                service = f"{cls.SERVICE_PREFIX}{provider_id}"
-                return keyring.set_password(service, "credential", secret)
+                keyring.set_password(cls.service(provider_id), "credential", secret)
+                return True
             except Exception:
                 return False
-        
+
         @classmethod
         def retrieve(cls, provider_id: str) -> Optional[str]:
-            """Retrieve a secret from the keychain."""
+            """The stored secret, or None (not stored, or backend unavailable)."""
             try:
-                service = f"{cls.SERVICE_PREFIX}{provider_id}"
-                return keyring.get_password(service, "credential")
+                return keyring.get_password(cls.service(provider_id), "credential")
             except Exception:
                 return None
-        
+
         @classmethod
         def delete(cls, provider_id: str) -> bool:
-            """Delete a secret from the keychain."""
+            """Delete the secret. True if it was present and is gone now."""
             try:
-                service = f"{cls.SERVICE_PREFIX}{provider_id}"
-                return keyring.delete_password(service, "credential")
+                keyring.delete_password(cls.service(provider_id), "credential")
+                return True
+            except keyring.errors.PasswordDeleteError:
+                # No such item to delete -- not an error the caller must act on as "failed",
+                # but a 404 signal the route can use to say "there was nothing stored".
+                return False
             except Exception:
                 return False
                 
@@ -404,38 +483,68 @@ except ImportError:
 
 # --- Provider registry ---
 
-_providers: Dict[str, ProviderSpec] = {
-    "openai": ProviderSpec(
-        id="openai",
-        display_name="OpenAI",
-        type=ProviderType.OPENAI,
-        models=["gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-4"],
-        capabilities={"chat": True, "embeddings": False},
-    ),
+#: Display metadata over the *authoritative* provider set. The adapters that actually
+#: exist are in ``gateway.providers.PROVIDERS``; this module must not maintain a parallel
+#: list that can drift (it once listed only "openai", so the settings page hid a real
+#: Gemini adapter). Human-facing names live here; machine-facing facts live with the adapter.
+_DISPLAY = {
+    "openai": ("OpenAI", ProviderType.OPENAI),
+    "gemini": ("Google Gemini", ProviderType.GOOGLE_GEMINI),
+    "groq": ("Groq", ProviderType.OPENAI),
+    "9router": ("9Router (local gateway)", ProviderType.OPENAI),
+    "openai_compatible": ("OpenAI-compatible (custom)", ProviderType.OPENAI),
+    "chat2api": ("Chat2API pool (local gateway)", ProviderType.OPENAI),
 }
 
 
 def list_providers() -> List[ProviderSpec]:
-    """List all supported providers."""
-    return list(_providers.values())
+    """The supported providers, derived from the live adapters.
+
+    Built from ``gateway.providers.PROVIDERS`` so a new adapter automatically appears
+    here (and in the settings page / credential table) without a second edit that can
+    be forgotten -- the source of truth is one dictionary, not two.
+    """
+    from ..gateway.providers import PROVIDERS
+
+    specs: List[ProviderSpec] = []
+    for provider_id, cls in PROVIDERS.items():
+        display_name, ptype = _DISPLAY.get(provider_id, (provider_id.capitalize(), ProviderType.OPENAI))
+        specs.append(ProviderSpec(
+            id=provider_id,
+            display_name=display_name,
+            type=ptype,
+            models=list(getattr(cls, "SUPPORTED_MODELS", []) or []),
+            capabilities={"chat": True, "embeddings": provider_id == "openai"},
+        ))
+    return specs
 
 
 def get_provider(provider_id: str) -> Optional[ProviderSpec]:
     """Get a provider by ID."""
-    return _providers.get(provider_id)
+    return next((p for p in list_providers() if p.id == provider_id), None)
 
 
 def register_provider(spec: ProviderSpec) -> None:
-    """Register a new provider (for extensibility)."""
-    _providers[spec.id] = spec
+    """No-op kept for API compatibility: the registry is the gateway's adapters, not a
+    mutable local list. A hand-registered provider without an adapter would be a
+    selection the assistant cannot call, which this project refuses rather than accepts."""
+    return None
 
 
 # --- Database operations ---
 
 def create_provider_table():
-    """Ensure providers table exists."""
+    """Ensure the provider tables exist, and seed them from the live adapter registry.
+
+    The seed is the authoritative ``PROVIDERS`` from the gateway (the providers that
+    actually have an adapter). Without it, ``ai_providers`` is empty and the
+    ``ai_credentials.provider_id`` foreign key has nothing to reference, so the very
+    first credential store fails with an IntegrityError the moment secure storage
+    actually works. Seeding is idempotent (INSERT OR IGNORE) and never overwrites a
+    row the user has already changed.
+    """
     db = get_db()
-    
+
     db.execute("""
     CREATE TABLE IF NOT EXISTS ai_providers (
         provider_id TEXT PRIMARY KEY,
@@ -451,7 +560,7 @@ def create_provider_table():
         updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     )
     """)
-    
+
     db.execute("""
     CREATE TABLE IF NOT EXISTS ai_credentials (
         credential_id TEXT PRIMARY KEY,
@@ -464,6 +573,49 @@ def create_provider_table():
         FOREIGN KEY (provider_id) REFERENCES ai_providers(provider_id)
     )
     """)
+
+    _seed_providers(db)
+
+
+def _seed_providers(db) -> None:
+    """Insert one row per provider that has a real adapter, only if it is not already there.
+
+    Read from the gateway's ``PROVIDERS`` so the DB cannot drift from the adapters that
+    actually exist. The type string is mapped onto ``ProviderType``; a provider with no
+    matching type is still recorded (as a generic cloud provider) so a future adapter is
+    not blocked on the enum catching up.
+    """
+    try:
+        from ..gateway.providers import PROVIDERS
+    except Exception:
+        return  # the gateway is the source of truth; if it is unavailable, do not seed
+
+    for provider_id, cls in PROVIDERS.items():
+        already = db.query("SELECT 1 FROM ai_providers WHERE provider_id = ?", (provider_id,))
+        if already:
+            continue
+        models = list(getattr(cls, "SUPPORTED_MODELS", []) or [])
+        # Map the live adapter id onto the ProviderType enum. This is an informational
+        # column; a provider with no matching enum member is still recorded so a future
+        # adapter is not blocked on the enum catching up.
+        type_str = _provider_type_string(provider_id)
+        db.execute(
+            """INSERT OR IGNORE INTO ai_providers
+               (provider_id, display_name, type, enabled, verified, models, capabilities)
+               VALUES (?, ?, ?, 1, 0, ?, '{}')""",
+            (provider_id, provider_id.capitalize(), type_str,
+             json.dumps(models, default=str)),
+        )
+
+
+def _provider_type_string(provider_id: str) -> str:
+    """The ``ai_providers.type`` value for a live adapter id, without pretending a
+    mismatch: gemini is a Google provider, not an OpenAI one."""
+    mapping = {
+        "openai": ProviderType.OPENAI,
+        "gemini": ProviderType.GOOGLE_GEMINI,
+    }
+    return mapping.get(provider_id, ProviderType.OPENAI).value
 
 
 def get_credentials(provider_id: str) -> List[CredentialRecord]:

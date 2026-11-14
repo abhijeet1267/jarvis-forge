@@ -1,0 +1,144 @@
+import SwiftUI
+
+@main
+struct VantageApp: App {
+
+    @NSApplicationDelegateAdaptor(AppDelegate.self) var delegate
+    @StateObject private var backend = BackendManager.shared
+
+    var body: some Scene {
+        WindowGroup {
+            ContentView()
+                .frame(minWidth: 800, minHeight: 520)
+
+        }
+        .windowResizability(.contentMinSize)
+        .commands {
+            CommandGroup(replacing: .newItem) {}
+            CommandGroup(replacing: .appInfo) {
+                Button("About Vantage") {
+                    NSApp.orderFrontStandardAboutPanel(nil)
+                }
+            }
+            CommandMenu("Backend") {
+                Button("Connect") {
+                    Task { await backend.connect() }
+                }
+                .keyboardShortcut("r", modifiers: [.command, .shift])
+                Button("Disconnect") {
+                    backend.disconnect()
+                }
+                Divider()
+                Button("Refresh Health") {
+                    Task { await backend.refreshHealth() }
+                }
+                .keyboardShortcut("r", modifiers: [.command])
+            }
+        }
+    }
+}
+
+@MainActor
+final class AppDelegate: NSObject, NSApplicationDelegate {
+
+    /// Never restore a previous session's windows.
+    ///
+    /// macOS persists per-bundle-id window state, and a stale entry can leave the app
+    /// running with *no window at all* — the process is alive, but the SwiftUI scene is
+    /// never activated, so `.task` never fires and the app never connects to the
+    /// backend. Measured on this machine: the same binary, same bundle, showed zero
+    /// windows on launch and a window on the next line of the same A/B, differing only
+    /// by `-ApplePersistenceIgnoreState YES`.
+    ///
+    /// The window is rebuilt from live backend state on every launch anyway (the
+    /// sidebar, the metrics and the connection badge are all fetched fresh), so
+    /// restoring a remembered frame buys nothing and can cost the user a window that
+    /// never appears. Setting the default before AppKit restores state is what makes
+    /// this take effect.
+    func applicationWillFinishLaunching(_ notification: Notification) {
+        UserDefaults.standard.register(defaults: [
+            "ApplePersistenceIgnoreState": true,
+            "NSQuitAlwaysKeepsWindows": false,
+        ])
+    }
+
+
+
+
+
+    /// The menu bar companion. Created once, on launch, holding only the window
+    /// and palette it already owns — no second app, no helper process.
+    private var statusItem: NSStatusItem?
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        // Register the global shortcut and build the menu bar item once. Both are
+        // idempotent (`start` guards on its own flag), so a restored session that
+        // calls this twice cannot double-register anything.
+        AnywhereController.shared.start()
+        installMenuBarItem()
+    }
+
+    /// A lightweight menu bar entry: the palette is reachable even if the
+    /// shortcut is taken by another app, which is the honest fallback the brief
+    /// asks for.
+    private func installMenuBarItem() {
+        guard statusItem == nil else { return }
+        let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        item.button?.image = NSImage(systemSymbolName: "sparkle",
+                                     accessibilityDescription: "Vantage")
+        item.button?.image?.isTemplate = true
+        let menu = NSMenu()
+        menu.addItem(withTitle: "Vantage Anywhere…  \u{2325}\u{2423}",
+                     action: #selector(openAnywhere), keyEquivalent: "")
+        menu.addItem(withTitle: "Open Vantage", action: #selector(openMainWindow),
+                     keyEquivalent: "")
+        menu.addItem(.separator())
+        menu.addItem(withTitle: "Recent commands", action: nil, keyEquivalent: "")
+        menu.addItem(.separator())
+        menu.addItem(withTitle: "Quit Vantage", action: #selector(quit), keyEquivalent: "q")
+        for menuItem in menu.items where menuItem.action != nil {
+            menuItem.target = self
+        }
+        // Fill "Recent commands" from the palette's own store so the menu and the
+        // palette never disagree about what was run.
+        let recentIndex = menu.items.firstIndex { $0.title == "Recent commands" }
+        if let recentIndex, !AnywhereController.shared.recent.isEmpty {
+            let submenu = NSMenu()
+            for text in AnywhereController.shared.recent.prefix(6) {
+                let entry = NSMenuItem(title: text, action: #selector(runRecent(_:)),
+                                       keyEquivalent: "")
+                entry.target = self
+                entry.representedObject = text
+                submenu.addItem(entry)
+            }
+            menu.items[recentIndex].submenu = submenu
+        } else if let recentIndex {
+            menu.items[recentIndex].isEnabled = false
+        }
+        item.menu = menu
+        statusItem = item
+    }
+
+    @objc private func openAnywhere() { AnywhereController.shared.show() }
+    @objc private func openMainWindow() { AnywhereController.shared.openMainWindow() }
+
+    @objc private func runRecent(_ sender: NSMenuItem) {
+        guard let text = sender.representedObject as? String else { return }
+        AnywhereController.shared.show()
+        NotificationCenter.default.post(name: .anywhereAskConversation,
+                                        object: nil, userInfo: ["prefill": text])
+    }
+
+    @objc private func quit() { NSApp.terminate(nil) }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        // Release the Carbon hotkey and its handler before the process goes away,
+        // so a relaunch cannot inherit a registration the old process still owns.
+        AnywhereController.shared.stop()
+        if let statusItem {
+            NSStatusBar.system.removeStatusItem(statusItem)
+            self.statusItem = nil
+        }
+        BackendManager.shared.disconnect()
+    }
+}

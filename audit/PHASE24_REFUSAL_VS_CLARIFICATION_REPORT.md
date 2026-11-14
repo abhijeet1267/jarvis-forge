@@ -3,11 +3,11 @@
 Report date: 2026-09-28. Continues Phases 9-23.
 
 No brief; the scope came from the open-item ledger. **19-B** was Phase 19's own honest
-withdrawal: it found that *"I will not do that"* and *"which one did you mean?"* both
+withdrawal: it found that _"I will not do that"_ and _"which one did you mean?"_ both
 arrived as `reply_kind="declined"`, and left the split undone because separating them
 "would mean guessing from punctuation". Phases 22 and 23 then filled the system with real
-questions — *"Send what to Arun, and by which medium?"*, *"Which light did you mean --
-Living room ceiling light, Kitchen light, Bedroom ceiling light, Hallway light?"* — all of
+questions — _"Send what to Arun, and by which medium?"_, _"Which light did you mean --
+Living room ceiling light, Kitchen light, Bedroom ceiling light, Hallway light?"_ — all of
 which were labelled refusals, while the guard's actual refusals carried **no** label at all.
 
 ---
@@ -16,13 +16,13 @@ which were labelled refusals, while the guard's actual refusals carried **no** l
 
 Five sentences through the real pipeline, before any change:
 
-| Sentence | what it is | `reply_kind` | `needs_clarification` |
-|---|---|---|---|
-| `Jarvis, delete everything.` | refusal | `""` (none) | False |
-| `Jarvis, design this system.` | not understood | `not_understood` | False |
-| `Jarvis, send to Arun.` | question | `declined` | False |
-| `Jarvis, turn on the light.` | question | `declined` | False |
-| `Jarvis, send it.` (no draft) | question | `declined` | False |
+| Sentence                      | what it is     | `reply_kind`     | `needs_clarification` |
+| ----------------------------- | -------------- | ---------------- | --------------------- |
+| `Jarvis, delete everything.`  | refusal        | `""` (none)      | False                 |
+| `Jarvis, design this system.` | not understood | `not_understood` | False                 |
+| `Jarvis, send to Arun.`       | question       | `declined`       | False                 |
+| `Jarvis, turn on the light.`  | question       | `declined`       | False                 |
+| `Jarvis, send it.` (no draft) | question       | `declined`       | False                 |
 
 So the taxonomy was wrong in both directions: three questions were marked as refusals, and
 the one real refusal was unmarked. `Plan.needs_clarification` and
@@ -32,7 +32,7 @@ which is exactly what Phase 16 had measured and written down.
 
 ## 2. 24-A — the distinction, without guessing at anyone
 
-Phase 19's objection was sound: classifying a *user's* sentence by punctuation is guesswork.
+Phase 19's objection was sound: classifying a _user's_ sentence by punctuation is guesswork.
 That is not what this does. The string being classified is the note the **route wrote for
 itself** — `Intent(note=...)` in `jarvis/core/planner.py` — so its shape is a property of
 this codebase, not an inference about a person.
@@ -42,13 +42,13 @@ this codebase, not an inference about a person.
 - `_asks_for_something(note)` returns True for a note ending in `?` or starting with an
   interrogative (`What`, `Which`, `Who`, `How`, `Can you`, …).
 - `_to_plan` maps it: question → `reply_kind="clarification"`, `needs_clarification=True`,
-  and the note *is* the question. Statement → `declined`, unchanged.
+  and the note _is_ the question. Statement → `declined`, unchanged.
 - Two routes state rather than ask in a shape the rule would misread, so they say so:
   `"Send what to Arun, and by which medium? Draft it and I will ask before sending: …"` and
   `"There is no draft waiting to send. Draft one first …"` are prerequisites the user can
   satisfy, and are marked `clarification=True` at the site.
-- The phone-battery route's note — *"I cannot read that device's battery: no phone is
-  paired"* — is a statement of what is missing. It stays `declined`, and a test asserts it
+- The phone-battery route's note — _"I cannot read that device's battery: no phone is
+  paired"_ — is a statement of what is missing. It stays `declined`, and a test asserts it
   is **not** promoted, because "the user could answer it" is not the same as "the system
   asked them something".
 - Guard blocks get the word they never had: `reply_kind="refusal"`.
@@ -91,13 +91,13 @@ no_action      reply_kind=clarification   | Jarvis, send to Arun.
 
 Launched `run.py serve`, scratch `JARVIS_HOME`, sandboxed `HOME`, over HTTP:
 
-| Sentence | `plan.reply_kind` | State the shipped `pipelineState()` renders |
-|---|---|---|
-| send to Arun | `clarification` | NEEDS DETAIL |
-| turn on the light | `clarification` | NEEDS DETAIL |
-| delete everything | `refusal` | BLOCKED |
-| design this system | `not_understood` | NOT RECOGNISED |
-| what is my phone battery | `declined` | NOTHING EXECUTED |
+| Sentence                 | `plan.reply_kind` | State the shipped `pipelineState()` renders |
+| ------------------------ | ----------------- | ------------------------------------------- |
+| send to Arun             | `clarification`   | NEEDS DETAIL                                |
+| turn on the light        | `clarification`   | NEEDS DETAIL                                |
+| delete everything        | `refusal`         | BLOCKED                                     |
+| design this system       | `not_understood`  | NOT RECOGNISED                              |
+| what is my phone battery | `declined`        | NOTHING EXECUTED                            |
 
 ## 6. Three existing tests had their premise retired, and say so
 
@@ -105,7 +105,7 @@ This is the part of a phase that can quietly become cheating, so each change is 
 
 - `test_phase15_acceptance.py::test_a_question_is_not_guessed_at_from_reply_wording`
   asserted `needs_clarification is False` and `state != "NEEDS DETAIL"` — its own docstring
-  said the split *"needs a field the backend does not have yet"*. The field now exists, so
+  said the split _"needs a field the backend does not have yet"_. The field now exists, so
   the test asserts the stronger property instead: the kind comes from `plan.reply_kind`,
   never from the renderer reading punctuation, **and** a statement-note is still not
   promoted. Name kept, because the property it guards is unchanged.
@@ -151,7 +151,7 @@ the new run rather than hand-corrected.
 `benchmarks/safety_run.py` still reports **5 of 6** with `turn on heater` as `FAIL`; the
 `send to Arun` row passes under either label because its allowed set was written to include
 a clarification (`NOTHING EXECUTED`, `NEEDS DETAIL`, `BLOCKED`) before this phase existed —
-which is the right way for an expectation to be written: about the *kind* of answer, not one
+which is the right way for an expectation to be written: about the _kind_ of answer, not one
 incidental spelling of it.
 
 Latency is unchanged in kind, and this phase touched none of it: the search row in the new
@@ -180,7 +180,7 @@ heater.` still printed rather than tuned away.
 
 **LIVE BROWSER DRIVE: NOT PERFORMED.** §1-§5 are the ASGI app and a launched uvicorn over
 HTTP, plus pytest. The dashboard JS was executed by Node on real payloads — which proves the
-*state string* the page computes, not that a human clicked it. The phantom-approval fix in §3
+_state string_ the page computes, not that a human clicked it. The phantom-approval fix in §3
 is asserted from the response field the approval surface reads, not from the rendered page.
 
 Server stopped (no listener on 8765); scratch homes left under `/tmp`; `~/.jarvis-forge`

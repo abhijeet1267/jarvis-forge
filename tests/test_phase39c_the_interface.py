@@ -33,9 +33,6 @@ PAGE = Path(__file__).resolve().parents[1] / "dashboard" / "index.html"
 CSS = re.search(r"<style>(.*?)</style>", PAGE.read_text(), re.S).group(1)
 
 
-def _tokens(block: str) -> set:
-    return set(re.findall(r"(--[\w-]+)\s*:", block))
-
 
 # ---------------------------------------------------------------------------
 # 1. the states a product has to show
@@ -60,21 +57,43 @@ def test_the_page_adapts_below_desktop_width():
 
 
 def test_a_dark_preference_is_honoured():
-    assert "prefers-color-scheme: dark" in CSS
+    """Dark is honoured by being the base theme.
 
-
-def test_the_dark_theme_defines_every_token_the_light_one_does():
-    """A dark mode that forgets a variable is not a dark mode; it is invisible text.
-
-    The light and dark token sets must be identical, which is the kind of drift a
-    screenshot at one width does not catch.
+    The phase report measured "light only, while the phone client is dark". The
+    remediation went dark-first: the base `:root` IS the dark theme and a
+    `prefers-color-scheme: light` block overrides it for light-preference users
+    (see test_the_light_theme_defines_every_colour_token_the_base_does). So a
+    dark-preference user sees dark with no media query at all; the assertion is
+    that the base surface actually is dark.
     """
-    root = re.search(r":root\s*\{(.*?)\}", CSS, re.S).group(1)
-    dark = CSS[CSS.index("prefers-color-scheme: dark"):]
-    dark_block = re.search(r":root\s*\{(.*?)\}", dark, re.S)
-    assert dark_block, "the dark block does not restate :root"
-    missing = _tokens(root) - _tokens(dark_block.group(1))
-    assert not missing, f"tokens undefined in dark mode: {sorted(missing)}"
+    base = re.search(r":root\s*\{(.*?)\}", CSS, re.S).group(1)
+    m = re.search(r"--bg\s*:\s*#([0-9a-fA-F]{6})\b", base)
+    assert m, "base theme has no hex --bg to verify"
+    r, g, b = (int(m.group(1)[i:i + 2], 16) for i in (0, 2, 4))
+    luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b
+    assert luminance < 128, f"base --bg is not a dark surface: #{m.group(1)}"
+
+
+def test_the_light_theme_defines_every_colour_token_the_base_does():
+    """A theme that forgets a variable is not a theme; it is invisible text.
+
+    Dark-first layout: the base `:root` is the dark theme and the
+    `prefers-color-scheme: light` block restates the colour tokens. A colour
+    token the override forgets would render with its dark value on a light
+    background -- the drift a screenshot at one scheme does not catch.
+    Non-colour constants (radii, easings, shadows) may inherit.
+    """
+    base_block = re.search(r":root\s*\{(.*?)\}", CSS, re.S).group(1)
+    light_block = re.search(
+        r":root\s*\{(.*?)\}", CSS[CSS.index("prefers-color-scheme: light"):], re.S
+    ).group(1)
+    base_defs = dict(re.findall(r"(--[\w-]+)\s*:\s*([^;}]+)", base_block))
+    light_defs = dict(re.findall(r"(--[\w-]+)\s*:\s*([^;}]+)", light_block))
+    missing = [
+        name for name, value in base_defs.items()
+        if re.match(r"^(#|rgb)", value.strip()) and name not in light_defs
+    ]
+    assert not missing, f"colour tokens undefined in light mode: {sorted(missing)}"
 
 
 def test_motion_respects_the_user_asking_not_to():
@@ -94,7 +113,12 @@ def test_the_reply_and_state_are_announced():
 
 def test_the_command_input_is_labelled():
     body = PAGE.read_text()
-    assert 'aria-label' in body[body.index('<input id="cmd"'):body.index('<input id="cmd"') + 300]
+    # The reflowed source may break the input across lines, so match `id="cmd"` and look
+    # for its `aria-label` in the surrounding tag rather than assuming a single-line input.
+    m = re.search(r'<input[^>]*id="cmd"[^>]*>', body, re.S)
+    assert m, "no command input on the panel"
+    tag = m.group(0)
+    assert 'aria-label' in tag, f"the command input has no accessible label: {tag}"
 
 
 # ---------------------------------------------------------------------------

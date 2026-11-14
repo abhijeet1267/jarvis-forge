@@ -1,0 +1,886 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="jarvis-bootstrap" content="__JARVIS_BOOTSTRAP__" />
+    <title>Vantage — Work</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #121418;
+        --panel: #1a1d23;
+        --panel-2: #22262e;
+        --text: #e6e8ec;
+        --muted: #9aa1ad;
+        --line: #2c313a;
+        --accent: #6ea8fe;
+        --ok: #4cc38a;
+        --warn: #e0a44a;
+        --bad: #e06a6a;
+      }
+      @media (prefers-color-scheme: light) {
+        :root {
+          color-scheme: light;
+          --bg: #f6f7f9;
+          --panel: #fff;
+          --panel-2: #f0f2f5;
+          --text: #1a1d23;
+          --muted: #5c6470;
+          --line: #d9dee6;
+          --accent: #2563eb;
+          --ok: #1f8a5b;
+          --warn: #9a6512;
+          --bad: #b03030;
+        }
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font:
+          14px/1.5 -apple-system,
+          BlinkMacSystemFont,
+          "Segoe UI",
+          sans-serif;
+      }
+      header {
+        display: flex;
+        align-items: baseline;
+        gap: 12px;
+        padding: 16px 22px;
+        border-bottom: 1px solid var(--line);
+      }
+      header h1 {
+        font-size: 17px;
+        margin: 0;
+        font-weight: 600;
+      }
+      header .spacer {
+        flex: 1;
+      }
+      header a {
+        color: var(--muted);
+        text-decoration: none;
+        font-size: 13px;
+      }
+      header a:hover {
+        color: var(--accent);
+      }
+      #status {
+        font-size: 12px;
+        color: var(--muted);
+      }
+      main {
+        max-width: 1180px;
+        margin: 0 auto;
+        padding: 22px;
+        display: grid;
+        gap: 16px;
+        grid-template-columns: 1fr 1fr;
+        align-items: start;
+      }
+      @media (max-width: 900px) {
+        main {
+          grid-template-columns: 1fr;
+        }
+      }
+      section {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 16px;
+      }
+      h2 {
+        font-size: 13px;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--muted);
+        margin: 0 0 12px;
+        font-weight: 600;
+      }
+      ul {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+      }
+      li.row {
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+        padding: 10px 0;
+        border-top: 1px solid var(--line);
+      }
+      li.row:first-child {
+        border-top: 0;
+      }
+      .grow {
+        flex: 1;
+        min-width: 0;
+      }
+      .t {
+        font-weight: 500;
+        overflow-wrap: anywhere;
+      }
+      .m {
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .badge {
+        display: inline-block;
+        font-size: 11px;
+        padding: 1px 8px;
+        border-radius: 999px;
+        border: 1px solid var(--line);
+        color: var(--muted);
+        margin-right: 5px;
+      }
+      .badge.ok {
+        color: var(--ok);
+        border-color: var(--ok);
+      }
+      .badge.warn {
+        color: var(--warn);
+        border-color: var(--warn);
+      }
+      .badge.bad {
+        color: var(--bad);
+        border-color: var(--bad);
+      }
+      button {
+        font: inherit;
+        font-size: 12px;
+        cursor: pointer;
+        color: var(--text);
+        background: var(--panel-2);
+        border: 1px solid var(--line);
+        border-radius: 7px;
+        padding: 5px 10px;
+      }
+      button:hover {
+        border-color: var(--accent);
+      }
+      button.primary {
+        background: var(--accent);
+        color: #0b1220;
+        border-color: var(--accent);
+        font-weight: 600;
+      }
+      form.inline {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 8px;
+        margin-top: 10px;
+      }
+      form.inline input {
+        font: inherit;
+        background: var(--panel-2);
+        color: var(--text);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 7px 10px;
+      }
+      .kv {
+        display: grid;
+        grid-template-columns: auto 1fr;
+        gap: 2px 10px;
+        font-size: 12px;
+      }
+      .kv .m {
+        margin: 0;
+      }
+      .err {
+        color: var(--bad);
+        font-size: 12px;
+        min-height: 16px;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Work</h1>
+      <span id="status">connecting…</span>
+      <span class="spacer"></span>
+      <a href="/planner">Planner</a>
+      <a href="/operator">Operator</a>
+      <a href="/work" style="font-weight: 600">Work</a>
+      <a href="/dashboard">Dashboard</a>
+      <a href="/ai-connections">AI Providers</a>
+    </header>
+
+    <main>
+      <div style="display: grid; gap: 16px">
+        <section>
+          <h2>Workspaces</h2>
+          <div class="err" id="ws-err"></div>
+          <ul id="workspaces">
+            <li class="m">Loading…</li>
+          </ul>
+          <form class="inline" id="ws-form">
+            <input
+              id="ws-path"
+              placeholder="/Users/me/code/project"
+              autocomplete="off"
+            />
+            <button class="primary" type="submit">Open</button>
+          </form>
+          <div class="m" style="margin-top: 6px">
+            A workspace is a folder Vantage may inspect and test, nothing more.
+          </div>
+        </section>
+
+        <section>
+          <h2>Agents</h2>
+          <div class="m" id="agents-note">Loading…</div>
+          <ul
+            id="agents"
+            style="list-style: none; padding: 0; margin: 10px 0 0"
+          ></ul>
+          <div class="m" style="margin-top: 6px">
+            An agent owns exactly the tools whose spec names it — the counts
+            below come from the registry, not from a list. Selecting one shows
+            what it may do and which of those actions need approval.
+          </div>
+        </section>
+
+        <section>
+          <h2>Coding tasks</h2>
+          <div class="m" id="coding-status">Checking for a coding agent…</div>
+          <form class="run" id="coding-form" style="margin-top: 10px">
+            <input
+              id="coding-goal"
+              placeholder="e.g. add a --verbose flag to the CLI and run its tests"
+              autocomplete="off"
+            />
+            <input
+              id="coding-path"
+              placeholder="Folder (optional, defaults to this repo)"
+              autocomplete="off"
+            />
+            <button class="primary" type="submit" id="coding-start" disabled>
+              Start
+            </button>
+          </form>
+          <div class="err" id="coding-err"></div>
+          <div id="coding-result"></div>
+          <div class="m" style="margin-top: 6px">
+            Starting a task runs the real coding agent in that folder, with file
+            access, so it asks before it begins. Vantage reports what the agent
+            answered and which files changed — it never claims work it did not
+            see.
+          </div>
+        </section>
+
+        <section>
+          <h2>Automations</h2>
+          <div id="templates" class="m">Loading…</div>
+          <div class="err" id="template-err"></div>
+          <div id="template-run"></div>
+          <div class="m" style="margin-top: 6px">
+            Each automation is a fixed list of real steps. A step that cannot do
+            its job reports failure — it is never counted as done.
+          </div>
+        </section>
+
+        <section>
+          <h2>Workflow jobs</h2>
+          <div class="err" id="job-err"></div>
+          <ul id="jobs">
+            <li class="m">Loading…</li>
+          </ul>
+          <div class="m" style="margin-top: 6px">
+            A job's progress is per step. A step waiting for approval is not
+            "done".
+          </div>
+        </section>
+      </div>
+
+      <section>
+        <h2>Workspace detail</h2>
+        <div id="ws-detail" class="m">Open a workspace to inspect it.</div>
+      </section>
+    </main>
+
+    <script>
+      (function () {
+        const BOOTSTRAP =
+          (document.querySelector('meta[name="jarvis-bootstrap"]') || {})
+            .content || "";
+        let token = "";
+        const statusEl = document.getElementById("status");
+        const el = (tag, props = {}, kids = []) => {
+          const n = document.createElement(tag);
+          Object.assign(n, props);
+          (Array.isArray(kids) ? kids : [kids]).forEach((k) =>
+            n.appendChild(
+              typeof k === "string" ? document.createTextNode(k) : k,
+            ),
+          );
+          return n;
+        };
+        const H = () => ({ "X-JARVIS-Token": token });
+        const HJ = () => ({
+          "X-JARVIS-Token": token,
+          "Content-Type": "application/json",
+        });
+
+        async function establish() {
+          const r = await fetch("/auth/session", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ bootstrap: BOOTSTRAP }),
+          });
+          if (!r.ok) throw new Error("session failed (" + r.status + ")");
+          token = (await r.json()).session_token || "";
+          if (!token) throw new Error("no session token");
+        }
+
+        function statusBadge(status) {
+          const s = String(status || "").toLowerCase();
+          const cls =
+            s === "completed" || s === "success"
+              ? "ok"
+              : s === "failed" || s === "blocked"
+                ? "bad"
+                : s === "running" ||
+                    s === "pending" ||
+                    s === "awaiting_confirmation"
+                  ? "warn"
+                  : "";
+          return el("span", { className: "badge " + cls }, status || "?");
+        }
+
+        async function loadWorkspaces() {
+          const ul = document.getElementById("workspaces");
+          try {
+            const r = await fetch("/workspaces", { headers: H() });
+            const data = await r.json();
+            const list = data.workspaces || [];
+            ul.textContent = "";
+            if (!list.length) {
+              ul.appendChild(
+                el("li", { className: "m" }, "No workspace open."),
+              );
+              return;
+            }
+            list.forEach((w) => {
+              const grow = el("div", { className: "grow" }, [
+                el("div", { className: "t" }, w.name),
+                el("div", { className: "m" }, w.root),
+              ]);
+              const inspectBtn = el("button", {}, "Inspect");
+              inspectBtn.addEventListener("click", () => inspectWorkspace(w));
+              const openBtn = el("button", {}, "Open in editor");
+              openBtn.addEventListener("click", () =>
+                runCommand("open " + w.root + " in cursor"),
+              );
+              ul.appendChild(
+                el("li", { className: "row" }, [
+                  grow,
+                  el("div", { style: "display:flex;gap:6px" }, [
+                    inspectBtn,
+                    openBtn,
+                  ]),
+                ]),
+              );
+            });
+          } catch (e) {
+            ul.textContent = "";
+            ul.appendChild(
+              el("li", { className: "m" }, "Could not load workspaces."),
+            );
+          }
+        }
+
+        async function inspectWorkspace(w) {
+          const box = document.getElementById("ws-detail");
+          box.textContent = "Inspecting…";
+          try {
+            const r = await fetch(
+              `/workspaces/${encodeURIComponent(w.workspace_id)}/inspect`,
+              { headers: H() },
+            );
+            if (!r.ok) throw new Error("HTTP " + r.status);
+            const data = await r.json();
+            // The route returns the inspection FLATTENED (`**inspect(workspace)`),
+            // so the fields are at the top level, not under an "inspection" key.
+            const i = data.inspection || data;
+            box.textContent = "";
+            box.appendChild(
+              el("div", { className: "t" }, i.workspace || w.name),
+            );
+            const kv = el("div", { className: "kv", style: "margin-top:8px" });
+            const put = (k, v) => {
+              kv.appendChild(el("div", { className: "m" }, k));
+              kv.appendChild(el("div", {}, String(v)));
+            };
+            put("git repo", i.is_git_repo ? "yes" : "no");
+            put("source files", i.file_count ?? "?");
+            put("test files", i.test_file_count ?? "?");
+            put("languages", Object.keys(i.languages || {}).join(", ") || "—");
+            put(
+              "test runners",
+              (i.likely_test_runners || []).join(", ") || "—",
+            );
+            put("entry points", (i.entry_points || []).join(", ") || "—");
+            box.appendChild(kv);
+            if ((i.largest_files || []).length) {
+              box.appendChild(
+                el(
+                  "div",
+                  { className: "m", style: "margin-top:8px" },
+                  "largest: " +
+                    i.largest_files
+                      .map((f) => f.path + " (" + f.lines + " lines)")
+                      .join(", "),
+                ),
+              );
+            }
+          } catch (e) {
+            box.textContent = "Could not inspect: " + e.message;
+          }
+        }
+
+        async function loadAgents() {
+          const ul = document.getElementById("agents");
+          const note = document.getElementById("agents-note");
+          try {
+            const r = await fetch("/agents", { headers: H() });
+            const data = await r.json();
+            const list = data.agents || [];
+            note.textContent =
+              list.length +
+              " specialised agents, " +
+              list.reduce((n, a) => n + a.tool_count, 0) +
+              " tool assignments.";
+            ul.textContent = "";
+            list.forEach((a) => {
+              const row = el(
+                "li",
+                {
+                  style:
+                    "display:flex;gap:8px;align-items:baseline;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.06)",
+                },
+                [
+                  el("div", { className: "grow" }, [
+                    el("div", {}, a.name),
+                    el("div", { className: "m" }, a.tool_count + " tool(s)"),
+                  ]),
+                ],
+              );
+              if (!a.usable) {
+                row.appendChild(el("span", { className: "m" }, "no tools"));
+              } else {
+                const b = el("button", {}, "Tools");
+                b.addEventListener("click", () => showAgent(a.name));
+                row.appendChild(b);
+              }
+              ul.appendChild(row);
+            });
+          } catch (e) {
+            note.textContent = "Could not load agents: " + e.message;
+          }
+        }
+
+        async function showAgent(name) {
+          const box = document.getElementById("agents-note");
+          try {
+            const r = await fetch("/agents/" + encodeURIComponent(name), {
+              headers: H(),
+            });
+            const d = await r.json();
+            if (!r.ok) throw new Error(d.detail || "HTTP " + r.status);
+            box.textContent =
+              name +
+              ": " +
+              (d.tools || [])
+                .map(
+                  (t) =>
+                    t.name +
+                    " (" +
+                    t.risk +
+                    (t.requires_confirmation ? ", needs approval" : "") +
+                    ")",
+                )
+                .join(" · ");
+          } catch (e) {
+            box.textContent = "Could not load that agent: " + e.message;
+          }
+        }
+
+        let codingAvailable = false;
+
+        async function loadCodingAvailability() {
+          const note = document.getElementById("coding-status");
+          const button = document.getElementById("coding-start");
+          try {
+            const r = await fetch("/coding/availability", { headers: H() });
+            const data = await r.json();
+            codingAvailable = !!data.available;
+            note.textContent =
+              data.detail || (codingAvailable ? "Ready." : "Unavailable.");
+            button.disabled = !codingAvailable;
+          } catch (e) {
+            note.textContent =
+              "Could not check for a coding agent: " + e.message;
+          }
+        }
+
+        document
+          .getElementById("coding-form")
+          .addEventListener("submit", async (ev) => {
+            ev.preventDefault();
+            if (!codingAvailable) return;
+            const goal = document.getElementById("coding-goal").value.trim();
+            const path = document.getElementById("coding-path").value.trim();
+            const out = document.getElementById("coding-result");
+            const err = document.getElementById("coding-err");
+            if (!goal) return;
+            err.textContent = "";
+            out.textContent = "Working… this can take a few minutes.";
+            const button = document.getElementById("coding-start");
+            button.disabled = true;
+            try {
+              const r = await fetch("/coding/tasks", {
+                method: "POST",
+                headers: HJ(),
+                body: JSON.stringify({ goal: goal, path: path }),
+              });
+              const data = await r.json();
+              if (!r.ok) throw new Error("HTTP " + r.status);
+              renderCodingResult(data, goal);
+              await loadJobs();
+            } catch (e) {
+              out.textContent = "";
+              err.textContent = "Could not run the task: " + e.message;
+            }
+            button.disabled = !codingAvailable;
+          });
+
+        function renderCodingResult(data, goal) {
+          const out = document.getElementById("coding-result");
+          out.textContent = "";
+          out.appendChild(el("div", { className: "t" }, goal));
+          out.appendChild(
+            el(
+              "div",
+              { className: "m" },
+              "job " +
+                data.job_id +
+                " · " +
+                (data.ok ? "completed" : "failed") +
+                (data.verified ? " · verified" : " · unverified"),
+            ),
+          );
+          if (data.message) {
+            out.appendChild(
+              el("div", { style: "margin-top:6px" }, data.message),
+            );
+          }
+          if (data.changed_files && data.changed_files.length) {
+            out.appendChild(
+              el(
+                "div",
+                { className: "m", style: "margin-top:6px" },
+                data.changed_files.length + " file(s) changed:",
+              ),
+            );
+            const ul = el("ul", {});
+            data.changed_files
+              .slice(0, 12)
+              .forEach((f) => ul.appendChild(el("li", {}, f)));
+            out.appendChild(ul);
+          } else if (data.ok) {
+            out.appendChild(
+              el("div", { className: "m" }, "No files changed on disk."),
+            );
+          }
+        }
+
+        async function loadTemplates() {
+          const box = document.getElementById("templates");
+          try {
+            const r = await fetch("/workflows", { headers: H() });
+            const data = await r.json();
+            const list = data.workflows || [];
+            box.textContent = "";
+            if (!list.length) {
+              box.textContent = "No automations available.";
+              return;
+            }
+            list.forEach((t) => {
+              const row = el(
+                "div",
+                {
+                  style:
+                    "display:flex;gap:10px;align-items:baseline;margin-top:6px",
+                },
+                [
+                  el("div", { className: "grow" }, [
+                    el("div", { className: "t" }, t.name),
+                    el("div", { className: "m" }, t.description),
+                  ]),
+                ],
+              );
+              const btn = el("button", {}, "Run");
+              btn.addEventListener("click", async () => {
+                btn.disabled = true;
+                document.getElementById("template-err").textContent = "";
+                try {
+                  const rr = await fetch(
+                    "/workflows/" +
+                      encodeURIComponent(t.workflow_id) +
+                      "/execute",
+                    {
+                      method: "POST",
+                      headers: HJ(),
+                      body: JSON.stringify({ session_id: "dashboard" }),
+                    },
+                  );
+                  const data = await rr.json();
+                  if (!rr.ok) throw new Error("HTTP " + rr.status);
+                  renderTemplateRun(t.name, data);
+                  await loadJobs();
+                } catch (e) {
+                  document.getElementById("template-err").textContent =
+                    "Could not run " + t.name + ": " + e.message;
+                }
+                btn.disabled = false;
+              });
+              row.appendChild(btn);
+              box.appendChild(row);
+            });
+          } catch (e) {
+            box.textContent = "Could not load automations.";
+          }
+        }
+
+        function renderTemplateRun(name, data) {
+          const out = document.getElementById("template-run");
+          out.textContent = "";
+          if (data.status === "error" || !data.run_id) {
+            out.appendChild(
+              el(
+                "div",
+                { className: "warnbox", style: "margin-top:8px" },
+                name + " did not run: " + (data.error || "unknown reason"),
+              ),
+            );
+            return;
+          }
+          out.appendChild(
+            el("div", { style: "margin-top:8px" }, [
+              el("div", { className: "t" }, name),
+              el(
+                "div",
+                { className: "m" },
+                "status " +
+                  data.current_status +
+                  " · step " +
+                  data.step +
+                  " of " +
+                  data.total_steps,
+              ),
+            ]),
+          );
+        }
+
+        // Poll for progress only when there is progress to watch.
+        let jobs = [];
+        let jobPollTimer = null;
+        function startJobPolling() {
+          if (jobPollTimer) return;
+          jobPollTimer = setInterval(async () => {
+            // Only states that can change *by themselves*. `incomplete` means a
+            // plan stopped before its later steps — nothing is executing, so
+            // polling would run forever: this machine already has twelve stale
+            // `lifecycle test` jobs in exactly that state.
+            const live = jobs.some((j) =>
+              ["running", "paused", "awaiting_confirmation"].includes(j.status),
+            );
+            if (!live) return; // idle: no request
+            try {
+              await loadJobs();
+            } catch (e) {
+              /* keep the last good view */
+            }
+          }, 4000);
+        }
+
+        async function loadJobs() {
+          const ul = document.getElementById("jobs");
+          try {
+            const r = await fetch("/tasks?limit=20", { headers: H() });
+            jobs = await r.json();
+            ul.textContent = "";
+            if (!jobs.length) {
+              ul.appendChild(
+                el("li", { className: "m" }, "No workflow jobs yet."),
+              );
+              return;
+            }
+            jobs.forEach((j) => {
+              const stepsBox = el("div", {
+                className: "m",
+                style: "margin-top:6px; display:none",
+              });
+              const grow = el("div", { className: "grow" }, [
+                el("div", { className: "t" }, j.goal || j.job_id),
+                el(
+                  "div",
+                  { className: "m" },
+                  j.job_id + " · " + (j.created_at || ""),
+                ),
+                el("div", { style: "margin-top:4px" }, [statusBadge(j.status)]),
+                stepsBox,
+              ]);
+              const controls = el("div", {
+                style: "display:flex;gap:6px;flex-wrap:wrap",
+              });
+              const mk = (label, action) => {
+                const b = el("button", {}, label);
+                b.addEventListener("click", async () => {
+                  b.disabled = true;
+                  try {
+                    const rr = await fetch(
+                      `/tasks/${encodeURIComponent(j.job_id)}/${action}`,
+                      { method: "POST", headers: H() },
+                    );
+                    if (!rr.ok) throw new Error("HTTP " + rr.status);
+                    await loadJobs();
+                  } catch (e) {
+                    document.getElementById("job-err").textContent = e.message;
+                    b.disabled = false;
+                  }
+                });
+                return b;
+              };
+              const stepsBtn = el("button", {}, "Steps");
+              stepsBtn.addEventListener("click", async () => {
+                if (stepsBox.style.display !== "none") {
+                  stepsBox.style.display = "none";
+                  return;
+                }
+                stepsBox.style.display = "block";
+                stepsBox.textContent = "Loading…";
+                try {
+                  const rr = await fetch(
+                    `/tasks/${encodeURIComponent(j.job_id)}`,
+                    { headers: H() },
+                  );
+                  if (!rr.ok) throw new Error("HTTP " + rr.status);
+                  const job = await rr.json();
+                  stepsBox.textContent = "";
+                  const steps = job.steps || [];
+                  if (!steps.length) {
+                    stepsBox.textContent = "No steps recorded.";
+                    return;
+                  }
+                  steps.forEach((st, i) => {
+                    stepsBox.appendChild(
+                      el(
+                        "div",
+                        {
+                          style:
+                            "display:flex;gap:8px;align-items:baseline;margin-top:3px",
+                        },
+                        [
+                          el("span", { className: "m" }, String(i + 1) + "."),
+                          statusBadge(st.status),
+                          el(
+                            "span",
+                            {},
+                            st.name ||
+                              st.tool ||
+                              "step" + (st.detail ? " — " + st.detail : ""),
+                          ),
+                        ],
+                      ),
+                    );
+                  });
+                } catch (e) {
+                  stepsBox.textContent = "Could not load steps: " + e.message;
+                }
+              });
+              controls.appendChild(stepsBtn);
+              if (j.status === "running")
+                controls.appendChild(mk("Pause", "pause"));
+              if (j.status === "paused")
+                controls.appendChild(mk("Resume", "resume"));
+              if (j.status === "failed")
+                controls.appendChild(mk("Retry", "retry"));
+              controls.appendChild(mk("Cancel", "cancel"));
+              ul.appendChild(el("li", { className: "row" }, [grow, controls]));
+            });
+          } catch (e) {
+            ul.textContent = "";
+            ul.appendChild(
+              el("li", { className: "m" }, "Could not load jobs."),
+            );
+          }
+        }
+
+        async function runCommand(text) {
+          const r = await fetch("/command", {
+            method: "POST",
+            headers: HJ(),
+            body: JSON.stringify({ text, source: "work" }),
+          });
+          const resp = await r.json();
+          document.getElementById("job-err").textContent = resp.reply || "";
+        }
+
+        document
+          .getElementById("ws-form")
+          .addEventListener("submit", async (ev) => {
+            ev.preventDefault();
+            const path = document.getElementById("ws-path").value.trim();
+            if (!path) return;
+            document.getElementById("ws-err").textContent = "";
+            try {
+              const r = await fetch("/workspaces", {
+                method: "POST",
+                headers: HJ(),
+                body: JSON.stringify({ path }),
+              });
+              if (!r.ok) {
+                let d = "HTTP " + r.status;
+                try {
+                  d = (await r.json()).detail || d;
+                } catch (_) {}
+                throw new Error(d);
+              }
+              document.getElementById("ws-path").value = "";
+              await loadWorkspaces();
+            } catch (e) {
+              document.getElementById("ws-err").textContent =
+                "Could not open: " + e.message;
+            }
+          });
+
+        (async () => {
+          try {
+            await establish();
+            await loadAgents();
+            await loadCodingAvailability();
+            await loadTemplates();
+            await Promise.all([loadWorkspaces(), loadJobs()]);
+            statusEl.textContent = "connected";
+            // A running job's progress was only ever visible if you reloaded the
+            // page. RUN_TESTS takes minutes and a coding task longer, so the
+            // screen showed a stale "running" with nothing moving. Poll only
+            // while something is actually live -- an idle page must not sit in a
+            // request loop.
+            startJobPolling();
+          } catch (e) {
+            statusEl.textContent = "not connected";
+            document.getElementById("ws-err").textContent = e.message;
+          }
+        })();
+      })();
+    </script>
+  </body>
+</html>

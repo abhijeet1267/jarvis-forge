@@ -28,6 +28,21 @@ TEST_TOKEN = os.environ["JARVIS_API_TOKEN"]
 PAGE = Path(__file__).resolve().parent.parent / "dashboard" / "index.html"
 
 
+def _function_extent(text: str, start: int) -> str:
+    """Extract from `start` to the matching closing brace, at whatever indent the
+    page actually uses. The old `.index("\n}")` assumed the closing brace sits at
+    column 0, which the current formatting of the page no longer guarantees."""
+    brace = text.index("{", start)
+    depth = 0
+    for j in range(brace, len(text)):
+        if text[j] == "{":
+            depth += 1
+        elif text[j] == "}":
+            depth -= 1
+            if depth == 0:
+                return text[start:j + 1]
+    raise ValueError("no matching closing brace")
+
 @pytest.fixture(scope="module")
 def client() -> TestClient:
     """Authenticated, loopback-host client -- the dashboard's own position."""
@@ -134,11 +149,11 @@ def tone_of(tmp_path_factory):
         # errors -- a missing function is a real answer, not a broken harness.
         pytest.skip("auditTone is not in the shipped page")
     start = body.index("function auditTone")
-    end = body.index("\n}", start) + 2
+    source = _function_extent(body, start)
     lib = tmp_path_factory.mktemp("p17") / "tone.js"
 
     def _run(token: str) -> str:
-        lib.write_text("eval(" + json.dumps(body[start:end]) + ");\n"
+        lib.write_text("eval(" + json.dumps(source) + ");\n"
                        # argv[0] is node, argv[1] is this script: the token is
                        # argv[2]. Reading argv[1] handed every test the file path
                        # and made the fallback tone look like a wrong mapping.

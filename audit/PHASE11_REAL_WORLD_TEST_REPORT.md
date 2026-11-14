@@ -6,13 +6,13 @@ Phase 9 and Phase 10 artifacts untouched.
 
 ## 1. Environment
 
-| | |
-|---|---|
-| Repo | `/Users/abhijeetmiskin/AppData/jarv/jarvis-forge` |
-| Git | branch `main`, **0 commits, 0 staged** (Phase 10 initialisation verified). Because nothing is committed, `git diff --stat` is empty and every change is untracked — recorded in §11 as a traceability weakness |
-| Python | `.venv` 3.11.16 (system `python3` is 3.14 — not the project env) |
-| Isolation | every execution used `JARVIS_HOME=$(mktemp -d)`; `~/.jarvis-forge` was not written to in this phase |
-| Sandbox | `~/JARVIS_REAL_TEST/` with `nested/` — created for real, on the real filesystem |
+|           |                                                                                                                                                                                                                |
+| --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Repo      | `/Users/abhijeetmiskin/AppData/jarv/jarvis-forge`                                                                                                                                                              |
+| Git       | branch `main`, **0 commits, 0 staged** (Phase 10 initialisation verified). Because nothing is committed, `git diff --stat` is empty and every change is untracked — recorded in §11 as a traceability weakness |
+| Python    | `.venv` 3.11.16 (system `python3` is 3.14 — not the project env)                                                                                                                                               |
+| Isolation | every execution used `JARVIS_HOME=$(mktemp -d)`; `~/.jarvis-forge` was not written to in this phase                                                                                                            |
+| Sandbox   | `~/JARVIS_REAL_TEST/` with `nested/` — created for real, on the real filesystem                                                                                                                                |
 
 ## 2. Internal map (§1 audit, from source not documentation)
 
@@ -50,7 +50,7 @@ report `Verification.UNKNOWN` if the read-back is impossible. Registered with
 ## 4. Real integrations tested
 
 **No account was connected** — no calendar or mail credential exists on this machine.
-What *was* verified is the §13 critical rule, against a deliberately dead CalDAV endpoint
+What _was_ verified is the §13 critical rule, against a deliberately dead CalDAV endpoint
 (`http://127.0.0.1:9/dav`, connection refused), executed in this session:
 
 ```text
@@ -78,23 +78,23 @@ branch for their owners. **Remaining P1.**
 Every "Verification" below is an **independent check from outside JARVIS** (`cat`, `ls`,
 `test -e`, `wc -c`, `sha256`, `pmset`, `sysctl`, `date`), not JARVIS agreeing with itself.
 
-| Test | Real/Sim | Expected | Actual | Independent verification |
-|---|---|---|---|---|
-| Create file | **REAL** | file exists | `Created hello.txt (17 bytes)` | `cat` → `JARVIS REAL TEST\n`; before-state `ABSENT` |
-| Read file | **REAL** | correct contents | `Read hello.txt.` | `cat` matches |
-| Modify file | **REAL** | new contents | `Appended to hello.txt (41 bytes)` | `cat` → both lines; `wc -c`=41; sha256 `a4b8067f529f5360` |
-| Delete file | **REAL** | file absent | `Moved hello.txt to Trash.` | `test -e` → **ABSENT** |
-| System info (battery) | **REAL** | OS value | `battery is at 100% (fully charged)` | `pmset -g batt` → `Now drawing from 'AC Power'` |
-| System info (status) | **REAL** | OS value | `8 CPUs, load … 8.90 8.10 6.95` | `sysctl hw.memsize` → 8589934592; load matches |
-| Current time | **REAL** | OS value | `It is 13:19 on Saturday, 26 September 2026.` | `date '+%H:%M'` → 13:19 |
-| Notification | — | — | **NOT TESTED — no such tool exists** | see §11 |
-| Microphone | **UNAVAILABLE** | honest refusal | `capture_available=False, state=blocked, permission=denied` | → `MICROPHONE_UNAVAILABLE` |
-| Calendar | **UNAVAILABLE** | offline ≠ empty | `ok=False / FAILED`, 4 tools | closed-port repro, output above |
-| Email | **UNAVAILABLE** | offline ≠ empty | classified sentences | provider suite (26 tests) |
-| Watch | **SIMULATED** | must not authorize | reply refused, **file survives** | see §7 |
-| Robot | **UNAVAILABLE** | must not execute | never configured | unchanged from Phase 9/10 |
-| Home | **UNAVAILABLE** | must not execute | never configured | unchanged |
-| Car | **UNAVAILABLE** | must not execute | never configured | unchanged |
+| Test                  | Real/Sim        | Expected           | Actual                                                      | Independent verification                                  |
+| --------------------- | --------------- | ------------------ | ----------------------------------------------------------- | --------------------------------------------------------- |
+| Create file           | **REAL**        | file exists        | `Created hello.txt (17 bytes)`                              | `cat` → `JARVIS REAL TEST\n`; before-state `ABSENT`       |
+| Read file             | **REAL**        | correct contents   | `Read hello.txt.`                                           | `cat` matches                                             |
+| Modify file           | **REAL**        | new contents       | `Appended to hello.txt (41 bytes)`                          | `cat` → both lines; `wc -c`=41; sha256 `a4b8067f529f5360` |
+| Delete file           | **REAL**        | file absent        | `Moved hello.txt to Trash.`                                 | `test -e` → **ABSENT**                                    |
+| System info (battery) | **REAL**        | OS value           | `battery is at 100% (fully charged)`                        | `pmset -g batt` → `Now drawing from 'AC Power'`           |
+| System info (status)  | **REAL**        | OS value           | `8 CPUs, load … 8.90 8.10 6.95`                             | `sysctl hw.memsize` → 8589934592; load matches            |
+| Current time          | **REAL**        | OS value           | `It is 13:19 on Saturday, 26 September 2026.`               | `date '+%H:%M'` → 13:19                                   |
+| Notification          | —               | —                  | **NOT TESTED — no such tool exists**                        | see §11                                                   |
+| Microphone            | **UNAVAILABLE** | honest refusal     | `capture_available=False, state=blocked, permission=denied` | → `MICROPHONE_UNAVAILABLE`                                |
+| Calendar              | **UNAVAILABLE** | offline ≠ empty    | `ok=False / FAILED`, 4 tools                                | closed-port repro, output above                           |
+| Email                 | **UNAVAILABLE** | offline ≠ empty    | classified sentences                                        | provider suite (26 tests)                                 |
+| Watch                 | **SIMULATED**   | must not authorize | reply refused, **file survives**                            | see §7                                                    |
+| Robot                 | **UNAVAILABLE** | must not execute   | never configured                                            | unchanged from Phase 9/10                                 |
+| Home                  | **UNAVAILABLE** | must not execute   | never configured                                            | unchanged                                                 |
+| Car                   | **UNAVAILABLE** | must not execute   | never configured                                            | unchanged                                                 |
 
 Permission and confirmation states were captured per action: `write_file` → `CONFIRM` →
 `APPROVED` → executed; `read_file`/`battery_status`/`get_time`/`system_status` → `EXECUTE`
@@ -102,8 +102,8 @@ Permission and confirmation states were captured per action: `write_file` → `C
 
 ## 6. Independent verification of a claim that could not be confirmed
 
-`delete_file` reported **"Moved hello.txt to Trash."** The *departure* is verified
-(`test -e` → ABSENT, and the tool sets `verified=not target.exists()`). The *destination*
+`delete_file` reported **"Moved hello.txt to Trash."** The _departure_ is verified
+(`test -e` → ABSENT, and the tool sets `verified=not target.exists()`). The _destination_
 is **not observable from this audit**: `ls ~/.Trash` → `Operation not permitted`
 (mode `drwx------`, macOS TCC). `_move_to_trash` performs a real `shutil.move` and returns
 an error string on failure, so the claim is plausible — but it was not corroborated.
@@ -114,27 +114,27 @@ Full Disk Access or an in-process assertion.
 
 ## 7. Security results
 
-| control | result |
-|---|---|
-| Master token exposed to an anonymous caller | **NO** — `/auth/token` → 403 headerless; `/dashboard` body contains 0 occurrences (Phase 10, re-confirmed by `/health` serving normally) |
-| Simulated watch authorising a real destructive action | **BLOCKED** — reproduced the Phase 9 exploit against the real sandbox: `delivered_via="simulated"`, reply refused with *"This prompt was carried by the simulated watch companion, not by a watch anyone is wearing, so a simulated wearer cannot confirm or cancel it."*, **file survives** |
-| Confirmation respects current authorization | **YES** — `pre_execute_check()`; revocation after the prompt now blocks execution |
-| Verification part of success determination | **YES** — audit token, step status, job status and recovery all read `verification`, not `.ok` |
-| Protected paths on the new tool | **YES** — `write_file` to `~/.ssh/…` refused at the permission layer, `confirmation: never created`, file not created |
+| control                                               | result                                                                                                                                                                                                                                                                                       |
+| ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Master token exposed to an anonymous caller           | **NO** — `/auth/token` → 403 headerless; `/dashboard` body contains 0 occurrences (Phase 10, re-confirmed by `/health` serving normally)                                                                                                                                                     |
+| Simulated watch authorising a real destructive action | **BLOCKED** — reproduced the Phase 9 exploit against the real sandbox: `delivered_via="simulated"`, reply refused with _"This prompt was carried by the simulated watch companion, not by a watch anyone is wearing, so a simulated wearer cannot confirm or cancel it."_, **file survives** |
+| Confirmation respects current authorization           | **YES** — `pre_execute_check()`; revocation after the prompt now blocks execution                                                                                                                                                                                                            |
+| Verification part of success determination            | **YES** — audit token, step status, job status and recovery all read `verification`, not `.ok`                                                                                                                                                                                               |
+| Protected paths on the new tool                       | **YES** — `write_file` to `~/.ssh/…` refused at the permission layer, `confirmation: never created`, file not created                                                                                                                                                                        |
 
 ## 8. Failure-injection results (§20)
 
-| injection | JARVIS said | truthful? |
-|---|---|---|
-| delete a missing file | `ok=False / FAILED` "Nothing to delete at …" | **YES** — no success fabricated after an approved confirmation |
-| delete `/etc/hosts` | `BLOCK` — "/private is a protected system location." | **YES** — confirmation never created |
-| write into `~/.ssh/` | `BLOCK` — ".ssh is a protected private location." | **YES** |
-| confirmation expired (1 s TTL, waited 1.4 s) | "That approval expired before it was answered, so I did nothing." — file **not** created | **YES** |
-| user denied | "Understood - cancelled. Nothing was changed." — file **not** created | **YES** |
-| calendar server unreachable | "I could not reach your calendar server … this is not an empty day" | **YES** |
-| microphone unavailable | `capture_state=blocked`, reported as blocked | **YES** |
-| simulated watch | refused, and says why | **YES** |
-| write that cannot be read back | `Verification.UNKNOWN`, `verified=False`, "could not read it back to check it" | **YES** — tested by forcing the read to fail |
+| injection                                    | JARVIS said                                                                              | truthful?                                                      |
+| -------------------------------------------- | ---------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| delete a missing file                        | `ok=False / FAILED` "Nothing to delete at …"                                             | **YES** — no success fabricated after an approved confirmation |
+| delete `/etc/hosts`                          | `BLOCK` — "/private is a protected system location."                                     | **YES** — confirmation never created                           |
+| write into `~/.ssh/`                         | `BLOCK` — ".ssh is a protected private location."                                        | **YES**                                                        |
+| confirmation expired (1 s TTL, waited 1.4 s) | "That approval expired before it was answered, so I did nothing." — file **not** created | **YES**                                                        |
+| user denied                                  | "Understood - cancelled. Nothing was changed." — file **not** created                    | **YES**                                                        |
+| calendar server unreachable                  | "I could not reach your calendar server … this is not an empty day"                      | **YES**                                                        |
+| microphone unavailable                       | `capture_state=blocked`, reported as blocked                                             | **YES**                                                        |
+| simulated watch                              | refused, and says why                                                                    | **YES**                                                        |
+| write that cannot be read back               | `Verification.UNKNOWN`, `verified=False`, "could not read it back to check it"           | **YES** — tested by forcing the read to fail                   |
 
 Not injected (no such path exists here): file locked, command rejected, network disconnected
 mid-flight, invalid provider credentials against a live server (401/500 classification was
@@ -159,6 +159,7 @@ measured"), and it remains open, documented in-test rather than blessed.
 ```text
 HARDWARE INTEGRATION = BLOCKED
 ```
+
 Permission engine verified ✔ · confirmation authority verified ✔ · verification pipeline
 verified ✔ · **emergency-stop semantics NOT verified** (no bridge exists to stop; it now
 truthfully reports `physical_stop=not_available`) · device pairing verified for the software
@@ -236,14 +237,14 @@ Phase 9 baseline for comparison: 126 failed / 875 passed / 1 skipped of 1002.
 
 ## 14. Remaining findings
 
-| sev | finding |
-|---|---|
-| **P1** | `briefing.py` + `api/app.py` count endpoint launder an unreachable provider as empty — the §13 rule holds in tools but leaks at two consumers |
-| **P1** | Simulated home/robotic actuations still record `Verification.SUCCESS`; hardcoded values presented as "last known state" |
-| **P1** | No planner route for `write_file` → the real computer capability is not reachable from natural language or the dashboard |
-| **P2** | No desktop-notification tool, so §12 cannot be exercised at all |
-| **P2** | §4 app surface unbuilt; desktop bundle still exits 1 |
-| **P2** | `gateway.status()["online"]` treats a simulated delivery as contact with a real watch |
-| **P2** | Two Phase 10 memory tests order-dependent / unexplained green |
-| **P3** | Trash destination unverifiable without Full Disk Access → "EXECUTED / VERIFICATION LIMITED" should be an explicit state surfaced by `delete_file` |
+| sev     | finding                                                                                                                                                     |
+| ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **P1**  | `briefing.py` + `api/app.py` count endpoint launder an unreachable provider as empty — the §13 rule holds in tools but leaks at two consumers               |
+| **P1**  | Simulated home/robotic actuations still record `Verification.SUCCESS`; hardcoded values presented as "last known state"                                     |
+| **P1**  | No planner route for `write_file` → the real computer capability is not reachable from natural language or the dashboard                                    |
+| **P2**  | No desktop-notification tool, so §12 cannot be exercised at all                                                                                             |
+| **P2**  | §4 app surface unbuilt; desktop bundle still exits 1                                                                                                        |
+| **P2**  | `gateway.status()["online"]` treats a simulated delivery as contact with a real watch                                                                       |
+| **P2**  | Two Phase 10 memory tests order-dependent / unexplained green                                                                                               |
+| **P3**  | Trash destination unverifiable without Full Disk Access → "EXECUTED / VERIFICATION LIMITED" should be an explicit state surfaced by `delete_file`           |
 | carried | RT-3 mutable risk tier · R-2 broad auto-retry · R-11…R-14 recovery misreporting · §13 device-scope and standing-grant reach · P0-2 bounded-session residual |

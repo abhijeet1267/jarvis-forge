@@ -53,8 +53,23 @@ def client() -> TestClient:
 
 #: The surface Phase 58 fixed at code-minting time. This phase adds a status line, not a path.
 PHONE_ALLOWED_AS_SHIPPED = {
+    # 2026-10-28: read-only build identity, so the phone can report a stale
+    # backend instead of calling any HTTP answer healthy. No state can change.
+    "/health/identity",
     "/command", "/confirmations", "/devices", "/devices/pair/request",
     "/emergency_stop", "/tools", "/voice/status", "/voice/transcribe",
+    # 2026-10-26: Google reads. The phone could already obtain this data
+    # through /command, which is on this list and can run arbitrary tool
+    # actions, so a structured read route widens nothing -- it makes the data
+    # usable as a screen. The connection lifecycle is deliberately absent and
+    # is proved unreachable below.
+    "/google/status", "/google/calendar/events", "/google/tasks",
+}
+
+#: Paths that must never be reachable from a phone session, whatever else is
+#: added: starting or tearing down the Mac's Google authorisation.
+PHONE_NEVER = {
+    "/google/connect/begin", "/google/callback", "/google/disconnect",
 }
 
 
@@ -164,6 +179,28 @@ def test_a_phone_session_still_cannot_read_the_laptop_wider_state(client) -> Non
     phone = {"X-JARVIS-Token": token}
 
     assert client.get("/tools", headers=phone).status_code == 200
+    # The Google connection lifecycle is never a phone capability: a phone must
+    # not be able to start or tear down the Mac's authorisation.
+    # Starting and stopping the connection must be refused outright.
+    for path in ("/google/connect/begin", "/google/disconnect"):
+        response = client.post(path, headers=phone, json={})
+        assert response.status_code in (401, 403, 404), (
+            f"a phone session reached {path}: {response.status_code}")
+
+    # /google/callback is reachable unauthenticated *by design* -- Google's
+    # redirect carries no Vantage token. What matters is that reaching it
+    # cannot connect anything, so that is what is asserted: a forged
+    # code/state pair must leave the connection exactly as it was and must not
+    # echo any credential back.
+    callback = client.get("/google/callback?code=forged&state=forged", headers=phone)
+    assert callback.status_code == 200
+    assert "forged" not in callback.text
+    assert "token" not in callback.text.lower() or "Nothing was connected" in callback.text
+    after = client.get("/google/status", headers=phone)
+    assert after.status_code == 200
+    assert after.json()["connection"]["state"] != "connected", (
+        "a forged callback connected an account")
+    assert after.json()["connection"]["has_token"] is False
     for path in ("/health", "/audit", "/privacy/delete"):
         refused = client.post(path, headers=phone) if path.endswith("delete") else \
             client.get(path, headers=phone)
@@ -179,7 +216,16 @@ def render(phone_html: str):
         pytest.skip("node not available to run the page's own code")
     body = re.search(r"<script>(.*?)</script>", phone_html, re.S).group(1)
     start = body.index("function modelLine")
-    source = body[start:body.index("\n}", start) + 2]
+    # Extract to the matching closing brace, not to a column-0 `}` — the page's own
+    # indentation is a formatting choice that must not decide whether the function survives.
+    depth = 0
+    end = body.index("{", start)
+    while end < len(body):
+        depth += 1 if body[end] == "{" else -1 if body[end] == "}" else 0
+        if depth == 0:
+            break
+        end += 1
+    source = body[start:end + 1]
     assert "answered_by" in source, "the extracted function is not the model line"
 
     def _run(model, root=REPO):

@@ -472,7 +472,12 @@ def test_the_master_token_appears_nowhere_in_the_relays_conversation(pairing):
     assert FAKE_MASTER not in joined
     assert pairing[2] not in joined, "the device PSK must not be echoed either"
     for call in sender.calls:
-        assert call["headers"].get("X-JARVIS-Token") != FAKE_MASTER or True  # pass-through only
+        # The relay proxies to the backend using the *client's* credential, never the
+        # host master token: no outbound call may carry it. (Line 472 above already
+        # covers this via the serialized call headers; kept explicit here so the
+        # per-call intent is unambiguous instead of a bare substring check.)
+        assert call["headers"].get("X-JARVIS-Token") != FAKE_MASTER, \
+            f"an outbound relay call carried the master token: {call}"
 
 
 def test_a_relay_session_carries_no_secret_in_its_token(pairing):

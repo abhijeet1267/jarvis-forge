@@ -1,19 +1,19 @@
 # Phase 55 — a search that searches
 
-| | |
-|---|---|
-| Phase | 55 |
-| Date | 2026-10-04 |
-| Starting commit | `377e79f` (Phase 54 close-out) |
-| Ending commit | `176bcfb` — filled in at the Phase 56 close-out; the header promised "recorded in §8" and §8 never recorded it |
-| Tests before | 2155 passed · 0 failed · 0 skipped |
-| Tests after | **2190 passed · 0 failed · 0 skipped** |
-| Tools before / after | 141 / **142** |
-| Planner routes before / after | 51 / **52** |
-| HTTP surface | 117 / 111 paths — unchanged, no endpoint was added |
-| Confirmation-gated | **28 of 142** |
-| **§6 coverage** | 36 / 37 → **37 / 37** |
-| Push status | **nothing pushed; local commit only** |
+|                               |                                                                                                                |
+| ----------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| Phase                         | 55                                                                                                             |
+| Date                          | 2026-10-04                                                                                                     |
+| Starting commit               | `377e79f` (Phase 54 close-out)                                                                                 |
+| Ending commit                 | `176bcfb` — filled in at the Phase 56 close-out; the header promised "recorded in §8" and §8 never recorded it |
+| Tests before                  | 2155 passed · 0 failed · 0 skipped                                                                             |
+| Tests after                   | **2190 passed · 0 failed · 0 skipped**                                                                         |
+| Tools before / after          | 141 / **142**                                                                                                  |
+| Planner routes before / after | 51 / **52**                                                                                                    |
+| HTTP surface                  | 117 / 111 paths — unchanged, no endpoint was added                                                             |
+| Confirmation-gated            | **28 of 142**                                                                                                  |
+| **§6 coverage**               | 36 / 37 → **37 / 37**                                                                                          |
+| Push status                   | **nothing pushed; local commit only**                                                                          |
 
 Gap D of the operating prompt: `search Google for FastAPI` was §6's last utterance without a
 capability, and the tempting fix — route it at `open_url` with `https://www.google.com` — is a
@@ -44,12 +44,12 @@ anything safer.
 
 ## 2. What was built
 
-| file | what it is |
-|---|---|
-| `jarvis/websearch.py` | the provider: URL building, the bounded fetch, the parse, and the two failure types |
-| `jarvis/tools/websearch.py` | `search_web` — maps those outcomes to states, and refuses before the network when the query is empty or a pasted paragraph |
-| `jarvis/core/planner.py` | `_web_search`, registered before `_search_files` (52 routes) |
-| `tests/test_phase55_a_search_that_searches.py` | 35 tests |
+| file                                           | what it is                                                                                                                 |
+| ---------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `jarvis/websearch.py`                          | the provider: URL building, the bounded fetch, the parse, and the two failure types                                        |
+| `jarvis/tools/websearch.py`                    | `search_web` — maps those outcomes to states, and refuses before the network when the query is empty or a pasted paragraph |
+| `jarvis/core/planner.py`                       | `_web_search`, registered before `_search_files` (52 routes)                                                               |
+| `tests/test_phase55_a_search_that_searches.py` | 35 tests                                                                                                                   |
 
 Provider: DuckDuckGo's Instant Answer API. No key, documented, JSON, and genuinely empty for
 many queries — which is the point of having a distinct empty state.
@@ -79,7 +79,7 @@ assert query.get("format") == ["json"]
 ```
 
 **My first version of that assertion was wrong and the code was right.** I asserted
-`"evil.example" not in url` — but the host appearing *inside* the encoded value is correct
+`"evil.example" not in url` — but the host appearing _inside_ the encoded value is correct
 behaviour; it is the text the user asked about. The defect would be it arriving as a second
 parameter or as the request's host, which is what the fixed assertion now checks.
 
@@ -127,33 +127,33 @@ against a host that never answers, which is the case that used to produce 20-sec
 
 ## 7. Numbers, re-measured
 
-| | before | after | how |
-|---|---|---|---|
-| Test suite | 2155 passed | **2190 passed · 0 failed · 0 skipped** | `JARVIS_HOME=$(mktemp -d) .venv/bin/python -m pytest -q` |
-| Phase 55 tests | 0 | **35** | `tests/test_phase55_a_search_that_searches.py` |
-| Test modules | 81 | **82** | `ls tests/test_*.py \| wc -l` |
-| Phase reports | 56 | **57** (this file) | `ls audit/*.md \| wc -l` |
-| Lines | 67,882 — 41,174 · 26,708 | **68,461 — 41,430 source · 27,031 tests** | `wc -l` |
-| Tools | 141 | **142** | registry |
-| Risk spread | 76 / 37 / 13 / 12 / 3 | **76 / 38 / 13 / 12 / 3** | registry — the new tool is LOW |
-| Planner routes | 51 | **52** | `len(core.planner._rules)` |
-| Confirmation-gated | 28 | **28** | unchanged |
-| **§6 coverage** | 36 / 37 | **37 / 37** | all 37 utterances re-run through the planner |
+|                    | before                   | after                                     | how                                                      |
+| ------------------ | ------------------------ | ----------------------------------------- | -------------------------------------------------------- |
+| Test suite         | 2155 passed              | **2190 passed · 0 failed · 0 skipped**    | `JARVIS_HOME=$(mktemp -d) .venv/bin/python -m pytest -q` |
+| Phase 55 tests     | 0                        | **35**                                    | `tests/test_phase55_a_search_that_searches.py`           |
+| Test modules       | 81                       | **82**                                    | `ls tests/test_*.py \| wc -l`                            |
+| Phase reports      | 56                       | **57** (this file)                        | `ls audit/*.md \| wc -l`                                 |
+| Lines              | 67,882 — 41,174 · 26,708 | **68,461 — 41,430 source · 27,031 tests** | `wc -l`                                                  |
+| Tools              | 141                      | **142**                                   | registry                                                 |
+| Risk spread        | 76 / 37 / 13 / 12 / 3    | **76 / 38 / 13 / 12 / 3**                 | registry — the new tool is LOW                           |
+| Planner routes     | 51                       | **52**                                    | `len(core.planner._rules)`                               |
+| Confirmation-gated | 28                       | **28**                                    | unchanged                                                |
+| **§6 coverage**    | 36 / 37                  | **37 / 37**                               | all 37 utterances re-run through the planner             |
 
 ## 8. Open items
 
-* **55-A** One source, and an encyclopaedic one. `search Google for FastAPI` returns nothing
+- **55-A** One source, and an encyclopaedic one. `search Google for FastAPI` returns nothing
   because the Instant Answer API has no article for it — a ranked web index would answer
   differently. The message says which source answered, so the limit is visible rather than
   implied.
-* **55-B** No key-based provider (Brave/SerpAPI/Google CSE) is wired, so there is no ranked
+- **55-B** No key-based provider (Brave/SerpAPI/Google CSE) is wired, so there is no ranked
   result path at all. That is a provider decision, and §I of the operating prompt puts provider
   work behind this one.
-* **55-C** Results are returned as text in the reply; nothing renders them as links in the phone
+- **55-C** Results are returned as text in the reply; nothing renders them as links in the phone
   or panel yet.
-* **55-D** The 5 s budget is per search. A slow-but-alive service is indistinguishable from a
+- **55-D** The 5 s budget is per search. A slow-but-alive service is indistinguishable from a
   dead one at that boundary, and the message says "could not reach" in both cases.
-* **55-E** `search files for my report` yields the query `"files for my"` — a pre-existing
+- **55-E** `search files for my report` yields the query `"files for my"` — a pre-existing
   defect in `_search_files`'s capture, noticed while writing the boundary test for this phase
   and left alone because it is a different capability's bug.
 

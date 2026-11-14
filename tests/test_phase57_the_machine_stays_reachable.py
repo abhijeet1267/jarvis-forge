@@ -714,6 +714,33 @@ def test_the_run_script_hands_the_bind_to_the_claiming_wrapper():
         "the panel's watchdog stays -- this change must not resurrect the orphan server"
 
 
+def test_the_run_script_probes_the_port_before_printing_success():
+    """Found live: a stale backend holding :8765 made a second `run.py` print the
+    "Vantage core -> .../dashboard" banner, then fail to bind and exit quietly -- so the
+    browser hit the OLD process, which 404'd on /dashboard. The port has to be probed and
+    refused *before* the success banner prints, or a losing second start masquerades as a
+    working start and the user chases a 404 from a dead process."""
+    import inspect
+
+    import run as run_module
+
+    source = inspect.getsource(run_module)
+    # The success banner is the `print(f"Vantage core ...` line. The port probe and its
+    # "REFUSED to start" refusal must both precede it, or a second start against an
+    # already-bound port prints success and then exits -- leaving the stale server
+    # answering with a 404. (Match the print statement itself, not the word in a comment.)
+    banner = source.index('print(f"Vantage core')
+    probe = source.index("port_is_free(probe_host")
+    refuse = source.index("REFUSED to start")
+    assert probe < banner, (
+        "the port must be probed before the success banner prints, or a losing second "
+        "start prints success and then exits")
+    assert refuse < banner, (
+        "the busy-port refusal must print before the success banner, so a stale backend "
+        "can't masquerade as a working start")
+    assert "SystemExit(1)" in source
+
+
 def test_launchd_is_asked_about_the_job_not_about_the_whole_domain(tmp_path, monkeypatch):
     """Measured on the real machine, and it is the difference between a working status line and
     a lie. ``launchctl print gui/<uid> <label>`` does not fail: it prints the *domain* dump
@@ -866,7 +893,22 @@ def test_the_answer_to_a_press_survives_the_refresh_that_follows_it(fn, card, no
     page = (Path(__file__).resolve().parents[1] / "dashboard" / "index.html").read_text(
         encoding="utf-8")
     start = page.index(f"async function {fn}(")
-    body = page[start:page.index("\nfunction ", start + 1)]
+    # The reflowed page indents functions inconsistently, so "up to the next column-0
+    # function" no longer works. Extract the body by its braces instead: the extent is
+    # determined by depth, not by the page's layout.
+    open_brace = page.index("{", start)
+    depth = 0
+    end = None
+    for j in range(open_brace, len(page)):
+        if page[j] == "{":
+            depth += 1
+        elif page[j] == "}":
+            depth -= 1
+            if depth == 0:
+                end = j + 1
+                break
+    assert end is not None, f"could not find the end of {fn}()"
+    body = page[start:end]
     assert f'id="{note}"' not in body, (
         f"{fn}() rewrites #{card}'s innerHTML, so a note rendered inside it is reset to its "
         f"default by the re-read that follows the press")

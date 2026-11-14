@@ -115,8 +115,13 @@ def _newest_match(fragment: str, search_root: Optional[Path] = None) -> Optional
 # ---------------------------------------------------------------------------
 # Read-only
 # ---------------------------------------------------------------------------
-async def list_devices(ctx: ToolContext) -> Any:
-    """List known devices with pairing state."""
+async def list_devices(ctx: ToolContext, query: str = "") -> Any:
+    """List known devices with pairing state.
+
+    A ``query`` narrows the list to the devices whose id or type contains
+    it, so a lookup that is *searched* by the name the person gave answers
+    "which one did you mean" rather than "what is there".
+    """
     devices = []
     for device in ctx.devices.all():
         devices.append(
@@ -129,6 +134,13 @@ async def list_devices(ctx: ToolContext) -> Any:
                 "last_seen": device.last_seen.isoformat() if device.last_seen else None,
             }
         )
+    needle = (query or "").strip().lower()
+    if needle:
+        devices = [
+            d for d in devices
+            if needle in str(d["device_id"]).lower()
+            or needle in str(d["type"]).lower()
+        ]
     paired = sum(1 for d in devices if d["paired"])
     return ok(
         "list_devices",
@@ -514,11 +526,11 @@ _SPECS = [
             agent="phone",
             risk=RiskLevel.READ,
             allowed_devices=["laptop_main"],
-            parameters={},
+            parameters={"query": "string"},
             tags=["phone", "read"],
             provides_identifiers={"target_device": {"items": "devices", "id": "device_id",
-                                                 "label": "device_id"}},
-
+                                                 "label": "device_id",
+                                                 "lookup": "query"}},
         ),
         list_devices,
     ),

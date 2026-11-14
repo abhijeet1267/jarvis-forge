@@ -33,12 +33,29 @@ MASK = "[redacted]"
 #
 # The first pattern is handled separately: it preserves the key name so the log
 # still says *which* credential was involved, and only masks the value.
+# `authorization` is followed by an *optional* scheme word ("Bearer", "Basic")
+# and the credential after it. Without this, "Authorization: Bearer SECRET123"
+# matched "Bearer" as the value and masked the scheme, leaving the token in the
+# clear -- measured. An HTTP header is exactly how this project's relay and
+# gateway carry credentials, so this shape matters more than it looks.
 _KV_SECRET = re.compile(
     r"(?i)\b(api[_-]?key|secret|token|password|passwd|pwd|authorization|"
-    r"bearer|client[_-]?secret|access[_-]?key|private[_-]?key)\b"
-    r"(\s*[:=]\s*|\s+)(['\"]?)([^\s'\"]{6,})\3"
+    r"bearer|client[_-]?secret|access[_-]?key|private[_-]?key|"
+    r"refresh[_-]?token|id[_-]?token|session[_-]?token)\b"
+    r"(\s*[:=]\s*|\s+)"
+    # A credential word may be followed by a scheme word ("Bearer", "Basic").
+    r"(?:(?:bearer|basic|token|digest)\s+)?"
+    # The value: quoted (any 6+ chars), or an unquoted run of 8+ token
+    # characters that CONTAINS A DIGIT. The digit requirement is what stops
+    # ordinary prose being mangled -- "your session token expired" and
+    # "token budget remaining" both used to lose their next word. Real
+    # credentials carry a digit; English words do not.
+    r"(?:"
+    r"([\"'])([^\"']{6,})\3"
+    r"|"
+    r"([A-Za-z0-9._~+/\-][A-Za-z0-9._~+/=\-]{7,})"
+    r")"
 )
-
 _SECRET_PATTERNS: List[re.Pattern] = [
     re.compile(r"\b(sk|pk|rk|ghp|gho|ghu|ghs|xox[baprs])[-_][A-Za-z0-9_\-]{12,}\b"),
     re.compile(r"\bAKIA[0-9A-Z]{16}\b"),                      # AWS access key id
@@ -96,10 +113,18 @@ def redact(text: str, settings: Optional[Settings] = None) -> str:
             result = result.replace(secret, MASK)
 
     # 2. key=value credentials, preserving the key name for context.
-    result = _KV_SECRET.sub(
-        lambda m: f"{m.group(1)}{m.group(2)}{m.group(3)}{MASK}{m.group(3)}",
-        result,
-    )
+    def _mask(m: re.Match) -> str:
+        quote, quoted, bare = m.group(3), m.group(4), m.group(5)
+        # An unquoted value only counts as a credential when it carries a
+        # digit; otherwise it is an English word and masking it destroys the
+        # sentence ("token expired" -> "token [redacted]").
+        if bare is not None and not any(ch.isdigit() for ch in bare):
+            return m.group(0)
+        value = quoted if quoted is not None else bare
+        q = quote or ""
+        return f"{m.group(1)}{m.group(2)}{q}{MASK}{q}"
+
+    result = _KV_SECRET.sub(_mask, result)
 
     # 3. Credential shapes that stand alone.
     for pattern in _SECRET_PATTERNS:

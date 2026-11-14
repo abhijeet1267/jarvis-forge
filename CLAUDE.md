@@ -94,18 +94,33 @@ skip by weakening the test.
 - Long-running checks go to the background; never block on a suite you can
   shard. Full suite per-file is the pattern used in `benchmarks/`.
 
-## Known defect register (verified 2026-10-16; details in docs/PROJECT_STATUS.md)
+## Known defect register (re-verified 2026-10-26; details in docs/PROJECT_STATUS.md)
 
-- Release pipeline builds the legacy WebView wrapper, not the native companion.
-- `android/` (canonical) is untracked by git.
-- Native Android client uses the legacy `/phone` + `/auth/session` contract
-  instead of `POST /companion/pairing-redeem`; no cert pinning.
-- macOS app: `ContentView.onDisappear` kills backend+gateway; `connect()`
-  not idempotent (orphan processes); SIGTERM sent to `/usr/bin/env`, not the
-  Python child; "Delete All Data" has no confirmation; version hardcoded.
-- Test collection was broken by a top-level `playwright` import in
-  `tests/test_phase92_browser_automation.py` (fixed 2026-10-16:
-  `pytest.importorskip` at collection; file skips cleanly).
+**Re-verified this date by reading the code and running the checks.** Four of the
+five 2026-10-16 entries are fixed; the register is kept so a future session does
+not re-report them as live defects.
+
+- ~~Release pipeline builds the legacy WebView wrapper~~ **fixed**:
+  `installers/android/build_apk.sh` is marked DEPRECATED, the release invokes
+  `./android/build_apk.sh`, and `tests/test_release_pipeline.py` enforces both
+  (3 passed).
+- **`android/` (canonical) is still untracked by git** — `git ls-files android/`
+  returns 0 files. Unchanged; it must not be `git clean`ed away.
+- ~~Native Android client uses the legacy `/phone` + `/auth/session` contract; no
+  cert pinning~~ **fixed**: the client redeems `POST /companion/pairing-redeem`
+  and `PinnedCertificateTrustManager` computes the leaf's SHA-256 and throws
+  `MismatchException` without echoing either fingerprint. The legacy endpoints
+  are deliberately absent (enforced by `VantageApiClientContractTest`).
+- ~~macOS app: `onDisappear` kills backend+gateway; `connect()` not idempotent;
+  SIGTERM sent to `/usr/bin/env`; "Delete All Data" has no confirmation; version
+  hardcoded~~ **fixed**: `onDisappear` removed (teardown only on quit),
+  `startBackend()` guards `process == nil`, `stopBackend()` escalates SIGTERM →
+  SIGINT after 5s, Settings shows a confirm alert naming what is removed, and the
+  version is read from `CFBundleShortVersionString`. Process teardown is still
+  not live-verified in a GUI session.
+- ~~Test collection was broken by a top-level `playwright` import~~ **fixed**
+  (2026-10-16); re-measured 2026-10-26: `test_phase92_browser_automation.py`
+  runs 28 passed, 0 skipped.
 
 ## Docs
 

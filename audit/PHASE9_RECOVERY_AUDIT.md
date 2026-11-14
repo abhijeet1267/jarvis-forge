@@ -20,15 +20,15 @@ success.**
 
 ## 0. How this was executed (reproducibility)
 
-* Every run used `JARVIS_HOME=$(mktemp -d)` and `HOME=$(mktemp -d)`. The user's real
+- Every run used `JARVIS_HOME=$(mktemp -d)` and `HOME=$(mktemp -d)`. The user's real
   `~/.jarvis-forge` was never opened. One side effect of an experiment moved a scratch
   file (`/tmp/p6scratch/fallback/victim.txt`) into `_trash_dir()`; that directory is
   `Path.home()/.Trash` (`jarvis/tools/files.py:44-46`), so `HOME` was redirected for
   every run after it. Verified afterwards: `~/.Trash/victim.txt` → `exists: False`.
-* Runner: `/Users/abhijeetmiskin/AppData/jarv/jarvis-forge/.venv/bin/python` (3.11.16).
-* As-shipped experiments import the real repo (`sys.path.insert(0, repo)`), so they
+- Runner: `/Users/abhijeetmiskin/AppData/jarv/jarvis-forge/.venv/bin/python` (3.11.16).
+- As-shipped experiments import the real repo (`sys.path.insert(0, repo)`), so they
   measure the code exactly as it stands today.
-* Policy/behaviour experiments that need working tools use a throwaway copy:
+- Policy/behaviour experiments that need working tools use a throwaway copy:
 
   ```bash
   rsync -a --exclude .venv --exclude __pycache__ --exclude .pytest_cache --exclude dist \
@@ -40,38 +40,39 @@ success.**
   Registry facts measured from the copy: **126 tools**, risk distribution
   `{READ:68, LOW:33, EXTERNAL:11, DESTRUCTIVE:11, PHYSICAL:3}`, **24** with
   `requires_confirmation=True`.
-* Runtime injection (replacing a handler, or one entry of the `ALTERNATIVES` dict) was
+
+- Runtime injection (replacing a handler, or one entry of the `ALTERNATIVES` dict) was
   done **in-process only**, inside `/tmp/p6scratch/*.py`. No repo file was patched to
   inject. Every injected element is named in the experiment.
-* Scratch scripts: `e1_real_baseline.py`, `e1b_mutation_vs_report.py`,
+- Scratch scripts: `e1_real_baseline.py`, `e1b_mutation_vs_report.py`,
   `e1c_confirm.py`, `e1d_effect_vs_report.py`, `e1e_destructive_effect_reported_failure.py`,
   `e2_retry_matrix.py`, `s1_unverified_recovery.py`, `s2_double_apply.py`,
   `s3_fallback.py`, `s3b_permission_bypass.py`, `s4_loops_persistence.py`,
   `s5_success_without_observation.py`, `s6_stamp_and_real_recovery.py`,
   `s6b_end_to_end_false_recovery.py`, `s6c_end_to_end_false_recovery.py`,
   `s7_degraded_sources.py`, `s8b_consolidation.py`, `s9_shipped_fallbacks.py`.
-* Verdict vocabulary: **PASS** (property held), **FAIL** (property broken),
+- Verdict vocabulary: **PASS** (property held), **FAIL** (property broken),
   **UNVERIFIED** (code evidence only, not executed).
 
 ### The chain, with a hop at each step
 
-| # | hop | file:line | what it actually does |
-|---|---|---|---|
-| 1 | handler raises | `jarvis/tools/base.py:16,103,110,117` | `Verification` unimported → every `ok()` raises `NameError` (known P0) |
-| 2 | swallow | `jarvis/agents/base.py:58-63` | `except Exception` → `fail(tool, f"{tool} raised: {exc}")` — the raw Python message becomes the tool's *error text*, i.e. input to the retry classifier |
-| 3 | trigger | `jarvis/core/orchestrator.py:259-266` | `if not result.ok:` → `recovery.recover(action, ctx, agent.execute, spec, result)` |
-| 4 | retry decision | `jarvis/core/recovery.py:117-134` | never retry `risk>=3` or tag `safety`; **always** retry `risk==0`/`IDEMPOTENT_TOOLS`; otherwise retry if the *error string* looks transient |
-| 5 | retry loop | `jarvis/core/recovery.py:157-181` | `max_retries=2` (`:111`), exponential backoff `0.2·2^(n-1)` (`:159`), accepts `retry_result.ok` as recovery (`:169`) |
-| 6 | fallback | `jarvis/core/recovery.py:192-215` | runs `ALTERNATIVES[tool]` with the **primary's own params**, **no** `policy.evaluate`, accepts `alt_result.ok` (`:209`) |
-| 7 | escalation | `jarvis/core/recovery.py:218-225` | writes a note into the outcome; **never** asks the user, **never** sets `needs_confirmation` |
-| 8 | failure record | `jarvis/core/recovery.py:228-257` → `jarvis/db/database.py:261-272` (`failures` table) | single writer; exceptions swallowed at log-level `info` (`:256-257`) |
-| 9 | status | `jarvis/core/orchestrator.py:283-297` | `ActionStatus.SUCCEEDED if result.ok`; job `"done"` if every step SUCCEEDED |
-| 10 | audit | `jarvis/core/orchestrator.py:120-146` (`:133`), `:272-281` | status token derived from **`result.ok`**, never from `result.verification` |
-| 11 | memory | `jarvis/core/orchestrator.py:451-460` | stores `"{tool}: {summary}"` of the *final* result only |
-| 12 | response | `jarvis/core/orchestrator.py:462-483` | recovery visible **only** when `recovered` is true (`:481-482`) |
-| 13 | confirmation path | `jarvis/core/orchestrator.py:390-407` | executes approved tools and **bypasses hops 3-12 entirely** (no recovery, no failure record) |
-| 14 | scheduler path | `jarvis/scheduler/runner.py:122-129` | executes and records `executed/failed`; **no recovery, no failure record** |
-| 15 | user "retry" | `jarvis/core/tasks.py:108-124` ← `jarvis/api/app.py:587-600` | flips step status only; nothing re-executes |
+| #   | hop               | file:line                                                                              | what it actually does                                                                                                                                   |
+| --- | ----------------- | -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | handler raises    | `jarvis/tools/base.py:16,103,110,117`                                                  | `Verification` unimported → every `ok()` raises `NameError` (known P0)                                                                                  |
+| 2   | swallow           | `jarvis/agents/base.py:58-63`                                                          | `except Exception` → `fail(tool, f"{tool} raised: {exc}")` — the raw Python message becomes the tool's _error text_, i.e. input to the retry classifier |
+| 3   | trigger           | `jarvis/core/orchestrator.py:259-266`                                                  | `if not result.ok:` → `recovery.recover(action, ctx, agent.execute, spec, result)`                                                                      |
+| 4   | retry decision    | `jarvis/core/recovery.py:117-134`                                                      | never retry `risk>=3` or tag `safety`; **always** retry `risk==0`/`IDEMPOTENT_TOOLS`; otherwise retry if the _error string_ looks transient             |
+| 5   | retry loop        | `jarvis/core/recovery.py:157-181`                                                      | `max_retries=2` (`:111`), exponential backoff `0.2·2^(n-1)` (`:159`), accepts `retry_result.ok` as recovery (`:169`)                                    |
+| 6   | fallback          | `jarvis/core/recovery.py:192-215`                                                      | runs `ALTERNATIVES[tool]` with the **primary's own params**, **no** `policy.evaluate`, accepts `alt_result.ok` (`:209`)                                 |
+| 7   | escalation        | `jarvis/core/recovery.py:218-225`                                                      | writes a note into the outcome; **never** asks the user, **never** sets `needs_confirmation`                                                            |
+| 8   | failure record    | `jarvis/core/recovery.py:228-257` → `jarvis/db/database.py:261-272` (`failures` table) | single writer; exceptions swallowed at log-level `info` (`:256-257`)                                                                                    |
+| 9   | status            | `jarvis/core/orchestrator.py:283-297`                                                  | `ActionStatus.SUCCEEDED if result.ok`; job `"done"` if every step SUCCEEDED                                                                             |
+| 10  | audit             | `jarvis/core/orchestrator.py:120-146` (`:133`), `:272-281`                             | status token derived from **`result.ok`**, never from `result.verification`                                                                             |
+| 11  | memory            | `jarvis/core/orchestrator.py:451-460`                                                  | stores `"{tool}: {summary}"` of the _final_ result only                                                                                                 |
+| 12  | response          | `jarvis/core/orchestrator.py:462-483`                                                  | recovery visible **only** when `recovered` is true (`:481-482`)                                                                                         |
+| 13  | confirmation path | `jarvis/core/orchestrator.py:390-407`                                                  | executes approved tools and **bypasses hops 3-12 entirely** (no recovery, no failure record)                                                            |
+| 14  | scheduler path    | `jarvis/scheduler/runner.py:122-129`                                                   | executes and records `executed/failed`; **no recovery, no failure record**                                                                              |
+| 15  | user "retry"      | `jarvis/core/tasks.py:108-124` ← `jarvis/api/app.py:587-600`                           | flips step status only; nothing re-executes                                                                                                             |
 
 ---
 
@@ -144,7 +145,7 @@ C delete_file (risk DESTRUCTIVE) approved -> executions: 1  failures rows: uncha
 ```
 
 Verdict: **FAIL (R-1, P0-consequence).** The P0's real recovery-system effect is the
-*inverse* of a false success — every mutating tool performs its effect and is then
+_inverse_ of a false success — every mutating tool performs its effect and is then
 reported, audited and metric-ed as a failure — with two aggravating facts: (a) the
 recovery engine is not consulted at all on the confirmation path, so these failures are
 never written to `failures` (row count stayed 0 through two destructive failures), and
@@ -186,7 +187,7 @@ emergency_stop           PHYSICAL            0        0        retry:skipped    
 ```
 
 Bound is real: worst case per action is `1 initial + 2 retries + |ALTERNATIVES|`,
-i.e. ≤ 3 executions and ≤ 0.6 s of backoff. `attempts` is a *retry* counter and excludes
+i.e. ≤ 3 executions and ≤ 0.6 s of backoff. `attempts` is a _retry_ counter and excludes
 the initial execution, so `attempts=N` means `N+1` real executions.
 
 Not clamped: `RecoveryEngine(max_retries=1000)` → **1001 executions** measured
@@ -206,22 +207,22 @@ on the shipped constants, not measured (labelled UNVERIFIED in §9).
 
 `is_retryable` (`recovery.py:124-134`) draws the line at `RiskLevel.DESTRUCTIVE` = **3**.
 The registry puts several effect-producing tools **below** it, so they are retried
-whenever the error *text* merely looks transient (`TRANSIENT_PATTERNS`, `:33-48`,
+whenever the error _text_ merely looks transient (`TRANSIENT_PATTERNS`, `:33-48`,
 matched against `error + summary`, `:104`):
 
-| tool | declared risk | spec | non-idempotent effect a second execution repeats |
-|---|---|---|---|
-| `move_file` | **EXTERNAL(2)** | `tools/files.py:522-524` | destroys the source; the test suite believes it is DESTRUCTIVE |
-| `copy_file` | EXTERNAL(2) | `files.py:509-511` | overwrites `destination` again |
-| `create_event` | EXTERNAL(2) | `calendar.py:402-405` | duplicate calendar event (CalDAV path, `integrations/calendar_provider.py:426,452` 20 s timeouts) |
-| `update_event` | EXTERNAL(2) | `calendar.py` | second write on possibly-new state |
-| `schedule_task` | EXTERNAL(2) | `scheduler.py:246-249` | duplicate schedule row |
-| `send_to_device` | EXTERNAL(2) | `phone.py:606-609` | duplicate file pushed to the phone |
-| `register_phone` | EXTERNAL(2) | `phone.py:563-566` | duplicate pairing record / rotated secret |
-| `run_allowlisted_command` | EXTERNAL(2) | `system.py:310-312` | re-runs an arbitrary allowlisted binary; `powerful_commands` (`config.py:117`) makes this `pip`/`npm install` |
-| `apply_code_change` | EXTERNAL(2) | `coding.py:412-415` | patch applied twice |
-| `compress_path` | **LOW(1)** | `files.py:548-550` | truncates and rewrites the archive |
-| `control_home_device`, `run_home_routine`, `open_app`, `close_app`, `vibrate_watch`, `send_watch_notification`, `remember_fact`, `create_project`, `add_paper`, `draft_email`, `take_screenshot` | LOW(1) | `tools/*.py` SPECS (33 tools, all `requires_confirmation=False`) | physical actuation, notifications and persistent writes repeated up to 3× with no approval step at all |
+| tool                                                                                                                                                                                             | declared risk   | spec                                                             | non-idempotent effect a second execution repeats                                                              |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------- | ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `move_file`                                                                                                                                                                                      | **EXTERNAL(2)** | `tools/files.py:522-524`                                         | destroys the source; the test suite believes it is DESTRUCTIVE                                                |
+| `copy_file`                                                                                                                                                                                      | EXTERNAL(2)     | `files.py:509-511`                                               | overwrites `destination` again                                                                                |
+| `create_event`                                                                                                                                                                                   | EXTERNAL(2)     | `calendar.py:402-405`                                            | duplicate calendar event (CalDAV path, `integrations/calendar_provider.py:426,452` 20 s timeouts)             |
+| `update_event`                                                                                                                                                                                   | EXTERNAL(2)     | `calendar.py`                                                    | second write on possibly-new state                                                                            |
+| `schedule_task`                                                                                                                                                                                  | EXTERNAL(2)     | `scheduler.py:246-249`                                           | duplicate schedule row                                                                                        |
+| `send_to_device`                                                                                                                                                                                 | EXTERNAL(2)     | `phone.py:606-609`                                               | duplicate file pushed to the phone                                                                            |
+| `register_phone`                                                                                                                                                                                 | EXTERNAL(2)     | `phone.py:563-566`                                               | duplicate pairing record / rotated secret                                                                     |
+| `run_allowlisted_command`                                                                                                                                                                        | EXTERNAL(2)     | `system.py:310-312`                                              | re-runs an arbitrary allowlisted binary; `powerful_commands` (`config.py:117`) makes this `pip`/`npm install` |
+| `apply_code_change`                                                                                                                                                                              | EXTERNAL(2)     | `coding.py:412-415`                                              | patch applied twice                                                                                           |
+| `compress_path`                                                                                                                                                                                  | **LOW(1)**      | `files.py:548-550`                                               | truncates and rewrites the archive                                                                            |
+| `control_home_device`, `run_home_routine`, `open_app`, `close_app`, `vibrate_watch`, `send_watch_notification`, `remember_fact`, `create_project`, `add_paper`, `draft_email`, `take_screenshot` | LOW(1)          | `tools/*.py` SPECS (33 tools, all `requires_confirmation=False`) | physical actuation, notifications and persistent writes repeated up to 3× with no approval step at all        |
 
 Proof that the retry path is reachable with a **real** error string, every hop on real
 code (`s2_double_apply.py`):
@@ -240,7 +241,7 @@ code (`s2_double_apply.py`):
 ```
 
 `hop1` is literally the string a timed-out command produces, and a timeout is the one
-error where "nothing changed" is *unknown*: the child was killed mid-work (`base.py:70-73`).
+error where "nothing changed" is _unknown_: the child was killed mid-work (`base.py:70-73`).
 The policy inverts that: `recovery.py:32-33` comments "the world probably has not changed"
 for `timed out`, while `move_file`/`copy_file`/`run_allowlisted_command` failures
 (`files.py:279`, `:304`, `system.py:217`) embed that exact substring on their way out of a
@@ -264,14 +265,14 @@ was told the action failed while its side effect had been applied three times.
 
 The suite's own guarantee is vacuous: `tests/test_recovery.py:23-29` defines a `_Spec`
 stand-in and `:57-68` asserts `("move_file", RiskLevel.DESTRUCTIVE)` — a risk the real
-`move_file` spec does not have — and `:75-79` asserts as *correct* that
+`move_file` spec does not have — and `:75-79` asserts as _correct_ that
 `run_allowlisted_command` (EXTERNAL) is retried on `connection refused`. All 22 recovery
 tests pass on the broken build (`pytest tests/test_recovery.py -q` → `22 passed`), so
 none of them touch `tools/base.py`, the registry or the orchestrator.
 
 Verdict: **FAIL (R-2, P1)** for risk 1-2; **PASS** for risk>=3 and for the `safety` tag
 (0 re-executions measured for `delete_file`, `command_robot_motion`, `emergency_stop`).
-Also **FAIL** as a *test-coverage* finding: the destructive-retry guarantee is asserted
+Also **FAIL** as a _test-coverage_ finding: the destructive-retry guarantee is asserted
 against fabricated specs, not the 126 real ones.
 
 ---
@@ -314,12 +315,13 @@ failures: {'tool':'compress_path','recovered':1,'strategy':'alternative','attemp
 ```
 
 Three separate defects compose here:
+
 1. **No authorisation.** `recover()` calls `execute()` directly (`:168`, `:208`). Everything
    `PermissionEngine.evaluate` gates — `validate_params` (`policy.py:114`), device
    allowed/offline (`:119-130`), the protected-path guard (`:134`), risk → CONFIRM
    (`:145`) — is skipped for the alternative. The measured verdict for the action that
    ran was `CONFIRM`; the `confirmations` table gained no row.
-2. **Semantic substitution.** The user asked to *compress*; the system *deleted* and
+2. **Semantic substitution.** The user asked to _compress_; the system _deleted_ and
    reported `succeeded` for step `compress_path`. The alternative is not a
    same-meaning operation and nothing in `RecoveryOutcome` records that the goal changed.
 3. **Provenance laundering.** `orchestrator._audit_action` logs `tool=action.tool`
@@ -329,9 +331,9 @@ Three separate defects compose here:
 
 The same shape applies to the "simulator vs real device / live vs cached" question. What
 is honest today (verified by executing the handlers, `s7_degraded_sources.py`):
-`get_car_status` appends *"This is the last state the car reported, not a live read"*
-(`tools/car.py:94-97`), `control_home_device` says *"simulated; no real device was
-reached"* (`home.py:252`), `search_memory` puts `retrieval.mode=keyword_only` in output
+`get_car_status` appends _"This is the last state the car reported, not a live read"_
+(`tools/car.py:94-97`), `control_home_device` says _"simulated; no real device was
+reached"_ (`home.py:252`), `search_memory` puts `retrieval.mode=keyword_only` in output
 (`memory/hybrid.py:100`).
 
 What is not: `search_email` silently reads a **local maildir** when no IMAP account is
@@ -479,34 +481,34 @@ false successes are all produced by the four field-level holes above.
 
 Measured conclusions:
 
-* **No loops.** 3 executions per action per turn, constant across turns (610-613 ms,
-  matching `0.2 + 0.4` backoff). Budget is per *action*, so a 3-step failing plan costs
+- **No loops.** 3 executions per action per turn, constant across turns (610-613 ms,
+  matching `0.2 + 0.4` backoff). Budget is per _action_, so a 3-step failing plan costs
   9 executions; there is no per-turn or per-session cap. Nothing re-enters `recover()`
   from inside a handler (`grep core.handle jarvis/tools/` → no matches), and
   `run_schedule_now` (`tools/scheduler.py:204`) is EXTERNAL, so its retries re-run a whole
   scheduled job — see R-2.
-* **Failure records do persist** on the direct path: exactly one `failures` row per
+- **Failure records do persist** on the direct path: exactly one `failures` row per
   `recover()` call (`recovery.py:236-255`, single writer — `grep -rn "INSERT INTO failures"`
   → `recovery.py:238` only), including `recovered`, `strategy`, `attempts`, `note`,
   `params` JSON and `created_at`. Schema at `db/database.py:261-272`.
-* **Silent loss.** `record_failure` swallows any exception at `log.info`
+- **Silent loss.** `record_failure` swallows any exception at `log.info`
   (`recovery.py:256-257`); with the table missing, one failure was recorded nowhere and
   nothing surfaced — while `failure_stats()`/`recent_failures()` (`:259-295`), used by
   `/api/metrics` (`api/app.py:614-618`) and the briefing (`core/briefing.py:108-118`),
   raise. Writes fail silently; reads fail loudly. **P3.**
-* **Recovery is not visible when it fails.** `recovery_notes` is appended only in the
+- **Recovery is not visible when it fails.** `recovery_notes` is appended only in the
   `outcome.recovered` branch (`orchestrator.py:267-271`), and `_compose_reply` prints it
   only if non-empty (`:481-482`). The escalation sentence "I could not recover
   automatically (not retried: …)" exists only in the DB. The user sees one line of error
   text and no indication that retries or a fallback were attempted, how many times, or
   that the system gave up. **FAIL (R-9, P2).**
-* **The documented "Ask user" stage is not implemented.** `recovery.py:3` promises
+- **The documented "Ask user" stage is not implemented.** `recovery.py:3` promises
   `… -> Ask user -> Record failure`; `recover()` has no channel to the orchestrator
   (`grep needs_confirmation jarvis/core/recovery.py` → no match), `strategy` `"gave_up"`
   is named in a comment (`:86`) and never assigned, and the measured
   `needs_confirmation` after a non-recovered failure is `False`. Escalation is a
   write-only log line.
-* **The user-triggered retry is a phantom.** `tasks.retry()` (`core/tasks.py:108-124`),
+- **The user-triggered retry is a phantom.** `tasks.retry()` (`core/tasks.py:108-124`),
   exposed as `POST /tasks/{id}/retry` (`api/app.py:587-600`), flips failed steps to
   `pending`, sets the job to `running`, erases the failure text (`SET detail = ''`) and
   re-executes nothing — measured 0 executions, status stuck at `running`. A job that
@@ -518,43 +520,43 @@ Measured conclusions:
 
 ## 8. Findings register
 
-| ID | Sev | Finding | Evidence |
-|---|---|---|---|
-| R-1 | **P0 (consequence of the known import bug)** | Every mutating tool applies its effect and is then reported/audited as a failure; on the confirmation path (where all 24 gated tools run) the recovery engine is never invoked, so those failures are never recorded in `failures` at all. Audit, `/metrics`, briefing and `explain_failures` describe a system whose destructive half is invisible; the natural user response is to re-run a destructive action that already happened. | `tools/base.py:16,103`; `agents/base.py:58-63`; `orchestrator.py:259-266` vs `:390-407`; EXP-02: `effect_landed=True / reported ok=False` for `copy_file`, `move_file`, `delete_file`, `compress_path`; `failures rows: 0 -> 0` |
-| R-2 | **P1** | The never-retry rule starts at risk 3, so **44 tools below that line are automatically re-executed up to 2 extra times**, including 11 EXTERNAL non-idempotent ones (`move_file`, `copy_file`, `create_event`, `schedule_task`, `send_to_device`, `register_phone`, `apply_code_change`, `update_event`, `run_allowlisted_command`, `run_schedule_now`, `run_workspace_tests`) and LOW physical/persistent ones (`control_home_device`, `run_home_routine`, `vibrate_watch`, `send_watch_notification`, `compress_path`, `remember_fact`). The gate is a *regex on the error string*, and the string a killed subprocess produces — `command timed out after 30.0s` — is exactly the case where the effect is unknown. Measured 3 executions and +4 persistent memory rows where the control (non-transient error) gave 1 and +2. | `recovery.py:124-134,33-48,104`; `files.py:509-524`, `calendar.py:402-405`, `scheduler.py:246-249`, `phone.py:563-609`, `coding.py:412-415`, `system.py:310-312`; `tools/base.py:70-73`; EXP-04 hops 1-5 |
-| R-3 | **P2** | Failure records state the opposite of what happened: `skip_reason` set inside the retry loop (`:180`) is rendered with the `"(not retried: …)"` prefix (`:220`) whenever *any* retry happened. Measured `attempts=1, tried=['retry#1'], note='… (not retried: the error is not transient)'`. `attempts` also excludes the initial execution, so a double-applied destructive action is logged with a number one lower than reality. | `recovery.py:178-181,219-225,251`; EXP-01, EXP-07 |
-| R-4 | **P1** | `recovered` is decided by `.ok` alone (`:169`, `:209`); `Verification` is not imported in `recovery.py:28`. A retry/fallback that lands on a `ok=True, delivered=False` branch is announced as `(Recovered automatically — … succeeded on retry 1)` while its own sentence reads "No device was switched" / "Nothing was changed", is marked `succeeded`, audited `success`, remembered in memory and counted in `recovery_rate` (measured 1.0 from one no-op). Directly contradicts `recovery.py:12-14`. | `recovery.py:12-14,28,169,209`; `orchestrator.py:267-297,451-460,481-482`; `home.py:222-249,285-300`; EXP-06 |
-| R-5 | **P1** | `ok()` defaults to `Verification.SUCCESS` with no observation (`base.py:102-103`): 155 of 171 `ok()` sites claim an observed external effect, 13 of them in messages that say the effect did not happen (verified live for `get_location_summary`, `get_car_status`, `get_car_telemetry`, `search_memory`). `unverified()` (`:115-117`) has zero call sites outside `base.py`. | `tools/base.py:81-117`; EXP-06 (AST scan + live) |
-| R-5b | **P2** | The field built to stop a no-op being logged as success is never used: `ActionResult.audit_result` (`models.py:265-273`) has no production caller; `_audit_action` derives the token from `result.ok` (`orchestrator.py:133`). | `grep -rn audit_result jarvis/`; `orchestrator.py:120-146` |
-| R-6 | **P1** | The fallback stage authorises itself. `recover()` calls `execute()` for the alternative (`:208`) with no `policy.evaluate`, so parameter validation, device/allowed/offline checks, the protected-path guard and the CONFIRM gate are all bypassed; params are copied from the primary unchanged (`:201-207`), so goal and payload both change silently. Measured: with one `ALTERNATIVES` entry injected, a DESTRUCTIVE `delete_file` (policy verdict `CONFIRM`) executed with 0 new confirmation rows, and the audit row recorded `tool=compress_path result=success risk=low`. Latent only because the two shipped pairs are unusable (R-10). | `recovery.py:192-215`; `policy.py:107-159`; `orchestrator.py:137,272-286`; EXP-05(b) |
-| R-7 | **P1** | `agents/laptop.py:38-40` / `laptop_center.py:41-43` overwrite a handler's honest `verified=False` with `True` for any `ok` result, and — because `ActionResult.model_config` has no `validate_assignment` — leave `verified=True` alongside `verification=unknown`, the exact inconsistency `models.py:245-248` claims to make impossible. 21 tools affected, including all file operations and `run_allowlisted_command`; the poisoned value is streamed to clients (`api/app.py:543`). | EXP-06 measurement |
-| R-8 | **P3** | `verified=True` without observation is promoted to `Verification.SUCCESS` at construction (`models.py:254-256`), and that is the shape every recovery test uses (`tests/test_recovery.py:19-20`), so the suite structurally cannot detect R-4/R-5/R-7. All 22 recovery tests pass on a build where every tool call fails. | EXP-04, EXP-06 |
-| R-9 | **P2** | Recovery is invisible exactly when the user needs it: notes are appended only on success (`orchestrator.py:267-271,481-482`); nothing reports "retried N times / tried X / gave up"; the `escalate` stage never asks the user (`needs_confirmation` measured False), and strategy `gave_up` is never assigned. The documented chain `… -> Ask user -> Record failure` has no "ask" implementation. | `recovery.py:3,86,218-225`; EXP-07(C) |
-| R-10 | **P2** | Both shipped fallback pairs are parameter-incompatible and therefore dead: `read_file→search_files` and `search_files→list_directory` end in `invalid parameters: … unexpected keyword argument`. Every recovery attempt that reached the fallback stage failed there in all runs. The "alternative tool" stage advertised in `recovery.py:3` and `README.md` does not exist in practice. | `recovery.py:72-78,201-207`; EXP-05(a) |
-| R-11 | **P2** | `POST /tasks/{id}/retry` (`api/app.py:587-600` → `core/tasks.py:108-124`) reports a successful retry, sets the job to `running`, resets steps to `pending`, erases `detail`, and re-executes nothing (measured 0 executions, permanently `running`). A failed job's state is rewritten to look recovered with its evidence removed. | EXP-07(F) |
-| R-12 | **P2** | The 11 EXTERNAL tools that require confirmation are exactly the ones recovery never guards: `resolve_confirmation` (`orchestrator.py:390-407`) runs the action with no recovery, no `failures` record and no `verification` check, so the retry-safety analysis for that tier is vacuous while the tier is also unmeasured. The scheduler path (`scheduler/runner.py:122-129`) likewise bypasses the whole chain. | `orchestrator.py:390-407`; EXP-02, EXP-07(E) |
-| R-13 | **P3** | `record_failure` swallows every exception at `log.info` (`recovery.py:256-257`), so failure records can vanish with no signal (measured: 1 failure, 0 rows, normal reply), while the read side (`failure_stats`/`recent_failures`) is unguarded and raises — `/api/metrics` and the briefing break on the same condition. | EXP-07(D) |
-| R-14 | **P3** | A successful fallback replaces the primary's result in the plan step and in memory (`orchestrator.py:268,283-285,451-460`), so memory records `read_file: <a directory listing>` — a false fact that future planning retrieves. Also `_compose_reply` appends the recovery sentence to the whole reply, so in a multi-action plan unrelated steps inherit it (`:474-482`). | `orchestrator.py:267-285,451-460,474-482` |
-| R-15 | **P2** | Fallback silently changes the data source while keeping the user-facing claim: `search_email` answers from a local maildir when no IMAP account is configured (`integrations/email_provider.py:504-511`) and says "I found no messages matching X" with `verification=success`; the substitution is only in `output.provider`. (Car/home/memory degradation *is* disclosed — `tools/car.py:94-97`, `home.py:252`, `hybrid.py:100` — so this is one gap, not a pattern.) | EXP-05(b)/S7 |
-| R-16 | **P4** | Cosmetic/robustness: `run_command`'s timeout is 20 s by default but callers pass 30 s with no overall turn budget (`tools/base.py:49-53`, `system.py:213`); `IDEMPOTENT_TOOLS` (`:52-69`) is a hand-maintained list of 16 names, all currently risk 0 (verified) but with no invariant enforcing that; `_watch_confirmation_note`'s grammar bug in generated prose (`orchestrator.py:420-449`) and "could not on Study desk lamp" from `home.py:225` produce unreadable user text. | EXP-03, EXP-06 |
+| ID   | Sev                                          | Finding                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | Evidence                                                                                                                                                                                                                        |
+| ---- | -------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| R-1  | **P0 (consequence of the known import bug)** | Every mutating tool applies its effect and is then reported/audited as a failure; on the confirmation path (where all 24 gated tools run) the recovery engine is never invoked, so those failures are never recorded in `failures` at all. Audit, `/metrics`, briefing and `explain_failures` describe a system whose destructive half is invisible; the natural user response is to re-run a destructive action that already happened.                                                                                                                                                                                                                                                                                                                                                                                           | `tools/base.py:16,103`; `agents/base.py:58-63`; `orchestrator.py:259-266` vs `:390-407`; EXP-02: `effect_landed=True / reported ok=False` for `copy_file`, `move_file`, `delete_file`, `compress_path`; `failures rows: 0 -> 0` |
+| R-2  | **P1**                                       | The never-retry rule starts at risk 3, so **44 tools below that line are automatically re-executed up to 2 extra times**, including 11 EXTERNAL non-idempotent ones (`move_file`, `copy_file`, `create_event`, `schedule_task`, `send_to_device`, `register_phone`, `apply_code_change`, `update_event`, `run_allowlisted_command`, `run_schedule_now`, `run_workspace_tests`) and LOW physical/persistent ones (`control_home_device`, `run_home_routine`, `vibrate_watch`, `send_watch_notification`, `compress_path`, `remember_fact`). The gate is a _regex on the error string_, and the string a killed subprocess produces — `command timed out after 30.0s` — is exactly the case where the effect is unknown. Measured 3 executions and +4 persistent memory rows where the control (non-transient error) gave 1 and +2. | `recovery.py:124-134,33-48,104`; `files.py:509-524`, `calendar.py:402-405`, `scheduler.py:246-249`, `phone.py:563-609`, `coding.py:412-415`, `system.py:310-312`; `tools/base.py:70-73`; EXP-04 hops 1-5                        |
+| R-3  | **P2**                                       | Failure records state the opposite of what happened: `skip_reason` set inside the retry loop (`:180`) is rendered with the `"(not retried: …)"` prefix (`:220`) whenever _any_ retry happened. Measured `attempts=1, tried=['retry#1'], note='… (not retried: the error is not transient)'`. `attempts` also excludes the initial execution, so a double-applied destructive action is logged with a number one lower than reality.                                                                                                                                                                                                                                                                                                                                                                                               | `recovery.py:178-181,219-225,251`; EXP-01, EXP-07                                                                                                                                                                               |
+| R-4  | **P1**                                       | `recovered` is decided by `.ok` alone (`:169`, `:209`); `Verification` is not imported in `recovery.py:28`. A retry/fallback that lands on a `ok=True, delivered=False` branch is announced as `(Recovered automatically — … succeeded on retry 1)` while its own sentence reads "No device was switched" / "Nothing was changed", is marked `succeeded`, audited `success`, remembered in memory and counted in `recovery_rate` (measured 1.0 from one no-op). Directly contradicts `recovery.py:12-14`.                                                                                                                                                                                                                                                                                                                         | `recovery.py:12-14,28,169,209`; `orchestrator.py:267-297,451-460,481-482`; `home.py:222-249,285-300`; EXP-06                                                                                                                    |
+| R-5  | **P1**                                       | `ok()` defaults to `Verification.SUCCESS` with no observation (`base.py:102-103`): 155 of 171 `ok()` sites claim an observed external effect, 13 of them in messages that say the effect did not happen (verified live for `get_location_summary`, `get_car_status`, `get_car_telemetry`, `search_memory`). `unverified()` (`:115-117`) has zero call sites outside `base.py`.                                                                                                                                                                                                                                                                                                                                                                                                                                                    | `tools/base.py:81-117`; EXP-06 (AST scan + live)                                                                                                                                                                                |
+| R-5b | **P2**                                       | The field built to stop a no-op being logged as success is never used: `ActionResult.audit_result` (`models.py:265-273`) has no production caller; `_audit_action` derives the token from `result.ok` (`orchestrator.py:133`).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | `grep -rn audit_result jarvis/`; `orchestrator.py:120-146`                                                                                                                                                                      |
+| R-6  | **P1**                                       | The fallback stage authorises itself. `recover()` calls `execute()` for the alternative (`:208`) with no `policy.evaluate`, so parameter validation, device/allowed/offline checks, the protected-path guard and the CONFIRM gate are all bypassed; params are copied from the primary unchanged (`:201-207`), so goal and payload both change silently. Measured: with one `ALTERNATIVES` entry injected, a DESTRUCTIVE `delete_file` (policy verdict `CONFIRM`) executed with 0 new confirmation rows, and the audit row recorded `tool=compress_path result=success risk=low`. Latent only because the two shipped pairs are unusable (R-10).                                                                                                                                                                                  | `recovery.py:192-215`; `policy.py:107-159`; `orchestrator.py:137,272-286`; EXP-05(b)                                                                                                                                            |
+| R-7  | **P1**                                       | `agents/laptop.py:38-40` / `laptop_center.py:41-43` overwrite a handler's honest `verified=False` with `True` for any `ok` result, and — because `ActionResult.model_config` has no `validate_assignment` — leave `verified=True` alongside `verification=unknown`, the exact inconsistency `models.py:245-248` claims to make impossible. 21 tools affected, including all file operations and `run_allowlisted_command`; the poisoned value is streamed to clients (`api/app.py:543`).                                                                                                                                                                                                                                                                                                                                          | EXP-06 measurement                                                                                                                                                                                                              |
+| R-8  | **P3**                                       | `verified=True` without observation is promoted to `Verification.SUCCESS` at construction (`models.py:254-256`), and that is the shape every recovery test uses (`tests/test_recovery.py:19-20`), so the suite structurally cannot detect R-4/R-5/R-7. All 22 recovery tests pass on a build where every tool call fails.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | EXP-04, EXP-06                                                                                                                                                                                                                  |
+| R-9  | **P2**                                       | Recovery is invisible exactly when the user needs it: notes are appended only on success (`orchestrator.py:267-271,481-482`); nothing reports "retried N times / tried X / gave up"; the `escalate` stage never asks the user (`needs_confirmation` measured False), and strategy `gave_up` is never assigned. The documented chain `… -> Ask user -> Record failure` has no "ask" implementation.                                                                                                                                                                                                                                                                                                                                                                                                                                | `recovery.py:3,86,218-225`; EXP-07(C)                                                                                                                                                                                           |
+| R-10 | **P2**                                       | Both shipped fallback pairs are parameter-incompatible and therefore dead: `read_file→search_files` and `search_files→list_directory` end in `invalid parameters: … unexpected keyword argument`. Every recovery attempt that reached the fallback stage failed there in all runs. The "alternative tool" stage advertised in `recovery.py:3` and `README.md` does not exist in practice.                                                                                                                                                                                                                                                                                                                                                                                                                                         | `recovery.py:72-78,201-207`; EXP-05(a)                                                                                                                                                                                          |
+| R-11 | **P2**                                       | `POST /tasks/{id}/retry` (`api/app.py:587-600` → `core/tasks.py:108-124`) reports a successful retry, sets the job to `running`, resets steps to `pending`, erases `detail`, and re-executes nothing (measured 0 executions, permanently `running`). A failed job's state is rewritten to look recovered with its evidence removed.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | EXP-07(F)                                                                                                                                                                                                                       |
+| R-12 | **P2**                                       | The 11 EXTERNAL tools that require confirmation are exactly the ones recovery never guards: `resolve_confirmation` (`orchestrator.py:390-407`) runs the action with no recovery, no `failures` record and no `verification` check, so the retry-safety analysis for that tier is vacuous while the tier is also unmeasured. The scheduler path (`scheduler/runner.py:122-129`) likewise bypasses the whole chain.                                                                                                                                                                                                                                                                                                                                                                                                                 | `orchestrator.py:390-407`; EXP-02, EXP-07(E)                                                                                                                                                                                    |
+| R-13 | **P3**                                       | `record_failure` swallows every exception at `log.info` (`recovery.py:256-257`), so failure records can vanish with no signal (measured: 1 failure, 0 rows, normal reply), while the read side (`failure_stats`/`recent_failures`) is unguarded and raises — `/api/metrics` and the briefing break on the same condition.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | EXP-07(D)                                                                                                                                                                                                                       |
+| R-14 | **P3**                                       | A successful fallback replaces the primary's result in the plan step and in memory (`orchestrator.py:268,283-285,451-460`), so memory records `read_file: <a directory listing>` — a false fact that future planning retrieves. Also `_compose_reply` appends the recovery sentence to the whole reply, so in a multi-action plan unrelated steps inherit it (`:474-482`).                                                                                                                                                                                                                                                                                                                                                                                                                                                        | `orchestrator.py:267-285,451-460,474-482`                                                                                                                                                                                       |
+| R-15 | **P2**                                       | Fallback silently changes the data source while keeping the user-facing claim: `search_email` answers from a local maildir when no IMAP account is configured (`integrations/email_provider.py:504-511`) and says "I found no messages matching X" with `verification=success`; the substitution is only in `output.provider`. (Car/home/memory degradation _is_ disclosed — `tools/car.py:94-97`, `home.py:252`, `hybrid.py:100` — so this is one gap, not a pattern.)                                                                                                                                                                                                                                                                                                                                                           | EXP-05(b)/S7                                                                                                                                                                                                                    |
+| R-16 | **P4**                                       | Cosmetic/robustness: `run_command`'s timeout is 20 s by default but callers pass 30 s with no overall turn budget (`tools/base.py:49-53`, `system.py:213`); `IDEMPOTENT_TOOLS` (`:52-69`) is a hand-maintained list of 16 names, all currently risk 0 (verified) but with no invariant enforcing that; `_watch_confirmation_note`'s grammar bug in generated prose (`orchestrator.py:420-449`) and "could not on Study desk lamp" from `home.py:225` produce unreadable user text.                                                                                                                                                                                                                                                                                                                                                | EXP-03, EXP-06                                                                                                                                                                                                                  |
 
 ### What held (explicitly, so the audit is not one-sided)
 
-* Retries **are** bounded: `max_retries=2` at `recovery.py:111`, measured 2 re-executions
+- Retries **are** bounded: `max_retries=2` at `recovery.py:111`, measured 2 re-executions
   maximum, 0 for risk>=3, and `0.2 + 0.4 = 0.6 s` backoff per failing action (613 ms walls).
-* The 14 tools at risk 3-4 were re-executed **0 times** in every measurement
+- The 14 tools at risk 3-4 were re-executed **0 times** in every measurement
   (`delete_file` DESTRUCTIVE, `command_robot_motion` and `emergency_stop` PHYSICAL were
   driven directly; the policy sweep shows all 11 DESTRUCTIVE + 3 PHYSICAL specs return
   `is_retryable == False`, including the `safety` tag rule at `recovery.py:126-127`). The
   rule at `recovery.py:124-127` works exactly as written for its own threshold — the
   problem is where the threshold sits, not whether it is enforced.
-* No runaway loop across turns or across a plan; growth is linear (3 execs/turn, 1 row/turn).
-* Failure records **are** persisted on the direct path, with correct `recovered`/`strategy`/
+- No runaway loop across turns or across a plan; growth is linear (3 execs/turn, 1 row/turn).
+- Failure records **are** persisted on the direct path, with correct `recovered`/`strategy`/
   `attempts`/`note` columns, and `failure_stats` aggregates them correctly.
-* Honest degraded-source prose exists for car (`tools/car.py:94-97`), home/robotics
+- Honest degraded-source prose exists for car (`tools/car.py:94-97`), home/robotics
   simulated and undelivered branches (`home.py:222-249`, `robotics.py:166-195`), and hybrid
   retrieval (`memory/hybrid.py:100`).
-* The scheduler refuses to escalate (`scheduler/runner.py:66-109`): risk ceiling enforced,
+- The scheduler refuses to escalate (`scheduler/runner.py:66-109`): risk ceiling enforced,
   policy re-evaluated every run, CONFIRM verdicts parked rather than auto-approved.
 
 ---
@@ -593,7 +595,7 @@ Measured conclusions:
    `result.audit_result` (R-4, R-5b).
 3. Move the never-retry line to "non-idempotent", not "risk>=3": require an explicit
    `idempotent: bool` on `ToolSpec` and default it to `False` for every write/motion tag
-   (R-2); treat `timed out` as *outcome unknown*, therefore never auto-retried.
+   (R-2); treat `timed out` as _outcome unknown_, therefore never auto-retried.
 4. Delete or repair `ALTERNATIVES`: if the stage stays, it must call
    `self.policy.evaluate(alt_action, …)` before executing and must carry a
    `goal_preserved: bool` that the response text has to state (R-6, R-10).

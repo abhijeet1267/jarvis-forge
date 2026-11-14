@@ -122,13 +122,28 @@ async def search_papers(
     )
 
 
-async def list_papers(ctx: ToolContext, project_id: str = "") -> Any:
-    """List stored references."""
+async def list_papers(ctx: ToolContext, project_id: str = "", query: str = "") -> Any:
+    """List stored references.
+
+    A ``query`` narrows the list to the references whose title, author or
+    venue contains it, so a lookup that is *searched* by the name the person
+    gave answers "which one did you mean" rather than "what is stored".
+    """
     papers = _store().all(project_id=project_id or None)
+    needle = (query or "").strip().lower()
+    if needle:
+        papers = [
+            p for p in papers
+            if needle in (p.title or "").lower()
+            or needle in " ".join(p.authors or []).lower()
+            or needle in (p.venue or "").lower()
+        ]
     if not papers:
+        message = (f"No references match {query!r}." if needle
+                   else "No references stored yet.")
         return ok(
             "list_papers",
-            "No references stored yet.",
+            message,
             device=ctx.device_id,
             papers=[],
         )
@@ -509,10 +524,11 @@ SPECS = [
             agent="research",
             risk=RiskLevel.READ,
             allowed_devices=["laptop_main"],
-            parameters={"project_id": "string"},
+            parameters={"project_id": "string", "query": "string"},
             tags=["research", "read"],
             provides_identifiers={"paper_id": {"items": "papers", "id": "paper_id",
-                                              "label": "title"}},
+                                              "label": "title",
+                                              "lookup": "query"}},
 
         ),
         list_papers,

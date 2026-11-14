@@ -63,7 +63,7 @@ async def test_revocation_after_confirmation_blocks_execution(core, engine, tmp_
     cid = await _confirm_deletion(core, victim)
 
     engine.revoke("delete_file", device="laptop_main")
-    response = await core.resolve_confirmation(cid, True, session_id="s")
+    response = await core.resolve_confirmation(cid, True, session_id="laptop", approver_session="laptop")
 
     assert response.decision is PolicyDecision.BLOCK
     assert response.actions == [], response.actions
@@ -80,7 +80,7 @@ async def test_device_offline_after_confirmation_blocks_execution(core, engine, 
     was_online = device.online
     device.online = False
     try:
-        response = await core.resolve_confirmation(cid, True, session_id="s")
+        response = await core.resolve_confirmation(cid, True, session_id="laptop", approver_session="laptop")
     finally:
         device.online = was_online
 
@@ -98,7 +98,7 @@ async def test_protected_path_reached_by_record_edit_is_refused(core, engine, tm
         "UPDATE confirmations SET params = ? WHERE confirmation_id = ?",
         ('{"path": "/etc/hosts"}', cid),
     )
-    response = await core.resolve_confirmation(cid, True, session_id="s")
+    response = await core.resolve_confirmation(cid, True, session_id="laptop", approver_session="laptop")
 
     assert response.decision is PolicyDecision.BLOCK
     assert "protected" in response.reply.lower()
@@ -112,7 +112,7 @@ async def test_malformed_stored_params_are_refused(core, engine, tmp_path):
         "UPDATE confirmations SET params = ? WHERE confirmation_id = ?",
         ("{}", cid),  # delete_file requires `path`
     )
-    response = await core.resolve_confirmation(cid, True, session_id="s")
+    response = await core.resolve_confirmation(cid, True, session_id="laptop", approver_session="laptop")
 
     assert response.decision is PolicyDecision.BLOCK
     assert victim.exists()
@@ -123,7 +123,7 @@ async def test_blocked_resolution_is_audited(core, engine, tmp_path):
     cid = await _confirm_deletion(core, victim)
     engine.revoke("delete_file", device="laptop_main")
 
-    await core.resolve_confirmation(cid, True, session_id="s")
+    await core.resolve_confirmation(cid, True, session_id="laptop", approver_session="laptop")
 
     recent = core.audit.recent(20)
     stages = [r for r in recent if r.get("tool") == "delete_file"]
@@ -138,7 +138,7 @@ async def test_a_still_allowed_action_still_executes(core, engine, tmp_path):
     victim = _victim(tmp_path)
     cid = await _confirm_deletion(core, victim)
 
-    response = await core.resolve_confirmation(cid, True, session_id="s")
+    response = await core.resolve_confirmation(cid, True, session_id="laptop", approver_session="laptop")
 
     assert response.decision is PolicyDecision.EXECUTE
     assert not victim.exists() or victim.parent == tmp_path
@@ -153,10 +153,10 @@ async def test_replay_still_refused(core, engine, tmp_path):
     victim = _victim(tmp_path, "replay.txt")
     cid = await _confirm_deletion(core, victim)
 
-    first = await core.resolve_confirmation(cid, True, session_id="s")
+    first = await core.resolve_confirmation(cid, True, session_id="laptop", approver_session="laptop")
     assert first.decision is PolicyDecision.EXECUTE
 
-    again = await core.resolve_confirmation(cid, True, session_id="s")
+    again = await core.resolve_confirmation(cid, True, session_id="laptop", approver_session="laptop")
     assert again.decision is PolicyDecision.BLOCK
     assert "already" in again.reply
 
@@ -168,7 +168,7 @@ async def test_substitution_still_impossible(core, engine, tmp_path):
     other.write_text("KEEP")
 
     cid = await _confirm_deletion(core, victim)
-    response = await core.resolve_confirmation(cid, True, session_id="s")
+    response = await core.resolve_confirmation(cid, True, session_id="laptop", approver_session="laptop")
 
     assert response.actions[0].tool == "delete_file"
     assert str(victim) in (response.actions[0].message or "") or not victim.exists()
@@ -181,7 +181,7 @@ async def test_expiry_still_wins(core, engine, tmp_path):
     try:
         cid = await _confirm_deletion(core, victim)
         time.sleep(2.1)
-        response = await core.resolve_confirmation(cid, True, session_id="s")
+        response = await core.resolve_confirmation(cid, True, session_id="laptop", approver_session="laptop")
     finally:
         core.settings.confirm_timeout = 300
 

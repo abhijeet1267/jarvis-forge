@@ -148,7 +148,7 @@ def test_full_pipeline_creates_a_real_file_and_verifies_it(core, workspace):
     assert not victim.exists(), "the file was created before the user confirmed"
 
     second = asyncio.run(
-        core.resolve_confirmation(first.confirmation_id, True, session_id=first.session_id))
+        core.resolve_confirmation(first.confirmation_id, True, session_id="laptop"))
 
     assert second.actions, second.reply
     result = second.actions[0]
@@ -167,7 +167,7 @@ def test_append_then_read_back_through_the_pipeline(core, workspace):
         response = await core.handle(CommandRequest(text=text, source="test"))
         if response.confirmation_id:
             response = await core.resolve_confirmation(
-                response.confirmation_id, True, session_id=response.session_id)
+                response.confirmation_id, True, session_id="laptop")
         return response
 
     asyncio.run(say("Create a file called hello.txt containing: JARVIS REAL TEST"))
@@ -183,7 +183,7 @@ def test_audit_records_the_real_action_as_verified(core, workspace):
     response = asyncio.run(core.handle(
         CommandRequest(text="Create a file called auditme.txt containing: X", source="test")))
     asyncio.run(core.resolve_confirmation(
-        response.confirmation_id, True, session_id=response.session_id))
+        response.confirmation_id, True, session_id="laptop"))
 
     rows = core.audit.recent(20)
     written = [r for r in rows if r.get("tool") == "write_file"]
@@ -219,3 +219,34 @@ def test_scheduler_does_not_record_unverified_work_as_executed(core):
     assert outcome["outcome"] == "unverified", (
         f"an unobserved action was recorded as {outcome['outcome']!r}")
     assert outcome["outcome"] != "executed"
+
+
+# ---------------------------------------------------------------------------
+# input validation (Phase 9 #11): a command is a sentence or a bounded run of
+# sentences, never an unbounded paste
+# ---------------------------------------------------------------------------
+
+def test_an_empty_command_is_refused():
+    import pytest
+    from jarvis.core.models import CommandRequest
+
+    with pytest.raises(ValueError, match="must not be empty"):
+        CommandRequest(text="   ", source="api")
+
+
+def test_an_overlong_command_is_refused_with_a_clear_message():
+    import pytest
+    from jarvis.core.models import CommandRequest, MAX_COMMAND_CHARS
+
+    with pytest.raises(ValueError, match="too long") as excinfo:
+        CommandRequest(text="x" * (MAX_COMMAND_CHARS + 1), source="api")
+    # The error names the limit so a caller knows how to split the request.
+    assert str(MAX_COMMAND_CHARS) in str(excinfo.value)
+
+
+def test_a_command_at_the_limit_is_accepted():
+    from jarvis.core.models import CommandRequest, MAX_COMMAND_CHARS
+
+    # Exactly the limit is a valid (if maximal) command; the bound is inclusive.
+    req = CommandRequest(text="x" * MAX_COMMAND_CHARS, source="api")
+    assert len(req.text) == MAX_COMMAND_CHARS

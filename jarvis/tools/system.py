@@ -27,6 +27,7 @@ async def get_time(ctx: ToolContext) -> Any:
         "get_time",
         now.strftime("It is %H:%M on %A, %d %B %Y."),
         device=ctx.device_id,
+        verified=True,
         iso=now.isoformat(),
         epoch=int(now.timestamp()),
     )
@@ -62,7 +63,7 @@ async def system_status(ctx: ToolContext) -> Any:
     return ok(
         "system_status",
         f"System looks healthy: {info.get('cpu_count')} CPUs, load {info.get('uptime', 'n/a')}.",
-        device=ctx.device_id,
+        device=ctx.device_id, verified=True,
         **info,
     )
 
@@ -95,7 +96,7 @@ async def battery_status(ctx: ToolContext) -> Any:
 
         return ok("get_battery_status",
             f"Your laptop battery is at {percent}% ({state}).",
-            device=ctx.device_id,
+            device=ctx.device_id, verified=True,
             percent=percent,
             state=state,
             raw=out,
@@ -220,7 +221,7 @@ async def run_allowlisted_command(ctx: ToolContext, command: str = "", args: str
     return ok(
         "run_allowlisted_command",
         f"Ran {binary} successfully.",
-        device=ctx.device_id,
+        device=ctx.device_id, verified=True,
         argv=argv,
         stdout=out[:4000],
     )

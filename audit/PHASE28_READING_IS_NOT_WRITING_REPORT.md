@@ -12,7 +12,7 @@ the first probe returned this:
     reply='Created documentation: read the readme (markdown) -- read-the-readme-2340c886.md'
 ```
 
-A sentence asking to *read* authored a new file, audited it as a success, and told the user
+A sentence asking to _read_ authored a new file, audited it as a success, and told the user
 it was done. That is not a mislabelled state, which the previous five phases were all
 about. It is an unrequested side effect, chosen by a substring.
 
@@ -42,24 +42,24 @@ these wrote a file:
 
 Two neighbouring truths the same probe exposed:
 
-* **`read_file` was never reachable.** Registered since v0.1, risk tier READ, in
+- **`read_file` was never reachable.** Registered since v0.1, risk tier READ, in
   `IDEMPOTENT_TOOLS`, and listed in README under Known open items as "no `read_file` route"
   since Phase 12 -- so the system had the capability and could not be asked to use it, while
-  it could be *tricked* by the same sentence into using one it wasn't asked for.
-* **It is not a one-off.** Measured over the registry: **29 of 127** tools appear nowhere in
+  it could be _tricked_ by the same sentence into using one it wasn't asked for.
+- **It is not a one-off.** Measured over the registry: **29 of 127** tools appear nowhere in
   `planner.py` as a route -- `cancel_event`, `update_event`, `search_events`, `read_email`,
   `inspect_memory`, `get_schedule`, `list_workspaces`, `ping_device`,
   `get_device_capabilities`, `propose_code_change`, `apply_code_change`,
   `extract_paper_methods/limitations/datasets`, `sweep_expired_memories`, `forget_paper`,
   the `link_*`/`add_*` graph tools, and others. For those, "I understood the words but not
-  the goal yet" is true of the *router* and reads to a person as "I can't".
+  the goal yet" is true of the _router_ and reads to a person as "I can't".
 
 ---
 
 ## 2. The fix, and the rule it is built on
 
 **An authoring route has to be asked to author.** Not a blocklist of naughty words --
-`_authoring_request()` compares which verb class speaks *first* in the sentence:
+`_authoring_request()` compares which verb class speaks _first_ in the sentence:
 
 ```python
 _AUTHOR_VERBS  = create|make|design|draw|write|build|generate|produce|prepare|add|draft|
@@ -69,19 +69,19 @@ _CONSUME_VERBS = read|show|open|get|list|display|print|cat|what|which|tell|find|
 ```
 
 `document the parser` → authoring first → still authors. `what does the document say` →
-consumption first → does not. The guard sits after the two *non-authoring* design branches
+consumption first → does not. The guard sits after the two _non-authoring_ design branches
 (analyzing and listing assets), which are unaffected, and before every branch that creates
 an artifact.
 
 **`read_file` becomes reachable.** A new rule, registered between the vision and
 file-search rules, resolving names by one stated rule rather than two opinions:
 
-| Input | Resolves to | Why |
-|---|---|---|
-| `read notes.txt` | `<file_workspace>/notes.txt` | a bare name is anchored, so a read cannot mean "whatever sits next to the process" |
-| `read ./sub/notes.txt` | `<file_workspace>/sub/notes.txt` | a relative path is anchored the same way |
-| `read /etc/hosts`, `~/…` | as typed | an explicit path is the engine guard's business, and refusing it here with write-shaped wording would be its own untruth |
-| `read the readme` | `<file_workspace>/README.md` | the alias is spelled out, not guessed from the sentence |
+| Input                    | Resolves to                      | Why                                                                                                                      |
+| ------------------------ | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `read notes.txt`         | `<file_workspace>/notes.txt`     | a bare name is anchored, so a read cannot mean "whatever sits next to the process"                                       |
+| `read ./sub/notes.txt`   | `<file_workspace>/sub/notes.txt` | a relative path is anchored the same way                                                                                 |
+| `read /etc/hosts`, `~/…` | as typed                         | an explicit path is the engine guard's business, and refusing it here with write-shaped wording would be its own untruth |
+| `read the readme`        | `<file_workspace>/README.md`     | the alias is spelled out, not guessed from the sentence                                                                  |
 
 **The reply shows what was read, capped.** `read_file` answered "Read README.md." before,
 which meant a successful read showed the user nothing; the message now carries the text,
@@ -166,32 +166,32 @@ routings 18 commands already exercise.
 
 ## 6. Everything re-measured after the change
 
-| | |
-|---|---|
-| Suite | **1466 passed · 0 failed · 0 skipped · 0 xfailed** (1466 collected), 52 modules |
-| Reachability | unrouted registered tools: **29 → 28** (the sweep is asserted by count, on purpose -- it moves only when someone routes another capability) |
-| Acceptance | 17 of 18 measured, median **5 ms**, sum **1,395 ms**; states unchanged from the Phase 27 artifact for all 18 rows |
-| Safety matrix | **5 of 6 ok**, `turn on heater` still FAIL (22-G, owner's call) |
-| Registry | 127 tools, 25 gated, tiers read 68 · low 33 · external 12 · destructive 11 · physical 3 -- unchanged; this phase added no capability, it made an existing one reachable |
-| Figures | charts and diagrams regenerated; `chart-suite-growth.svg` ends at the Phase 28 point |
+|               |                                                                                                                                                                         |
+| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Suite         | **1466 passed · 0 failed · 0 skipped · 0 xfailed** (1466 collected), 52 modules                                                                                         |
+| Reachability  | unrouted registered tools: **29 → 28** (the sweep is asserted by count, on purpose -- it moves only when someone routes another capability)                             |
+| Acceptance    | 17 of 18 measured, median **5 ms**, sum **1,395 ms**; states unchanged from the Phase 27 artifact for all 18 rows                                                       |
+| Safety matrix | **5 of 6 ok**, `turn on heater` still FAIL (22-G, owner's call)                                                                                                         |
+| Registry      | 127 tools, 25 gated, tiers read 68 · low 33 · external 12 · destructive 11 · physical 3 -- unchanged; this phase added no capability, it made an existing one reachable |
+| Figures       | charts and diagrams regenerated; `chart-suite-growth.svg` ends at the Phase 28 point                                                                                    |
 
 ---
 
 ## 7. Carried forward
 
-* **28-A** 28 tools remain unreachable from a sentence. The list is in §1. Routing them is a
+- **28-A** 28 tools remain unreachable from a sentence. The list is in §1. Routing them is a
   product decision per capability (and some, like `approve_pairing`, deliberately have no
-  spoken form); the honest statement now is that the *count* is measured rather than
+  spoken form); the honest statement now is that the _count_ is measured rather than
   remembered.
-* **28-B** `make a diagram of the build` blocks with *"missing required parameter
-  'components'"* -- an internal schema field shown to a human instead of a question they
+- **28-B** `make a diagram of the build` blocks with _"missing required parameter
+  'components'"_ -- an internal schema field shown to a human instead of a question they
   could answer. Asserted as-is so the suite records it; the fix is a decision about how the
   gate asks for missing parameters, and it applies to every gated tool, not just diagrams.
-* **28-C** A consumption verb that leads a sentence declines the artifact route outright, so
+- **28-C** A consumption verb that leads a sentence declines the artifact route outright, so
   "summarise my last design asset" or "review the diagram you made" now falls through to
   "not understood" where it used to produce something. The old behaviour was worse (it
   authored on demand), but the gap is real and belongs with 28-A.
-* Everything already open: 27-A…D, 26-A closed by Phase 27, 26-B, the `ToolSpec.parameters`
+- Everything already open: 27-A…D, 26-A closed by Phase 27, 26-B, the `ToolSpec.parameters`
   residual, 22-G, 23-E, mic/speech TCC, 15-F, 14-D, 16-F, hardware **BLOCKED**, LLM planner,
   unattended workflows.
 

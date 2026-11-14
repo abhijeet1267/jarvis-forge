@@ -29,15 +29,15 @@ find … -name '*.pyc' | wc -l  → 127
 ```
 
 145 files were sealed at build time; 127 more appeared afterwards, all of them compiled
-Python, all of them inside the bundle. The build *stages* no bytecode (`STAGED_SKIP` holds
+Python, all of them inside the bundle. The build _stages_ no bytecode (`STAGED_SKIP` holds
 `__pycache__`, the copy filter drops `.pyc`), so the bundle was clean when it was signed and
 got dirty by being **used**: the server the panel spawns imports the staged source and writes
 `__pycache__` next to it. `PYTHONDONTWRITEBYTECODE=1` in the spawn environment is the whole
 fix — assigned, not defaulted, for the same reason `PYTHONUNBUFFERED` is.
 
 Why it matters rather than being cosmetic: an ad-hoc-signed, un-notarised app is already the
-one Gatekeeper hesitates over, and *"Vantage is damaged"* is what an invalid seal turns that
-hesitation into. A copy of the app must survive being copied *and* being run.
+one Gatekeeper hesitates over, and _"Vantage is damaged"_ is what an invalid seal turns that
+hesitation into. A copy of the app must survive being copied _and_ being run.
 
 ## 3. Then the app orphaned a server on the wifi address
 
@@ -61,9 +61,9 @@ the same orphan. Of course it did: Tk does not die by signal. Its quit path invo
 
 So the guarantee is made twice, because the two halves fail differently:
 
-* `root.createcommand("exit", …)` — the panel's own exit is the cleanup, whatever invoked it.
+- `root.createcommand("exit", …)` — the panel's own exit is the cleanup, whatever invoked it.
   The Quit button and the window close keep doing what they did.
-* `jarvis/process.py` — the server is told its parent's pid (`JARVIS_GUARDIAN_PID`) and
+- `jarvis/process.py` — the server is told its parent's pid (`JARVIS_GUARDIAN_PID`) and
   watches it. `guardian_gone()` checks reparenting first, because reparenting is the shape
   actually observed. This is the half that covers the deaths no in-process hook can: SIGKILL,
   a crash, a logout.
@@ -100,9 +100,9 @@ GET /phone over 127.0.0.1            200
 .pycount after three launches        0        seal after use: still valid
 ```
 
-The instructions file states the checkbox by the label it actually carries (*"Allow devices
-on my wifi to connect"*) and the button by the text the page renders (*"Pair with this
-laptop"*), because the first draft of it invented both.
+The instructions file states the checkbox by the label it actually carries (_"Allow devices
+on my wifi to connect"_) and the button by the text the page renders (_"Pair with this
+laptop"_), because the first draft of it invented both.
 
 ## 5. Regressions and numbers
 
@@ -122,20 +122,20 @@ is tests, and the thing that changed is whether the artifact a user can hold is 
 
 ## 6. Carried forward
 
-* **40-A** the laptop has no address that survives a DHCP lease. Its own Bonjour name is
+- **40-A** the laptop has no address that survives a DHCP lease. Its own Bonjour name is
   refused by the `Host` gate — measured 400, identical to the forged-hostname case — so the
   fix is not just advertising `…local`, it is teaching the gate to accept exactly one
   machine-owned name without reopening DNS rebinding. 38-B and 39-E are the same defect.
-* **40-B** `.local` does not resolve on Android browsers, so even a correct name would help
+- **40-B** `.local` does not resolve on Android browsers, so even a correct name would help
   iPhones and desktop machines first. Not measured — no handset was reachable from here.
-* **40-C** the guardian's exit is `os._exit(0)`, chosen because a thread cannot ask uvicorn
+- **40-C** the guardian's exit is `os._exit(0)`, chosen because a thread cannot ask uvicorn
   for a graceful shutdown. In-flight requests are dropped and the WAL is left to SQLite;
   a stop that drains would need the signal path the panel already has.
-* **40-D** `codesign --verify` is checked by hand, not in the suite: `dist/` is gitignored,
+- **40-D** `codesign --verify` is checked by hand, not in the suite: `dist/` is gitignored,
   so the CI-side guard remains the one 29-D recorded as never running.
-* **40-E** the account cannot start runner jobs (39-F), and the user has now asked for no
+- **40-E** the account cannot start runner jobs (39-F), and the user has now asked for no
   pushes regardless. Every number above is measured on this machine.
-* Unchanged: 39-A…E, 38-A…D, 37-A…E, 36-A…E, 35-A…C, 34-A…C, and the `-rs` CI change.
+- Unchanged: 39-A…E, 38-A…D, 37-A…E, 36-A…E, 35-A…C, 34-A…C, and the `-rs` CI change.
 
 ## 7. Git
 

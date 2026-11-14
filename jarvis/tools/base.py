@@ -118,12 +118,17 @@ def ok(
     command with no bridge ended up audited as a success. Both spellings are
     now honoured, and a handler that observed nothing can say so.
 
-    A bare ``ok()`` still means "this handler established what it reports",
-    which is true for reads and local computation. Anything claiming an effect
-    in the world outside this process must pass its observation.
+    Default is ``UNKNOWN`` — honest. A read or local computation whose answer
+    is inherently self-verifying (e.g. the file was just written and re-read)
+    should pass ``verified=True`` (or ``verification=Verification.SUCCESS``).
+    A bare ``ok()`` means "the handler returned without exception," which is not
+    the same as "the world changed as intended." See ``unverified()`` for the
+    same default spelled explicitly.
     """
     if verification is None:
-        verification = Verification.SUCCESS if verified is not False else Verification.UNKNOWN
+        verification = Verification.UNKNOWN if verified is None else (
+            Verification.SUCCESS if verified else Verification.UNKNOWN
+        )
     return ActionResult(
         ok=True,
         tool=tool,

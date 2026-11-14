@@ -1,25 +1,25 @@
 # Phase 61 — desktop control that asks, and only then touches
 
-| | |
-|---|---|
-| Phase | 61 (Computer Use — the last item in the build prompt's §26 order) |
-| Date | 2026-10-05 |
-| Starting commit | `c922a26` (Phase 60 close-out) |
-| Ending commit | `ddb52df` (the work) → `e0dd12f` (the close-out, whose own hash is written by the next commit to touch this file) |
-| Tests before | 2355 passed · 0 failed · 0 skipped |
-| Tests after | **2380 passed · 0 failed** (76.5 s; one arXiv-gated test skipped on one of four runs) |
-| Tools / gated | 145 / 30 → **148 / 32** — three added, none loosened |
-| Risk split | read 77 · low 38 · external 15 · destructive 12 · physical 3 → **read 78 · low 38 · external 15 · destructive 14 · physical 3** |
-| Planner rules | 52 → **52** (one new branch inside an existing rule, not a new rule) |
-| Host HTTP surface | 122 route objects / 115 paths → **unchanged** |
-| Real actuation | **DELIBERATELY NOT DEMONSTRATED** — see §7 |
-| Push status | **nothing pushed; local commits only** |
+|                   |                                                                                                                                 |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| Phase             | 61 (Computer Use — the last item in the build prompt's §26 order)                                                               |
+| Date              | 2026-10-05                                                                                                                      |
+| Starting commit   | `c922a26` (Phase 60 close-out)                                                                                                  |
+| Ending commit     | `ddb52df` (the work) → `e0dd12f` (the close-out, whose own hash is written by the next commit to touch this file)               |
+| Tests before      | 2355 passed · 0 failed · 0 skipped                                                                                              |
+| Tests after       | **2380 passed · 0 failed** (76.5 s; one arXiv-gated test skipped on one of four runs)                                           |
+| Tools / gated     | 145 / 30 → **148 / 32** — three added, none loosened                                                                            |
+| Risk split        | read 77 · low 38 · external 15 · destructive 12 · physical 3 → **read 78 · low 38 · external 15 · destructive 14 · physical 3** |
+| Planner rules     | 52 → **52** (one new branch inside an existing rule, not a new rule)                                                            |
+| Host HTTP surface | 122 route objects / 115 paths → **unchanged**                                                                                   |
+| Real actuation    | **DELIBERATELY NOT DEMONSTRATED** — see §7                                                                                      |
+| Push status       | **nothing pushed; local commits only**                                                                                          |
 
 ---
 
 ## 1. What was measured before anything was written
 
-The register said *"No Computer Use capability — §26 not started"*. Half of that is wrong in the
+The register said _"No Computer Use capability — §26 not started"_. Half of that is wrong in the
 same shape as Phase 60's row: the **eyes** already shipped and the **hands** did not.
 
 ```
@@ -44,16 +44,16 @@ The gap was the hands, and hands are where the spec's security model actually bi
 A Computer Use demo is exactly the thing that rule exists to catch: whatever text was last on the
 screen — a webpage, a PDF, an email — becomes the hand that moves the cursor. So:
 
-* **`click_desktop` and `type_desktop_text` are `DESTRUCTIVE` and confirmation-gated, and
+- **`click_desktop` and `type_desktop_text` are `DESTRUCTIVE` and confirmation-gated, and
   `reversible=False`.** A click lands on whatever is focused in the user's session; there is no
   undo, and "accidental destructive actions" is a named threat on §26.1. Every DESTRUCTIVE tool in
   this registry is gated (measured invariant since Phase 22) and these two join it without
   bending it — asserted against the live registry, not against a list.
-* **They carry no `examples`.** Examples are how the router learns what a tool is for. A test keeps
+- **They carry no `examples`.** Examples are how the router learns what a tool is for. A test keeps
   the field empty, and another sweeps a dozen sentences — "click at 100 200", "click my save
   button", "type hello world", "press the button at 5 5" — and asserts none of them resolve to an
   actuation. The gate is the card a person approves, not a parsing accident.
-* **`get_desktop_control_state` is `READ` and *is* routed**, because Phase 28's rule still holds: a
+- **`get_desktop_control_state` is `READ` and _is_ routed**, because Phase 28's rule still holds: a
   capability that exists must be askable about. "can you control my computer", "can you click on my
   screen", "do you have accessibility permission" and "is desktop control available" all reach the
   read.
@@ -77,7 +77,7 @@ AppleScript string concatenation is this platform's shell injection. The three s
 change the program being run, while `keystroke "…"` built by interpolation can. A test sends the
 payload `" & do shell script "rm -rf ~` and asserts it appears in `args`, never in the script
 source, **and carries a negative control**: the same test builds the naive interpolated form and
-asserts the payload *does* appear in it, so the assertion is known to be able to fail rather than
+asserts the payload _does_ appear in it, so the assertion is known to be able to fail rather than
 vacuously true.
 
 ## 5. Success is only what a re-read observed
@@ -140,7 +140,7 @@ Three findings worth stating plainly, because two of them contradict what this p
 2. **The recorder was needed, and it changed what could be proven.** Because the permission is
    granted to this process, a live proof that ran the real sender would have moved the cursor in the
    user's session. So the proof wraps `_osascript` with a function that records and never runs, and
-   what it measures is *the code's decision to send*, not an effect. Five decisions, zero events.
+   what it measures is _the code's decision to send_, not an effect. Five decisions, zero events.
 3. **That harness exposed a real weakness in the handler**, which is why the fix is in the code and
    not in the proof: the re-read trusted any string as an application name, so a canned
    `0, "not sent…"` became "…is the application in front now". §5 describes the bound that replaced
@@ -149,7 +149,7 @@ Three findings worth stating plainly, because two of them contradict what this p
 **No click and no keystroke has ever been executed by this code.** That is a choice, not a blocker:
 demonstrating it means driving the user's own pointer inside their applications, which is
 irreversible and is theirs to ask for. `BLOCKED_BY_USER_DECISION` would be the wrong label — nothing
-is blocking it — the honest statement is *not demonstrated, deliberately*.
+is blocking it — the honest statement is _not demonstrated, deliberately_.
 
 ## 8. Tests — 25, in `tests/test_phase61_desktop_control_that_asks_before_it_touches.py`
 
@@ -168,17 +168,17 @@ and that ordering is a decision to make in the open. Recorded as 61-C.
 
 ## 10. Numbers, re-measured
 
-| | before (Phase 60 close) | after |
-|---|---|---|
-| Tests | 2355 · 0 failed | **2380 · 0 failed** (76.5 s) |
-| Test modules | 87 | **88** |
-| Tools / gated | 145 / 30 | **148 / 32** |
-| Risk split | read 77 · low 38 · external 15 · destructive 12 · physical 3 | **read 78 · low 38 · external 15 · destructive 14 · physical 3** |
-| Planner rules | 52 | **52** |
-| Host HTTP routes / paths | 122 / 115 | **122 / 115** |
-| Versioned lines | 74,233 | **74,892** |
-| Shipped code / tests | 43,871 / 29,761 | **44,161 / 30,130** |
-| `audit/` reports | 62 | **63** (this file) |
+|                          | before (Phase 60 close)                                      | after                                                            |
+| ------------------------ | ------------------------------------------------------------ | ---------------------------------------------------------------- |
+| Tests                    | 2355 · 0 failed                                              | **2380 · 0 failed** (76.5 s)                                     |
+| Test modules             | 87                                                           | **88**                                                           |
+| Tools / gated            | 145 / 30                                                     | **148 / 32**                                                     |
+| Risk split               | read 77 · low 38 · external 15 · destructive 12 · physical 3 | **read 78 · low 38 · external 15 · destructive 14 · physical 3** |
+| Planner rules            | 52                                                           | **52**                                                           |
+| Host HTTP routes / paths | 122 / 115                                                    | **122 / 115**                                                    |
+| Versioned lines          | 74,233                                                       | **74,892**                                                       |
+| Shipped code / tests     | 43,871 / 29,761                                              | **44,161 / 30,130**                                              |
+| `audit/` reports         | 62                                                           | **63** (this file)                                               |
 
 Four full-suite runs were made during this phase. Two carried the documented Vision-OCR load flake
 (5 and 6 failures in `tests/test_vision.py`, all passing on a quiet re-run), one showed a single
@@ -188,7 +188,7 @@ measured, not attributed to this phase's code and not hidden.
 ## 11. Open items
 
 - **61-A — the read reports a process's permission, and a person reads it as the product's.**
-  `get_desktop_control_state` answers from the helper for *this* process; the app and a
+  `get_desktop_control_state` answers from the helper for _this_ process; the app and a
   terminal-launched host disagree. The message should name which subject was asked, the way the
   permission card does since Phase 50.
 - **61-B — the actuations are unreachable from a sentence by design, which makes them reachable
@@ -206,24 +206,24 @@ measured, not attributed to this phase's code and not hidden.
 
 ## 12. Delivery
 
-Work commit `ddb52df` — *Give the laptop hands, and keep them behind the confirmation card*.
-Close-out commit `e0dd12f` — *Record the Phase 61 redeploy, and what the shipped server now
-publishes*. Its own hash lands in the file it commits, which is why it was left blank until it
+Work commit `ddb52df` — _Give the laptop hands, and keep them behind the confirmation card_.
+Close-out commit `e0dd12f` — _Record the Phase 61 redeploy, and what the shipped server now
+publishes_. Its own hash lands in the file it commits, which is why it was left blank until it
 existed.
 
 Rebuilt from this tree, redeployed, verified with **GETs only** — no POST and no actuation reached
 the user's real data directory, and no click was ever sent:
 
-| check | result |
-|---|---|
-| `codesign --verify --deep --strict` on the deployed bundle | valid on disk, satisfies its Designated Requirement |
-| `jarvis/tools/desktop.py` present inside the bundle and inside `Vantage.app.zip` after extraction | both, and the extracted copy re-verifies |
-| `GET /health` on the delivered app | `status ok`, **148 tools**, 15 agents, scheduler running with a 30 s tick, `llm_enabled: false`, `ai_provider: openai` |
-| `GET /tools` | **148** entries; `get_desktop_control_state` read/ungated, `click_desktop` and `type_desktop_text` destructive + `confirmation=True` — the gate is visible in what the shipped server publishes, not only in the source |
-| `GET /tools` and `GET /health` with no token | **401** |
-| the claim the shipped build wrote | `{"pid": 89131, "host": "0.0.0.0", "port": 8765, …}` |
-| archives | `Vantage.app.zip` 1,172,479 B and `vantage-source.zip` 2,540,639 B, both rebuilt; the source archive scans clean for `.env`, tokens, key files and databases |
-| suite | **2380 passed · 0 failed**, measured twice clean (83.1 s and 76.4 s). Earlier runs in the same phase showed the documented Vision-OCR load flake (5 and 6 failures) and one arXiv network-gated skip; both are reported as what they measured, not folded into the headline |
+| check                                                                                             | result                                                                                                                                                                                                                                                                      |
+| ------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `codesign --verify --deep --strict` on the deployed bundle                                        | valid on disk, satisfies its Designated Requirement                                                                                                                                                                                                                         |
+| `jarvis/tools/desktop.py` present inside the bundle and inside `Vantage.app.zip` after extraction | both, and the extracted copy re-verifies                                                                                                                                                                                                                                    |
+| `GET /health` on the delivered app                                                                | `status ok`, **148 tools**, 15 agents, scheduler running with a 30 s tick, `llm_enabled: false`, `ai_provider: openai`                                                                                                                                                      |
+| `GET /tools`                                                                                      | **148** entries; `get_desktop_control_state` read/ungated, `click_desktop` and `type_desktop_text` destructive + `confirmation=True` — the gate is visible in what the shipped server publishes, not only in the source                                                     |
+| `GET /tools` and `GET /health` with no token                                                      | **401**                                                                                                                                                                                                                                                                     |
+| the claim the shipped build wrote                                                                 | `{"pid": 89131, "host": "0.0.0.0", "port": 8765, …}`                                                                                                                                                                                                                        |
+| archives                                                                                          | `Vantage.app.zip` 1,172,479 B and `vantage-source.zip` 2,540,639 B, both rebuilt; the source archive scans clean for `.env`, tokens, key files and databases                                                                                                                |
+| suite                                                                                             | **2380 passed · 0 failed**, measured twice clean (83.1 s and 76.4 s). Earlier runs in the same phase showed the documented Vision-OCR load flake (5 and 6 failures) and one arXiv network-gated skip; both are reported as what they measured, not folded into the headline |
 
 `READ ME FIRST.txt` gained section 8, which says what the hands are, that no sentence reaches them,
 that the permission answer belongs to a process rather than to the product (and that this machine

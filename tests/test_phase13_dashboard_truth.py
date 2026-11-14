@@ -109,7 +109,7 @@ async def test_real_created_file_renders_verified(core, workspace, state_of):
     assert not target.exists(), "the file appeared before the user approved"
 
     after = await core.resolve_confirmation(
-        first.confirmation_id, True, session_id=first.session_id)
+        first.confirmation_id, True, session_id="laptop")
     payload = _payload(after)
     assert payload["actions"][0]["verification"] == "success"
     assert state_of(payload) == "VERIFIED"

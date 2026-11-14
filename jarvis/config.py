@@ -62,12 +62,50 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
+    #: List-valued settings decode ``JARVIS_X`` as **JSON** before any
+    #: ``field_validator`` runs (``pydantic-settings`` 2.x). That means a blank
+    #: line -- ``JARVIS_CORS_ORIGINS=``, exactly what a copied ``.env.example``
+    #: contains -- tries ``json.loads("")`` and raises ``SettingsError``, so the
+    #: server will not start. A blank value plainly means "not set": it is
+    #: replaced with ``None`` before decoding, so the field falls back to its
+    #: default. ``"[]"`` still means "an empty list", which is a deliberate and
+    #: different choice.
+    @classmethod
+    def settings_customise_sources(
+        cls, settings_cls,
+        init_settings, env_settings, dotenv_settings, file_secret_settings,
+    ):
+        _list_fields = {"cors_origins", "allowed_commands",
+                        "powerful_commands", "wake_words"}
+
+        def _blank_lists_are_unset(source):
+            if source is None:
+                return None
+            original = source.prepare_field_value
+
+            def prepare_field_value(field_name, field, value, value_is_complex):
+                if (field_name in _list_fields
+                        and isinstance(value, str) and value.strip() == ""):
+                    return None  # "unset": the field's default applies
+                return original(field_name, field, value, value_is_complex)
+
+            source.prepare_field_value = prepare_field_value
+            return source
+
+        return (
+            init_settings,
+            _blank_lists_are_unset(env_settings),
+            _blank_lists_are_unset(dotenv_settings),
+            file_secret_settings,
+        )
+
     # --- Core ---------------------------------------------------------------
     env: str = "dev"
     home: Path = Field(default_factory=_default_home)
     log_level: str = "INFO"
     host: str = "127.0.0.1"
     port: int = 8765
+    companion_port: int = 8766
 
     #: Where a relative filename typed by a user is anchored.
     #:
@@ -200,6 +238,60 @@ class Settings(BaseSettings):
     calendar_url: str = ""
     calendar_user: str = ""
     calendar_password: str = ""
+
+    # --- Google (Calendar + Tasks) -----------------------------------------
+    # The OAuth *client* identifiers only. The refresh token is never a
+    # setting: it lives in the OS keychain (see integrations/google_auth.py),
+    # because settings are read into logs and diagnostics far more casually
+    # than a credential should be.
+    #
+    # A desktop app is a "public client" under Google's rules -- it cannot keep
+    # a secret -- so only the client id is needed for the installed-app flow.
+    google_client_id: str = ""
+    google_client_secret: str = ""
+    # Least privilege: read calendar, read+write tasks. Calendar write is a
+    # separate scope so it can be requested only once event editing exists.
+    google_calendar_enabled: bool = True
+    google_tasks_enabled: bool = True
+    # The calendar to read when the account has several. Empty means "primary".
+    google_calendar_id: str = "primary"
+    google_task_list_id: str = ""
+
+    # --- n8n automation ----------------------------------------------------
+    # Vantage runs only workflows that are in its own registry
+    # (integrations/n8n.py) and only over their webhooks. It deliberately has
+    # no access to n8n's admin API, so a chat turn cannot create, edit or
+    # activate a workflow.
+    #
+    # n8n_api_key is read from the environment or the OS keychain and is never
+    # returned by any route. The URL must be http(s); a non-loopback host is
+    # refused unless n8n_allow_remote is deliberately turned on.
+    n8n_enabled: bool = False
+    n8n_base_url: str = "http://127.0.0.1:5678"
+    n8n_api_key: str = ""
+    n8n_auth_header: str = "Authorization"
+    n8n_auth_prefix: str = "Bearer "
+    n8n_timeout: float = 20.0
+    n8n_allow_remote: bool = False
+    #: Comma-separated registry keys. Empty means every approved workflow.
+    n8n_allowed_workflows: str = ""
+
+    # --- MCP (one remote connector) ----------------------------------------
+    # One Streamable-HTTP MCP server (Zapier MCP, an n8n MCP node, or another).
+    # Empty URL means "not configured": nothing is attempted and no tool exists.
+    #
+    # JARVIS_MCP_ALLOWED_TOOLS is a comma-separated allowlist and defaults to
+    # EMPTY on purpose. Discovering a server's tools is not the same as making
+    # them callable, so a server that advertises hundreds of actions still
+    # exposes only the names listed here -- each one through the normal
+    # approval path, because the adapter registers them as EXTERNAL writes.
+    #
+    # The token is read from the environment but never echoed: status payloads
+    # and error messages redact it (integrations/mcp_client.py).
+    mcp_name: str = "mcp"
+    mcp_url: str = ""
+    mcp_token: str = ""
+    mcp_allowed_tools: str = ""
 
     # --- Design (v1.2) -------------------------------------------------------
     # External design tools are opt-in and must be BOTH configured and enabled
@@ -366,14 +458,50 @@ class Settings(BaseSettings):
 
     @property
     def llm_enabled(self) -> bool:
-        """True when a model endpoint has been configured."""
-        return bool(self.llm_base_url and self.llm_api_key)
+        """True when a model endpoint can actually be reached.
+
+        Two conditions, and both must hold:
+          1. the assistant is switched on (the AI enable/disable control; default on),
+          2. the selected provider can be called -- a key in the environment/``llm.env``
+             or in the secure store the AI Settings screen writes to, or a provider that
+             needs no key at all (a loopback connector whose adapter sets
+             ``REQUIRES_KEY = False``).
+
+        The base URL is not part of the test because every supported provider has a
+        default endpoint. The on/off switch is checked first so a stored key cannot
+        defeat a deliberate "off": the user turning the assistant off means every
+        sentence stays on the deterministic rule planner.
+        """
+        from .gateway.selection import ai_enabled, effective_key
+        if not ai_enabled(self.home):
+            return False
+        if effective_key(self, self.ai_provider):
+            return True
+        return not _provider_requires_key(self.ai_provider)
 
     def ensure_dirs(self) -> None:
         self.home.mkdir(parents=True, exist_ok=True)
 
 
 LLM_FILE_NAME = "llm.env"
+
+
+def _provider_requires_key(provider_name: str) -> bool:
+    """Whether the named provider refuses a request that carries no credential.
+
+    Read from the adapter rather than a list here, so a new keyless connector
+    declares the fact once (``REQUIRES_KEY = False``) and both this switch and the
+    provider routes agree. An unknown name is treated as key-requiring: refusing is
+    the safe answer for a name this build cannot call.
+    """
+    try:
+        from .gateway.providers import PROVIDERS
+    except Exception:
+        return True
+    cls = PROVIDERS.get(str(provider_name or "").strip().lower())
+    if cls is None:
+        return True
+    return bool(getattr(cls, "REQUIRES_KEY", True))
 
 #: Where the model configuration came from. `llm_enabled` only says "something is set",
 #: which is the difference between a working key, a typo and an empty file -- and the
@@ -459,13 +587,49 @@ def get_settings() -> Settings:
     """Return the process-wide settings singleton.
 
     `llm.env` is applied first because pydantic reads the environment when the model is
-    constructed, and the file must not outrank a variable the shell already set.
+    constructed, and the file must not outrank a variable the shell already set. The
+    AI-provider *selection* saved through the settings screen is then overlaid for the
+    fields it controls, but only where the environment did not already supply a value:
+    a shell variable is the one the person meant, and a UI selection must not silently
+    outrank it.
     """
     for warning in apply_llm_file():
         _warn(warning)
     settings = Settings()
     settings.ensure_dirs()
+    _overlay_ai_selection(settings)
     return settings
+
+
+def _overlay_ai_selection(settings: "Settings") -> None:
+    """Apply the persisted provider/model selection for fields the environment did not set.
+
+    This imports ``gateway.selection`` lazily: it needs ``settings.home`` (already
+    available here) and must not form an import cycle, since ``gateway.selection``
+    itself imports ``config`` helpers lazily on first use, not at module load.
+    """
+    try:
+        from .gateway.selection import load_selection
+    except Exception:
+        return
+
+    selection = load_selection(settings.home)
+    if not selection:
+        return
+
+    # An explicitly exported env var wins over the selection file, matching
+    # apply_llm_file's "the real environment always wins" rule.
+    provider = selection.get("ai_provider")
+    if provider and "JARVIS_AI_PROVIDER" not in os.environ:
+        settings.ai_provider = provider
+
+    model = selection.get("llm_model")
+    if model and "JARVIS_LLM_MODEL" not in os.environ:
+        settings.llm_model = model
+
+    base_url = selection.get("llm_base_url")
+    if base_url and "JARVIS_LLM_BASE_URL" not in os.environ:
+        settings.llm_base_url = base_url
 
 
 def _warn(message: str) -> None:

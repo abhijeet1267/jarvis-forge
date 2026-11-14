@@ -49,6 +49,10 @@ class TTSBackend(ABC):
     """Synthesises and optionally plays speech."""
 
     name: str = "base"
+    #: False for a stand-in that records what would have been said and plays nothing.
+    #: A caller must not treat one of these as a voice: `NullTTS` answers `ok` for text
+    #: it never spoke, and `/voice/speak` used to report "Spoken via null" above silence.
+    real: bool = True
 
     def __init__(self, settings: Optional[Settings] = None) -> None:
         self.settings = settings or get_settings()
@@ -232,9 +236,15 @@ class Pyttsx3TTS(TTSBackend):
 
 
 class NullTTS(TTSBackend):
-    """Records what would have been spoken. Used in tests and headless runs."""
+    """Records what would have been spoken. Used in tests and headless runs.
+
+    It is a recording double, not a voice. ``ok`` stays True because tests use it as
+    the deterministic stand-in for a working speaker, but ``played`` is always False
+    and ``real`` is False: anything a person reads as "it was spoken" is a lie here.
+    """
 
     name = "null"
+    real = False
 
     def __init__(self, settings: Optional[Settings] = None) -> None:
         super().__init__(settings)
@@ -249,12 +259,16 @@ class NullTTS(TTSBackend):
 
     async def speak(self, text: str, destination: Optional[Path] = None) -> TTSResult:
         self.spoken.append(text)
-        return TTSResult(True, self.name, text, played=True, meta={"silent": True})
+        return TTSResult(True, self.name, text, played=False, meta={"silent": True})
 
 
-def get_tts(settings: Optional[Settings] = None) -> TTSBackend:
-    """Select a TTS backend based on configuration, then availability."""
-    settings = settings or get_settings()
+def _select_tts(settings: Settings, *, announce: bool = True) -> TTSBackend:
+    """The backend a speak request would use.
+
+    Shared by :func:`get_tts` and :func:`describe_tts` so the status endpoint
+    reports the same selection a request would get, without logging that selection
+    on every status poll.
+    """
     if not settings.tts_enabled:
         return NullTTS(settings)
 
@@ -269,21 +283,49 @@ def get_tts(settings: Optional[Settings] = None) -> TTSBackend:
         backend = registry[requested](settings)
         if backend.available():
             return backend
-        log.info("requested tts backend unavailable", extra_fields={"backend": requested})
+        if announce:
+            log.info("requested tts backend unavailable", extra_fields={"backend": requested})
 
     for name in ("macos_say", "pyttsx3"):
         backend = registry[name](settings)
         if backend.available():
-            log.info("tts backend selected", extra_fields={"backend": name})
+            if announce:
+                log.info("tts backend selected", extra_fields={"backend": name})
             return backend
 
-    log.info("no tts backend available; falling back to null")
+    if announce:
+        log.info("no tts backend available; falling back to null")
     return NullTTS(settings)
 
 
-def describe_tts() -> dict:
-    """Report TTS availability (used by /voice/status)."""
-    settings = get_settings()
+def get_tts(settings: Optional[Settings] = None) -> TTSBackend:
+    """Select a TTS backend based on configuration, then availability."""
+    return _select_tts(settings or get_settings())
+
+
+def tts_unavailable_reason(settings: Optional[Settings] = None) -> str:
+    """Why asking this machine to speak would produce no sound."""
+    settings = settings or get_settings()
+    if not settings.tts_enabled:
+        return ("speech is turned off in the backend (JARVIS_TTS_ENABLED=false), "
+                "so nothing was played")
+    if (settings.tts_backend or "auto").lower() == "null":
+        return ("the configured TTS backend is `null`, which records text and plays "
+                "nothing")
+    return ("no speech backend is installed on this machine (macOS `say` and "
+            "pyttsx3 are both unavailable), so nothing was played")
+
+
+def describe_tts(settings: Optional[Settings] = None) -> dict:
+    """Report TTS availability (used by /voice/status).
+
+    ``available`` means *installed*, not *will speak*: TTS can be disabled in
+    config, or the configured backend can be the recording stand-in, and neither
+    stops a backend from being installed. ``can_speak`` answers the question a
+    caller actually has, and ``reason`` is what to tell a person when it is False.
+    """
+    settings = settings or get_settings()
+    backend = _select_tts(settings, announce=False)
     return {
         "enabled": settings.tts_enabled,
         "configured_backend": settings.tts_backend,
@@ -293,4 +335,9 @@ def describe_tts() -> dict:
             "macos_say": MacOSSayTTS(settings).available(),
             "pyttsx3": Pyttsx3TTS(settings).available(),
         },
+        #: The backend a /voice/speak request would answer through.
+        "backend": backend.name,
+        #: Whether that backend plays audible sound here.
+        "can_speak": backend.real,
+        "reason": "" if backend.real else tts_unavailable_reason(settings),
     }

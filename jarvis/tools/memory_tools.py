@@ -52,6 +52,10 @@ async def remember_fact(
         "remember_fact",
         f"Got it. I will remember: {content}",
         device=ctx.device_id,
+        # The write is to the local store and is confirmed by the returned row
+        # with a real id -- a self-verifying write, so the effect is verified,
+        # not "sent somewhere we cannot see".
+        verified=True,
         memory_id=item.id,
         scope=scope_enum.value,
         project_id=project_id,
@@ -136,6 +140,7 @@ async def search_memory(ctx: ToolContext, query: str = "", since: str = "",
             f"On {day} I recorded {len(results)} thing(s). Most recent"
             f"{clause}: {top['content']}",
             device=ctx.device_id,
+            verified=True,
             query=query,
             window=window,
             results=results,

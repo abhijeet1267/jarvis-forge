@@ -1,0 +1,18 @@
+# One checkout, two laptops: normalise text line endings so a pull on the other
+# machine does not show every file as modified.
+* text=auto eol=lf
+
+# Windows batch files must keep CRLF or cmd.exe mis-reads them.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Never touch binary assets.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.pdf binary
+*.icns binary
+*.jar binary
+*.app binary

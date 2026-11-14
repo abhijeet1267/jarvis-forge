@@ -14,6 +14,7 @@ Two behaviours from the plan are implemented here rather than deferred:
 
 from __future__ import annotations
 
+import asyncio
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -52,6 +53,18 @@ class VoiceTurn:
     def reply_text(self) -> str:
         return self.response.reply if self.response else ""
 
+    @property
+    def speech_error(self) -> str:
+        """Why the reply was not spoken, or "" when it was (or was not asked to be).
+
+        Asking to speak and getting silence is a failure, and the caller has to be
+        able to see it: a `/voice/command` with ``speak: true`` that answers
+        ``spoken: false`` used to carry no explanation at all.
+        """
+        if self.speech is None or self.speech.ok:
+            return ""
+        return self.speech.error or "speech failed"
+
     def as_dict(self) -> dict:
         return {
             "transcript": self.transcript,
@@ -61,6 +74,7 @@ class VoiceTurn:
             "needs_confirmation": bool(self.response and self.response.needs_confirmation),
             "confirmation_id": self.response.confirmation_id if self.response else None,
             "spoken": bool(self.speech and self.speech.played),
+            "speech_error": self.speech_error,
             "rejected": self.rejected,
             "reject_reason": self.reject_reason,
             "duration_ms": self.duration_ms,
@@ -214,7 +228,17 @@ class VoiceSession:
 
     async def speak(self, text: str) -> TTSResult:
         """Speak text directly, bypassing the command pipeline."""
-        return await self.tts.speak(text)
+        try:
+            return await self.tts.speak(text)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            # Same rule as _maybe_speak: a backend fault is a reported failure,
+            # not an exception that escapes the route or the REPL.
+            return TTSResult(
+                False, getattr(self.tts, "name", "unknown"), text,
+                error=f"speech failed: {exc}",
+            )
 
     def reset(self) -> None:
         """Clear conversational state."""
@@ -229,7 +253,7 @@ class VoiceSession:
         return {
             "enabled": self.settings.voice_enabled,
             "wake": describe_wake(self.settings),
-            "tts": describe_tts(),
+            "tts": describe_tts(self.settings),
             "stt": describe_stt(),
             "audio": audio,
             "conversation": {
@@ -274,4 +298,19 @@ class VoiceSession:
     async def _maybe_speak(self, text: str, speak: bool, turn: VoiceTurn) -> None:
         if not speak or not text.strip():
             return
-        turn.speech = await self.tts.speak(text)
+        # A backend that cannot start at all (`say` removed mid-session, a busy
+        # audio device raising OSError) must not take the whole turn with it: the
+        # answer was already computed and is about to be printed, and a raised
+        # exception here crashed `run.py voice` on a command that had succeeded
+        # and turned `/voice/command` into a 500. Speech is an extra channel;
+        # its failure is reported through the turn, not by discarding the reply.
+        try:
+            turn.speech = await self.tts.speak(text)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            turn.speech = TTSResult(
+                False, getattr(self.tts, "name", "unknown"), text,
+                error=f"speech failed: {exc}",
+            )
+            log.info("speech failed", extra_fields={"error": str(exc)})

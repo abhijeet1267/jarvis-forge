@@ -9,9 +9,9 @@ Report date: 2026-09-27. Continues Phases 9-18.
 No brief. Two carried-forward findings are the same defect seen from two ends, and
 they were taken together:
 
-* **14-D** — a sentence whose second half could not be routed was answered with only
+- **14-D** — a sentence whose second half could not be routed was answered with only
   the first half, and nothing said the rest was dropped.
-* **17-A** — `no_action` covered four different facts (nothing understood, capability
+- **17-A** — `no_action` covered four different facts (nothing understood, capability
   missing, route refused, detail requested) because the planner knew which one it had
   produced and the response did not say.
 
@@ -33,8 +33,8 @@ frontend still cannot authorise anything: the new fields change labels only.
 ```
 
 The interesting part is that the reason **already existed**. `RulePlanner._anchored`
-produces a full explanation -- "*lands outside my file workspace, so I will not create
-it by name*" -- and `_composed` saw it, returned `None`, and the fallback threw the
+produces a full explanation -- "_lands outside my file workspace, so I will not create
+it by name_" -- and `_composed` saw it, returned `None`, and the fallback threw the
 note away with the clause. Phase 19 mostly recovers information the system already
 had and discarded.
 
@@ -44,10 +44,10 @@ had and discarded.
 
 ### 3.1 Two fields on `Plan` (`jarvis/core/models.py`)
 
-* `unhandled: List[str]` — each clause this plan does not cover, **carrying the
+- `unhandled: List[str]` — each clause this plan does not cover, **carrying the
   planner's own reason**: a refusing route contributes its note; a clause nothing
   matched is handed back as `I don't know how to "<clause>".`. No reason is invented.
-* `reply_kind: str` — `not_understood | capability_missing | declined | ""`. It
+- `reply_kind: str` — `not_understood | capability_missing | declined | ""`. It
   describes a non-execution only; `""` means a plan was built, and the renderer must
   not read anything into it.
 
@@ -64,7 +64,7 @@ all-or-nothing safety property is unchanged.
 
 `_note_unhandled()` appends, for each dropped clause:
 
-> And I did not do that part: *<the planner's reason>*
+> And I did not do that part: _<the planner's reason>_
 
 It is called at all five post-planning returns — direct reply, clarification,
 per-action BLOCK, CONFIRM, no-agent, and the final composition — so a dropped clause
@@ -87,8 +87,8 @@ still reached exclusively from `actions[].verification === "success"`.
 
 The first live run over HTTP showed the escape sentence rendering **VERIFIED**: once
 the dropped clause was named in the reply, the state chip still looked only at the
-actions that *did* run, so "here is the time, and I refused the file" was labelled as
-complete verification. Fixing 14-D without this would have made the page *more*
+actions that _did_ run, so "here is the time, and I refused the file" was labelled as
+complete verification. Fixing 14-D without this would have made the page _more_
 misleading than before it.
 
 `VERIFIED IN PART` now applies when every executed step verified **and**
@@ -104,15 +104,16 @@ fully-composed sequence  page=VERIFIED           ledger=success   <- not a blank
 ---
 
 ## 5. Live proof (real server, dashboard bootstrap path, ledger from `action_logs`,
+
 ### the shipped `pipelineState` executed by node over each real response)
 
-| Command | `reply_kind` | page state | ledger |
-| --- | --- | --- | --- |
-| time and then create `../p19_escape.txt` | — | VERIFIED IN PART | `success` + `detail.unhandled` |
-| time and then frobnicate the warp core | — | VERIFIED IN PART | success + clause recorded |
-| design this system | `not_understood` | NOT RECOGNISED | `no_action` |
-| transfer this file to my phone. | `declined` | NOTHING EXECUTED | `no_action` |
-| time, and then what is my battery | — | VERIFIED | `success` |
+| Command                                  | `reply_kind`     | page state       | ledger                         |
+| ---------------------------------------- | ---------------- | ---------------- | ------------------------------ |
+| time and then create `../p19_escape.txt` | —                | VERIFIED IN PART | `success` + `detail.unhandled` |
+| time and then frobnicate the warp core   | —                | VERIFIED IN PART | success + clause recorded      |
+| design this system                       | `not_understood` | NOT RECOGNISED   | `no_action`                    |
+| transfer this file to my phone.          | `declined`       | NOTHING EXECUTED | `no_action`                    |
+| time, and then what is my battery        | —                | VERIFIED         | `success`                      |
 
 Reply the user actually gets for the first row:
 
@@ -129,19 +130,19 @@ And the refusal stayed a refusal: no file appeared outside the workspace.
 
 `tests/test_phase19_refusal_transparency.py` — **17 tests**, written first.
 
-* Red → green, watched: 12 initially failed (refused clause named in reply, unroutable
+- Red → green, watched: 12 initially failed (refused clause named in reply, unroutable
   clause named, clause present in audit detail, all three `reply_kind` classifications,
   the dashboard mapping, the shipped-vocabulary check), then 2 more for
   `VERIFIED IN PART` discovered at §4.
-* Green throughout, as guards: nothing dropped when every clause routes, a
+- Green throughout, as guards: nothing dropped when every clause routes, a
   single-clause sentence has an empty `unhandled`, the refused file still is not
   created, a real failure outranks a dropped clause.
-* One test of mine was wrong and is recorded as such: I asserted a payload with no
+- One test of mine was wrong and is recorded as such: I asserted a payload with no
   `direct_reply`, no kind and no actions should read `NOTHING EXECUTED`. That has the
   page asserting a fact the backend never stated; the conservative answer is
   `UNKNOWN`, and the corrected test now also pins that a **forged** `reply_kind`
   cannot produce a state either.
-* One test was rewritten mid-phase for the same reason: `capability_missing` was
+- One test was rewritten mid-phase for the same reason: `capability_missing` was
   first "tested" by a placeholder expression that asserted nothing. Replaced with a
   real `_to_plan` call.
 
@@ -177,14 +178,14 @@ baseline before phase   : 1263 collected / 1259 passed   ->  +17 tests
 
 ## 9. Files modified
 
-| File | Change |
-| --- | --- |
-| `jarvis/core/models.py` | `Plan.unhandled`, `Plan.reply_kind` |
-| `jarvis/core/planner.py` | `_composed` returns `(plan, dropped)` and scans every clause; `_unrecognised`; `reply_kind` on the three `_to_plan` exits |
-| `jarvis/core/orchestrator.py` | `_note_unhandled` at all five post-planning returns; `unhandled` in audit detail at both no-execution records and via `_audit_action` |
-| `dashboard/index.html` | `plan` hoisted; NOT RECOGNISED / NOT AVAILABLE / NOTHING EXECUTED from `reply_kind`; `VERIFIED IN PART`; new tones |
-| `tests/test_phase19_refusal_transparency.py` | new, 17 tests |
-| `tests/test_phase15_acceptance.py` | permitted states widened (its own assertion unchanged) |
+| File                                         | Change                                                                                                                                |
+| -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `jarvis/core/models.py`                      | `Plan.unhandled`, `Plan.reply_kind`                                                                                                   |
+| `jarvis/core/planner.py`                     | `_composed` returns `(plan, dropped)` and scans every clause; `_unrecognised`; `reply_kind` on the three `_to_plan` exits             |
+| `jarvis/core/orchestrator.py`                | `_note_unhandled` at all five post-planning returns; `unhandled` in audit detail at both no-execution records and via `_audit_action` |
+| `dashboard/index.html`                       | `plan` hoisted; NOT RECOGNISED / NOT AVAILABLE / NOTHING EXECUTED from `reply_kind`; `VERIFIED IN PART`; new tones                    |
+| `tests/test_phase19_refusal_transparency.py` | new, 17 tests                                                                                                                         |
+| `tests/test_phase15_acceptance.py`           | permitted states widened (its own assertion unchanged)                                                                                |
 
 ---
 
@@ -196,7 +197,7 @@ tool, and the only way to separate them would be to read the note's punctuation 
 guessing this program has repeatedly refused. `NEEDS DETAIL` therefore still fires only
 for `plan.needs_clarification`, which the rules planner does not currently reach
 (Phase 16 finding 16-A). Distinguishing them is a planner-side decision about what each
-route *means*, not a renderer change.
+route _means_, not a renderer change.
 
 ## 11. Carried forward
 

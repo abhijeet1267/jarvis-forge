@@ -42,6 +42,21 @@ KNOWN_RESULTS = {
 }
 
 
+def _function_extent(text: str, start: int) -> str:
+    """Extract from `start` to the matching closing brace, at whatever indent the
+    page actually uses. The old `.index("\n}")` assumed the closing brace sits at
+    column 0, which the current formatting of the page no longer guarantees."""
+    brace = text.index("{", start)
+    depth = 0
+    for j in range(brace, len(text)):
+        if text[j] == "{":
+            depth += 1
+        elif text[j] == "}":
+            depth -= 1
+            if depth == 0:
+                return text[start:j + 1]
+    raise ValueError("no matching closing brace")
+
 @pytest.fixture()
 def ledger(tmp_path, monkeypatch):
     """A real SQLite audit log in a database of its own, with more rows than the old window.
@@ -205,7 +220,7 @@ def chain_render(tmp_path_factory):
     body = re.search(r"<script>(.*?)</script>",
                      (REPO / "dashboard" / "index.html").read_text(), re.S).group(1)
     start = body.index("function auditChainLine")
-    source = body[start:body.index("\n}", start) + 2]
+    source = _function_extent(body, start)
     assert "chain_intact" in source, "the extracted function is not the chain line"
     root = tmp_path_factory.mktemp("p66")
 

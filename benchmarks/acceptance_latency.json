@@ -1,244 +1,196 @@
 {
- "surface": "POST /command via the ASGI app (no network, no hardware, no account)",
- "commands": [
-  {
-   "command": "Jarvis, open VS Code.",
-   "skipped": "would launch a GUI application"
-  },
-  {
-   "command": "Jarvis, find my latest project report.",
-   "http_status": 200,
-   "ms": 2722,
-   "intent": "search_files",
-   "tools": [
-    "search_files"
-   ],
-   "verification": [
-    "success"
-   ],
-   "audit_result": "success",
-   "dashboard_state": "VERIFIED",
-   "reply": "I could not find any file matching 'project report.' under /Users/abhijeetmiskin."
-  },
-  {
-   "command": "Jarvis, show me my laptop battery.",
-   "http_status": 200,
-   "ms": 163,
-   "intent": "laptop_battery",
-   "tools": [
-    "get_battery_status"
-   ],
-   "verification": [
-    "success"
-   ],
-   "audit_result": "success",
-   "dashboard_state": "VERIFIED",
-   "reply": "Your laptop battery is at 100% (fully charged)."
-  },
-  {
-   "command": "Jarvis, transfer this file to my phone.",
-   "http_status": 200,
-   "ms": 12,
-   "intent": "transfer",
-   "tools": [],
-   "verification": [],
-   "audit_result": "no_action",
-   "dashboard_state": "NOTHING EXECUTED",
-   "reply": "I will not guess which file to send. Tell me the exact file, for example: \"send /tmp/report.pdf to my phone\"."
-  },
-  {
-   "command": "Jarvis, what is my phone battery?",
-   "http_status": 200,
-   "ms": 9,
-   "intent": "phone_battery",
-   "tools": [],
-   "verification": [],
-   "audit_result": "no_action",
-   "dashboard_state": "NOTHING EXECUTED",
-   "reply": "I cannot read that device's battery: no phone is paired with this laptop yet, so there is nothing to read from it."
-  },
-  {
-   "command": "Jarvis, plan my day.",
-   "http_status": 200,
-   "ms": 16,
-   "intent": "daily_schedule",
-   "tools": [
-    "daily_schedule"
-   ],
-   "verification": [
-    "success"
-   ],
-   "audit_result": "success",
-   "dashboard_state": "VERIFIED",
-   "reply": "Your today is clear."
-  },
-  {
-   "command": "Jarvis, schedule two hours for project work tomorrow.",
-   "http_status": 200,
-   "ms": 19,
-   "intent": "schedule_task",
-   "tools": [],
-   "verification": [],
-   "audit_result": "no_action",
-   "dashboard_state": "NEEDS DETAIL",
-   "reply": "When should I do that? For example: 'every morning' or 'at 8 PM'."
-  },
-  {
-   "command": "Jarvis, draft an email to my teammate.",
-   "http_status": 200,
-   "ms": 41,
-   "intent": "draft_email",
-   "tools": [
-    "draft_email"
-   ],
-   "verification": [
-    "failed"
-   ],
-   "audit_result": "failure",
-   "dashboard_state": "FAILED",
-   "reply": "That did not work: I do not have a contact called 'teammate'. Give me the full email address, or add them as a contact first."
-  },
-  {
-   "command": "Jarvis, send it.",
-   "http_status": 200,
-   "ms": 18,
-   "intent": "send_email",
-   "tools": [],
-   "verification": [],
-   "audit_result": "no_action",
-   "dashboard_state": "NEEDS DETAIL",
-   "reply": "There is no draft waiting to send. Draft one first, for example: \"draft an email to someone@example.com\"."
-  },
-  {
-   "command": "Jarvis, remember that this is my AMR project.",
-   "http_status": 200,
-   "ms": 13,
-   "intent": "remember",
-   "tools": [
-    "remember_fact"
-   ],
-   "verification": [
-    "success"
-   ],
-   "audit_result": "success",
-   "dashboard_state": "VERIFIED",
-   "reply": "Got it. I will remember: this is my AMR project."
-  },
-  {
-   "command": "Jarvis, what did I work on yesterday?",
-   "http_status": 200,
-   "ms": 49,
-   "intent": "recall",
-   "tools": [
-    "search_memory"
-   ],
-   "verification": [
-    "success"
-   ],
-   "audit_result": "success",
-   "dashboard_state": "VERIFIED",
-   "reply": "Nothing was recorded in memory on 2026-10-05."
-  },
-  {
-   "command": "Jarvis, design this system.",
-   "http_status": 200,
-   "ms": 38,
-   "intent": "unknown",
-   "tools": [],
-   "verification": [],
-   "audit_result": "no_action",
-   "dashboard_state": "NOT RECOGNISED",
-   "reply": "I understood the words but not the goal yet. You don't have to remember a command list -- things I can do right now: \"what is a train\", \"open github.com\", \"chec"
-  },
-  {
-   "command": "Jarvis, research this idea.",
-   "http_status": 200,
-   "ms": 11179,
-   "intent": "search_papers",
-   "tools": [
-    "search_papers"
-   ],
-   "verification": [
-    "success"
-   ],
-   "audit_result": "success",
-   "dashboard_state": "VERIFIED",
-   "reply": "I found no results for 'this idea.' on local. (arxiv: arXiv could not be reached: The read operation timed out)"
-  },
-  {
-   "command": "Jarvis, check my car fuel.",
-   "http_status": 200,
-   "ms": 39,
-   "intent": "car_telemetry",
-   "tools": [
-    "get_car_telemetry"
-   ],
-   "verification": [
-    "failed"
-   ],
-   "audit_result": "failure",
-   "dashboard_state": "UNAVAILABLE",
-   "reply": "I could not read those car values (no car adapter or vehicle API is configured)."
-  },
-  {
-   "command": "Jarvis, check my car charge.",
-   "http_status": 200,
-   "ms": 13,
-   "intent": "car_telemetry",
-   "tools": [
-    "get_car_telemetry"
-   ],
-   "verification": [
-    "failed"
-   ],
-   "audit_result": "failure",
-   "dashboard_state": "UNAVAILABLE",
-   "reply": "I could not read those car values (no car adapter or vehicle API is configured)."
-  },
-  {
-   "command": "Jarvis, give me today's location summary.",
-   "http_status": 200,
-   "ms": 10,
-   "intent": "location_summary",
-   "tools": [
-    "get_location_summary"
-   ],
-   "verification": [
-    "failed"
-   ],
-   "audit_result": "failure",
-   "dashboard_state": "UNAVAILABLE",
-   "reply": "Location history for today is not available: location tracking is disabled."
-  },
-  {
-   "command": "Jarvis, turn on study mode.",
-   "http_status": 200,
-   "ms": 26,
-   "intent": "home_routine",
-   "tools": [
-    "run_home_routine"
-   ],
-   "verification": [
-    "failed"
-   ],
-   "audit_result": "failure",
-   "dashboard_state": "UNAVAILABLE",
-   "reply": "Your home gateway is offline, so I could not run 'study'. It would affect: Study desk lamp, Study AC, Living room media power, Study standing desk. Nothing was "
-  },
-  {
-   "command": "Jarvis, stop all physical actions.",
-   "http_status": 200,
-   "ms": 9,
-   "intent": "emergency_stop",
-   "tools": [
-    "emergency_stop"
-   ],
-   "verification": [
-    "success"
-   ],
-   "audit_result": "success",
-   "dashboard_state": "VERIFIED",
-   "reply": "No JARVIS job was in flight, so there was nothing here to cancel. Physical actuators were NOT stopped by this command -- no robot bridge or safety-controller in"
-  }
- ]
+  "surface": "POST /command via the ASGI app (no network, no hardware, no account)",
+  "commands": [
+    {
+      "command": "Jarvis, open VS Code.",
+      "skipped": "would launch a GUI application"
+    },
+    {
+      "command": "Jarvis, find my latest project report.",
+      "http_status": 200,
+      "ms": 2722,
+      "intent": "search_files",
+      "tools": ["search_files"],
+      "verification": ["success"],
+      "audit_result": "success",
+      "dashboard_state": "VERIFIED",
+      "reply": "I could not find any file matching 'project report.' under /Users/abhijeetmiskin."
+    },
+    {
+      "command": "Jarvis, show me my laptop battery.",
+      "http_status": 200,
+      "ms": 163,
+      "intent": "laptop_battery",
+      "tools": ["get_battery_status"],
+      "verification": ["success"],
+      "audit_result": "success",
+      "dashboard_state": "VERIFIED",
+      "reply": "Your laptop battery is at 100% (fully charged)."
+    },
+    {
+      "command": "Jarvis, transfer this file to my phone.",
+      "http_status": 200,
+      "ms": 12,
+      "intent": "transfer",
+      "tools": [],
+      "verification": [],
+      "audit_result": "no_action",
+      "dashboard_state": "NOTHING EXECUTED",
+      "reply": "I will not guess which file to send. Tell me the exact file, for example: \"send /tmp/report.pdf to my phone\"."
+    },
+    {
+      "command": "Jarvis, what is my phone battery?",
+      "http_status": 200,
+      "ms": 9,
+      "intent": "phone_battery",
+      "tools": [],
+      "verification": [],
+      "audit_result": "no_action",
+      "dashboard_state": "NOTHING EXECUTED",
+      "reply": "I cannot read that device's battery: no phone is paired with this laptop yet, so there is nothing to read from it."
+    },
+    {
+      "command": "Jarvis, plan my day.",
+      "http_status": 200,
+      "ms": 16,
+      "intent": "daily_schedule",
+      "tools": ["daily_schedule"],
+      "verification": ["success"],
+      "audit_result": "success",
+      "dashboard_state": "VERIFIED",
+      "reply": "Your today is clear."
+    },
+    {
+      "command": "Jarvis, schedule two hours for project work tomorrow.",
+      "http_status": 200,
+      "ms": 19,
+      "intent": "schedule_task",
+      "tools": [],
+      "verification": [],
+      "audit_result": "no_action",
+      "dashboard_state": "NEEDS DETAIL",
+      "reply": "When should I do that? For example: 'every morning' or 'at 8 PM'."
+    },
+    {
+      "command": "Jarvis, draft an email to my teammate.",
+      "http_status": 200,
+      "ms": 41,
+      "intent": "draft_email",
+      "tools": ["draft_email"],
+      "verification": ["failed"],
+      "audit_result": "failure",
+      "dashboard_state": "FAILED",
+      "reply": "That did not work: I do not have a contact called 'teammate'. Give me the full email address, or add them as a contact first."
+    },
+    {
+      "command": "Jarvis, send it.",
+      "http_status": 200,
+      "ms": 18,
+      "intent": "send_email",
+      "tools": [],
+      "verification": [],
+      "audit_result": "no_action",
+      "dashboard_state": "NEEDS DETAIL",
+      "reply": "There is no draft waiting to send. Draft one first, for example: \"draft an email to someone@example.com\"."
+    },
+    {
+      "command": "Jarvis, remember that this is my AMR project.",
+      "http_status": 200,
+      "ms": 13,
+      "intent": "remember",
+      "tools": ["remember_fact"],
+      "verification": ["success"],
+      "audit_result": "success",
+      "dashboard_state": "VERIFIED",
+      "reply": "Got it. I will remember: this is my AMR project."
+    },
+    {
+      "command": "Jarvis, what did I work on yesterday?",
+      "http_status": 200,
+      "ms": 49,
+      "intent": "recall",
+      "tools": ["search_memory"],
+      "verification": ["success"],
+      "audit_result": "success",
+      "dashboard_state": "VERIFIED",
+      "reply": "Nothing was recorded in memory on 2026-10-05."
+    },
+    {
+      "command": "Jarvis, design this system.",
+      "http_status": 200,
+      "ms": 38,
+      "intent": "unknown",
+      "tools": [],
+      "verification": [],
+      "audit_result": "no_action",
+      "dashboard_state": "NOT RECOGNISED",
+      "reply": "I understood the words but not the goal yet. You don't have to remember a command list -- things I can do right now: \"what is a train\", \"open github.com\", \"chec"
+    },
+    {
+      "command": "Jarvis, research this idea.",
+      "http_status": 200,
+      "ms": 11179,
+      "intent": "search_papers",
+      "tools": ["search_papers"],
+      "verification": ["success"],
+      "audit_result": "success",
+      "dashboard_state": "VERIFIED",
+      "reply": "I found no results for 'this idea.' on local. (arxiv: arXiv could not be reached: The read operation timed out)"
+    },
+    {
+      "command": "Jarvis, check my car fuel.",
+      "http_status": 200,
+      "ms": 39,
+      "intent": "car_telemetry",
+      "tools": ["get_car_telemetry"],
+      "verification": ["failed"],
+      "audit_result": "failure",
+      "dashboard_state": "UNAVAILABLE",
+      "reply": "I could not read those car values (no car adapter or vehicle API is configured)."
+    },
+    {
+      "command": "Jarvis, check my car charge.",
+      "http_status": 200,
+      "ms": 13,
+      "intent": "car_telemetry",
+      "tools": ["get_car_telemetry"],
+      "verification": ["failed"],
+      "audit_result": "failure",
+      "dashboard_state": "UNAVAILABLE",
+      "reply": "I could not read those car values (no car adapter or vehicle API is configured)."
+    },
+    {
+      "command": "Jarvis, give me today's location summary.",
+      "http_status": 200,
+      "ms": 10,
+      "intent": "location_summary",
+      "tools": ["get_location_summary"],
+      "verification": ["failed"],
+      "audit_result": "failure",
+      "dashboard_state": "UNAVAILABLE",
+      "reply": "Location history for today is not available: location tracking is disabled."
+    },
+    {
+      "command": "Jarvis, turn on study mode.",
+      "http_status": 200,
+      "ms": 26,
+      "intent": "home_routine",
+      "tools": ["run_home_routine"],
+      "verification": ["failed"],
+      "audit_result": "failure",
+      "dashboard_state": "UNAVAILABLE",
+      "reply": "Your home gateway is offline, so I could not run 'study'. It would affect: Study desk lamp, Study AC, Living room media power, Study standing desk. Nothing was "
+    },
+    {
+      "command": "Jarvis, stop all physical actions.",
+      "http_status": 200,
+      "ms": 9,
+      "intent": "emergency_stop",
+      "tools": ["emergency_stop"],
+      "verification": ["success"],
+      "audit_result": "success",
+      "dashboard_state": "VERIFIED",
+      "reply": "No JARVIS job was in flight, so there was nothing here to cancel. Physical actuators were NOT stopped by this command -- no robot bridge or safety-controller in"
+    }
+  ]
 }

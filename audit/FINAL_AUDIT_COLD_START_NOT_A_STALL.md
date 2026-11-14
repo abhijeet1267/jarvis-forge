@@ -1,13 +1,13 @@
 # Final-audit addendum — the cold start was being called a stall
 
-| | |
-|---|---|
-| Follows | `VANTAGE_FINAL_ACCEPTANCE_REPORT.md` §7, which recorded this as "cause not established" |
-| Date | 2026-10-05 |
-| Starting commit | `455a64c` (final audit close-out) |
-| Ending commit | `5e90b81` (the fix) → `0896589` (the redeploy record; its own hash is written by the next commit to touch this file) |
-| Tests before | 2383 passed · 0 failed |
-| Tests after | **2387 passed · 0 failed** (77.2 s), verified on **6 consecutive full-suite runs, 0 failures** |
+|                        |                                                                                                                                              |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| Follows                | `VANTAGE_FINAL_ACCEPTANCE_REPORT.md` §7, which recorded this as "cause not established"                                                      |
+| Date                   | 2026-10-05                                                                                                                                   |
+| Starting commit        | `455a64c` (final audit close-out)                                                                                                            |
+| Ending commit          | `5e90b81` (the fix) → `0896589` (the redeploy record; its own hash is written by the next commit to touch this file)                         |
+| Tests before           | 2383 passed · 0 failed                                                                                                                       |
+| Tests after            | **2387 passed · 0 failed** (77.2 s), verified on **6 consecutive full-suite runs, 0 failures**                                               |
 | Before, measured today | five `test_vision.py` OCR tests failed on **4 of ~12** full-suite runs, always as a group of exactly five, and passed on an immediate re-run |
 
 ---
@@ -21,11 +21,11 @@ justify. So this addendum exists because the finding was chased, and the chase c
 Three hypotheses were tested and **two were falsified by measurement**, which is the part worth
 writing down:
 
-| hypothesis | experiment | result |
-|---|---|---|
-| CPU contention makes the recogniser slow enough to fail | 16 busy-loop processes, then `pytest tests/test_vision.py` | **falsified** — 48 passed in 6.3 s |
-| a concurrently running Vantage host contends for Vision | second host on port 8921 with a live scheduler, vision tests and then a full suite alongside | **falsified** — 48 passed / 2383 passed |
-| one real call exceeds the fixed budget, and the cooldown turns it into five | traced every recogniser call inside full-suite runs until it reproduced | **confirmed**, twice |
+| hypothesis                                                                  | experiment                                                                                   | result                                  |
+| --------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- | --------------------------------------- |
+| CPU contention makes the recogniser slow enough to fail                     | 16 busy-loop processes, then `pytest tests/test_vision.py`                                   | **falsified** — 48 passed in 6.3 s      |
+| a concurrently running Vantage host contends for Vision                     | second host on port 8921 with a live scheduler, vision tests and then a full suite alongside | **falsified** — 48 passed / 2383 passed |
+| one real call exceeds the fixed budget, and the cooldown turns it into five | traced every recogniser call inside full-suite runs until it reproduced                      | **confirmed**, twice                    |
 
 The traced reproduction:
 
@@ -123,25 +123,25 @@ instinct in the moment was to trust them:
    **ten** tests failed. For a minute those ten looked like a bigger flake than the five-test
    cluster. They were the instrument. The run was discarded, not quoted.
 2. The first cold-call probe ran against `/tmp/x.png`, which does not exist, and `read_text` refuses
-   a missing file *before* consulting the helper — so the budget was never reached and the numbers
+   a missing file _before_ consulting the helper — so the budget was never reached and the numbers
    were meaningless. Reading the returned error ("I could not find /tmp/x.png") rather than
    assuming the stub was at fault is what exposed it, and the test now creates a real file on disk
    with that reason in a docstring.
 
-A third, quieter one: `-k "stalled or cooldown or timeout"` selects the tests that *stub* a stall.
+A third, quieter one: `-k "stalled or cooldown or timeout"` selects the tests that _stub_ a stall.
 Those passed on cold-home runs and looked like the guard had fired harmlessly, while the cold cost
 had been paid by a different file's test entirely. Selecting by keyword is not selecting by cause.
 
 ## 6. Numbers, re-measured
 
-| | before | after |
-|---|---|---|
-| Tests | 2383 · 0 failed | **2387 · 0 failed** (77.2 s) |
-| Test modules | 89 | **90** |
-| Vision-OCR failures today | 5 in 4 of ~12 runs | **0 in 6 consecutive runs** |
-| Steady / cold call | 0.28 s / 7.4 s → 20 s+ | unchanged; the cold call now gets a matching budget |
-| Tools / gated / rules / routes | 148 / 32 / 52 / 122 objects | unchanged |
-| `audit/` reports | 63 | **64** (this file) |
+|                                | before                      | after                                               |
+| ------------------------------ | --------------------------- | --------------------------------------------------- |
+| Tests                          | 2383 · 0 failed             | **2387 · 0 failed** (77.2 s)                        |
+| Test modules                   | 89                          | **90**                                              |
+| Vision-OCR failures today      | 5 in 4 of ~12 runs          | **0 in 6 consecutive runs**                         |
+| Steady / cold call             | 0.28 s / 7.4 s → 20 s+      | unchanged; the cold call now gets a matching budget |
+| Tools / gated / rules / routes | 148 / 32 / 52 / 122 objects | unchanged                                           |
+| `audit/` reports               | 63                          | **64** (this file)                                  |
 
 Browser verification: **NOT APPLICABLE** — no page changed. Nothing here is visible in a browser;
 `/health` gained two OCR state fields that no page reads yet.
@@ -164,21 +164,21 @@ Nothing was pushed.
 
 ## 8. Delivery
 
-Work commit `5e90b81` — *Measure a cold Vision start as what it is, not as a stall*.
-Close-out commit `0896589` — *Record the cold-start addendum's redeploy, and the eight clean runs*
+Work commit `5e90b81` — _Measure a cold Vision start as what it is, not as a stall_.
+Close-out commit `0896589` — _Record the cold-start addendum's redeploy, and the eight clean runs_
 (its own hash was added by the commit after it, because a file cannot carry the hash of the commit
 that contains it).
 
 `jarvis/vision/ocr.py` is shipped code, so the bundle was rebuilt and re-deployed:
 
-| check | result |
-|---|---|
-| `codesign --verify --deep --strict` on the deployed bundle | valid, satisfies its Designated Requirement |
-| the fix present in the staged source, twice over (`_COLD_START_SECONDS`) | in `~/Downloads/Vantage/Vantage.app`, and again after extracting `Vantage.app.zip` into a temp dir |
-| `GET /health` | `status ok`, **148 tools** |
-| `GET /tools` | **148** entries |
-| archives | `Vantage.app.zip` 1,173,369 B and `vantage-source.zip` 2,561,327 B, both rebuilt from this tree; the source archive carries this addendum |
-| suite after the fix | **2387 passed · 0 failed** — eight consecutive clean full-suite runs (76.8–98.9 s) |
+| check                                                                    | result                                                                                                                                    |
+| ------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `codesign --verify --deep --strict` on the deployed bundle               | valid, satisfies its Designated Requirement                                                                                               |
+| the fix present in the staged source, twice over (`_COLD_START_SECONDS`) | in `~/Downloads/Vantage/Vantage.app`, and again after extracting `Vantage.app.zip` into a temp dir                                        |
+| `GET /health`                                                            | `status ok`, **148 tools**                                                                                                                |
+| `GET /tools`                                                             | **148** entries                                                                                                                           |
+| archives                                                                 | `Vantage.app.zip` 1,173,369 B and `vantage-source.zip` 2,561,327 B, both rebuilt from this tree; the source archive carries this addendum |
+| suite after the fix                                                      | **2387 passed · 0 failed** — eight consecutive clean full-suite runs (76.8–98.9 s)                                                        |
 
 Nothing was pushed, and no user-visible behaviour changed beyond OCR being given a truthful budget on
 its first call.

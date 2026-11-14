@@ -29,16 +29,16 @@ the client pages. 31 distinct files carry the rename, plus this report.
 **Verified by counting, not by eyeballing.** Before and after, the wiring names were counted
 across the tree and the two snapshots diffed:
 
-| Identifier | Before | After |
-|---|---|---|
-| `JARVIS_*` environment variables | 493 | 493 |
-| `X-JARVIS-Token` | 59 | 59 |
-| `jarvis-bootstrap` / `__JARVIS_BOOTSTRAP__` | 10 / 6 | 10 / 6 |
-| `jarvis.device` (the phone's stored pairing key) | 4 | 4 |
-| `com.jarvisforge.app` (bundle identity) | 4 | 4 |
-| `.jarvis-forge` (data directory) | 64 | 64 |
-| `from jarvis` / `import jarvis` | 244 | 244 |
-| `jarvis/` paths | 886 | 886 |
+| Identifier                                       | Before | After  |
+| ------------------------------------------------ | ------ | ------ |
+| `JARVIS_*` environment variables                 | 493    | 493    |
+| `X-JARVIS-Token`                                 | 59     | 59     |
+| `jarvis-bootstrap` / `__JARVIS_BOOTSTRAP__`      | 10 / 6 | 10 / 6 |
+| `jarvis.device` (the phone's stored pairing key) | 4      | 4      |
+| `com.jarvisforge.app` (bundle identity)          | 4      | 4      |
+| `.jarvis-forge` (data directory)                 | 64     | 64     |
+| `from jarvis` / `import jarvis`                  | 244    | 244    |
+| `jarvis/` paths                                  | 886    | 886    |
 
 Identical, so nothing that carries state changed spelling.
 
@@ -63,27 +63,27 @@ editing the record rather than naming the product.
 compares `app/launcher.py` against the copy inside the built bundle. After the rename the suite
 went from `1710 passed, 0 skipped` to `1709 passed, 1 skipped` — the guard's hardcoded
 `dist/Vantage.app` path had been rewritten by the same pass that renamed the bundle, but the
-bundle on disk was still the old one, so the file "did not exist" and the check *skipped itself*.
+bundle on disk was still the old one, so the file "did not exist" and the check _skipped itself_.
 A guard that stops running reports nothing wrong, which is worse than a guard that fails. Fixed at
 the root: the test now imports `APP_NAME` from `build_app`, so the path cannot drift from the
 thing it is checking. Verified both directions — in sync it passes, and appending one line to the
 bundled copy makes it fail again.
 
 **A test that asserted the wrong file.** The new boundary test failed on its first run because it
-looked for the literal `X-JARVIS-Token` in `jarvis/api/app.py`, which only *imports* the constant;
+looked for the literal `X-JARVIS-Token` in `jarvis/api/app.py`, which only _imports_ the constant;
 the string is defined once, in `jarvis/security/auth.py:33`. The premise was wrong, not the code —
 the assertion was moved to the defining file rather than dropped.
 
 ## 4. What kept its old name, and why that is not laziness
 
-| Kept | Why renaming it would cost the user something |
-|---|---|
-| `com.jarvisforge.app` (CFBundleIdentifier) | This is the identity macOS recorded the microphone and Speech Recognition grants against. A new identifier is a new app to TCC: permissions silently reset, and the microphone note in the panel would say "allowed" about an app that is no longer the one it was asked about. |
-| `~/.jarvis-forge` | The memory database, the hash-chained audit log, the device registry and the API token live there. A new path leaves an installed user with an empty assistant and an orphaned ledger. |
-| `jarvis.device` in localStorage | The phone's stable identity ("pairing a phone twice should not create two devices"). Renaming it un-pairs every handset that had paired. |
-| `X-JARVIS-Token`, `__JARVIS_BOOTSTRAP__`, `jarvis-bootstrap` | Wire protocol between the shipped pages and the server; renaming one side in a later edit would produce a dashboard that silently never authenticates. |
-| `import jarvis`, `JarvisCore`, `JARVIS_*` env vars | The declined option — a code-wide rename of 207 files and 89 configuration variables, which changes no user-visible thing and breaks every existing `.env`, shell and script. |
-| the wake word "Jarvis" | `run.py`'s acceptance phrases and `JARVIS_WAKE_WORDS` default. It is what the user says out loud; changing it is a user decision, not a rebrand side effect. |
+| Kept                                                         | Why renaming it would cost the user something                                                                                                                                                                                                                                   |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `com.jarvisforge.app` (CFBundleIdentifier)                   | This is the identity macOS recorded the microphone and Speech Recognition grants against. A new identifier is a new app to TCC: permissions silently reset, and the microphone note in the panel would say "allowed" about an app that is no longer the one it was asked about. |
+| `~/.jarvis-forge`                                            | The memory database, the hash-chained audit log, the device registry and the API token live there. A new path leaves an installed user with an empty assistant and an orphaned ledger.                                                                                          |
+| `jarvis.device` in localStorage                              | The phone's stable identity ("pairing a phone twice should not create two devices"). Renaming it un-pairs every handset that had paired.                                                                                                                                        |
+| `X-JARVIS-Token`, `__JARVIS_BOOTSTRAP__`, `jarvis-bootstrap` | Wire protocol between the shipped pages and the server; renaming one side in a later edit would produce a dashboard that silently never authenticates.                                                                                                                          |
+| `import jarvis`, `JarvisCore`, `JARVIS_*` env vars           | The declined option — a code-wide rename of 207 files and 89 configuration variables, which changes no user-visible thing and breaks every existing `.env`, shell and script.                                                                                                   |
+| the wake word "Jarvis"                                       | `run.py`'s acceptance phrases and `JARVIS_WAKE_WORDS` default. It is what the user says out loud; changing it is a user decision, not a rebrand side effect.                                                                                                                    |
 
 Four of these are pinned by `test_the_names_that_carry_state_kept_their_spelling` — five
 parametrised cases asserting the exact spellings survive in the files that define them. Proven
@@ -138,20 +138,20 @@ last hop is the user's.
 
 ## 7. Carried forward
 
-* **37-A** the project is now half-renamed by design: product "Vantage", code `jarvis`. A reader
+- **37-A** the project is now half-renamed by design: product "Vantage", code `jarvis`. A reader
   arriving from the README will hit `import jarvis`, `JARVIS_HOME` and `JarvisCore` and has to
   reconcile them; the note at the top of the README is the mitigation, and it is a mitigation, not
   a fix.
-* **37-B** the voice wake word is still "Jarvis". Renaming it changes what the user says out loud
+- **37-B** the voice wake word is still "Jarvis". Renaming it changes what the user says out loud
   and is theirs to decide; `JARVIS_WAKE_WORDS` already accepts alternatives without a code change.
-* **37-C** searching this repository for "JARVIS" still returns hits — the historical reports and
+- **37-C** searching this repository for "JARVIS" still returns hits — the historical reports and
   the wiring names. Anyone auditing "is the rename complete?" will get a misleading answer from a
   plain grep, which is why §1 counts identifiers instead.
-* **37-D** `dist/Jarvis Forge.app` was deleted as a stale build artifact of this session's own
+- **37-D** `dist/Jarvis Forge.app` was deleted as a stale build artifact of this session's own
   earlier build. Nothing was installed under `/Applications` (checked: neither name is present),
   so no user-facing install was touched. A previously installed copy elsewhere would need
   re-installing under the new name; `install_app.sh` does that.
-* Unchanged from before: 36-A…E, 35-A…C, 34-A…C, and the `-rs` CI change that would finally name
+- Unchanged from before: 36-A…E, 35-A…C, 34-A…C, and the `-rs` CI change that would finally name
   the runner's six skips.
 
 ## 8. Git
@@ -161,7 +161,7 @@ guard now derives `APP_NAME`, and `tests/test_phase36_two_applications.py`, whic
 boundary tests),
 `README.md`, `benchmarks/*.json`, `assets/*.svg`, this report.
 
-* **37-E** the repository is still `abhijeet1267/jarvis-forge` on GitHub and `jarvis-forge/` on
+- **37-E** the repository is still `abhijeet1267/jarvis-forge` on GitHub and `jarvis-forge/` on
   disk, and the README's CI badge URL points at that path. Renaming a remote is shared state — it
   rewrites every clone's origin and any link that already exists — so it was offered and left for
   the user to call rather than done as a side effect of a branding pass.
@@ -171,4 +171,3 @@ boundary tests),
 six skips remain unnamed for the same reason as the last two phases: `python -m pytest -q` prints
 no `SKIPPED` reason, and adding `-rs` to shared CI is still an open item rather than something to
 change from a feature commit.
-

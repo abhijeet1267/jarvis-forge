@@ -13,14 +13,14 @@ and, from the app itself, the sentence that triggered the look:
 Six asks were named. Each was run through the planner **before any code was written**, so
 the phase would fix what is actually broken rather than what the feature list said:
 
-| Sentence | Measured before | What that meant |
-|---|---|---|
-| `open my project` | **declined** with the note above | `design`, `laptop` and `coding` agents are all registered, and Phase 39 already opens a folder in the editor and proves it. The excuse was false. |
-| `check storage` / `how much storage is left` | `not_understood` | no tool existed for disk space at all |
-| `open github.com` | routed to **`read_file`** with `path=<home>/github.com` | a hostname was turned into a filename in the user's home directory — a wrong action, not a missing one |
-| `open the github site in chrome` | `open_app(chrome)` | the app launched, the site was thrown away |
-| `find my resume and open it` | `not_understood` | `search_files` and an open path both existed; nothing joined them |
-| `hey vantage …` | `not_understood` | the wake list is `["jarvis", "hey jarvis", "ok jarvis"]` — the product was renamed in Phase 37 and the words it answers to were not (37-B, now user-visible) |
+| Sentence                                     | Measured before                                         | What that meant                                                                                                                                              |
+| -------------------------------------------- | ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `open my project`                            | **declined** with the note above                        | `design`, `laptop` and `coding` agents are all registered, and Phase 39 already opens a folder in the editor and proves it. The excuse was false.            |
+| `check storage` / `how much storage is left` | `not_understood`                                        | no tool existed for disk space at all                                                                                                                        |
+| `open github.com`                            | routed to **`read_file`** with `path=<home>/github.com` | a hostname was turned into a filename in the user's home directory — a wrong action, not a missing one                                                       |
+| `open the github site in chrome`             | `open_app(chrome)`                                      | the app launched, the site was thrown away                                                                                                                   |
+| `find my resume and open it`                 | `not_understood`                                        | `search_files` and an open path both existed; nothing joined them                                                                                            |
+| `hey vantage …`                              | `not_understood`                                        | the wake list is `["jarvis", "hey jarvis", "ok jarvis"]` — the product was renamed in Phase 37 and the words it answers to were not (37-B, now user-visible) |
 
 ## 2. What was built, and what it refuses to do
 
@@ -49,8 +49,8 @@ browser without a front window, or a macOS that has not authorised the sender, d
 answer and does not fail. That is the same class of defect Phase 34 closed for network reads,
 so the query now carries its own 4 s deadline and the answer names the reason it could not
 confirm. Proven again live: `open github.com` returned in **4.12 s**, `ok=True`,
-`verification=unknown`, reply *"Asked Google Chrome to open https://github.com; I could not
-confirm the page — it did not answer in time."* The bounded-test is non-vacuous: removing the
+`verification=unknown`, reply _"Asked Google Chrome to open https://github.com; I could not
+confirm the page — it did not answer in time."_ The bounded-test is non-vacuous: removing the
 `timeout=` argument makes it fail with `unbounded wait: timeout=None`.
 
 **A leaked workspace, again.** `test_the_one_open_project...` was green alone and red in a
@@ -114,7 +114,7 @@ start (39-F, 40-E).
 listened for a name that left the product four phases ago. Typed sentences happened to work
 anyway -- the routes key on their own words, not the prefix -- which is exactly the kind of
 half-true state that survives a rename: `hey vantage open github` was understood once
-`open_url` existed, while *speaking* to it still did not wake it. Both lists now carry
+`open_url` existed, while _speaking_ to it still did not wake it. Both lists now carry
 `vantage`, and the test asserts the microphone's list and the parser's prefix regex agree.
 
 **A filename was an application.** `open ~/notes/vantage-notes.txt` resolved to the **Notes**
@@ -125,35 +125,35 @@ something that starts with `/`, `~`, `./` or names a file that exists is a path,
 Measured after the fix: `open ~/Desktop/vantage-notes.txt` → `read_file` with that path.
 
 **A folder is not a document.** The same guard let `open /tmp/vantage-demo` fall through to
-`read_file`, which answered *"File not found"* about a directory that plainly exists -- a
+`read_file`, which answered _"File not found"_ about a directory that plainly exists -- a
 correct refusal about the wrong verb. An existing directory in an `open` sentence now goes to
 the editor route, which is the one that can verify it happened. Live, on the delivered app
-over its wifi address: `open /tmp/vantage-demo` → *"Opened vantage-demo in Visual Studio
-Code."*, `verification=success`.
+over its wifi address: `open /tmp/vantage-demo` → _"Opened vantage-demo in Visual Studio
+Code."_, `verification=success`.
 
 ## 6. Carried forward
 
-* **41-A — closed inside the phase** (§3b): the voice and typed wake lists both accept
-  `vantage` now. What remains unmeasured is the *microphone* path on this machine, because
+- **41-A — closed inside the phase** (§3b): the voice and typed wake lists both accept
+  `vantage` now. What remains unmeasured is the _microphone_ path on this machine, because
   macOS has not granted the app a microphone (§4 of Phase 40's self-test still reports
   `blocked`), so the fuzzy matcher is proven against transcripts, not against speech.
-* **41-B — "give summary of that data" is not answered.** A page's content is not reachable
+- **41-B — "give summary of that data" is not answered.** A page's content is not reachable
   from here without either the browser's cooperation (which §3 shows is not granted) or a
   fetch, and a summary with the model off would be an extract of whatever HTML happened to
   load — for a logged-in site, that is not the same data the user is looking at. Recorded
   rather than faked. `summarize_email`'s extractive rule is the pattern to follow if this is
   built.
-* **41-C — "auto login" is the user's own session, not a credential store.** Opening a site in
+- **41-C — "auto login" is the user's own session, not a credential store.** Opening a site in
   their browser reuses whatever the browser already remembers; nothing here stores or types a
   password. That is deliberate: the alternative turns a personal assistant into a
   credential-bearing app, which is a different security conversation.
-* **41-D — the confirmation channel is per-browser and unauthorised right now**, so `open_url`
+- **41-D — the confirmation channel is per-browser and unauthorised right now**, so `open_url`
   returns UNKNOWN on this machine until Automation permission is granted (System Settings →
   Privacy & Security → Automation). Every site open costs its 4 s deadline in the meantime.
-* **41-E — `open -a "Google Chrome" <url>` reached the Chrome that was already running**, which
+- **41-E — `open -a "Google Chrome" <url>` reached the Chrome that was already running**, which
   on this machine is an automation-profile instance started by a debugging tool, not the
   user's own window. Which profile a URL lands in is not something this tool chooses today.
-* **41-F — `find_and_open` has no observation channel** for "a window took this file", so it
+- **41-F — `find_and_open` has no observation channel** for "a window took this file", so it
   can never be verified as written. `lsappinfo` or an accessibility query could be one; that
   would need the same permission conversation as 41-D.
 

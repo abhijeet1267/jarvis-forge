@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import subprocess
 from pathlib import Path
 from typing import Any, List, Optional, Tuple
 
@@ -342,6 +343,74 @@ async def open_app(ctx: ToolContext, app: str = "", path: str = "") -> "object":
     )
 
 
+async def open_document(ctx: ToolContext, path: str = "", app: str = "") -> "object":
+    """Open a document in a chosen app (or in its default handler).
+
+    The verification is the same rule ``open_application`` follows: ``open``
+    exiting 0 means the launch was *requested*, not that a window appeared. When
+    an app is named, success is claimed only if that app is observed in the
+    process table; with no app, the default handler is an unverifiable launch and
+    is reported as such.
+    """
+    target_path = Path(os.path.expanduser(str(path or "").strip()))
+    if not str(path).strip():
+        return fail("open_document", "Which document should I open? Give me its path.",
+                    device=ctx.device_id)
+    if not target_path.exists():
+        return fail("open_document", f"I could not find {target_path}.", device=ctx.device_id,
+                    path=str(target_path))
+    if target_path.is_dir():
+        return fail("open_document",
+                    f"{target_path.name} is a folder, not a document -- say open the project "
+                    "folder instead.", device=ctx.device_id, path=str(target_path))
+
+    named = str(app or "").strip()
+    if named:
+        spec = ctx.apps.resolve(named, platform=ctx.platform)
+        if spec is None:
+            return fail("open_document", f"I could not find an application matching {named!r}.",
+                        device=ctx.device_id, app=named)
+        target = ctx.apps.launch_target(spec, platform=ctx.platform)
+        if ctx.platform == "macos":
+            argv = ["open", "-a", target, str(target_path)]
+        elif ctx.platform == "linux":
+            argv = [target, str(target_path)]
+        else:
+            argv = ["cmd", "/c", "start", "", target, str(target_path)]
+        code, _out, err = await run_command(argv, detach=True)
+        if code != 0:
+            return fail("open_document", f"Could not open {target_path.name} in "
+                        f"{spec.display_name}: {err or 'launch failed'}", device=ctx.device_id)
+        observed = False
+        for _ in range(LAUNCH_OBSERVATION_TRIES):
+            if await _process_observed(target, ctx.platform):
+                observed = True
+                break
+            await asyncio.sleep(LAUNCH_OBSERVATION_INTERVAL_S)
+        if observed:
+            return ok("open_document", f"Opened {target_path.name} in {spec.display_name}.",
+                      device=ctx.device_id, path=str(target_path), app_key=spec.key,
+                      display_name=spec.display_name, verified=True, risk=int(RiskLevel.LOW))
+        return unverified("open_document",
+                          f"{spec.display_name} was told to open {target_path.name}, but I "
+                          "could not confirm it -- check the window.", device=ctx.device_id,
+                          path=str(target_path), app_key=spec.key, verified=False)
+
+    # No app named: hand it to the default handler. That launch cannot be observed
+    # from here, so it is reported unverified rather than claimed.
+    argv = (["open", str(target_path)] if ctx.platform == "macos"
+            else [str(target_path)] if ctx.platform == "linux"
+            else ["cmd", "/c", "start", "", str(target_path)])
+    code, _out, err = await run_command(argv, detach=True)
+    if code != 0:
+        return fail("open_document", f"Could not open {target_path.name}: "
+                    f"{err or 'launch failed'}", device=ctx.device_id)
+    return unverified("open_document",
+                      f"Asked your default application to open {target_path.name}; I cannot "
+                      "confirm which app took it.", device=ctx.device_id, path=str(target_path),
+                      verified=False)
+
+
 async def close_app(ctx: ToolContext, app: str = "") -> "object":
     """Quit an application gracefully."""
     spec = ctx.apps.resolve(app, platform=ctx.platform)
@@ -373,6 +442,180 @@ async def close_app(ctx: ToolContext, app: str = "") -> "object":
         app_key=spec.key,
     )
 
+
+#: Ask an application to come forward. Verified afterwards by reading the
+#: frontmost application back, because "the AppleScript exited 0" is not the same
+#: fact as "that window is now in front".
+_ACTIVATE = '''
+tell application "{target}" to activate
+'''
+
+async def focus_app(ctx: ToolContext, app: str = "") -> "object":
+    """Bring an already-running application to the front.
+
+    Distinct from opening it: a person asking to *switch to* Mail does not want a
+    second instance, and wants to know whether it actually came forward. The
+    result is checked against the frontmost application rather than assumed from
+    the AppleScript's exit code, and an app that is not running is reported as
+    such with the next useful action, not silently launched.
+    """
+    spec = ctx.apps.resolve(app, platform=ctx.platform)
+    if spec is None:
+        return fail(
+            "focus_application",
+            f"I could not find an application matching {app!r}.",
+            device=ctx.device_id,
+        )
+    if ctx.platform != "macos":
+        return fail(
+            "focus_application",
+            "Bringing an application forward is only implemented on macOS for now.",
+            device=ctx.device_id,
+        )
+
+    target = ctx.apps.launch_target(spec, platform=ctx.platform)
+    code, _out, err = await run_command(
+        ["osascript", "-e", _ACTIVATE.format(target=target)], timeout=ACTIVATE_TIMEOUT_S)
+    if code != 0:
+        detail = (err or "").strip()
+        if "-1728" in detail or "can't get application" in detail.lower():
+            return fail(
+                "focus_application",
+                f"{spec.display_name} is not running, so there is nothing to bring forward. "
+                f"Open it first.",
+                device=ctx.device_id, running=False,
+            )
+        if "-1743" in detail or "not authorized" in detail.lower():
+            return fail(
+                "focus_application",
+                f"macOS would not let me bring {spec.display_name} forward: Vantage needs "
+                "Automation permission for it (System Settings -> Privacy & Security -> "
+                "Automation).",
+                device=ctx.device_id,
+            )
+        return fail("focus_application",
+                    f"Could not bring {spec.display_name} forward. {detail[:160]}".strip(),
+                    device=ctx.device_id)
+
+    # Read the answer back rather than trusting the exit code.
+    check_code, out, _err = await run_command(
+        ["osascript", "-e", _FRONTMOST_PROCESS], timeout=FINDER_QUERY_TIMEOUT_S)
+    front = (out or "").strip().splitlines()[0].strip() if check_code == 0 and out else ""
+    if front and front.lower() == spec.display_name.lower():
+        return ok("focus_application",
+                  f"{spec.display_name} is in front.",
+                  device=ctx.device_id, application=front, verified=True)
+    return unverified(
+        "focus_application",
+        f"I asked {spec.display_name} to come forward and the request was accepted, but "
+        + (f"{front} is still the application in front." if front
+           else "I could not confirm which application is in front."),
+        device=ctx.device_id,
+    )
+
+async def review_downloads(ctx: ToolContext) -> "object":
+    """List what is in Downloads, newest first. It never deletes anything.
+
+    Reporting only the count would answer a question nobody asked; the point of
+    reviewing a folder is seeing what is in it, so the largest/most recent entries
+    are named.
+    """
+    folder = Path.home() / "Downloads"
+    if not folder.is_dir():
+        return fail("review_downloads",
+                    f"There is no Downloads folder at {folder}.",
+                    device=ctx.device_id)
+    entries = []
+    try:
+        for item in folder.iterdir():
+            if item.name.startswith("."):
+                continue
+            try:
+                stat = item.stat()
+            except OSError:
+                continue
+            entries.append({"name": item.name, "is_dir": item.is_dir(),
+                            "size_bytes": stat.st_size, "modified": stat.st_mtime})
+    except OSError as exc:
+        return fail("review_downloads", f"Could not read Downloads: {exc}",
+                    device=ctx.device_id)
+
+    entries.sort(key=lambda e: e["modified"], reverse=True)
+    shown = entries[:10]
+    if entries:
+        names = ", ".join(e["name"] for e in shown[:5])
+        message = (f"Your Downloads folder has {len(entries)} item(s). "
+                   f"Most recent: {names}.")
+    else:
+        message = "Your Downloads folder is empty."
+    return ok("review_downloads", message, device=ctx.device_id,
+              count=len(entries), items=shown, verified=True)
+
+def _running_locally(name: str) -> bool:
+    """Whether a process with this executable name is running, by exact name.
+
+    Substring matching on the full path is wrong here: macOS ships
+    ``CursorUIViewService``, so "cursor" appears in a path on a machine with no
+    Cursor installed. Only the executable's own name counts.
+    """
+    try:
+        out = subprocess.run(["ps", "-wwo", "comm=", "-A"],
+                             capture_output=True, text=True, timeout=5).stdout
+    except Exception:
+        return False
+    wanted = name.strip().lower()
+    return any(Path(line.strip()).name.lower() in (wanted, wanted + ".app")
+               for line in out.splitlines())
+
+#: Where macOS puts application bundles. Utilities and CoreServices matter:
+#: Terminal lives in ``/System/Applications/Utilities`` and Finder in
+#: ``/System/Library/CoreServices``, so a check that only looks at
+#: ``/Applications`` reports two of the most-used apps as not installed.
+_BUNDLE_ROOTS = (
+    "/Applications",
+    "/Applications/Utilities",
+    "/System/Applications",
+    "/System/Applications/Utilities",
+    "/System/Library/CoreServices",
+)
+
+def _bundle_installed(target: str) -> bool:
+    """Whether macOS has an application bundle with this name."""
+    roots = list(_BUNDLE_ROOTS) + [str(Path.home() / "Applications")]
+    return any(Path(root, f"{target}.app").exists() for root in roots)
+
+async def get_app_status(ctx: ToolContext) -> "object":
+    """Which known applications are actually installed, and which are running.
+
+    "Vantage knows 15 applications" was true and useless: it listed apps the
+    machine does not have (Cursor, on this one), so a person could not tell what
+    an open request would actually do. Availability is checked on disk and
+    running state is asked of the system, not assumed.
+    """
+    rows = []
+    for app in ctx.apps.all():
+        if ctx.platform not in app.platform:
+            continue
+        target = ctx.apps.launch_target(app, platform=ctx.platform) or app.display_name
+        installed = _bundle_installed(target) if ctx.platform == "macos" else True
+        rows.append({
+            "key": app.key,
+            "name": app.display_name,
+            "category": app.category,
+            "installed": installed,
+            "running": _running_locally(app.display_name) if installed else False,
+        })
+    # The question asked is usually "what is running", so name those. Reporting only
+    # the install count answered a question nobody asked.
+    running = [r["name"] for r in rows if r["running"]]
+    installed = sum(1 for r in rows if r["installed"])
+    if running:
+        message = (f"Running now: {', '.join(running)}. "
+                   f"{installed} of {len(rows)} known applications are installed here.")
+    else:
+        message = (f"Nothing from my list is running right now. "
+                   f"{installed} of {len(rows)} known applications are installed here.")
+    return ok("get_app_status", message, device=ctx.device_id, apps=rows, verified=True)
 
 async def list_apps(ctx: ToolContext) -> "object":
     """List applications JARVIS knows how to launch."""
@@ -431,6 +674,13 @@ def _standard_folder(name: str) -> Tuple[Optional[Path], str]:
 #: gets one deadline (Phase 34), so the question is asked with a short budget and a timeout is
 #: treated as an answer -- "I cannot ask Finder" -- rather than as a reason to wait again.
 FINDER_QUERY_TIMEOUT_S = 3.0
+
+#: Activating an application is not the same budget as asking Finder a question:
+#: the target app has to receive and handle an AppleScript event, and one that is
+#: starting up (or showing an Automation prompt) takes longer than 3 s. Mail timed
+#: out at the Finder budget and the user was told "could not bring Mail forward"
+#: about an app that simply had not answered yet.
+ACTIVATE_TIMEOUT_S = 15.0
 
 
 async def _finder_reports(name: str) -> Tuple[bool, str]:
@@ -543,6 +793,19 @@ SPECS = [
     ),
     (
         ToolSpec(
+            name="open_document",
+            description="Open a document in a chosen app, or in its default handler.",
+            risk=RiskLevel.LOW,
+            requires_confirmation=False,
+            reversible=True,
+            parameters={"path": "string", "app": "string"},
+            required_parameters=["path"],
+            tags=["computer", "app", "document"],
+        ),
+        open_document,
+    ),
+    (
+        ToolSpec(
             name="close_app",
             description="Quit a running application.",
             risk=RiskLevel.LOW,
@@ -584,6 +847,44 @@ SPECS = [
             tags=["computer", "app", "folder"],
         ),
         open_user_folder,
+    ),
+    (
+        ToolSpec(
+            name="review_downloads",
+            description="List what is in the Downloads folder. It never deletes.",
+            risk=RiskLevel.READ,
+            requires_confirmation=False,
+            allowed_devices=["laptop_main"],
+            parameters={},
+            tags=["computer", "files", "read"],
+        ),
+        review_downloads,
+    ),
+    (
+        ToolSpec(
+            name="get_app_status",
+            description="Which known applications are installed and running on this machine.",
+            risk=RiskLevel.READ,
+            requires_confirmation=False,
+            parameters={},
+            required_parameters=[],
+            tags=["computer", "app", "read"],
+        ),
+        get_app_status,
+    ),
+    (
+        ToolSpec(
+            name="focus_application",
+            aliases=("focus_app", "bring_to_front", "switch_to_app"),
+            description="Bring an already-running application to the front.",
+            risk=RiskLevel.LOW,
+            requires_confirmation=False,
+            reversible=True,
+            parameters={"app": "string"},
+            required_parameters=["app"],
+            tags=["computer", "app", "window"],
+        ),
+        focus_app,
     ),
     (
         ToolSpec(

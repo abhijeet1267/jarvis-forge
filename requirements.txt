@@ -6,6 +6,13 @@ pydantic-settings>=2.3
 httpx>=0.27
 python-multipart>=0.0.9
 
+# Browser automation (Phase 92)
+playwright>=1.40
+
+# AI provider credential storage (Phase 72) — KeychainStorage's real backend;
+# without it the store/retrieve path silently degrades to a no-op fallback.
+keyring>=25.0
+
 # Test / dev
 pytest>=8.2
 pytest-asyncio>=0.23
@@ -13,3 +20,7 @@ pytest-asyncio>=0.23
 # Desktop bundle build (app/make_icon.py renders the .icns with it; build_app.py
 # raises without it, so `python build_app.py` on a fresh clone used to fail)
 pillow>=10.0
+
+# Attachment pipeline — PDF text extraction (pure-Python; /ai/process-attachments
+# extracts real text from uploaded PDFs and reports encrypted/unreadable truthfully)
+pypdf>=5.0

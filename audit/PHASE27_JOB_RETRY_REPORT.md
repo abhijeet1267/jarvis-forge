@@ -5,8 +5,8 @@ Report date: 2026-09-29. Continues Phases 9-26.
 No brief. The scope was written by Phase 26 itself, in the sentence its own endpoint
 returned to users:
 
-> *"Nothing ran. 1 failed step(s) are marked as needing another attempt… This build has no
-> job re-dispatcher, so ask me the goal again to run it."*
+> _"Nothing ran. 1 failed step(s) are marked as needing another attempt… This build has no
+> job re-dispatcher, so ask me the goal again to run it."_
 
 That was the right thing to say when it was written -- Phase 26's job was to stop `retry`
 from lying. But §31 of the working plan lists `retry` as a task-manager capability, and an
@@ -27,11 +27,11 @@ invocations after tasks.retry(): {'get_time': 0, 'battery_status': 0}
 core has retry_job? False
 ```
 
-The row kept the tool's *name* -- `tasks.create(goal, [a.tool for a in plan.actions])` --
+The row kept the tool's _name_ -- `tasks.create(goal, [a.tool for a in plan.actions])` --
 and none of what that tool had been asked to do. Phase 26's own report had already named
 this as the reason not to bolt an executor onto the verb (26-A), along with the second
-hazard: *"If an executor is ever added, note that it would replay failed steps with no
-`policy.evaluate` call."* Both observations were load-bearing, and both are dealt with here.
+hazard: _"If an executor is ever added, note that it would replay failed steps with no
+`policy.evaluate` call."_ Both observations were load-bearing, and both are dealt with here.
 
 ---
 
@@ -56,21 +56,21 @@ implementation of the pipeline: it gets the parameter validation, the device che
 risk verdict, the confirmation prompt, the recovery stage, the audit row and the step
 update exactly as a first run does.
 
-`seqs` is the part that makes a *partial* re-run safe. A retried plan contains only the
+`seqs` is the part that makes a _partial_ re-run safe. A retried plan contains only the
 failed steps, indexed 0..n-1, but their job rows live at their original positions, so the
 mapping is passed in rather than assumed. Without it, re-running step 2 would have written
 its result onto step 1.
 
 **Three rules `retry_job` exists to keep.**
 
-* Only steps recorded `failed` are re-run -- a step whose effect was verified is never
+- Only steps recorded `failed` are re-run -- a step whose effect was verified is never
   replayed (`executed` and the counting handlers both assert this).
-* Everything goes back through the gate. A gated step mints a **fresh** confirmation and
+- Everything goes back through the gate. A gated step mints a **fresh** confirmation and
   runs nothing until it is answered: the earlier approval was spent, and reusing its token
   would let an expired or revoked consent authorise a second execution.
-* A step it cannot reconstruct is refused. Params `{}` on a tool that requires `path`
+- A step it cannot reconstruct is refused. Params `{}` on a tool that requires `path`
   answers `missing required parameter 'path'` with zero invocations; a step naming a tool
-  that no longer exists answers *"… is no longer a registered tool"* instead of the
+  that no longer exists answers _"… is no longer a registered tool"_ instead of the
   `AttributeError` the risk-label lookup would have thrown.
 
 **The trail both attempts deserve.** The re-run writes its own summary over the step, which
@@ -113,7 +113,7 @@ fix, on a step that fails the same way twice:
   unknown -> HTTP 404  detail: no such job
 ```
 
-Note the honesty of case 2: the screenshot step *still* fails, because the reason is real
+Note the honesty of case 2: the screenshot step _still_ fails, because the reason is real
 (no Screen Recording permission on this machine, which is a carried item) -- the retry
 reported one execution and left the job `failed`. A re-run that "succeeds" because it ran
 nothing would be the old bug again.
@@ -131,11 +131,11 @@ that `verify_chain()` still holds).
 
 Three existing tests changed, each for a stated reason:
 
-| Test | Was | Now |
-|---|---|---|
-| `test_phase26_recovery_trust.py::test_the_retry_endpoint_reports_zero_executions` | asserted the endpoint's `executed == 0` -- true only because no dispatcher existed | renamed `test_a_retry_that_cannot_run_reports_zero_and_no_fake_state`: a *gated* re-run answers `executed: 0`, no `running`, and a fresh `confirmation_id`. Phase 26's claim was never "retry can't run things"; it was "a verb may not invent a state", and that survives a working retry |
-| `test_pipeline.py::test_audit_records_every_action` | compared the lengths of two `recent(limit=200)` windows | scoped to its own session id. The window arithmetic stopped meaning anything once the shared session database held more than 200 rows -- Phase 27's new tests were enough to trip it, and any future suite growth would too |
-| `test_pipeline.py::test_audit_result_is_a_status_token_not_a_message` | asserted `battery_status` appeared nowhere in the last 50 failure rows -- a global-state assumption, which a legitimate *failing* battery test in another file can violate | filters the failure rows to its own session. Same claim, no longer order-dependent |
+| Test                                                                              | Was                                                                                                                                                                        | Now                                                                                                                                                                                                                                                                                        |
+| --------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `test_phase26_recovery_trust.py::test_the_retry_endpoint_reports_zero_executions` | asserted the endpoint's `executed == 0` -- true only because no dispatcher existed                                                                                         | renamed `test_a_retry_that_cannot_run_reports_zero_and_no_fake_state`: a _gated_ re-run answers `executed: 0`, no `running`, and a fresh `confirmation_id`. Phase 26's claim was never "retry can't run things"; it was "a verb may not invent a state", and that survives a working retry |
+| `test_pipeline.py::test_audit_records_every_action`                               | compared the lengths of two `recent(limit=200)` windows                                                                                                                    | scoped to its own session id. The window arithmetic stopped meaning anything once the shared session database held more than 200 rows -- Phase 27's new tests were enough to trip it, and any future suite growth would too                                                                |
+| `test_pipeline.py::test_audit_result_is_a_status_token_not_a_message`             | asserted `battery_status` appeared nowhere in the last 50 failure rows -- a global-state assumption, which a legitimate _failing_ battery test in another file can violate | filters the failure rows to its own session. Same claim, no longer order-dependent                                                                                                                                                                                                         |
 
 The second and third were found the honest way: they passed alone and failed in the full
 run. They are recorded here rather than as "flaky", because their premise -- that nothing
@@ -145,13 +145,13 @@ else in the process has ever failed at that tool -- was never true.
 
 ## 5. Everything re-measured after the change
 
-| | |
-|---|---|
-| Suite | **1433 passed · 0 failed · 0 skipped · 0 xfailed** (1433 collected), 51 modules |
-| Acceptance | `python benchmarks/acceptance_run.py`: 17 of 18 measured, median **4 ms**, sum **2,060 ms**; **no command changed state or audit token** against the Phase 26 artifact. `research` was 1,903 ms this run (arXiv 406 + retry, 15-F) and the sandboxed search 80 ms |
-| Safety matrix | `python benchmarks/safety_run.py`: **5 of 6 ok**, `turn on heater` still FAIL (22-G, unchanged, owner's call) |
-| Registry | 127 tools, 25 gated, tiers read 68 · low 33 · external 12 · destructive 11 · physical 3 -- untouched by a schema and orchestrator change |
-| Figures | `assets/build_charts.py` + `build_diagrams.py` regenerated; `chart-suite-growth.svg` ends at the Phase 27 point |
+|               |                                                                                                                                                                                                                                                                   |
+| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Suite         | **1433 passed · 0 failed · 0 skipped · 0 xfailed** (1433 collected), 51 modules                                                                                                                                                                                   |
+| Acceptance    | `python benchmarks/acceptance_run.py`: 17 of 18 measured, median **4 ms**, sum **2,060 ms**; **no command changed state or audit token** against the Phase 26 artifact. `research` was 1,903 ms this run (arXiv 406 + retry, 15-F) and the sandboxed search 80 ms |
+| Safety matrix | `python benchmarks/safety_run.py`: **5 of 6 ok**, `turn on heater` still FAIL (22-G, unchanged, owner's call)                                                                                                                                                     |
+| Registry      | 127 tools, 25 gated, tiers read 68 · low 33 · external 12 · destructive 11 · physical 3 -- untouched by a schema and orchestrator change                                                                                                                          |
+| Figures       | `assets/build_charts.py` + `build_diagrams.py` regenerated; `chart-suite-growth.svg` ends at the Phase 27 point                                                                                                                                                   |
 
 ### One run where five vision tests failed, and what it turned out to be
 
@@ -163,19 +163,19 @@ real defect gets buried.
 
 What the measurements say:
 
-* the failing run took **46.9 s**; the same file afterwards ran clean twice, in **4.5 s** and
+- the failing run took **46.9 s**; the same file afterwards ran clean twice, in **4.5 s** and
   **3.6 s**, and a single one of those tests alone passes in 2.98 s;
-* no stray project process was left running (`ps` for `run.py serve` / `uvicorn`: nothing),
+- no stray project process was left running (`ps` for `run.py serve` / `uvicorn`: nothing),
   but the failures came immediately after two benchmark regenerations and a launched-server
   sweep, all of which drive the same macOS Vision helper the tests shell out to;
-* the assertions that failed are the ones reading *recognised text* out of the helper --
+- the assertions that failed are the ones reading _recognised text_ out of the helper --
   `KeyError: 'lines'` is a response with no lines in it, i.e. the helper answered nothing,
   not that the code changed shape.
 
 So: an environment-sensitive test under load, in a capability (`macos_vision`) the suite
-already treats as skippable when the helper is *absent*. It is not a Phase 27 regression --
+already treats as skippable when the helper is _absent_. It is not a Phase 27 regression --
 none of the changed modules are on that path -- but the gap is real and belongs to the same
-family as Phase 21's runner/laptop divergence: a green suite can be a *quiet-machine* suite.
+family as Phase 21's runner/laptop divergence: a green suite can be a _quiet-machine_ suite.
 Carried as **27-D**: those five tests should get the same capability/timeout treatment the
 battery and ffmpeg tests got, instead of failing when the machine is busy.
 
@@ -183,19 +183,19 @@ battery and ffmpeg tests got, instead of failing when the machine is busy.
 
 ## 6. Carried forward
 
-* **27-A** `resume()` lifts a pause but does not dispatch a halted sequence's `pending`
+- **27-A** `resume()` lifts a pause but does not dispatch a halted sequence's `pending`
   steps. `_execute_plan(job_id=…, seqs=…)` already supports it; what is missing is the
-  decision about what "continue" should mean after a *denied* step -- re-offering work the
+  decision about what "continue" should mean after a _denied_ step -- re-offering work the
   user refused is not automatically right, and Phase 14's "one approval buys one action"
   is the precedent to argue against.
-* **27-B** Jobs created before this phase store `params = '{}'`; their retry is refused by
+- **27-B** Jobs created before this phase store `params = '{}'`; their retry is refused by
   the gate rather than guessed at. Re-issuing the sentence is the supported path. A
   backfill is not possible from the row alone -- the parameters were never written down.
-* **27-C** No dashboard affordance for a job that failed, though the endpoint exists and
+- **27-C** No dashboard affordance for a job that failed, though the endpoint exists and
   the page already renders the step states.
-* **27-D** Five `@pytest.mark.slow` OCR tests fail when the machine is busy (§5). They need
+- **27-D** Five `@pytest.mark.slow` OCR tests fail when the machine is busy (§5). They need
   the capability/timeout treatment Phase 21 gave the battery and ffmpeg tests.
-* Everything already open: 22-G, 23-E, 26-B, the `ToolSpec.parameters` residual, mic/speech
+- Everything already open: 22-G, 23-E, 26-B, the `ToolSpec.parameters` residual, mic/speech
   TCC, 15-F, 14-D, 16-F, hardware **BLOCKED**, LLM planner, unattended workflows.
 
 ---
@@ -218,14 +218,13 @@ conclusion=success
 ```
 
 The schema change matters here: both runners start from an empty `JARVIS_HOME`, so a fresh
-database has to be created with the new columns *and* the additive migration path has to be
+database has to be created with the new columns _and_ the additive migration path has to be
 harmless when they already exist -- both are exercised on every run now.
 
 And 27-D's diagnosis is supported rather than assumed: `ci.yml` runs plain `python -m
 pytest -q` with no `-m 'not slow'` deselection, so those five `@pytest.mark.slow` OCR tests
 genuinely executed on both macOS images and passed. A busy laptop is the difference, not a
 code path the runner avoids.
-
 
 ### Corrected additively by Phase 29 (2026-10-01)
 

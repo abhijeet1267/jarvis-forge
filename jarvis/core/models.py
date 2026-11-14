@@ -14,6 +14,11 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+#: Longest accepted command text. Bounded so a pasted document cannot blow up the
+#: planner scan or the model prompt; generous enough for any legitimate multi-part
+#: question. Mirrors the email-body budget.
+MAX_COMMAND_CHARS = 20_000
+
 
 def utcnow() -> datetime:
     return datetime.now(timezone.utc)
@@ -158,6 +163,14 @@ class ToolSpec(BaseModel):
     #: instead of keeping a second copy of the mapping in the router -- the pattern Phase
     #: 30 and 32 established, and the failure mode 32 documented: two lists that drift.
     #: Only a READ-tier tool that requires nothing may be declared, and a test sweeps it.
+    #:
+    #: The optional ``"lookup"`` key names the parameter the tool takes when it is
+    #: used as an identifier source: the thing the person called the object.
+    #: Without it the source is run with no arguments, which for a *windowed*
+    #: enumerator means "today" -- and then a request about next week's
+    #: event was answered "I checked, and there is nothing of that kind
+    #: right now" while the event sat six days away. A search tool takes
+    #: the name instead, and finds it wherever it is.
     provides_identifiers: Dict[str, Dict[str, str]] = Field(default_factory=dict)
     tags: Tuple[str, ...] = ()
     #: Other names this tool answers to, oldest first.
@@ -351,6 +364,25 @@ class Plan(BaseModel):
     identifier_sources_used: List[str] = Field(default_factory=list)
     #: Identifiers the sentence did not supply, so the orchestrator can look candidates up.
     missing_identifiers: List[str] = Field(default_factory=list)
+    #: The thing the sentence named, when it named one -- "cancel my Design Review
+    #: event" names *Design Review*. Carried so an identifier lookup can search for
+    #: that name instead of listing whatever happens to be in the default window.
+    named_thing: str = ""
+    #: An identifier the lookup found on its own, matched against the name the
+    #: person gave. Set only when exactly one candidate matched: the person's
+    #: words then identify the row, and asking them to pick anyway is asking
+    #: them to do the lookup twice.
+    resolved_identifier: Dict[str, str] = Field(default_factory=dict)
+    #: A demonstrative request ("read that one", "summarize the second one")
+    #: points at the message the conversation just dealt with. The planner
+    #: carries the pointer it saw -- `""` for the selected one, the ordinal
+    #: word for a pick from a list -- and the orchestrator, which holds the
+    #: per-session selection, turns it into a read of a real uid. ``None``
+    #: means the sentence named its own target.
+    referent: Optional[str] = None
+    #: The body of a reply the sentence already carried ("reply to that one
+    #: saying thanks"). Written into the draft verbatim; never invented.
+    referent_body: str = ""
     created_at: datetime = Field(default_factory=utcnow)
     planner: str = "rules"  # rules | llm
 
@@ -370,6 +402,15 @@ class CommandRequest(BaseModel):
     def _non_empty(cls, value: str) -> str:
         if not value or not value.strip():
             raise ValueError("command text must not be empty")
+        # One command is a sentence or a bounded run of sentences, not a paste of a
+        # whole document. A generous cap keeps a pathological input from blowing up the
+        # planner scan and the model prompt, while leaving plenty of room for any
+        # legitimate multi-part question. Aligned with the email body budget.
+        if len(value) > MAX_COMMAND_CHARS:
+            raise ValueError(
+                f"command text is too long ({len(value)} chars; the limit is "
+                f"{MAX_COMMAND_CHARS}). Break it into shorter requests."
+            )
         return value.strip()
 
 

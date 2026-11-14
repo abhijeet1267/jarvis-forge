@@ -1,1190 +1,2414 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<!-- Injected by the server at serve time. A single-use bootstrap code, never the
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- Injected by the server at serve time. A single-use bootstrap code, never the
      API token: see authenticate() below, which spends it on POST /auth/session. -->
-<meta name="jarvis-bootstrap" content="__JARVIS_BOOTSTRAP__" />
-<title>Vantage — Control Dashboard</title>
-<!-- Offline by design: no CDN, no fonts, no icon request to fail. -->
-<link rel="icon" href="data:," />
-<style>
-  :root {
-    --bg: #f5f7fa;
-    --panel: #ffffff;
-    --ink: #1b2230;
-    --muted: #6b7688;
-    --line: #e2e7ef;
-    --accent: #2f6df6;
-    --ok: #16a34a;
-    --warn: #d97706;
-    --bad: #dc2626;
-    --radius: 10px;
-    /* Every colour the page paints is named here. The dark block below has to
-      restate the same list, which a test enforces -- a dark mode that forgets a
-      token is not a dark mode, it is invisible text. */
-    --on-accent: #ffffff;
-    --console-bg: #0f172a;
-    --console-ink: #e6edf7;
-    --console-muted: #8b98ab;
-    --ok-ink: #16a34a;
-    --warn-ink: #f0b429;
-    --bad-ink: #ff6b6b;
-    --pill-bg: #eef3ff;
-    --tag-bg: #eef1f6;
-    --ghost-bg: #f1f3f7;
-    --focus: #2f6df6;
-  }
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --bg: #0d1117;
-      --panel: #161b22;
-      --ink: #e6edf3;
-      --muted: #9198a1;
-      --line: #21262d;
-      --accent: #4c8dff;
-      --ok: #3fb950;
-      --warn: #d29922;
-      --bad: #f85149;
-      --radius: 10px;
-      --on-accent: #0b1220;
-      --console-bg: #0b1220;
-      --console-ink: #e6edf7;
-      --console-muted: #8b98ab;
-      --ok-ink: #3fb950;
-      --warn-ink: #e3b341;
-      --bad-ink: #ff8080;
-      --pill-bg: #13274d;
-      --tag-bg: #21262d;
-      --ghost-bg: #21262d;
-      --focus: #6ea8ff;
-    }
-  }
-  /* Keyboard focus is a feature, not a decoration: it is the only way to see
-     where a command will go without touching the trackpad. */
-  :focus-visible {
-    outline: 2px solid var(--focus);
-    outline-offset: 2px;
-    border-radius: 4px;
-  }
-  @media (prefers-reduced-motion: reduce) {
-    * { animation: none !important; transition: none !important; }
-  }
-  * { box-sizing: border-box; }
-  body {
-    margin: 0; background: var(--bg); color: var(--ink);
-    font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  }
-  header {
-    display: flex; align-items: center; gap: 14px;
-    padding: 16px 22px; background: var(--panel); border-bottom: 1px solid var(--line);
-    position: sticky; top: 0; z-index: 5;
-  }
-  header h1 { font-size: 17px; margin: 0; letter-spacing: .3px; }
-  .pill {
-    font-size: 12px; padding: 3px 9px; border-radius: 999px;
-    background: var(--pill-bg); color: var(--accent); font-weight: 600;
-  }
-  .wrap { padding: 18px 22px 40px; max-width: 1240px; margin: 0 auto; }
-  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr)); gap: 16px; }
-  .card {
-    background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
-    padding: 14px 16px;
-  }
-  .card h2 {
-    font-size: 12px; text-transform: uppercase; letter-spacing: .8px;
-    color: var(--muted); margin: 0 0 10px;
-  }
-  .row { display: flex; justify-content: space-between; gap: 10px; padding: 5px 0; border-bottom: 1px dashed var(--line); }
-  .row:last-child { border-bottom: 0; }
-  .muted { color: var(--muted); }
-  .ok { color: var(--ok); font-weight: 600; }
-  .off { color: var(--muted); }
-  .bad { color: var(--bad); font-weight: 600; }
-  .warn { color: var(--warn); font-weight: 600; }
-  .cmdbar { display: flex; gap: 8px; margin-bottom: 16px; }
-  .cmdbar input {
-    flex: 1; padding: 11px 13px; border: 1px solid var(--line); border-radius: var(--radius);
-    font-size: 14px; background: var(--panel); color: var(--ink);
-  }
-  .cmdbar button {
-    padding: 11px 18px; border: 0; border-radius: var(--radius);
-    background: var(--accent); color: var(--on-accent); font-weight: 600; cursor: pointer;
-  }
-  .cmdbar button:hover { filter: brightness(.95); }
-  /* Quick actions: the sentences a person actually says, as buttons. A tap types the
-     sentence into the command box and runs the same send() as typing does, so permission,
-     confirmation, verification and the audit row still sit behind every one. */
-  .quick { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 14px; }
-  .quick button {
-    padding: 7px 12px; font-size: 13px; font-weight: 500; cursor: pointer;
-    background: var(--ghost-bg); color: var(--ink);
-    border: 1px solid var(--line); border-radius: 999px;
-  }
-  .quick button:hover { filter: brightness(.94); }
-  .quick button:active { transform: translateY(1px); }
-  .quick .muted { font-size: 12px; }
-  /* A device row that is not this machine can be dismissed. Deliberately quiet: it is
-     cleanup, not a call to action. */
-  .stopbtn { background: var(--bad); color: var(--on-accent); font-weight: 600; }
-  .revoked { color: var(--bad-ink); font-weight: 600; }
-  .forget { background: var(--ghost-bg); color: var(--bad-ink); border: 1px solid var(--line);
-            border-radius: 6px; padding: 3px 9px; cursor: pointer; font-size: 11px;
-            margin-left: 8px; }
-  .toolbar { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
-  .toolbar input { flex: 1; max-width: 340px; padding: 7px 10px; font-size: 13px;
-                   border: 1px solid var(--line); border-radius: var(--radius);
-                   background: var(--panel); color: var(--ink); }
-  .note { font-size: 12px; margin: 6px 0 0; }
-  /* Pipeline state chip. Reuses the existing ok/warn/bad tone classes rather
-     than inventing a palette, so it reads as part of this page. */
-  .state {
-    display: flex; align-items: center; gap: 8px; margin: 0 0 8px;
-    font-size: 12px; letter-spacing: .04em; font-weight: 600;
-  }
-  .state .chip {
-    padding: 3px 10px; border-radius: 999px; background: var(--console-bg);
-    border: 1px solid currentColor; text-transform: uppercase;
-  }
-  .state.ok .chip { color: var(--ok); }
-  .state.warn .chip { color: var(--warn-ink); }
-  .state.bad .chip { color: var(--bad-ink); }
-  .state.muted .chip { color: var(--console-muted); font-weight: 500; }
-  /* One line per step of a multi-step goal, read from GET /tasks/{job_id}. */
-  .steps { list-style: none; margin: 0 0 10px; padding: 0; font-size: 12px; }
-  .steps li { display: flex; gap: 8px; align-items: baseline; padding: 2px 0; }
-  .steps li .chip {
-    padding: 2px 8px; border-radius: 999px; border: 1px solid currentColor;
-    text-transform: uppercase; font-size: 10px; font-weight: 600; letter-spacing: .04em;
-    flex: 0 0 auto; min-width: 96px; text-align: center;
-  }
-  .steps li.ok .chip { color: var(--ok); }
-  .steps li.warn .chip { color: var(--warn-ink); }
-  .steps li.bad .chip { color: var(--bad-ink); }
-  .steps li.muted .chip { color: var(--console-muted); font-weight: 500; }
-  .steps li .name { color: var(--console-ink); font-weight: 600; flex: 0 0 auto; }
-  .steps li .detail { color: var(--console-muted); }
-  pre.reply {
-    background: var(--console-bg); color: var(--console-ink); padding: 12px 14px; border-radius: var(--radius);
-    white-space: pre-wrap; word-break: break-word; font-size: 13px; margin: 0 0 16px;
-    min-height: 42px;
-  }
-  table { width: 100%; border-collapse: collapse; font-size: 13px; }
-  th, td { text-align: left; padding: 6px 4px; border-bottom: 1px solid var(--line);
-           overflow-wrap: anywhere; }
-  .card { min-width: 0; }
-  th { color: var(--muted); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: .5px; }
-  .risk-0 { color: var(--muted); }
-  .risk-1 { color: var(--ok); }
-  .risk-2 { color: var(--warn); }
-  .risk-3, .risk-4 { color: var(--bad); }
-  .tag { font-size: 11px; padding: 1px 7px; border-radius: 999px; background: var(--tag-bg); color: var(--muted); }
-  .approve { background: var(--ok); color: var(--on-accent); border: 0; border-radius: 6px; padding: 4px 10px; cursor: pointer; font-size: 12px; }
-  .deny { background: var(--ghost-bg); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: 4px 10px; cursor: pointer; font-size: 12px; }
-  /* Pointer and keyboard feedback on everything a person can act on. The page
-     had one hover rule in total, so nothing else admitted it was clickable. */
-  .cmdbar button:hover, .approve:hover, .deny:hover { filter: brightness(.96); }
-  .cmdbar button:active, .approve:active, .deny:active { transform: translateY(1px); }
-  .card:hover { border-color: var(--accent); }
-  .row:hover { background: color-mix(in srgb, var(--panel) 70%, var(--accent) 8%); }
-  button { transition: filter .12s ease, transform .06s ease; }
-  .loading { animation: pulse 1.2s ease-in-out infinite; }
-  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .45; } }
-  .empty { color: var(--muted); font-size: 13px; line-height: 1.5; }
-  .empty b { color: var(--ink); font-weight: 600; }
+    <meta name="jarvis-bootstrap" content="__JARVIS_BOOTSTRAP__" />
+    <title>Vantage — Control Dashboard</title>
+    <!-- Offline by design: no CDN, no fonts, no icon request to fail. -->
+    <link rel="icon" href="data:," />
+    <style>
+      /*━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        Vantage — Mission Control Design System
+        Dark-first premium dashboard for a local AI command center.
+        ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━*/
+      :root {
+        /* Surface */
+        --bg: #080b10;
+        --panel: #0f131c;
+        --panel-raised: #151a26;
+        --panel-glass: rgba(15, 19, 28, 0.82);
+        /* Ink */
+        --ink: #e4e8f0;
+        --ink-dim: #b0b8c8;
+        --muted: #6b7288;
+        /* Borders */
+        --line: rgba(255, 255, 255, 0.07);
+        --line-strong: rgba(255, 255, 255, 0.11);
+        /* Accent — warm command gold */
+        --accent: #e8a840;
+        --accent-dim: #c89030;
+        --accent-glow: rgba(232, 168, 64, 0.18);
+        /* Semantic */
+        --ok: #4ade80;
+        --ok-glow: rgba(74, 222, 128, 0.12);
+        --warn: #fbbf24;
+        --warn-glow: rgba(251, 191, 36, 0.12);
+        --bad: #f87171;
+        --bad-glow: rgba(248, 113, 113, 0.12);
+        --info: #60a5fa;
+        --info-glow: rgba(96, 165, 250, 0.1);
+        /* Derived */
+        --radius: 12px;
+        --radius-sm: 8px;
+        --radius-pill: 999px;
+        --on-accent: #0a0800;
+        --console-bg: #060810;
+        --console-ink: #e4e8f0;
+        --console-muted: #6b7288;
+        --ok-ink: #4ade80;
+        --warn-ink: #fbbf24;
+        --bad-ink: #f87171;
+        --on-ok: #06140a;
+        --on-bad: #ffffff;
+        --bad-hover: #e05555;
+        --pill-bg: rgba(232, 168, 64, 0.1);
+        --tag-bg: rgba(255, 255, 255, 0.04);
+        --ghost-bg: rgba(255, 255, 255, 0.04);
+        --focus: #e8a840;
+        /* Shadows */
+        --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+        --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
+        --shadow-glow: 0 0 20px var(--accent-glow);
+        /* Transitions */
+        --ease: 180ms cubic-bezier(0.4, 0, 0.2, 1);
+        --ease-slow: 320ms cubic-bezier(0.4, 0, 0.2, 1);
+      }
 
-  /* Below a laptop lid's worth of width the grid gives up pretending to be
-     three columns, and the command bar stops sitting on one line. */
-  @media (max-width: 900px) {
-    .grid { grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr)); }
-  }
-  @media (max-width: 620px) {
-    header { flex-wrap: wrap; gap: 8px; padding: 12px 14px; }
-    #clock { display: none; }
-    .wrap { padding: 12px 12px 32px; }
-    /* minmax(0, 1fr), not 1fr: a `1fr` track refuses to shrink below its widest
-       content, so one long audit row pushed the whole page past the viewport. */
-    .grid { grid-template-columns: minmax(0, 1fr); gap: 12px; }
-    .cmdbar { flex-direction: column; }
-    .cmdbar button { width: 100%; }
-  }
-  @media (max-width: 420px) {
-    header h1 { font-size: 15px; }
-    .card { padding: 12px; }
-    th, td { font-size: 12px; padding: 5px 3px; }
-  }
-</style>
-</head>
-<body>
-<header>
-  <h1>Vantage</h1>
-  <nav style="display: flex; gap: 8px; align-items: center;">
-    <a href="/ai/chat" style="color: var(--accent); text-decoration: none; font-size: 12px;">
-      AI Chat
-    </a>
-    <a href="/ai-connections" style="color: var(--accent); text-decoration: none; font-size: 12px;">
-      Settings
-    </a>
-  </nav>
-  <span class="pill" id="version">core</span>
-  <span class="pill" id="llm">model: rules</span>
-  <span style="flex:1"></span>
-  <span class="muted" id="clock"></span>
-</header>
+      @media (prefers-color-scheme: light) {
+        :root {
+          --bg: #f0f2f6;
+          --panel: #ffffff;
+          --panel-raised: #fafbfc;
+          --panel-glass: rgba(255, 255, 255, 0.88);
+          --ink: #1a1e2b;
+          --ink-dim: #4a5068;
+          --muted: #8b90a4;
+          --line: rgba(0, 0, 0, 0.06);
+          --line-strong: rgba(0, 0, 0, 0.1);
+          --accent: #c87820;
+          --accent-dim: #a06018;
+          --accent-glow: rgba(200, 120, 32, 0.08);
+          --ok: #22c55e;
+          --ok-glow: rgba(34, 197, 94, 0.06);
+          --warn: #d97706;
+          --warn-glow: rgba(217, 119, 6, 0.06);
+          --bad: #ef4444;
+          --bad-glow: rgba(239, 68, 68, 0.06);
+          --info: #3b82f6;
+          --info-glow: rgba(59, 130, 246, 0.05);
+          --radius: 12px;
+          --radius-sm: 8px;
+          --radius-pill: 999px;
+          --on-accent: #ffffff;
+          --console-bg: #f8f9fc;
+          --console-ink: #1a1e2b;
+          --console-muted: #8b90a4;
+          --ok-ink: #16a34a;
+          --warn-ink: #b45309;
+          --bad-ink: #dc2626;
+          --on-ok: #ffffff;
+          --on-bad: #ffffff;
+          --bad-hover: #d93636;
+          --pill-bg: rgba(200, 120, 32, 0.08);
+          --tag-bg: rgba(0, 0, 0, 0.03);
+          --ghost-bg: rgba(0, 0, 0, 0.03);
+          --focus: #c87820;
+          --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.06);
+          --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.08);
+          --shadow-glow: 0 0 24px var(--accent-glow);
+        }
+      }
 
-<div class="wrap">
-  <div class="cmdbar">
-    <input id="cmd" aria-label="Command for Vantage" placeholder='Try: "what is my battery"  ·  "find my report"  ·  "help"' autocomplete="off" />
-    <button id="send" aria-label="Send command">Send</button>
-  </div>
-  <!-- Rendered against GET /tools: a button exists only while the capability does. -->
-  <!-- §30: a stop reachable without typing, from the screen that shows the work. Its label is
-       the laptop's own report, including the part it cannot stop. -->
-  <div class="row" style="margin-bottom:8px">
-    <button id="stopAll" class="stopbtn" aria-label="Emergency stop">Emergency stop</button>
-    <span class="muted" id="stopNote">stops what is running now; asks nothing first</span>
-  </div>
-  <div class="quick" id="quick" role="group" aria-label="Quick actions">
-    <span class="muted">checking what this laptop can do…</span>
-  </div>
-  <!-- Rendered from the backend's own fields. See pipelineState() for exactly
-       which ones, and why an HTTP 200 or action.ok is never one of them. -->
-  <div class="state muted" id="state" role="status" aria-live="polite"><span class="chip" id="stateChip">IDLE</span><span class="muted" id="stateNote"></span></div>
-  <!-- A goal that became several steps. Each line is the server's own step
-       status; nothing here is inferred from the request having been sent. -->
-  <ol class="steps" id="steps" hidden></ol>
-  <pre class="reply" id="reply" aria-live="polite">Ready. Type a command above, or say "help" to see what I can do.</pre>
+      /*━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        Reset & Base
+        ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━*/
+      :focus-visible {
+        outline: 2px solid var(--focus);
+        outline-offset: 3px;
+        border-radius: 4px;
+      }
+      @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+          animation: none !important;
+          transition: none !important;
+        }
+      }
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+      }
 
-  <div class="grid">
-    <div class="card">
-      <h2>Devices</h2>
-      <div id="devices"><span class="muted loading">loading…</span></div>
-    </div>
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--ink);
+        font:
+          400 13.5px/1.55 -apple-system,
+          BlinkMacSystemFont,
+          "SF Pro Text",
+          "Segoe UI",
+          Roboto,
+          Helvetica,
+          Arial,
+          sans-serif;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+        letter-spacing: -0.01em;
+      }
 
-    <div class="card">
-      <h2>Peripherals &amp; Gateways</h2>
-      <div id="peripherals"><span class="muted loading">loading…</span></div>
-    </div>
+      /*━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        Header
+        ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━*/
+      header {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        padding: 14px 28px;
+        background: var(--panel-glass);
+        backdrop-filter: blur(16px) saturate(140%);
+        -webkit-backdrop-filter: blur(16px) saturate(140%);
+        border-bottom: 1px solid var(--line);
+        position: sticky;
+        top: 0;
+        z-index: 10;
+      }
+      header h1 {
+        font-size: 16px;
+        font-weight: 640;
+        margin: 0;
+        letter-spacing: -0.02em;
+        color: var(--ink);
+      }
+      header nav {
+        display: flex;
+        gap: 4px;
+        align-items: center;
+      }
+      header nav a {
+        color: var(--ink-dim);
+        text-decoration: none;
+        font-size: 12.5px;
+        font-weight: 500;
+        padding: 5px 12px;
+        border-radius: var(--radius-sm);
+        transition:
+          background var(--ease),
+          color var(--ease);
+      }
+      header nav a:hover {
+        background: var(--ghost-bg);
+        color: var(--ink);
+      }
 
-    <div class="card">
-      <h2>Pending Confirmations</h2>
-      <div id="confirmations"><span class="muted">none</span></div>
-    </div>
+      .pill {
+        font-size: 11px;
+        padding: 3px 10px;
+        border-radius: var(--radius-pill);
+        background: var(--pill-bg);
+        color: var(--accent);
+        font-weight: 600;
+        letter-spacing: 0.02em;
+        border: 1px solid rgba(232, 168, 64, 0.15);
+      }
 
-    <div class="card">
-      <h2>Recent Actions</h2>
-      <div id="audit"><span class="muted loading">loading…</span></div>
-    </div>
+      /*━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        Layout
+        ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━*/
+      .wrap {
+        padding: 28px 28px 48px;
+        max-width: 1320px;
+        margin: 0 auto;
+        animation: pageIn 420ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
+      }
+      @keyframes pageIn {
+        from {
+          opacity: 0;
+          transform: translateY(8px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
 
-    <div class="card">
-      <h2>Memory</h2>
-      <div id="memory"><span class="muted loading">loading…</span></div>
-    </div>
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(min(340px, 100%), 1fr));
+        gap: 16px;
+      }
 
-    <div class="card">
-      <h2>Voice</h2>
-      <div id="voice"><span class="muted loading">loading…</span></div>
-    </div>
+      /*━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        Cards
+        ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━*/
+      .card {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        padding: 18px 20px;
+        transition:
+          border-color var(--ease),
+          box-shadow var(--ease);
+      }
+      .card:hover {
+        border-color: var(--line-strong);
+        box-shadow: var(--shadow-sm);
+      }
+      .card h2 {
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--muted);
+        margin: 0 0 12px;
+      }
 
-    <div class="card">
-      <h2>Permissions</h2>
-      <div id="permissions"><span class="muted loading">asking macOS…</span></div>
-      <!-- Outside the re-rendered container on purpose: the card polls, and a note rendered
-           inside it is replaced by its own default text the instant the answer arrives. -->
-      <p class="note muted" id="permNote">Granting happens on this laptop, and macOS is asked
-        only when you press the button.</p>
-    </div>
+      /*━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        Rows inside cards
+        ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━*/
+      .row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        padding: 7px 0;
+        border-bottom: 1px solid var(--line);
+        font-size: 13px;
+      }
+      .row:last-child {
+        border-bottom: 0;
+      }
+      .muted {
+        color: var(--muted);
+      }
+      .ok {
+        color: var(--ok);
+        font-weight: 600;
+      }
+      .off {
+        color: var(--muted);
+      }
+      .bad {
+        color: var(--bad);
+        font-weight: 600;
+      }
+      .warn {
+        color: var(--warn);
+        font-weight: 600;
+      }
 
-    <div class="card">
-      <h2>Start-up</h2>
-      <div id="persistence"><span class="muted loading">asking launchd…</span></div>
-      <p class="note muted" id="persistNote">A login item is what runs when nobody is watching, so
-        pressing it goes through the approval card first. The line above is read back from launchd,
-        never from what the request claimed.</p>
-    </div>
+      /*━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        Command Bar — the hero
+        ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━*/
+      .cmdbar {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 20px;
+      }
+      .cmdbar input {
+        flex: 1;
+        padding: 14px 18px;
+        border: 1px solid var(--line-strong);
+        border-radius: var(--radius);
+        font-size: 14.5px;
+        font-weight: 450;
+        background: var(--panel);
+        color: var(--ink);
+        transition:
+          border-color var(--ease),
+          box-shadow var(--ease);
+        letter-spacing: -0.01em;
+      }
+      .cmdbar input::placeholder {
+        color: var(--muted);
+        opacity: 0.7;
+      }
+      .cmdbar input:focus {
+        border-color: var(--accent);
+        box-shadow:
+          0 0 0 3px var(--accent-glow),
+          var(--shadow-glow);
+        outline: none;
+      }
+      .cmdbar button {
+        padding: 14px 28px;
+        border: 0;
+        border-radius: var(--radius);
+        background: var(--accent);
+        color: var(--on-accent);
+        font-weight: 620;
+        font-size: 14px;
+        cursor: pointer;
+        letter-spacing: -0.01em;
+        transition:
+          background var(--ease),
+          transform 100ms ease,
+          box-shadow var(--ease);
+      }
+      .cmdbar button:hover {
+        background: var(--accent-dim);
+        box-shadow: 0 2px 12px var(--accent-glow);
+      }
+      .cmdbar button:active {
+        transform: scale(0.975);
+      }
 
-    <div class="card">
-      <h2>Health &amp; Recovery</h2>
-      <div id="health-metrics"><span class="muted loading">loading…</span></div>
-    </div>
+      /*━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        Quick actions
+        ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━*/
+      .quick {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin: 0 0 16px;
+      }
+      .quick button {
+        padding: 8px 16px;
+        font-size: 13px;
+        font-weight: 500;
+        cursor: pointer;
+        background: var(--ghost-bg);
+        color: var(--ink-dim);
+        border: 1px solid var(--line);
+        border-radius: var(--radius-pill);
+        transition:
+          background var(--ease),
+          color var(--ease),
+          border-color var(--ease),
+          transform 100ms ease;
+      }
+      .quick button:hover {
+        background: var(--tag-bg);
+        color: var(--ink);
+        border-color: var(--line-strong);
+      }
+      .quick button:active {
+        transform: translateY(1px);
+      }
 
-    <div class="card">
-      <h2>Privacy</h2>
-      <div id="privacy"><span class="muted loading">loading…</span></div>
-    </div>
+      /*━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        Emergency stop
+        ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━*/
+      .stopbtn {
+        background: var(--bad);
+        color: var(--on-bad);
+        font-weight: 620;
+        font-size: 12.5px;
+        padding: 8px 20px;
+        border: 0;
+        border-radius: var(--radius-sm);
+        cursor: pointer;
+        letter-spacing: 0.02em;
+        transition:
+          background var(--ease),
+          box-shadow var(--ease);
+      }
+      .stopbtn:hover {
+        background: var(--bad-hover);
+        box-shadow: 0 2px 16px var(--bad-glow);
+      }
+      .revoked {
+        color: var(--bad-ink);
+        font-weight: 600;
+      }
 
-    <div class="card" style="grid-column: 1 / -1;">
-      <h2>Tool Registry</h2>
-      <div class="toolbar">
-        <input id="toolFilter" placeholder="filter by name or description"
-               aria-label="Filter the tool registry" autocomplete="off" />
-        <span class="muted" id="toolCount"></span>
+      .forget {
+        background: transparent;
+        color: var(--muted);
+        border: 1px solid var(--line);
+        border-radius: var(--radius-sm);
+        padding: 4px 10px;
+        cursor: pointer;
+        font-size: 11px;
+        margin-left: 8px;
+        font-weight: 500;
+        transition:
+          color var(--ease),
+          border-color var(--ease),
+          background var(--ease);
+      }
+      .forget:hover {
+        color: var(--bad-ink);
+        border-color: rgba(248, 113, 113, 0.3);
+        background: var(--bad-glow);
+      }
+
+      /*━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        Toolbar
+        ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━*/
+      .toolbar {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        margin-bottom: 10px;
+      }
+      .toolbar input {
+        flex: 1;
+        max-width: 360px;
+        padding: 9px 14px;
+        font-size: 13px;
+        border: 1px solid var(--line);
+        border-radius: var(--radius-sm);
+        background: var(--panel);
+        color: var(--ink);
+        transition: border-color var(--ease);
+      }
+      .toolbar input:focus {
+        border-color: var(--accent);
+        outline: none;
+      }
+
+      .note {
+        font-size: 12px;
+        margin: 8px 0 0;
+        color: var(--muted);
+      }
+
+      /* AI Providers card */
+      .key-bar {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        margin-bottom: 12px;
+        padding: 10px;
+        background: var(--panel);
+        border-radius: var(--radius-sm);
+        flex-wrap: wrap;
+      }
+      .key-bar select {
+        padding: 7px 10px;
+        font-size: 13px;
+        border: 1px solid var(--line);
+        border-radius: var(--radius-sm);
+        background: var(--panel);
+        color: var(--ink);
+        min-width: 150px;
+      }
+      .key-bar input {
+        flex: 1;
+        min-width: 180px;
+        padding: 7px 10px;
+        font-size: 13px;
+        border: 1px solid var(--line);
+        border-radius: var(--radius-sm);
+        background: var(--panel);
+        color: var(--ink);
+      }
+      .key-bar input:focus,
+      .key-bar select:focus {
+        border-color: var(--accent);
+        outline: none;
+      }
+      .btn-small {
+        padding: 6px 14px;
+        font-size: 12px;
+        font-weight: 600;
+        border: 1px solid var(--accent);
+        border-radius: var(--radius-sm);
+        background: var(--accent);
+        color: var(--on-accent);
+        cursor: pointer;
+        white-space: nowrap;
+        transition: opacity var(--ease);
+      }
+      .btn-small:hover {
+        opacity: 0.8;
+      }
+      .btn-small.muted {
+        background: var(--panel);
+        color: var(--muted);
+        border-color: var(--line);
+      }
+      .provider-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 8px 10px;
+        margin-bottom: 6px;
+        background: var(--panel);
+        border-radius: var(--radius-sm);
+      }
+      .provider-row .label {
+        flex: 1;
+        font-weight: 500;
+        font-size: 13px;
+      }
+      .provider-row .badge {
+        font-size: 11px;
+        padding: 2px 8px;
+        border-radius: 10px;
+        font-weight: 600;
+      }
+      .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        display: inline-block;
+        flex-shrink: 0;
+      }
+      .dot.ok {
+        background: var(--ok);
+      }
+      .dot.warn {
+        background: var(--warn);
+      }
+      .dot.off {
+        background: var(--muted);
+        opacity: 0.4;
+      }
+      .icon-btn {
+        background: none;
+        border: 1px solid var(--line);
+        border-radius: var(--radius-sm);
+        color: var(--muted);
+        cursor: pointer;
+        font-size: 11px;
+        padding: 3px 8px;
+        line-height: 1;
+        transition:
+          color var(--ease),
+          border-color var(--ease);
+      }
+      .icon-btn:hover {
+        color: var(--ink);
+        border-color: var(--ink);
+      }
+      .icon-btn.danger:hover {
+        color: var(--err);
+        border-color: var(--err);
+      }
+      .loading {
+        opacity: 0.6;
+      }
+
+      /*━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        AI providers
+        ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━*/
+      .ai-providers {
+        margin-top: 32px;
+      }
+      .ai-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+        gap: 12px;
+      }
+      .ai-card {
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        background: var(--panel);
+        padding: 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        transition: border-color var(--ease);
+      }
+      .ai-card:hover {
+        border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
+      }
+      .ai-card-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+      .ai-logo {
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        padding: 4px 8px;
+        border-radius: 6px;
+      }
+      .ai-card-body {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        flex: 1;
+      }
+      .ai-name {
+        font-size: 14px;
+        font-weight: 600;
+      }
+      .ai-status {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12px;
+        color: var(--muted);
+        min-height: 16px;
+      }
+      .ai-badges {
+        display: flex;
+        gap: 6px;
+      }
+      .ai-badge {
+        font-size: 11px;
+        color: var(--muted);
+        border: 1px solid var(--line);
+        padding: 2px 7px;
+        border-radius: 10px;
+      }
+      .ai-badge.def {
+        color: var(--ok);
+        border-color: color-mix(in srgb, var(--ok) 40%, transparent);
+      }
+      .ai-card-actions {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+      }
+      .ai-test-btn {
+        font-size: 12px;
+        padding: 4px 12px;
+        border-radius: var(--radius-sm);
+      }
+      .ai-trash {
+        margin-left: auto;
+      }
+      .ai-modal {
+        display: none;
+        position: fixed;
+        inset: 0;
+        z-index: 100;
+        background: color-mix(in srgb, black 60%, transparent);
+        backdrop-filter: blur(2px);
+        align-items: center;
+        justify-content: center;
+      }
+      .ai-modal.open {
+        display: flex;
+      }
+      .ai-modal-box {
+        width: min(90vw, 380px);
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        padding: 24px;
+      }
+      .ai-modal-box h3 {
+        font-size: 15px;
+        margin-bottom: 16px;
+      }
+      .ai-modal-box label {
+        display: block;
+        font-size: 12px;
+        color: var(--muted);
+        margin-bottom: 6px;
+      }
+      .ai-modal-box select,
+      .ai-modal-box input {
+        width: 100%;
+        box-sizing: border-box;
+        background: var(--bg);
+        border: 1px solid var(--line);
+        border-radius: var(--radius-sm);
+        color: var(--ink);
+        padding: 8px 10px;
+        font-size: 13px;
+        margin-bottom: 14px;
+      }
+      .ai-modal-box select:focus,
+      .ai-modal-box input:focus {
+        outline: none;
+        border-color: var(--accent);
+      }
+      .ai-modal-actions {
+        display: flex;
+        gap: 10px;
+        justify-content: flex-end;
+      }
+
+      /*━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        State / pipeline chip
+        ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━*/
+      .state {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin: 0 0 10px;
+        font-size: 12px;
+        letter-spacing: 0.03em;
+        font-weight: 600;
+      }
+      .state .chip {
+        padding: 4px 11px;
+        border-radius: var(--radius-pill);
+        background: var(--tag-bg);
+        border: 1px solid currentColor;
+        text-transform: uppercase;
+        font-size: 10px;
+        font-weight: 650;
+        letter-spacing: 0.05em;
+      }
+      .state.ok .chip {
+        color: var(--ok);
+        background: var(--ok-glow);
+      }
+      .state.warn .chip {
+        color: var(--warn);
+        background: var(--warn-glow);
+      }
+      .state.bad .chip {
+        color: var(--bad);
+        background: var(--bad-glow);
+      }
+      .state.muted .chip {
+        color: var(--muted);
+        font-weight: 500;
+      }
+
+      /*━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        Steps list
+        ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━*/
+      .steps {
+        list-style: none;
+        margin: 0 0 12px;
+        padding: 0;
+        font-size: 12px;
+      }
+      .steps li {
+        display: flex;
+        gap: 10px;
+        align-items: baseline;
+        padding: 3px 0;
+        color: var(--ink-dim);
+      }
+      .steps li .chip {
+        padding: 2px 9px;
+        border-radius: var(--radius-pill);
+        border: 1px solid currentColor;
+        text-transform: uppercase;
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        flex: 0 0 auto;
+        min-width: 96px;
+        text-align: center;
+      }
+      .steps li.ok .chip {
+        color: var(--ok);
+      }
+      .steps li.warn .chip {
+        color: var(--warn);
+      }
+      .steps li.bad .chip {
+        color: var(--bad);
+      }
+      .steps li.muted .chip {
+        color: var(--muted);
+        font-weight: 500;
+      }
+      .steps li .name {
+        font-weight: 500;
+      }
+      .steps li .status {
+        margin-left: auto;
+        font-weight: 500;
+      }
+
+      /*━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        Console / response
+        ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━*/
+      .console {
+        background: var(--console-bg);
+        color: var(--console-ink);
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        padding: 16px 20px;
+        margin: 0 0 16px;
+        font:
+          13px/1.6 "SF Mono",
+          "Fira Code",
+          "Fira Mono",
+          Menlo,
+          Consolas,
+          monospace;
+        white-space: pre-wrap;
+        word-break: break-word;
+        max-height: 320px;
+        overflow-y: auto;
+      }
+      .console .m {
+        color: var(--console-muted);
+      }
+      .console .ok {
+        color: var(--ok-ink);
+        font-weight: 500;
+      }
+      .console .bad {
+        color: var(--bad-ink);
+        font-weight: 500;
+      }
+
+      /*━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        Status dot — refined indicator
+        ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━*/
+      .dot {
+        display: inline-block;
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        margin-right: 6px;
+        vertical-align: middle;
+        position: relative;
+        top: -1px;
+      }
+      .dot.ok {
+        background: var(--ok);
+        box-shadow: 0 0 6px var(--ok-glow);
+      }
+      .dot.warn {
+        background: var(--warn);
+        box-shadow: 0 0 6px var(--warn-glow);
+      }
+      .dot.bad {
+        background: var(--bad);
+        box-shadow: 0 0 6px var(--bad-glow);
+      }
+      .dot.off {
+        background: var(--muted);
+        box-shadow: none;
+      }
+
+      /*━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        Loading / empty
+        ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━*/
+      .loading {
+        animation: pulse 1.8s ease-in-out infinite;
+      }
+      @keyframes pulse {
+        0%,
+        100% {
+          opacity: 0.35;
+        }
+        50% {
+          opacity: 0.7;
+        }
+      }
+      .empty {
+        padding: 20px 0;
+        text-align: center;
+        color: var(--muted);
+        font-size: 13px;
+      }
+      .empty b {
+        font-weight: 600;
+        color: var(--ink-dim);
+        display: block;
+        margin-bottom: 4px;
+      }
+
+      /*━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        Permission tags
+        ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━*/
+      .perm-tag {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 3px 10px;
+        border-radius: var(--radius-pill);
+        font-size: 11.5px;
+        font-weight: 500;
+        margin: 2px 3px;
+      }
+      .perm-tag.allow {
+        background: var(--ok-glow);
+        color: var(--ok);
+      }
+      .perm-tag.deny {
+        background: var(--bad-glow);
+        color: var(--bad);
+      }
+      .perm-tag.ask {
+        background: var(--warn-glow);
+        color: var(--warn);
+      }
+
+      /*━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        Responsive
+        ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━*/
+      @media (max-width: 640px) {
+        header {
+          padding: 12px 16px;
+        }
+        .wrap {
+          padding: 16px 14px 32px;
+        }
+        .grid {
+          grid-template-columns: 1fr;
+          gap: 12px;
+        }
+        .cmdbar {
+          flex-direction: column;
+        }
+        .cmdbar button {
+          width: 100%;
+        }
+      }
+
+      @media (max-width: 430px) {
+        header {
+          flex-wrap: wrap;
+          gap: 8px;
+          padding: 10px 12px;
+        }
+        .wrap {
+          padding: 12px 10px 28px;
+        }
+        .quick button {
+          padding: 8px 12px;
+          font-size: 12.5px;
+        }
+        .cmdbar input {
+          font-size: 16px; /* 16px stops iOS Safari zoom-on-focus */
+        }
+        table {
+          display: block;
+          overflow-x: auto;
+          -webkit-overflow-scrolling: touch;
+        }
+      }
+
+      /*━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        Tool table
+        ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━*/
+      .tool-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 12.5px;
+      }
+      .tool-table th {
+        text-align: left;
+        font-weight: 600;
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--muted);
+        padding: 0 0 8px;
+        border-bottom: 1px solid var(--line);
+      }
+      .tool-table td {
+        padding: 6px 0;
+        border-bottom: 1px solid var(--line);
+        color: var(--ink-dim);
+      }
+      .tool-table tr:hover td {
+        color: var(--ink);
+      }
+
+      /*━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        Confirmation row
+        ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━*/
+      .confirm-actions {
+        display: flex;
+        gap: 8px;
+        margin-top: 6px;
+      }
+      .confirm-actions button {
+        padding: 5px 14px;
+        font-size: 12px;
+        font-weight: 600;
+        border: 0;
+        border-radius: var(--radius-sm);
+        cursor: pointer;
+        transition:
+          filter var(--ease),
+          transform 100ms ease;
+      }
+      .confirm-actions button:active {
+        transform: scale(0.97);
+      }
+      .confirm-actions .approve {
+        background: var(--ok);
+        color: var(--on-ok);
+      }
+      .confirm-actions .deny {
+        background: var(--bad);
+        color: var(--on-bad);
+      }
+      .confirm-actions button:hover {
+        filter: brightness(1.1);
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Vantage</h1>
+      <div
+        id="stale-code"
+        hidden
+        style="
+          margin: 8px 0;
+          padding: 8px 10px;
+          border-radius: 6px;
+          background: #4a3a12;
+          color: #f0c674;
+          font-size: 12px;
+        "
+      ></div>
+      <nav style="display: flex; gap: 8px; align-items: center">
+        <a
+          href="/planner"
+          style="color: var(--accent); text-decoration: none; font-size: 12px"
+        >
+          Planner
+        </a>
+        <a
+          href="/operator"
+          style="color: var(--accent); text-decoration: none; font-size: 12px"
+        >
+          Operator
+        </a>
+        <a
+          href="/work"
+          style="color: var(--accent); text-decoration: none; font-size: 12px"
+        >
+          Work
+        </a>
+        <a
+          href="/ai/chat"
+          style="color: var(--accent); text-decoration: none; font-size: 12px"
+        >
+          AI Chat
+        </a>
+        <a
+          href="/ai-connections"
+          style="color: var(--accent); text-decoration: none; font-size: 12px"
+        >
+          Settings
+        </a>
+      </nav>
+      <span class="pill" id="version">core</span>
+      <span class="pill" id="llm">model: rules</span>
+      <span style="flex: 1"></span>
+      <span class="muted" id="clock"></span>
+    </header>
+
+    <div class="wrap">
+      <div class="cmdbar">
+        <input
+          id="cmd"
+          aria-label="Command for Vantage"
+          placeholder='Try: "what is my battery"  ·  "find my report"  ·  "help"'
+          autocomplete="off"
+        />
+        <button id="send" aria-label="Send command">Send</button>
       </div>
-      <div id="tools"><span class="muted loading">loading…</span></div>
+      <!-- Rendered against GET /tools: a button exists only while the capability does. -->
+      <!-- §30: a stop reachable without typing, from the screen that shows the work. Its label is
+       the laptop's own report, including the part it cannot stop. -->
+      <div class="row" style="margin-bottom: 8px">
+        <button id="stopAll" class="stopbtn" aria-label="Emergency stop">
+          Emergency stop
+        </button>
+        <span class="muted" id="stopNote"
+          >stops what is running now; asks nothing first</span
+        >
+      </div>
+      <div class="quick" id="quick" role="group" aria-label="Quick actions">
+        <span class="muted">loading tools…</span>
+      </div>
+      <!-- Rendered from the backend's own fields. See pipelineState() for exactly
+       which ones, and why an HTTP 200 or action.ok is never one of them. -->
+      <div class="state muted" id="state" role="status" aria-live="polite">
+        <span class="chip" id="stateChip">IDLE</span
+        ><span class="muted" id="stateNote"></span>
+      </div>
+      <!-- A goal that became several steps. Each line is the server's own step
+       status; nothing here is inferred from the request having been sent. -->
+      <ol class="steps" id="steps" hidden></ol>
+      <pre class="reply" id="reply" aria-live="polite">
+Ready. Type a command above, or say "help" to see what I can do.</pre>
+
+      <div class="grid">
+        <div class="card">
+          <h2>Devices</h2>
+          <div id="devices"><span class="muted loading">loading…</span></div>
+        </div>
+
+        <div class="card">
+          <h2>Peripherals &amp; Gateways</h2>
+          <div id="peripherals">
+            <span class="muted loading">loading…</span>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>Pending Confirmations</h2>
+          <div id="confirmations"><span class="muted">none</span></div>
+        </div>
+
+        <div class="card">
+          <h2>Recent Actions</h2>
+          <div id="audit"><span class="muted loading">loading…</span></div>
+        </div>
+
+        <div class="card">
+          <h2>Memory</h2>
+          <div id="memory"><span class="muted loading">loading…</span></div>
+        </div>
+
+        <div class="card">
+          <h2>Voice</h2>
+          <div id="voice"><span class="muted loading">loading…</span></div>
+        </div>
+
+        <div class="card">
+          <h2>Permissions</h2>
+          <div id="permissions">
+            <span class="muted loading">asking macOS…</span>
+          </div>
+          <!-- Outside the re-rendered container on purpose: the card polls, and a note rendered
+           inside it is replaced by its own default text the instant the answer arrives. -->
+          <p class="note muted" id="permNote">
+            Granting happens on this laptop, and macOS is asked only when you
+            press the button.
+          </p>
+        </div>
+
+        <div class="card">
+          <h2>Start-up</h2>
+          <div id="persistence">
+            <span class="muted loading">asking launchd…</span>
+          </div>
+          <p class="note muted" id="persistNote">
+            A login item is what runs when nobody is watching, so pressing it
+            goes through the approval card first. The line above is read back
+            from launchd, never from what the request claimed.
+          </p>
+        </div>
+
+        <div class="card">
+          <h2>Health &amp; Recovery</h2>
+          <div id="health-metrics">
+            <span class="muted loading">loading…</span>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>Failures</h2>
+          <div class="muted" style="font-size: 12px">
+            What actually went wrong, newest first. A count alone tells you
+            something is broken but not what to fix.
+          </div>
+          <div id="failure-list" style="margin-top: 8px; font-size: 12px">
+            <span class="muted loading">loading…</span>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>Privacy</h2>
+          <div id="privacy"><span class="muted loading">loading…</span></div>
+        </div>
+
+        <div class="card" id="providersCard">
+          <h2>AI Providers</h2>
+          <div class="toolbar">
+            <button id="addKeyBtn" class="btn-small">+ Add Key</button>
+            <span class="muted" id="providerCount"></span>
+          </div>
+          <div id="addKeyForm" class="key-bar" style="display: none">
+            <select id="providerSelect" aria-label="Pick a provider"></select>
+            <input
+              id="keyInput"
+              placeholder="sk-… or keychain path"
+              autocomplete="off"
+              aria-label="API key"
+            />
+            <button id="submitKeyBtn" class="btn-small">Store</button>
+            <button id="cancelKeyBtn" class="btn-small muted">Cancel</button>
+          </div>
+          <div id="providersList">
+            <span class="muted loading">loading…</span>
+          </div>
+        </div>
+
+        <div class="card" style="grid-column: 1 / -1">
+          <h2>Tool Registry</h2>
+          <div class="toolbar">
+            <input
+              id="toolFilter"
+              placeholder="filter by name or description"
+              aria-label="Filter the tool registry"
+              autocomplete="off"
+            />
+            <span class="muted" id="toolCount"></span>
+          </div>
+          <div id="tools"><span class="muted loading">loading…</span></div>
+        </div>
+      </div>
     </div>
-  </div>
-</div>
 
-<script>
-const API = "";
+    <script>
+      const API = "";
 
-// The server injects a single-use bootstrap code, not the API token. This page
-// spends that code once on /auth/session and keeps the returned session token in
-// memory only -- never localStorage -- so the credential dies with the tab, and a
-// page reload is what renews it.
-let TOKEN = "";
-const BOOTSTRAP = (document.querySelector('meta[name="jarvis-bootstrap"]') || {}).content || "";
+      // The server injects a single-use bootstrap code, not the API token. This page
+      // spends that code once on /auth/session and keeps the returned session token in
+      // memory only -- never localStorage -- so the credential dies with the tab, and a
+      // page reload is what renews it.
+      let TOKEN = "";
+      const BOOTSTRAP =
+        (document.querySelector('meta[name="jarvis-bootstrap"]') || {})
+          .content || "";
 
-async function authenticate() {
-  if (!BOOTSTRAP) return;  // auth is off; every route answers without a credential
-  const res = await fetch(API + "/auth/session", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ bootstrap: BOOTSTRAP }),
-  });
-  if (!res.ok) throw new Error(res.status + " -- reload the dashboard");
-  const data = await res.json();
-  TOKEN = data.session_token || "";
-  if (!TOKEN) throw new Error("empty session -- reload the dashboard");
-}
+      async function authenticate() {
+        if (!BOOTSTRAP) return; // auth is off; every route answers without a credential
+        const res = await fetch(API + "/auth/session", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ bootstrap: BOOTSTRAP }),
+        });
+        if (!res.ok) throw new Error(res.status + " -- reload the dashboard");
+        const data = await res.json();
+        TOKEN = data.session_token || "";
+        if (!TOKEN) throw new Error("empty session -- reload the dashboard");
+      }
 
-function authHeaders(extra) {
-  const headers = Object.assign({}, extra || {});
-  if (TOKEN) headers["X-JARVIS-Token"] = TOKEN;
-  return headers;
-}
+      function authHeaders(extra) {
+        const headers = Object.assign({}, extra || {});
+        if (TOKEN) headers["X-JARVIS-Token"] = TOKEN;
+        return headers;
+      }
 
-async function get(path) {
-  const res = await fetch(API + path, { headers: authHeaders() });
-  if (res.status === 401) throw new Error("unauthorised: session missing, expired or revoked. Reload the dashboard.");
-  if (!res.ok) throw new Error(path + " -> " + res.status);
-  return res.json();
-}
+      async function get(path) {
+        const res = await fetch(API + path, { headers: authHeaders() });
+        if (res.status === 401)
+          throw new Error(
+            "unauthorised: session missing, expired or revoked. Reload the dashboard.",
+          );
+        if (!res.ok) throw new Error(path + " -> " + res.status);
+        return res.json();
+      }
 
-function escapeHtml(value) {
-  return String(value ?? "").replace(/[&<>"']/g, c => (
-    { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]
-  ));
-}
+      function escapeHtml(value) {
+        return String(value ?? "").replace(
+          /[&<>"']/g,
+          (c) =>
+            ({
+              "&": "&amp;",
+              "<": "&lt;",
+              ">": "&gt;",
+              '"': "&quot;",
+              "'": "&#39;",
+            })[c],
+        );
+      }
 
-// ---------------------------------------------------------------------------
-// Quick actions
-// ---------------------------------------------------------------------------
-//
-// The sentences worth saying, so a person does not have to remember a command list.
-// `say` is what gets typed into the command box, and `{site}` / `{name}` / `{subject}`
-// are the one word a tap cannot know -- the page asks for those, and sends nothing if
-// the answer comes back blank. A slot that reached /command literally would search for
-// a file called "{name}".
-//
-// Why a button types a sentence instead of calling a tool endpoint directly: every
-// command has to pass permission, confirmation, verification and the audit row, and the
-// /command path is the only thing that runs all of them. A second path would be a second
-// set of gates to keep in sync, which is how a UI ends up advertising a capability the
-// system no longer grants.
-//
-// "Explain something" says `explain {subject}` rather than passing a free question
-// through, measured on this build: "what trains run from pune to mumbai" parses to
-// nothing at all, while "explain what a load balancer does" hands the lookup the whole
-// clause as its topic. A button that only works when the person happens to phrase the
-// question in one particular shape is not a button.
-const QUICK = [
-  { label: "Battery", tool: "get_battery_status", say: "what is my battery" },
-  { label: "Storage", tool: "check_storage", say: "check storage" },
-  { label: "Open project", tool: "open_project_folder", say: "open my project" },
-  { label: "Find a file", tool: "find_and_open", say: "find {name} and open it" },
-  { label: "Open a site", tool: "open_url", say: "open the {site} site" },
-  { label: "Explain something", tool: "ask_question", say: "explain {subject}" },
-  { label: "What I remember", tool: "memory_overview", say: "what do you remember" },
-  { label: "Screenshot", tool: "take_screenshot", say: "take a screenshot" },
-  { label: "Time", tool: "get_time", say: "what time is it" }
-];
+      // ---------------------------------------------------------------------------
+      // Quick actions
+      // ---------------------------------------------------------------------------
+      //
+      // The sentences worth saying, so a person does not have to remember a command list.
+      // `say` is what gets typed into the command box, and `{site}` / `{name}` / `{subject}`
+      // are the one word a tap cannot know -- the page asks for those, and sends nothing if
+      // the answer comes back blank. A slot that reached /command literally would search for
+      // a file called "{name}".
+      //
+      // Why a button types a sentence instead of calling a tool endpoint directly: every
+      // command has to pass permission, confirmation, verification and the audit row, and the
+      // /command path is the only thing that runs all of them. A second path would be a second
+      // set of gates to keep in sync, which is how a UI ends up advertising a capability the
+      // system no longer grants.
+      //
+      // "Explain something" says `explain {subject}` rather than passing a free question
+      // through, measured on this build: "what trains run from pune to mumbai" parses to
+      // nothing at all, while "explain what a load balancer does" hands the lookup the whole
+      // clause as its topic. A button that only works when the person happens to phrase the
+      // question in one particular shape is not a button.
 
-const SLOT_ASK = {
-  site: "Which site? (opens in the browser)",
-  name: "What should I look for?",
-  subject: "Explain what? (one topic, up to 8 words)"
-};
+      const SLOT_ASK = {
+        site: "Which site? (opens in the browser)",
+        name: "What should I look for?",
+        subject: "Explain what? (one topic, up to 8 words)",
+      };
 
-function tap(action) {
-  const answers = {};
-  let blank = false;
-  (action.say.match(/\{\w+\}/g) || []).forEach(slot => {
-    const key = slot.slice(1, -1);
-    if (answers[key] === undefined) {
-      const answer = (prompt(SLOT_ASK[key] || (key + "?"), "") || "").trim();
-      if (!answer) blank = true;
-      answers[key] = answer;
-    }
-  });
-  if (blank) return;
-  const text = action.say.replace(/\{(\w+)\}/g, (_, key) => answers[key]);
-  document.getElementById("cmd").value = text;
-  send();
-}
+      function tap(action) {
+        const answers = {};
+        let blank = false;
+        (action.say.match(/\{\w+\}/g) || []).forEach((slot) => {
+          const key = slot.slice(1, -1);
+          if (answers[key] === undefined) {
+            const answer = (
+              prompt(SLOT_ASK[key] || key + "?", "") || ""
+            ).trim();
+            if (!answer) blank = true;
+            answers[key] = answer;
+          }
+        });
+        if (blank) return;
+        const text = action.say.replace(/\{(\w+)\}/g, (_, key) => answers[key]);
+        document.getElementById("cmd").value = text;
+        send();
+      }
 
-// Rendered against the registry the laptop just reported, so removing a tool removes its
-// button. `_toolsFailed` keeps a failed read from being painted as "nothing available":
-// an empty list is a claim about the machine, and a request that threw says nothing about
-// it. `_quickSource` records which read the band currently shows came from, so a stale
-// band cannot survive a successful one.
-let _tools = [];
-let _toolsFailed = null;
-let _quickSignature = null;
+      // Rendered against the registry the laptop just reported, so removing a tool removes its
+      // button. `_toolsFailed` keeps a failed read from being painted as "nothing available":
+      // an empty list is a claim about the machine, and a request that threw says nothing about
+      // it. `_quickSource` records which read the band currently shows came from, so a stale
+      // band cannot survive a successful one.
+      let _tools = [];
+      let _toolsFailed = null;
+      let _quickSignature = null;
 
-function renderQuick() {
-  const box = document.getElementById("quick");
-  if (_toolsFailed && !_tools.length) {
-    box.innerHTML = `<span class="muted">cannot read the tool registry: ${escapeHtml(_toolsFailed)}</span>`;
-    _quickSignature = null;
-    return;
-  }
-  const names = _tools.map(t => t.name);
-  const live = QUICK.filter(a => names.indexOf(a.tool) !== -1);
-  const signature = live.map(a => a.tool).join(",");
-  if (signature === _quickSignature) return;      // repaint only on a real change
-  _quickSignature = signature;
-  const hidden = QUICK.length - live.length;
-  box.innerHTML = (live.length
-    ? live.map((a, i) => `<button data-i="${i}" aria-label="${escapeHtml("Ask Vantage: " + a.label)}">`
-        + `${escapeHtml(a.label)}</button>`).join("")
-    : '<span class="muted">this laptop reports none of these capabilities</span>')
-    + (hidden ? `<span class="muted">${hidden} hidden: not available here</span>` : "");
-  box.querySelectorAll("button").forEach(btn => btn.onclick = () => tap(live[Number(btn.dataset.i)]));
-}
+      // Build quick actions dynamically from live tool registry
+      // Maps common natural language phrases to tools
+      const TOOL_QUICK_PHRASES = [
+        ["battery", "get_battery_status", "what is my battery"],
+        ["storage", "check_storage", "check storage"],
+        ["project", "open_project_folder", "open my project"],
+        ["find file", "find_and_open", "find {name} and open it"],
+        ["site", "open_url", "open the {site} site"],
+        ["explain", "ask_question", "explain {subject}"],
+        ["memory", "memory_overview", "what do you remember"],
+        ["screenshot", "take_screenshot", "take a screenshot"],
+        ["time", "get_time", "what time is it"],
+        ["clipboard", "read_clipboard", "what's on clipboard"],
+        ["processes", "list_applications", "what apps are running"],
+        ["system", "inspect_system", "system status"],
+      ];
 
-// Pipeline state, rendered from fields the server already sends. This function
-// decides nothing and authorises nothing -- it only says what the backend said.
-//
-// The rule that matters: VERIFIED comes from actions[].verification === "success"
-// and from nothing else. Not an HTTP 200, not action.ok, not the reply wording
-// containing "success". Phases 9-12 measured that `ok` means "the handler
-// answered", which an offline gateway no-op satisfies as happily as a real
-// actuation; a UI that upgraded a 200 to VERIFIED would rebuild that defect at
-// the top of the stack and make it visible to a human for the first time.
-//
-// When the evidence does not distinguish a state, the answer is UNKNOWN rather
-// than a guess.
-const STATE_TONE = {
-  VERIFIED: "ok",
-  SIMULATED: "warn",
-  UNAVAILABLE: "warn",
-  PLANNED: "muted",
-  EXECUTING: "muted",
-  IDLE: "muted",
-  AWAITING: "warn",
-  "NEEDS DETAIL": "warn",
-  "NOT RECOGNISED": "muted",
-  "NOT AVAILABLE": "warn",
-  "NOTHING EXECUTED": "muted",
-  "VERIFIED IN PART": "warn",
-  UNKNOWN: "bad",
-  FAILED: "bad",
-  BLOCKED: "bad",
-};
+      function renderQuick() {
+        const box = document.getElementById("quick");
+        if (_toolsFailed && !_tools.length) {
+          box.innerHTML = `<span class="muted">cannot read the tool registry: ${escapeHtml(_toolsFailed)}</span>`;
+          _quickSignature = null;
+          return;
+        }
 
-function pipelineState(data) {
-  if (!data || typeof data !== "object") return "UNKNOWN";
+        const names = _tools.map((t) => t.name);
 
-  // Asked, not yet approved: nothing has run, whatever the status code said.
-  if (data.needs_confirmation === true && data.confirmation_id) return "AWAITING CONFIRMATION";
+        // Build dynamic quick actions from live tools
+        const live = TOOL_QUICK_PHRASES.filter(([keyword, tool, say]) =>
+          names.includes(tool),
+        ).map(([keyword, tool, say]) => ({
+          label: keyword.replace("_", " ").toUpperCase(),
+          tool,
+          say,
+        }));
 
-  const actions = Array.isArray(data.actions) ? data.actions : [];
-  // Read once: the plan carries what the response left undone, which matters both
-  // when nothing ran and when part of the request did.
-  const plan = data.plan;
-  if (!actions.length) {
-    if (data.decision === "BLOCK" || data.blocked_reason) return "BLOCKED";
-    // Vantage answered and deliberately ran nothing. That is a known outcome, not
-    // an unknowable one: the Phase 15 acceptance sweep found five of eighteen
-    // commands -- every honest refusal and clarification -- labelled UNKNOWN,
-    // which told the user the system was unsure when it had actually said "no".
-    // The kind is the planner's own word (`plan.reply_kind`): "I did not
-    // understand", "I have no such capability", "I will not do that" and "I need one
-    // more thing from you" are four different answers to four different questions, and
-    // until Phase 19 the page could only say "nothing ran". Phase 24 split the last two:
-    // a refusal ends the turn, a clarification is the user's next move, and showing them
-    // identically hides which. A caller-supplied kind can change a label and nothing
-    // else -- it cannot authorise, verify, or hide an action.
-    if (plan && plan.needs_clarification === true) return "NEEDS DETAIL";
-    if (plan && plan.reply_kind === "clarification") return "NEEDS DETAIL";
-    if (plan && plan.reply_kind === "not_understood") return "NOT RECOGNISED";
-    if (plan && plan.reply_kind === "capability_missing") return "NOT AVAILABLE";
-    if (plan && plan.reply_kind === "declined") return "NOTHING EXECUTED";
-    if (plan && typeof plan.direct_reply === "string" && plan.direct_reply) return "NOTHING EXECUTED";
-    if (plan && Array.isArray(plan.actions) && plan.actions.length) return "PLANNED";
-    return "UNKNOWN";
-  }
+        const signature = live.map((a) => a.tool).join(",");
+        if (signature === _quickSignature) return; // repaint only on a real change
+        _quickSignature = signature;
 
-  const verifications = actions.map(a => a && a.verification);
-  const failed = verifications.indexOf("failed") !== -1;
-  const unknown = verifications.indexOf("unknown") !== -1;
-  const allSuccess = verifications.length > 0 && verifications.every(v => v === "success");
+        box.innerHTML = live.length
+          ? live
+              .map(
+                (a, i) =>
+                  `<button data-i="${i}" data-tool="${escapeHtml(a.tool)}" aria-label="${escapeHtml("Ask Vantage: " + a.label)}">` +
+                  `${escapeHtml(a.label)}</button>`,
+              )
+              .join("")
+          : '<span class="muted">this laptop reports no quick actions available</span>';
 
-  // A provider that could not be reached is a different fact from one that
-  // answered and refused, and neither is a machine that broke.
-  const providerStates = actions.map(a => (a && a.output && a.output.provider_status) || "");
-  if (failed && (providerStates.indexOf("unavailable") !== -1
-                 || providerStates.indexOf("network_error") !== -1)) return "UNAVAILABLE";
+        box.querySelectorAll("button").forEach(
+          (btn) =>
+            (btn.onclick = () => {
+              const toolInfo = live[Number(btn.dataset.i)];
+              if (toolInfo) tap(toolInfo);
+            }),
+        );
+      }
 
-  // A real failure outranks everything below it: SIMULATED must not become a new
-  // way to hide one.
-  if (failed) return "FAILED";
+      // Pipeline state, rendered from fields the server already sends. This function
+      // decides nothing and authorises nothing -- it only says what the backend said.
+      //
+      // The rule that matters: VERIFIED comes from actions[].verification === "success"
+      // and from nothing else. Not an HTTP 200, not action.ok, not the reply wording
+      // containing "success". Phases 9-12 measured that `ok` means "the handler
+      // answered", which an offline gateway no-op satisfies as happily as a real
+      // actuation; a UI that upgraded a 200 to VERIFIED would rebuild that defect at
+      // the top of the stack and make it visible to a human for the first time.
+      //
+      // When the evidence does not distinguish a state, the answer is UNKNOWN rather
+      // than a guess.
+      const STATE_TONE = {
+        VERIFIED: "ok",
+        SIMULATED: "warn",
+        UNAVAILABLE: "warn",
+        PLANNED: "muted",
+        EXECUTING: "muted",
+        IDLE: "muted",
+        AWAITING: "warn",
+        "NEEDS DETAIL": "warn",
+        "NOT RECOGNISED": "muted",
+        "NOT AVAILABLE": "warn",
+        "NOTHING EXECUTED": "muted",
+        "VERIFIED IN PART": "warn",
+        UNKNOWN: "bad",
+        FAILED: "bad",
+        BLOCKED: "bad",
+      };
 
-  // Nothing physical happened. Until Phase 18 this relied on verification=success
-  // and so only appeared while the backend was overstating the result; now that
-  // the ledger says what it means, the label comes from `simulated` alone.
-  if (actions.some(a => a.output && a.output.simulated === true)) return "SIMULATED";
+      function pipelineState(data) {
+        if (!data || typeof data !== "object") return "UNKNOWN";
 
-  if (unknown) return "UNKNOWN";
-  if (allSuccess) {
-    // Every step that ran was observed -- but the planner says part of the request
-    // was never turned into a step at all. Full verification would be a claim about
-    // a job that is not finished, which is how this page read before Phase 19.
-    return (plan && Array.isArray(plan.unhandled) && plan.unhandled.length)
-      ? "VERIFIED IN PART" : "VERIFIED";
-  }
-  return "UNKNOWN";
-}
+        // Asked, not yet approved: nothing has run, whatever the status code said.
+        if (data.needs_confirmation === true && data.confirmation_id)
+          return "AWAITING CONFIRMATION";
 
-function renderState(state, note) {
-  const box = document.getElementById("state");
-  const chip = document.getElementById("stateChip");
-  if (!box || !chip) return;
-  box.className = "state " + stateTone(state);
-  chip.textContent = state;
-  document.getElementById("stateNote").textContent = note || "";
-}
+        const actions = Array.isArray(data.actions) ? data.actions : [];
+        // Read once: the plan carries what the response left undone, which matters both
+        // when nothing ran and when part of the request did.
+        const plan = data.plan;
+        if (!actions.length) {
+          if (data.decision === "BLOCK" || data.blocked_reason)
+            return "BLOCKED";
+          // Vantage answered and deliberately ran nothing. That is a known outcome, not
+          // an unknowable one: the Phase 15 acceptance sweep found five of eighteen
+          // commands -- every honest refusal and clarification -- labelled UNKNOWN,
+          // which told the user the system was unsure when it had actually said "no".
+          // The kind is the planner's own word (`plan.reply_kind`): "I did not
+          // understand", "I have no such capability", "I will not do that" and "I need one
+          // more thing from you" are four different answers to four different questions, and
+          // until Phase 19 the page could only say "nothing ran". Phase 24 split the last two:
+          // a refusal ends the turn, a clarification is the user's next move, and showing them
+          // identically hides which. A caller-supplied kind can change a label and nothing
+          // else -- it cannot authorise, verify, or hide an action.
+          if (plan && plan.needs_clarification === true) return "NEEDS DETAIL";
+          if (plan && plan.reply_kind === "clarification")
+            return "NEEDS DETAIL";
+          if (plan && plan.reply_kind === "not_understood")
+            return "NOT RECOGNISED";
+          if (plan && plan.reply_kind === "capability_missing")
+            return "NOT AVAILABLE";
+          if (plan && plan.reply_kind === "declined") return "NOTHING EXECUTED";
+          if (
+            plan &&
+            typeof plan.direct_reply === "string" &&
+            plan.direct_reply
+          )
+            return "NOTHING EXECUTED";
+          if (plan && Array.isArray(plan.actions) && plan.actions.length)
+            return "PLANNED";
+          return "UNKNOWN";
+        }
 
-// A goal that became several steps. Each status is the backend's own per-step
-// verdict, written from verification rather than from a handler answering, and
-// read back from GET /tasks/{job_id} -- this page supplies nothing.
-//
-// `pending` is the important one: after a sequence stops at an approval, the
-// steps behind it are not queued and not coming. They never ran.
-const STEP_STATE = {
-  succeeded: "VERIFIED",
-  unverified: "UNKNOWN",
-  failed: "FAILED",
-  blocked: "BLOCKED",
-  awaiting_confirmation: "AWAITING CONFIRMATION",
-  running: "EXECUTING",
-  pending: "NOT RUN",
-  skipped: "NOT RUN",
-};
+        const verifications = actions.map((a) => a && a.verification);
+        const failed = verifications.indexOf("failed") !== -1;
+        const unknown = verifications.indexOf("unknown") !== -1;
+        const allSuccess =
+          verifications.length > 0 &&
+          verifications.every((v) => v === "success");
 
-// The aggregate. `done` is only reachable when every step verified; `incomplete`
-// is the honest word for a sequence that stopped part-way and will not resume by
-// itself, because one approval buys one action here.
-const JOB_STATE = {
-  running: "WORKFLOW RUNNING",
-  done: "WORKFLOW COMPLETE",
-  incomplete: "WORKFLOW PARTLY DONE",
-  awaiting_confirmation: "WORKFLOW AWAITING CONFIRMATION",
-  unverified: "WORKFLOW UNVERIFIED",
-  failed: "WORKFLOW FAILED",
-  paused: "WORKFLOW PAUSED",
-  cancelled: "WORKFLOW CANCELLED",
-};
+        // A provider that could not be reached is a different fact from one that
+        // answered and refused, and neither is a machine that broke.
+        const providerStates = actions.map(
+          (a) => (a && a.output && a.output.provider_status) || "",
+        );
+        if (
+          failed &&
+          (providerStates.indexOf("unavailable") !== -1 ||
+            providerStates.indexOf("network_error") !== -1)
+        )
+          return "UNAVAILABLE";
 
-function stateTone(state) {
-  if (String(state).indexOf("AWAITING") === 0) return "warn";
-  if (String(state).indexOf("WORKFLOW") === 0) {
-    if (state.indexOf("COMPLETE") !== -1) return "ok";
-    if (state.indexOf("FAILED") !== -1) return "bad";
-    return "warn";
-  }
-  return STATE_TONE[state] || "muted";
-}
+        // A real failure outranks everything below it: SIMULATED must not become a new
+        // way to hide one.
+        if (failed) return "FAILED";
 
-async function renderWorkflow(jobId) {
-  const box = document.getElementById("steps");
-  if (!box) return;
-  if (!jobId) {
-    box.hidden = true;
-    box.innerHTML = "";
-    return;
-  }
-  let job;
-  try {
-    job = await get("/tasks/" + encodeURIComponent(jobId));
-  } catch (e) {
-    box.hidden = false;
-    box.innerHTML = '<li class="bad"><span class="chip">UNKNOWN</span>'
-      + '<span class="detail">steps could not be read from the backend</span></li>';
-    return;
-  }
-  const rows = [{
-    state: JOB_STATE[job.status] || ("UNKNOWN (" + job.status + ")"),
-    name: "goal",
-    detail: job.goal || "",
-  }].concat((job.steps || []).map(step => ({
-    state: STEP_STATE[step.status] || "UNKNOWN",
-    name: step.name,
-    detail: step.detail || "",
-  })));
-  box.innerHTML = rows.map(row =>
-    '<li class="' + stateTone(row.state) + '">'
-    + '<span class="chip">' + escapeHtml(row.state) + '</span>'
-    + '<span class="name">' + escapeHtml(row.name) + '</span>'
-    + '<span class="detail">' + escapeHtml(row.detail) + '</span></li>'
-  ).join("");
-  box.hidden = false;
-}
+        // Nothing physical happened. Until Phase 18 this relied on verification=success
+        // and so only appeared while the backend was overstating the result; now that
+        // the ledger says what it means, the label comes from `simulated` alone.
+        if (actions.some((a) => a.output && a.output.simulated === true))
+          return "SIMULATED";
 
-function applyHealth(h) {
-  // "cloud" named no vendor while the gateway can be pointed at two of them, which is the
-  // smaller twin of the badge Phase 60 removed. With no key configured there is no vendor to
-  // name either: rules answer, and printing a configured-by-default vendor would advertise a
-  // call path that will never be taken.
-  const model = h.llm_enabled ? (h.ai_provider || "a configured model") : "rules (no key)";
-  document.getElementById("llm").textContent =
-    "model: " + model + " · " + h.tools + " tools";
-}
+        if (unknown) return "UNKNOWN";
+        if (allSuccess) {
+          // Every step that ran was observed -- but the planner says part of the request
+          // was never turned into a step at all. Full verification would be a claim about
+          // a job that is not finished, which is how this page read before Phase 19.
+          return plan && Array.isArray(plan.unhandled) && plan.unhandled.length
+            ? "VERIFIED IN PART"
+            : "VERIFIED";
+        }
+        return "UNKNOWN";
+      }
 
-// "OFFLINE" is not one fact, it is several: a device that was never paired, one
-// waiting for approval, a revoked one, an adapter that was never configured, and
-// a gateway that is simulated. The backends already know which; flattening them
-// into one red/green dot would throw that away.
-//
-// Pairing words only apply to devices that pair. home_gateway and car_main are
-// gateways and adapters, so telling the user to "pair" them is simply wrong --
-// their real state comes from the peripheral report below.
-const AUTH_WORD = {
-  paired: "paired", pending: "awaiting approval",
-  unpaired: "not paired", revoked: "revoked",
-};
-const PERIPHERAL_OF = { car_main: "car", watch_main: "watch", home_gateway: "home" };
-let _peripherals = {};
-let _deviceNote = "";
+      function renderState(state, note) {
+        const box = document.getElementById("state");
+        const chip = document.getElementById("stateChip");
+        if (!box || !chip) return;
+        box.className = "state " + stateTone(state);
+        chip.textContent = state;
+        document.getElementById("stateNote").textContent = note || "";
+      }
 
-function peripheralWord(info) {
-  if (!info) return null;
-  if (info.error) return { text: "state unavailable", cls: "bad" };
-  // The watch is the one mapped device that pairs, so its pairing state leads.
-  if (info.auth_state && info.auth_state !== "paired") {
-    return {
-      text: AUTH_WORD[info.auth_state] || info.auth_state,
-      cls: info.auth_state === "revoked" ? "bad" : "off",
-    };
-  }
-  if (info.mode === "simulate" || info.simulated) return { text: "simulated", cls: "warn" };
-  if (info.online || info.connected) return { text: "online", cls: "ok" };
-  if (info.mode === "queue") return { text: "outbox only", cls: "warn" };
-  if (info.configured === false) return { text: "not configured", cls: "off" };
-  if (info.checked === false) return { text: "not read yet", cls: "off" };
-  // "not answering" is an accusation, so it needs evidence that something was
-  // tried. Without a recorded failure the honest answer is simply "unknown".
-  if (info.bridge_error || info.adapter_error) return { text: "not answering", cls: "bad" };
-  if (info.mode === "offline") return { text: "not configured", cls: "off" };
-  return { text: "unknown", cls: "off" };
-}
+      // A goal that became several steps. Each status is the backend's own per-step
+      // verdict, written from verification rather than from a handler answering, and
+      // read back from GET /tasks/{job_id} -- this page supplies nothing.
+      //
+      // `pending` is the important one: after a sequence stops at an approval, the
+      // steps behind it are not queued and not coming. They never ran.
+      const STEP_STATE = {
+        succeeded: "VERIFIED",
+        unverified: "UNKNOWN",
+        failed: "FAILED",
+        blocked: "BLOCKED",
+        awaiting_confirmation: "AWAITING CONFIRMATION",
+        running: "EXECUTING",
+        pending: "NOT RUN",
+        skipped: "NOT RUN",
+      };
 
-async function forgetDevice(id) {
-  // Deliberately asked for in words: revoking destroys the device's key, and the only
-  // way back is for that device to pair again.
-  if (!window.confirm(`Forget ${id}? Its key is destroyed and it has to pair again.`)) return;
-  try {
-    const res = await fetch(API + `/devices/${encodeURIComponent(id)}/revoke`, {
-      method: "POST", headers: authHeaders({ "Content-Type": "application/json" }),
-    });
-    const data = await res.json().catch(() => ({}));
-    _deviceNote = res.ok
-      ? `${id} forgotten.`
-      : `Would not forget ${id}: ${data.detail || ("HTTP " + res.status)}`;
-  } catch (e) {
-    // No answer is not a failure to revoke; it is a state nobody has observed.
-    _deviceNote = `No answer from Vantage about ${id} — nothing was confirmed either way.`;
-  }
-  refresh();
-}
+      // The aggregate. `done` is only reachable when every step verified; `incomplete`
+      // is the honest word for a sequence that stopped part-way and will not resume by
+      // itself, because one approval buys one action here.
+      const JOB_STATE = {
+        running: "WORKFLOW RUNNING",
+        done: "WORKFLOW COMPLETE",
+        incomplete: "WORKFLOW PARTLY DONE",
+        awaiting_confirmation: "WORKFLOW AWAITING CONFIRMATION",
+        unverified: "WORKFLOW UNVERIFIED",
+        failed: "WORKFLOW FAILED",
+        paused: "WORKFLOW PAUSED",
+        cancelled: "WORKFLOW CANCELLED",
+      };
 
-async function loadDevices() {
-  const devices = await get("/devices");
-  const box = document.getElementById("devices");
-  if (!devices.length) {
-    // An empty box reads as broken. Say what is missing and how it gets filled.
-    box.innerHTML =
-      '<div class="empty"><b>Nothing paired yet.</b>' +
-      '<br><a href="/ai-connections" style="color: var(--accent);">Configure AI providers in settings</a></div>';
-    return;
-  }
-  box.innerHTML = devices.map(d => {
-    const word = PERIPHERAL_OF[d.device_id] ? peripheralWord(_peripherals[PERIPHERAL_OF[d.device_id]]) : null;
-    const auth = AUTH_WORD[d.auth_state] || d.auth_state || "unknown";
-    const cls = word ? word.cls
-      : d.online ? "ok"
-      : d.auth_state === "revoked" ? "bad"
-      : d.auth_state === "pending" ? "warn" : "off";
-    // "offline" would be a lie about a forgotten device: it says *not here right now*,
-    // and the row is in fact permanently unpaired until it pairs again. Measured in the
-    // browser -- the card read OFFLINE for a device the same page had just revoked.
-    const state = word ? word.text
-      : d.auth_state === "revoked" ? "revoked"
-      : d.online ? "online"
-      : PERIPHERAL_OF[d.device_id] ? auth : "offline";
-    // Which row is the machine itself comes from the server (`is_host`), not from an id
-    // this page invented -- a laptop cannot be forgotten from here, and a button offering
-    // to would be a lie about what is recoverable.
-    const tail = d.is_host
-      ? ' <span class="tag">this machine</span>'
-      : ` <button class="forget" data-id="${escapeHtml(d.device_id)}">Forget</button>`;
-    return `
+      function stateTone(state) {
+        if (String(state).indexOf("AWAITING") === 0) return "warn";
+        if (String(state).indexOf("WORKFLOW") === 0) {
+          if (state.indexOf("COMPLETE") !== -1) return "ok";
+          if (state.indexOf("FAILED") !== -1) return "bad";
+          return "warn";
+        }
+        return STATE_TONE[state] || "muted";
+      }
+
+      async function renderWorkflow(jobId) {
+        const box = document.getElementById("steps");
+        if (!box) return;
+        if (!jobId) {
+          box.hidden = true;
+          box.innerHTML = "";
+          return;
+        }
+        let job;
+        try {
+          job = await get("/tasks/" + encodeURIComponent(jobId));
+        } catch (e) {
+          box.hidden = false;
+          box.innerHTML =
+            '<li class="bad"><span class="chip">UNKNOWN</span>' +
+            '<span class="detail">steps could not be read from the backend</span></li>';
+          return;
+        }
+        const rows = [
+          {
+            state: JOB_STATE[job.status] || "UNKNOWN (" + job.status + ")",
+            name: "goal",
+            detail: job.goal || "",
+          },
+        ].concat(
+          (job.steps || []).map((step) => ({
+            state: STEP_STATE[step.status] || "UNKNOWN",
+            name: step.name,
+            detail: step.detail || "",
+          })),
+        );
+        box.innerHTML = rows
+          .map(
+            (row) =>
+              '<li class="' +
+              stateTone(row.state) +
+              '">' +
+              '<span class="chip">' +
+              escapeHtml(row.state) +
+              "</span>" +
+              '<span class="name">' +
+              escapeHtml(row.name) +
+              "</span>" +
+              '<span class="detail">' +
+              escapeHtml(row.detail) +
+              "</span></li>",
+          )
+          .join("");
+        box.hidden = false;
+      }
+
+      function applyHealth(h) {
+        // "cloud" named no vendor while the gateway can be pointed at two of them, which is the
+        // smaller twin of the badge Phase 60 removed. With no key configured there is no vendor to
+        // name either: rules answer, and printing a configured-by-default vendor would advertise a
+        // call path that will never be taken.
+        const model = h.llm_enabled
+          ? h.ai_provider || "a configured model"
+          : "rules (no key)";
+        document.getElementById("llm").textContent =
+          "model: " + model + " · " + h.tools + " tools";
+      }
+
+      // "OFFLINE" is not one fact, it is several: a device that was never paired, one
+      // waiting for approval, a revoked one, an adapter that was never configured, and
+      // a gateway that is simulated. The backends already know which; flattening them
+      // into one red/green dot would throw that away.
+      //
+      // Pairing words only apply to devices that pair. home_gateway and car_main are
+      // gateways and adapters, so telling the user to "pair" them is simply wrong --
+      // their real state comes from the peripheral report below.
+      const AUTH_WORD = {
+        paired: "paired",
+        pending: "awaiting approval",
+        unpaired: "not paired",
+        revoked: "revoked",
+      };
+      const PERIPHERAL_OF = {
+        car_main: "car",
+        watch_main: "watch",
+        home_gateway: "home",
+      };
+      let _peripherals = {};
+      let _deviceNote = "";
+
+      function peripheralWord(info) {
+        if (!info) return null;
+        if (info.error) return { text: "state unavailable", cls: "bad" };
+        // The watch is the one mapped device that pairs, so its pairing state leads.
+        if (info.auth_state && info.auth_state !== "paired") {
+          return {
+            text: AUTH_WORD[info.auth_state] || info.auth_state,
+            cls: info.auth_state === "revoked" ? "bad" : "off",
+          };
+        }
+        if (info.mode === "simulate" || info.simulated)
+          return { text: "simulated", cls: "warn" };
+        if (info.online || info.connected) return { text: "online", cls: "ok" };
+        if (info.mode === "queue") return { text: "outbox only", cls: "warn" };
+        if (info.configured === false)
+          return { text: "not configured", cls: "off" };
+        if (info.checked === false) return { text: "not read yet", cls: "off" };
+        // "not answering" is an accusation, so it needs evidence that something was
+        // tried. Without a recorded failure the honest answer is simply "unknown".
+        if (info.bridge_error || info.adapter_error)
+          return { text: "not answering", cls: "bad" };
+        if (info.mode === "offline")
+          return { text: "not configured", cls: "off" };
+        return { text: "unknown", cls: "off" };
+      }
+
+      async function forgetDevice(id) {
+        // Deliberately asked for in words: revoking destroys the device's key, and the only
+        // way back is for that device to pair again.
+        if (
+          !window.confirm(
+            `Forget ${id}? Its key is destroyed and it has to pair again.`,
+          )
+        )
+          return;
+        try {
+          const res = await fetch(
+            API + `/devices/${encodeURIComponent(id)}/revoke`,
+            {
+              method: "POST",
+              headers: authHeaders({ "Content-Type": "application/json" }),
+            },
+          );
+          const data = await res.json().catch(() => ({}));
+          _deviceNote = res.ok
+            ? `${id} forgotten.`
+            : `Would not forget ${id}: ${data.detail || "HTTP " + res.status}`;
+        } catch (e) {
+          // No answer is not a failure to revoke; it is a state nobody has observed.
+          _deviceNote = `No answer from Vantage about ${id} — nothing was confirmed either way.`;
+        }
+        refresh();
+      }
+
+      async function loadDevices() {
+        const devices = await get("/devices");
+        const box = document.getElementById("devices");
+        if (!devices.length) {
+          // An empty box reads as broken. Say what is missing and how it gets filled.
+          box.innerHTML =
+            '<div class="empty"><b>Nothing paired yet.</b> Open the phone client on this ' +
+            'laptop\'s address and tap "Pair with this laptop", or plug in a watch.</div>';
+          return;
+        }
+        box.innerHTML =
+          devices
+            .map((d) => {
+              const word = PERIPHERAL_OF[d.device_id]
+                ? peripheralWord(_peripherals[PERIPHERAL_OF[d.device_id]])
+                : null;
+              const auth = AUTH_WORD[d.auth_state] || d.auth_state || "unknown";
+              const cls = word
+                ? word.cls
+                : d.online
+                  ? "ok"
+                  : d.auth_state === "revoked"
+                    ? "bad"
+                    : d.auth_state === "pending"
+                      ? "warn"
+                      : "off";
+              // "offline" would be a lie about a forgotten device: it says *not here right now*,
+              // and the row is in fact permanently unpaired until it pairs again. Measured in the
+              // browser -- the card read OFFLINE for a device the same page had just revoked.
+              const state = word
+                ? word.text
+                : d.auth_state === "revoked"
+                  ? "revoked"
+                  : d.online
+                    ? "online"
+                    : PERIPHERAL_OF[d.device_id]
+                      ? auth
+                      : "offline";
+              // Which row is the machine itself comes from the server (`is_host`), not from an id
+              // this page invented -- a laptop cannot be forgotten from here, and a button offering
+              // to would be a lie about what is recoverable.
+              const tail = d.is_host
+                ? ' <span class="tag">this machine</span>'
+                : ` <button class="forget" data-id="${escapeHtml(d.device_id)}">Forget</button>`;
+              return `
     <div class="row">
       <span>${escapeHtml(d.device_id)} <span class="tag">${escapeHtml(d.type)}</span></span>
       <span class="${cls}">${escapeHtml(state.toUpperCase())}${tail}</span>
     </div>`;
-  }).join("") + (_deviceNote ? `<p class="note muted">${escapeHtml(_deviceNote)}</p>` : "");
-  box.querySelectorAll(".forget").forEach(btn => btn.onclick = () => forgetDevice(btn.dataset.id));
-}
+            })
+            .join("") +
+          (_deviceNote
+            ? `<p class="note muted">${escapeHtml(_deviceNote)}</p>`
+            : "");
+        box
+          .querySelectorAll(".forget")
+          .forEach((btn) => (btn.onclick = () => forgetDevice(btn.dataset.id)));
+      }
 
-function renderPeripherals() {
-  const p = _peripherals;
-  const row = (label, value, cls, note) => `
+      function renderPeripherals() {
+        const p = _peripherals;
+        const row = (label, value, cls, note) => `
     <div class="row">
       <span>${escapeHtml(label)}${note ? `<br><span class="muted" style="font-size:12px">${escapeHtml(note)}</span>` : ""}</span>
       <span class="${cls}">${escapeHtml(value)}</span>
     </div>`;
 
-  // Each builder returns one row, or "" when that agent has nothing to say.
-  // A peripheral whose state could not be read is reported as unknown: falling
-  // through to "not configured" would invent a reason we never observed, which
-  // is the one thing this card exists to avoid.
-  const failed = (label, info) => info && info.error
-    ? row(label, "state unavailable", "bad", info.error) : "";
+        // Each builder returns one row, or "" when that agent has nothing to say.
+        // A peripheral whose state could not be read is reported as unknown: falling
+        // through to "not configured" would invent a reason we never observed, which
+        // is the one thing this card exists to avoid.
+        const failed = (label, info) =>
+          info && info.error
+            ? row(label, "state unavailable", "bad", info.error)
+            : "";
 
-  const carRow = (car) => {
-    if (!car.configured) {
-      return row("Car", "adapter not connected", "off",
-                 "read-only telemetry is wired; no OBD-II adapter or vehicle API is configured");
-    }
-    if (!car.checked) {
-      return row("Car", "configured · not read yet", "off",
-                 `${car.adapter || car.via} — the first question about the car will reach it`);
-    }
-    if (car.connected) {
-      return row("Car", car.via === "simulate" ? "connected · simulated" : "connected",
-                 car.via === "simulate" ? "warn" : "ok", car.adapter || car.via);
-    }
-    return row("Car", "not answering", "bad", car.adapter_error || car.adapter || car.via);
-  };
+        const carRow = (car) => {
+          if (!car.configured) {
+            return row(
+              "Car",
+              "adapter not connected",
+              "off",
+              "read-only telemetry is wired; no OBD-II adapter or vehicle API is configured",
+            );
+          }
+          if (!car.checked) {
+            return row(
+              "Car",
+              "configured · not read yet",
+              "off",
+              `${car.adapter || car.via} — the first question about the car will reach it`,
+            );
+          }
+          if (car.connected) {
+            return row(
+              "Car",
+              car.via === "simulate" ? "connected · simulated" : "connected",
+              car.via === "simulate" ? "warn" : "ok",
+              car.adapter || car.via,
+            );
+          }
+          return row(
+            "Car",
+            "not answering",
+            "bad",
+            car.adapter_error || car.adapter || car.via,
+          );
+        };
 
-  const watchRow = (watch) => {
-    if (watch.auth_state !== "paired") {
-      const cls = watch.auth_state === "revoked" ? "bad" : watch.auth_state === "pending" ? "warn" : "off";
-      return row("Watch", AUTH_WORD[watch.auth_state] || watch.auth_state, cls,
-                 "pair it before prompts can be delivered");
-    }
-    const battery = watch.battery === null || watch.battery === undefined
-      ? "" : ` · battery ${watch.battery}%`;
-    if (watch.mode === "bridge") {
-      return row("Watch", "paired · pushed to bridge" + battery, "ok",
-                 watch.online ? "companion has called in" : "no delivery confirmed by the bridge yet");
-    }
-    if (watch.mode === "simulate") {
-      return row("Watch", "paired · simulated companion" + battery, "warn",
-                 "demonstration device, not a real watch");
-    }
-    const queued = watch.counts && watch.counts.queued
-      ? ` · ${watch.counts.queued} waiting in the outbox` : "";
-    return row("Watch", "paired · outbox only" + battery + queued, "warn",
-               "no bridge configured, so prompts wait here until the companion collects them");
-  };
+        const watchRow = (watch) => {
+          if (watch.auth_state !== "paired") {
+            const cls =
+              watch.auth_state === "revoked"
+                ? "bad"
+                : watch.auth_state === "pending"
+                  ? "warn"
+                  : "off";
+            return row(
+              "Watch",
+              AUTH_WORD[watch.auth_state] || watch.auth_state,
+              cls,
+              "pair it before prompts can be delivered",
+            );
+          }
+          const battery =
+            watch.battery === null || watch.battery === undefined
+              ? ""
+              : ` · battery ${watch.battery}%`;
+          if (watch.mode === "bridge") {
+            return row(
+              "Watch",
+              "paired · pushed to bridge" + battery,
+              "ok",
+              watch.online
+                ? "companion has called in"
+                : "no delivery confirmed by the bridge yet",
+            );
+          }
+          if (watch.mode === "simulate") {
+            return row(
+              "Watch",
+              "paired · simulated companion" + battery,
+              "warn",
+              "demonstration device, not a real watch",
+            );
+          }
+          const queued =
+            watch.counts && watch.counts.queued
+              ? ` · ${watch.counts.queued} waiting in the outbox`
+              : "";
+          return row(
+            "Watch",
+            "paired · outbox only" + battery + queued,
+            "warn",
+            "no bridge configured, so prompts wait here until the companion collects them",
+          );
+        };
 
-  const homeRow = (home) => home.online
-    ? row("Home", home.simulated ? "simulated gateway" : "gateway online",
-          home.simulated ? "warn" : "ok", `${home.devices || 0} device(s) known`)
-    : row("Home", "gateway offline", "off",
-          "nothing is switched; readings are last known state");
+        const homeRow = (home) =>
+          home.online
+            ? row(
+                "Home",
+                home.simulated ? "simulated gateway" : "gateway online",
+                home.simulated ? "warn" : "ok",
+                `${home.devices || 0} device(s) known`,
+              )
+            : row(
+                "Home",
+                "gateway offline",
+                "off",
+                "nothing is switched; readings are last known state",
+              );
 
-  const robotRow = (robots) => {
-    const faults = (robots.faults || []).length ? ` · ${robots.faults.length} safety fault(s)` : "";
-    return robots.online
-      ? row("Robots", robots.simulated ? "simulated bridge" : "bridge online",
-            robots.simulated ? "warn" : "ok", `${robots.robots || 0} robot(s)${faults}`)
-      : row("Robots", "bridge offline", "off", `no motion command is ever sent${faults}`);
-  };
+        const robotRow = (robots) => {
+          const faults = (robots.faults || []).length
+            ? ` · ${robots.faults.length} safety fault(s)`
+            : "";
+          return robots.online
+            ? row(
+                "Robots",
+                robots.simulated ? "simulated bridge" : "bridge online",
+                robots.simulated ? "warn" : "ok",
+                `${robots.robots || 0} robot(s)${faults}`,
+              )
+            : row(
+                "Robots",
+                "bridge offline",
+                "off",
+                `no motion command is ever sent${faults}`,
+              );
+        };
 
-  let html = [
-    p.car && (failed("Car", p.car) || carRow(p.car)),
-    p.watch && (failed("Watch", p.watch) || watchRow(p.watch)),
-    p.home && (failed("Home", p.home) || homeRow(p.home)),
-    p.robotics && (failed("Robots", p.robotics) || robotRow(p.robotics)),
-  ].filter(Boolean).join("");
+        let html = [
+          p.car && (failed("Car", p.car) || carRow(p.car)),
+          p.watch && (failed("Watch", p.watch) || watchRow(p.watch)),
+          p.home && (failed("Home", p.home) || homeRow(p.home)),
+          p.robotics && (failed("Robots", p.robotics) || robotRow(p.robotics)),
+        ]
+          .filter(Boolean)
+          .join("");
 
-  if (!html) html = '<span class="muted">no hardware-facing agents reported</span>';
-  document.getElementById("peripherals").innerHTML = html;
-}
+        if (!html)
+          html =
+            '<span class="muted">no hardware-facing agents reported</span>';
+        document.getElementById("peripherals").innerHTML = html;
+      }
 
-// One /health read per cycle feeds three panels: the header pill, the peripheral
-// rows, and the devices card (which needs the peripheral state to avoid calling
-// an unconfigured adapter "not paired").
-async function loadPeripherals() {
-  const h = await get("/health");
-  _peripherals = h.peripherals || {};
-  applyHealth(h);
-  renderPeripherals();
-  await loadDevices();
-}
+      // One /health read per cycle feeds three panels: the header pill, the peripheral
+      // rows, and the devices card (which needs the peripheral state to avoid calling
+      // an unconfigured adapter "not paired").
+      async function loadPeripherals() {
+        const h = await get("/health");
+        _peripherals = h.peripherals || {};
+        applyHealth(h);
+        renderPeripherals();
+        await loadDevices();
+        await checkCodeFreshness();
+        await loadFailures();
+      }
 
-async function loadConfirmations() {
-  const items = await get("/confirmations");
-  const box = document.getElementById("confirmations");
-  if (!items.length) {
-    box.innerHTML = '<div class="empty"><b>Nothing waiting.</b> Anything risky I am asked '
-      + 'to do appears here for you to approve or deny.</div>';
-    return;
-  }
-  box.innerHTML = items.map(c => `
+      // A running backend does not reload its modules, so a fix edited after
+      // startup is silently absent and looks like a fix that did not work. Say so.
+      async function loadFailures() {
+        const box = document.getElementById("failure-list");
+        if (!box) return;
+        try {
+          const rows = await get("/failures");
+          const list = Array.isArray(rows) ? rows : [];
+          if (!list.length) {
+            box.innerHTML = '<span class="muted">Nothing has failed.</span>';
+            return;
+          }
+          box.innerHTML = list
+            .slice(0, 8)
+            .map((f) => {
+              const tool = escapeHtml(String(f.tool || "?"));
+              const err = escapeHtml(String(f.error || "").slice(0, 160));
+              const when = escapeHtml(String(f.created_at || "").slice(0, 16));
+              return `<div style="padding:5px 0;border-bottom:1px solid rgba(255,255,255,0.06)">
+              <b>${tool}</b> <span class="muted">${when}</span><br>
+              <span class="muted">${err}</span></div>`;
+            })
+            .join("");
+        } catch (e) {
+          box.innerHTML =
+            '<span class="muted">Could not read the failure log.</span>';
+        }
+      }
+
+      async function checkCodeFreshness() {
+        const pill = document.getElementById("stale-code");
+        if (!pill) return;
+        try {
+          const f = await get("/health/code");
+          if (f && f.stale) {
+            pill.hidden = false;
+            pill.textContent =
+              "Code on disk is newer than the running server (" +
+              (f.newest_file || "a source file") +
+              "). Restart the backend to load it.";
+          } else {
+            pill.hidden = true;
+          }
+        } catch (e) {
+          pill.hidden = true; // an older server has no such route
+        }
+      }
+
+      async function loadConfirmations() {
+        const items = await get("/confirmations");
+        const box = document.getElementById("confirmations");
+        if (!items.length) {
+          box.innerHTML =
+            '<div class="empty"><b>Nothing waiting.</b> Anything risky I am asked ' +
+            "to do appears here for you to approve or deny.</div>";
+          return;
+        }
+        box.innerHTML = items
+          .map(
+            (c) => `
     <div class="row">
       <span>${escapeHtml(c.tool)}<br><span class="muted" style="font-size:12px">${escapeHtml(c.preview)}</span></span>
       <span style="white-space:nowrap">
         <button class="approve" data-id="${escapeHtml(c.confirmation_id)}" data-approve="1">Approve</button>
         <button class="deny" data-id="${escapeHtml(c.confirmation_id)}" data-approve="0">Deny</button>
       </span>
-    </div>`).join("");
-  box.querySelectorAll("button").forEach(btn => {
-    btn.onclick = () => resolveConfirmation(btn.dataset.id, btn.dataset.approve === "1");
-  });
-}
+    </div>`,
+          )
+          .join("");
+        box.querySelectorAll("button").forEach((btn) => {
+          btn.onclick = () =>
+            resolveConfirmation(btn.dataset.id, btn.dataset.approve === "1");
+        });
+      }
 
-async function resolveConfirmation(id, approve) {
-  const res = await fetch(API + `/confirm/${encodeURIComponent(id)}?approve=${approve}`, {
-    method: "POST",
-    headers: authHeaders(),
-  });
-  const data = await res.json();
-  document.getElementById("reply").textContent = data.reply;
-  // Same rule as /command. Denying or letting a confirmation expire returns no
-  // actions and decision=BLOCK, which renders BLOCKED -- never VERIFIED.
-  renderState(res.ok ? pipelineState(data) : "UNKNOWN",
-              res.ok ? ("confirm " + (approve ? "approved" : "denied")) : ("HTTP " + res.status));
-  renderWorkflow(data.job_id);
-  refresh();
-}
+      async function resolveConfirmation(id, approve) {
+        const res = await fetch(
+          API + `/confirm/${encodeURIComponent(id)}?approve=${approve}`,
+          {
+            method: "POST",
+            headers: authHeaders(),
+          },
+        );
+        const data = await res.json();
+        document.getElementById("reply").textContent = data.reply;
+        // Same rule as /command. Denying or letting a confirmation expire returns no
+        // actions and decision=BLOCK, which renders BLOCKED -- never VERIFIED.
+        renderState(
+          res.ok ? pipelineState(data) : "UNKNOWN",
+          res.ok
+            ? "confirm " + (approve ? "approved" : "denied")
+            : "HTTP " + res.status,
+        );
+        renderWorkflow(data.job_id);
+        refresh();
+      }
 
-// Ledger result tokens, mapped to the tones the page already uses. The card used
-// to ask "is it success?" and colour everything else amber, so a decision that
-// deliberately did nothing looked identical to an action that failed -- and
-// "no_action" next to "failure" in the same list is exactly the ambiguity the
-// audit chain exists to remove.
-function auditTone(result) {
-  const tones = {
-    success: "ok",
-    recovered: "warn",
-    failure: "bad",
-    unverified: "bad",
-    blocked: "bad",
-    denied: "bad",
-    expired: "warn",
-    awaiting_confirmation: "warn",
-    clarification: "warn",
-    // The simulator accepted it; no real device moved. Neither a success nor a
-    // failure, so it needs its own tone rather than defaulting to amber-with-the-errors.
-    simulated: "warn",
-    // Nothing was going to run, and that was the answer. Not an error.
-    no_action: "muted",
-  };
-  return tones[result] || "warn";
-}
+      // Ledger result tokens, mapped to the tones the page already uses. The card used
+      // to ask "is it success?" and colour everything else amber, so a decision that
+      // deliberately did nothing looked identical to an action that failed -- and
+      // "no_action" next to "failure" in the same list is exactly the ambiguity the
+      // audit chain exists to remove.
+      function auditTone(result) {
+        const tones = {
+          success: "ok",
+          recovered: "warn",
+          failure: "bad",
+          unverified: "bad",
+          blocked: "bad",
+          denied: "bad",
+          expired: "warn",
+          awaiting_confirmation: "warn",
+          clarification: "warn",
+          // The simulator accepted it; no real device moved. Neither a success nor a
+          // failure, so it needs its own tone rather than defaulting to amber-with-the-errors.
+          simulated: "warn",
+          // Nothing was going to run, and that was the answer. Not an error.
+          no_action: "muted",
+        };
+        return tones[result] || "warn";
+      }
 
-async function loadAudit() {
-  const rows = await get("/audit?limit=12");
-  document.getElementById("audit").innerHTML = rows.length ? rows.map(r => `
+      async function loadAudit() {
+        const rows = await get("/audit?limit=12");
+        document.getElementById("audit").innerHTML = rows.length
+          ? rows
+              .map(
+                (r) => `
     <div class="row">
       <span>${escapeHtml(r.tool || r.intent)}<br><span class="muted" style="font-size:12px">${escapeHtml((r.created_at || "").slice(11, 19))}</span></span>
       <span class="${auditTone(r.result)}">${escapeHtml(r.result)}</span>
-    </div>`).join("") : '<span class="muted">no actions yet</span>';
-}
+    </div>`,
+              )
+              .join("")
+          : '<span class="muted">no actions yet</span>';
+      }
 
-async function loadMemory() {
-  const data = await get("/memory?limit=8");
-  const stats = data.stats || {};
-  const head = `<div class="row"><span class="muted">total</span><span>${stats.total || 0}</span></div>`;
-  document.getElementById("memory").innerHTML = head + (data.items || []).map(m => `
+      async function loadMemory() {
+        const data = await get("/memory?limit=8");
+        const stats = data.stats || {};
+        const head = `<div class="row"><span class="muted">total</span><span>${stats.total || 0}</span></div>`;
+        document.getElementById("memory").innerHTML =
+          head +
+          (data.items || [])
+            .map(
+              (m) => `
     <div class="row">
       <span>${escapeHtml(m.content).slice(0, 80)}</span>
       <span class="tag">${escapeHtml(m.scope)}</span>
-    </div>`).join("");
-}
+    </div>`,
+            )
+            .join("");
+      }
 
-async function loadVoice() {
-  const v = await get("/voice/status");
-  const tts = v.tts || {};
-  const stt = v.stt || {};
-  const audio = v.audio || {};
+      async function loadVoice() {
+        const v = await get("/voice/status");
+        const tts = v.tts || {};
+        const stt = v.stt || {};
+        const audio = v.audio || {};
 
-  const ttsBackend = Object.entries(tts.available || {}).find(([, ok]) => ok)?.[0] || "none";
-  // "available" means *may be tried*, which is not the same question as "has ever
-  // worked here" -- picking the first true out of that list used to print `transcript`,
-  // a passthrough that cannot hear, as though it were the microphone.
-  const sttStates = stt.states || {};
-  const sttProven = Object.entries(sttStates).find(([, s]) => s === "proven")?.[0];
-  const sttTryable = Object.entries(sttStates).find(([, s]) => s !== "refused")?.[0];
-  const sttBackend = sttProven || sttTryable || "none";
-  const sttWord = `${sttBackend} · ${stt.state || "untested"}`;
+        const ttsBackend =
+          Object.entries(tts.available || {}).find(([, ok]) => ok)?.[0] ||
+          "none";
+        // "available" means *may be tried*, which is not the same question as "has ever
+        // worked here" -- picking the first true out of that list used to print `transcript`,
+        // a passthrough that cannot hear, as though it were the microphone.
+        const sttStates = stt.states || {};
+        const sttProven = Object.entries(sttStates).find(
+          ([, s]) => s === "proven",
+        )?.[0];
+        const sttTryable = Object.entries(sttStates).find(
+          ([, s]) => s !== "refused",
+        )?.[0];
+        const sttBackend = sttProven || sttTryable || "none";
+        const sttWord = `${sttBackend} · ${stt.state || "untested"}`;
 
-  const line = (label, value, ok) =>
-    `<div class="row"><span>${label}</span><span class="${ok ? "ok" : "off"}">${value}</span></div>`;
+        const line = (label, value, ok) =>
+          `<div class="row"><span>${label}</span><span class="${ok ? "ok" : "off"}">${value}</span></div>`;
 
-  // Microphone needs three words, not two: "installed" and "allowed to listen"
-  // are different facts, and "cannot measure" must not read as "broken".
-  const micRow = (audio) => {
-    const state = audio.capture_state || "unknown";
-    const mic = audio.microphone || {};
-    const words = {
-      ready: "ready",
-      measuring: "measuring…",
-      blocked: "not permitted",
-      no_backend: "no capture backend",
-      unknown: "consent unreadable",
-    };
-    const word = words[state] || state;
-    const cls = state === "ready" ? "ok" : state === "unknown" || state === "measuring" ? "tag" : "off";
-    const mics = (mic.devices || []).map(d => d.name).filter(Boolean);
-    const hint = [
-      audio.capture_available ? "" : "capture unavailable",
-      mic.permission ? "macOS says: " + mic.permission : "",
-      mic.host ? "asked of: " + mic.host : "",
-      mics.length ? mics.length + " input device(s): " + mics.join(", ") : "no input devices seen",
-      mic.detail || "",
-    ].filter(Boolean).join(" — ");
-    return `<div class="row"><span>Microphone</span><span class="${cls}" title="${escapeHtml(hint)}">${escapeHtml(word)}</span></div>`;
-  };
+        // Microphone needs three words, not two: "installed" and "allowed to listen"
+        // are different facts, and "cannot measure" must not read as "broken".
+        const micRow = (audio) => {
+          const state = audio.capture_state || "unknown";
+          const mic = audio.microphone || {};
+          const words = {
+            ready: "ready",
+            measuring: "measuring…",
+            blocked: "not permitted",
+            no_backend: "no capture backend",
+            unknown: "consent unreadable",
+          };
+          const word = words[state] || state;
+          const cls =
+            state === "ready"
+              ? "ok"
+              : state === "unknown" || state === "measuring"
+                ? "tag"
+                : "off";
+          const mics = (mic.devices || []).map((d) => d.name).filter(Boolean);
+          const hint = [
+            audio.capture_available ? "" : "capture unavailable",
+            mic.permission ? "macOS says: " + mic.permission : "",
+            mic.host ? "asked of: " + mic.host : "",
+            mics.length
+              ? mics.length + " input device(s): " + mics.join(", ")
+              : "no input devices seen",
+            mic.detail || "",
+          ]
+            .filter(Boolean)
+            .join(" — ");
+          return `<div class="row"><span>Microphone</span><span class="${cls}" title="${escapeHtml(hint)}">${escapeHtml(word)}</span></div>`;
+        };
 
-  document.getElementById("voice").innerHTML =
-    line("Wake word", (v.wake?.wake_words || []).join(" / "), true) +
-    line("TTS", ttsBackend, ttsBackend !== "none") +
-    line("STT", sttWord, !!sttProven) +
-    micRow(audio) +
-    line("Voice", v.enabled ? "enabled" : "disabled", v.enabled) +
-    `<div class="row"><span class="muted">Try it</span>
+        document.getElementById("voice").innerHTML =
+          line("Wake word", (v.wake?.wake_words || []).join(" / "), true) +
+          line("TTS", ttsBackend, ttsBackend !== "none") +
+          line("STT", sttWord, !!sttProven) +
+          micRow(audio) +
+          line("Voice", v.enabled ? "enabled" : "disabled", v.enabled) +
+          `<div class="row"><span class="muted">Try it</span>
        <span><button class="approve" id="speakBtn">Speak</button></span></div>`;
-  const btn = document.getElementById("speakBtn");
-  if (btn) btn.onclick = speakTest;
-}
+        const btn = document.getElementById("speakBtn");
+        if (btn) btn.onclick = speakTest;
+      }
 
-async function speakTest() {
-  const text = prompt("Text to speak:", "Vantage is online.");
-  if (!text) return;
-  document.getElementById("reply").textContent = "…synthesising speech";
-  try {
-    const res = await fetch(API + "/voice/speak", {
-      method: "POST",
-      headers: authHeaders({ "Content-Type": "application/json" }),
-      body: JSON.stringify({ text }),
-    });
-    const data = await res.json();
-    document.getElementById("reply").textContent = data.ok
-      ? `Spoken via ${data.backend}.\nAudio: ${data.audio_path || "(streamed directly)"}`
-      : `Speech failed: ${data.error}`;
-  } catch (e) {
-    document.getElementById("reply").textContent = "Error: " + e.message;
-  }
-}
+      async function speakTest() {
+        const text = prompt("Text to speak:", "Vantage is online.");
+        if (!text) return;
+        document.getElementById("reply").textContent = "…synthesising speech";
+        try {
+          const res = await fetch(API + "/voice/speak", {
+            method: "POST",
+            headers: authHeaders({ "Content-Type": "application/json" }),
+            body: JSON.stringify({ text }),
+          });
+          const data = await res.json();
+          document.getElementById("reply").textContent = data.ok
+            ? `Spoken via ${data.backend}.\nAudio: ${data.audio_path || "(streamed directly)"}`
+            : `Speech failed: ${data.error}`;
+        } catch (e) {
+          document.getElementById("reply").textContent = "Error: " + e.message;
+        }
+      }
 
-// macOS answers a permission question about the process that asked it, so this card names
-// the process as plainly as it names the status. A "granted" read by a helper that a
-// terminal started is a true statement about the wrong application.
-const PERMISSION_TONE = {
-  GRANTED: "ok",
-  DENIED: "bad",
-  REQUIRES_MANUAL_SYSTEM_SETTINGS: "bad",
-  NOT_DETERMINED: "warn",
-  UNKNOWN: "tag",
-  NOT_REQUIRED: "off",
-};
-const PERMISSION_WORD = {
-  GRANTED: "granted",
-  DENIED: "denied",
-  REQUIRES_MANUAL_SYSTEM_SETTINGS: "needs Settings",
-  NOT_DETERMINED: "never asked",
-  UNKNOWN: "unknown",
-  NOT_REQUIRED: "not gated on macOS",
-};
+      // macOS answers a permission question about the process that asked it, so this card names
+      // the process as plainly as it names the status. A "granted" read by a helper that a
+      // terminal started is a true statement about the wrong application.
+      const PERMISSION_TONE = {
+        GRANTED: "ok",
+        DENIED: "bad",
+        REQUIRES_MANUAL_SYSTEM_SETTINGS: "bad",
+        NOT_DETERMINED: "warn",
+        UNKNOWN: "tag",
+        NOT_REQUIRED: "off",
+      };
+      const PERMISSION_WORD = {
+        GRANTED: "granted",
+        DENIED: "denied",
+        REQUIRES_MANUAL_SYSTEM_SETTINGS: "needs Settings",
+        NOT_DETERMINED: "never asked",
+        UNKNOWN: "unknown",
+        NOT_REQUIRED: "not gated on macOS",
+      };
 
-async function loadPermissions() {
-  const data = await get("/permissions");
-  const rows = (data.capabilities || []).map(r => {
-    const tone = PERMISSION_TONE[r.status] || "tag";
-    // "granted" is only ever printed for a GRANTED; every other state gets its own word
-    // rather than a default that reads like good news.
-    const word = r.status === "GRANTED"
-      ? PERMISSION_WORD.GRANTED
-      : (PERMISSION_WORD[r.status] || r.status.toLowerCase());
-    // A button only where macOS can actually be asked, and the label never promises more
-    // than the action can do: the Accessibility prompt opens System Settings and grants
-    // nothing by itself, so it must not be labelled "Grant access".
-    let action = "";
-    if (r.requestable && r.status !== "GRANTED") {
-      action = r.prompt_only
-        ? `<button class="ghost" data-perm="${escapeHtml(r.capability)}">`
-          + `Open System Settings</button>`
-        : `<button class="ghost" data-perm="${escapeHtml(r.capability)}">`
-          + `Grant access</button>`;
-    } else if (!r.requestable && r.status !== "GRANTED" && r.no_request_reason) {
-      action = `<span class="muted" title="${escapeHtml(r.no_request_reason)}">`
-             + `cannot be asked here</span>`;
-    }
-    return `<div class="row"><span>${escapeHtml(r.label)}</span>`
-      + `<span class="${tone}">${escapeHtml(word)} ${action}</span></div>`;
-  }).join("");
-  // The subject is one line, styled by whether it describes Vantage at all. It is not
-  // rebuilt from the fields here: the server's sentence already names the bundle the
-  // server runs from, and printing a second near-identical line is noise. What the
-  // client owns is the consequence -- a reading about some other process is shown as a
-  // warning, never as a calm grey note.
-  const subject = `<p class="note ${data.about_bundled_host ? "muted" : "bad"}">`
-    + `${escapeHtml(data.note || "")}</p>`;
-  document.getElementById("permissions").innerHTML = rows
-    + subject
-    + '<div class="row"><span></span><span><button class="deny" id="permCheck">Check again</button></span></div>';
-  document.getElementById("permCheck").onclick = () => {
-    setPermNote("Re-read from macOS just now.");
-    loadPermissions().catch(() => {});
-  };
-  // The reply is the state macOS reports *after* the request, which the server reads back
-  // rather than repeating what the request claimed. Then the card re-reads anyway, so what is
-  // on screen is never older than the answer about it.
-  document.querySelectorAll("[data-perm]").forEach(btn => btn.onclick = async () => {
-    const cap = btn.dataset.perm;
-    btn.disabled = true;
-    setPermNote(`asking macOS about ${cap}…`);
-    try {
-      const res = await fetch(`/permissions/${encodeURIComponent(cap)}/request`,
-                              { method: "POST", headers: authHeaders(POST_JSON) });
-      const body = await res.json().catch(() => ({}));
-      setPermNote(res.ok ? (body.message || `reported ${body.state}`)
-                         : (body.detail || `refused (HTTP ${res.status})`));
-    } catch (e) {
-      setPermNote("the laptop did not answer");
-    }
-    loadPermissions().catch(() => {});
-  });
-}
+      async function loadPermissions() {
+        const data = await get("/permissions");
+        const rows = (data.capabilities || [])
+          .map((r) => {
+            const tone = PERMISSION_TONE[r.status] || "tag";
+            // "granted" is only ever printed for a GRANTED; every other state gets its own word
+            // rather than a default that reads like good news.
+            const word =
+              r.status === "GRANTED"
+                ? PERMISSION_WORD.GRANTED
+                : PERMISSION_WORD[r.status] || r.status.toLowerCase();
+            // A button only where macOS can actually be asked, and the label never promises more
+            // than the action can do: the Accessibility prompt opens System Settings and grants
+            // nothing by itself, so it must not be labelled "Grant access".
+            let action = "";
+            if (r.requestable && r.status !== "GRANTED") {
+              action = r.prompt_only
+                ? `<button class="ghost" data-perm="${escapeHtml(r.capability)}">` +
+                  `Open System Settings</button>`
+                : `<button class="ghost" data-perm="${escapeHtml(r.capability)}">` +
+                  `Grant access</button>`;
+            } else if (
+              !r.requestable &&
+              r.status !== "GRANTED" &&
+              r.no_request_reason
+            ) {
+              action =
+                `<span class="muted" title="${escapeHtml(r.no_request_reason)}">` +
+                `cannot be asked here</span>`;
+            }
+            return (
+              `<div class="row"><span>${escapeHtml(r.label)}</span>` +
+              `<span class="${tone}">${escapeHtml(word)} ${action}</span></div>`
+            );
+          })
+          .join("");
+        // The subject is one line, styled by whether it describes Vantage at all. It is not
+        // rebuilt from the fields here: the server's sentence already names the bundle the
+        // server runs from, and printing a second near-identical line is noise. What the
+        // client owns is the consequence -- a reading about some other process is shown as a
+        // warning, never as a calm grey note.
+        const subject =
+          `<p class="note ${data.about_bundled_host ? "muted" : "bad"}">` +
+          `${escapeHtml(data.note || "")}</p>`;
+        document.getElementById("permissions").innerHTML =
+          rows +
+          subject +
+          '<div class="row"><span></span><span><button class="deny" id="permCheck">Check again</button></span></div>';
+        document.getElementById("permCheck").onclick = () => {
+          setPermNote("Re-read from macOS just now.");
+          loadPermissions().catch(() => {});
+        };
+        // The reply is the state macOS reports *after* the request, which the server reads back
+        // rather than repeating what the request claimed. Then the card re-reads anyway, so what is
+        // on screen is never older than the answer about it.
+        document.querySelectorAll("[data-perm]").forEach(
+          (btn) =>
+            (btn.onclick = async () => {
+              const cap = btn.dataset.perm;
+              btn.disabled = true;
+              setPermNote(`asking macOS about ${cap}…`);
+              try {
+                const res = await fetch(
+                  `/permissions/${encodeURIComponent(cap)}/request`,
+                  { method: "POST", headers: authHeaders(POST_JSON) },
+                );
+                const body = await res.json().catch(() => ({}));
+                setPermNote(
+                  res.ok
+                    ? body.message || `reported ${body.state}`
+                    : body.detail || `refused (HTTP ${res.status})`,
+                );
+              } catch (e) {
+                setPermNote("the laptop did not answer");
+              }
+              loadPermissions().catch(() => {});
+            }),
+        );
+      }
 
-function setPermNote(text) {
-  const el = document.getElementById("permNote");
-  if (el) el.textContent = text;
-}
+      function setPermNote(text) {
+        const el = document.getElementById("permNote");
+        if (el) el.textContent = text;
+      }
 
-// Every state launchd can actually leave us in, in the words the state deserves.
-// "installed_not_loaded" is the one worth naming: the file is there and nothing will
-// start, which is exactly what a message like "installed" would hide.
-const PERSISTENCE_WORD = {
-  loaded: ["starts at login", "good"],
-  running: ["starts at login", "good"],
-  installed_not_loaded: ["file present, launchd has no job for it", "warn"],
-  loaded_without_file: ["running now, gone at the next login", "warn"],
-  not_installed: ["only while the window is open", ""],
-  unsupported: ["no login-item facility on this system", ""],
-};
+      // Every state launchd can actually leave us in, in the words the state deserves.
+      // "installed_not_loaded" is the one worth naming: the file is there and nothing will
+      // start, which is exactly what a message like "installed" would hide.
+      const PERSISTENCE_WORD = {
+        loaded: ["starts at login", "good"],
+        running: ["starts at login", "good"],
+        installed_not_loaded: [
+          "file present, launchd has no job for it",
+          "warn",
+        ],
+        loaded_without_file: ["running now, gone at the next login", "warn"],
+        not_installed: ["only while the window is open", ""],
+        unsupported: ["no login-item facility on this system", ""],
+      };
 
-async function loadPersistence() {
-  const d = await get("/persistence");
-  const pair = PERSISTENCE_WORD[d.state] || [String(d.state || "unknown"), ""];
-  let button = "";
-  if (d.supported) {
-    button = (d.installed || d.loaded)
-      ? '<button class="ghost" id="persistOff">Remove the login item</button>'
-      : '<button class="ghost" id="persistOn">Install the login item</button>';
-  }
-  document.getElementById("persistence").innerHTML =
-      `<div class="row"><span>Vantage on this laptop</span>`
-    + `<span class="${pair[1]}">${escapeHtml(pair[0])}</span></div>`
-    + `<p class="note muted">${escapeHtml(d.detail || "")}</p>`
-    + `<div class="row"><span></span><span>${button}`
-    + ` <button class="ghost" id="persistCheck">Check again</button></span></div>`;
-  document.getElementById("persistCheck").onclick = () => {
-    setPersistNote("Re-read from launchd just now.");
-    loadPersistence().catch(() => {});
-  };
-  const on = document.getElementById("persistOn");
-  const off = document.getElementById("persistOff");
-  if (on) on.onclick = () => changePersistence("install the login item", on);
-  if (off) off.onclick = () => changePersistence("remove the login item", off);
-}
+      async function loadPersistence() {
+        const d = await get("/persistence");
+        const pair = PERSISTENCE_WORD[d.state] || [
+          String(d.state || "unknown"),
+          "",
+        ];
+        let button = "";
+        if (d.supported) {
+          button =
+            d.installed || d.loaded
+              ? '<button class="ghost" id="persistOff">Remove the login item</button>'
+              : '<button class="ghost" id="persistOn">Install the login item</button>';
+        }
+        document.getElementById("persistence").innerHTML =
+          `<div class="row"><span>Vantage on this laptop</span>` +
+          `<span class="${pair[1]}">${escapeHtml(pair[0])}</span></div>` +
+          `<p class="note muted">${escapeHtml(d.detail || "")}</p>` +
+          `<div class="row"><span></span><span>${button}` +
+          ` <button class="ghost" id="persistCheck">Check again</button></span></div>`;
+        document.getElementById("persistCheck").onclick = () => {
+          setPersistNote("Re-read from launchd just now.");
+          loadPersistence().catch(() => {});
+        };
+        const on = document.getElementById("persistOn");
+        const off = document.getElementById("persistOff");
+        if (on)
+          on.onclick = () => changePersistence("install the login item", on);
+        if (off)
+          off.onclick = () => changePersistence("remove the login item", off);
+      }
 
-async function changePersistence(sentence, btn) {
-  btn.disabled = true;
-  setPersistNote("asking Vantage…");
-  try {
-    const res = await fetch(API + "/command", {
-      method: "POST",
-      headers: authHeaders(POST_JSON),
-      body: JSON.stringify({ text: sentence, source: "dashboard" }),
-    });
-    const data = await res.json().catch(() => ({}));
-    // A confirmation is not an effect. Saying "done" here would be the exact lie this
-    // project keeps having to design against.
-    setPersistNote(data.confirmation_id
-      ? "It is waiting for you on the Approvals card. Nothing has changed yet."
-      : (data.reply || `the laptop refused (HTTP ${res.status})`));
-  } catch (e) {
-    setPersistNote("the laptop did not answer");
-  }
-  loadPersistence().catch(() => {});
-}
+      async function changePersistence(sentence, btn) {
+        btn.disabled = true;
+        setPersistNote("asking Vantage…");
+        try {
+          const res = await fetch(API + "/command", {
+            method: "POST",
+            headers: authHeaders(POST_JSON),
+            body: JSON.stringify({ text: sentence, source: "dashboard" }),
+          });
+          const data = await res.json().catch(() => ({}));
+          // A confirmation is not an effect. Saying "done" here would be the exact lie this
+          // project keeps having to design against.
+          setPersistNote(
+            data.confirmation_id
+              ? "It is waiting for you on the Approvals card. Nothing has changed yet."
+              : data.reply || `the laptop refused (HTTP ${res.status})`,
+          );
+        } catch (e) {
+          setPersistNote("the laptop did not answer");
+        }
+        loadPersistence().catch(() => {});
+      }
 
-function setPersistNote(text) {
-  const el = document.getElementById("persistNote");
-  if (el) el.textContent = text;
-}
+      function setPersistNote(text) {
+        const el = document.getElementById("persistNote");
+        if (el) el.textContent = text;
+      }
 
-function auditChainLine(a) {
-  // A colour is not an explanation. The verifier knows which record broke, how many did, and how
-  // much of the ledger it actually walked, so the row says those three: "BROKEN" alone cannot be
-  // acted on, and the word "intact" over rows the walk never reached would be read as a longer
-  // guarantee than the walk gives.
-  const checked = a.chain_checked ?? 0;
-  const of = a.chain_verified_of ?? checked;
-  const gaps = a.chain_unverified ?? 0;
-  if (a.chain_intact) {
-    const tail = gaps ? ` · ${gaps} not verified` : "";
-    return `intact · ${checked} of ${of} verified${tail}`;
-  }
-  const breaks = a.chain_breaks ?? 1;
-  const reason = a.chain_reason ? ` · ${a.chain_reason}` : "";
-  return `BROKEN · ${breaks} record${breaks === 1 ? "" : "s"} · ${checked} of ${of} verified${reason}`;
-}
+      function auditChainLine(a) {
+        // A colour is not an explanation. The verifier knows which record broke, how many did, and how
+        // much of the ledger it actually walked, so the row says those three: "BROKEN" alone cannot be
+        // acted on, and the word "intact" over rows the walk never reached would be read as a longer
+        // guarantee than the walk gives.
+        const checked = a.chain_checked ?? 0;
+        const of = a.chain_verified_of ?? checked;
+        const gaps = a.chain_unverified ?? 0;
+        if (a.chain_intact) {
+          const tail = gaps ? ` · ${gaps} not verified` : "";
+          return `intact · ${checked} of ${of} verified${tail}`;
+        }
+        const breaks = a.chain_breaks ?? 1;
+        const reason = a.chain_reason ? ` · ${a.chain_reason}` : "";
+        return `BROKEN · ${breaks} record${breaks === 1 ? "" : "s"} · ${checked} of ${of} verified${reason}`;
+      }
 
-async function loadMetrics() {
-  const m = await get("/metrics");
-  const f = m.failures || {};
-  const a = m.audit || {};
-  const rate = Math.round((f.recovery_rate || 0) * 100);
+      async function loadMetrics() {
+        const m = await get("/metrics");
+        const f = m.failures || {};
+        const a = m.audit || {};
+        const rate = Math.round((f.recovery_rate || 0) * 100);
 
-  const line = (label, value, cls) =>
-    `<div class="row"><span>${label}</span><span class="${cls || ""}">${value}</span></div>`;
+        const line = (label, value, cls) =>
+          `<div class="row"><span>${label}</span><span class="${cls || ""}">${value}</span></div>`;
 
-  let html = "";
-  html += line("Failures recorded", f.total_failures ?? 0);
-  html += line("Recovered automatically", `${f.total_recovered ?? 0} (${rate}%)`,
-               rate > 0 ? "ok" : "off");
-  html += line("Audit chain", auditChainLine(a), a.chain_intact ? "ok" : "bad");
-  html += line("Actions recorded", a.ledger_rows ?? a.sampled ?? 0);
-  const odd = a.unexpected_result_values ?? 0;
-  if (odd) {
-    // Rows whose `result` column holds something that is not a status token -- an early build wrote
-    // a response message there. Counted and named, never renamed into a status that was not
-    // recorded and never left out of the total.
-    html += line("· result values that are not statuses", odd, "muted");
-  }
+        let html = "";
+        html += line("Failures recorded", f.total_failures ?? 0);
+        html += line(
+          "Recovered automatically",
+          `${f.total_recovered ?? 0} (${rate}%)`,
+          rate > 0 ? "ok" : "off",
+        );
+        html += line(
+          "Audit chain",
+          auditChainLine(a),
+          a.chain_intact ? "ok" : "bad",
+        );
+        html += line("Actions recorded", a.ledger_rows ?? a.sampled ?? 0);
+        const odd = a.unexpected_result_values ?? 0;
+        if (odd) {
+          // Rows whose `result` column holds something that is not a status token -- an early build wrote
+          // a response message there. Counted and named, never renamed into a status that was not
+          // recorded and never left out of the total.
+          html += line("· result values that are not statuses", odd, "muted");
+        }
 
-  const topTools = Object.entries(a.top_tools || {}).slice(0, 3);
-  for (const [tool, count] of topTools) {
-    html += line(`· ${tool}`, count, "muted");
-  }
+        const topTools = Object.entries(a.top_tools || {}).slice(0, 3);
+        for (const [tool, count] of topTools) {
+          html += line(`· ${tool}`, count, "muted");
+        }
 
-  document.getElementById("health-metrics").innerHTML = html;
-}
+        document.getElementById("health-metrics").innerHTML = html;
+      }
 
-async function loadPrivacy() {
-  const p = await get("/privacy");
-  const on = p.privacy_mode;
+      async function loadPrivacy() {
+        const p = await get("/privacy");
+        const on = p.privacy_mode;
 
-  document.getElementById("privacy").innerHTML = `
+        document.getElementById("privacy").innerHTML = `
     <div class="row"><span>Redaction</span><span class="ok">always on</span></div>
     <div class="row"><span>Privacy mode</span>
       <span class="${on ? "ok" : "off"}">${on ? "ON" : "off"}</span></div>
@@ -1195,65 +2419,77 @@ async function loadPrivacy() {
       <span><button class="deny" id="exportBtn">Export data</button></span>
     </div>`;
 
-  const btn = document.getElementById("privBtn");
-  if (btn) btn.onclick = async () => {
-    await fetch(API + "/privacy/mode?enabled=" + (!on), {
-      method: "POST", headers: authHeaders(),
-    });
-    refresh();
-  };
+        const btn = document.getElementById("privBtn");
+        if (btn)
+          btn.onclick = async () => {
+            await fetch(API + "/privacy/mode?enabled=" + !on, {
+              method: "POST",
+              headers: authHeaders(),
+            });
+            refresh();
+          };
 
-  const exp = document.getElementById("exportBtn");
-  if (exp) exp.onclick = async () => {
-    const data = await get("/privacy/export");
-    const totals = data.totals || {};
-    const summary = Object.entries(totals)
-      .filter(([, n]) => n > 0)
-      .map(([t, n]) => `${t}: ${n}`)
-      .join("\n") || "(no data)";
-    document.getElementById("reply").textContent =
-      `Data export (redacted)\n\n${summary}`;
-  };
-}
+        const exp = document.getElementById("exportBtn");
+        if (exp)
+          exp.onclick = async () => {
+            const data = await get("/privacy/export");
+            const totals = data.totals || {};
+            const summary =
+              Object.entries(totals)
+                .filter(([, n]) => n > 0)
+                .map(([t, n]) => `${t}: ${n}`)
+                .join("\n") || "(no data)";
+            document.getElementById("reply").textContent =
+              `Data export (redacted)\n\n${summary}`;
+          };
+      }
 
-async function loadTools() {
-  try {
-    _tools = await get("/tools");
-    _toolsFailed = null;
-  } catch (e) {
-    // A registry that could not be read is not a registry that is empty. Say which.
-    _toolsFailed = e.message;
-    document.getElementById("tools").innerHTML =
-      `<div class="empty"><b>Tool registry not readable.</b> ${escapeHtml(e.message)}</div>`;
-    document.getElementById("toolCount").textContent = "";
-    renderQuick();
-    return;
-  }
-  renderTools();
-  renderQuick();
-}
+      async function loadTools() {
+        try {
+          _tools = await get("/tools");
+          _toolsFailed = null;
+        } catch (e) {
+          // A registry that could not be read is not a registry that is empty. Say which.
+          _toolsFailed = e.message;
+          document.getElementById("tools").innerHTML =
+            `<div class="empty"><b>Tool registry not readable.</b> ${escapeHtml(e.message)}</div>`;
+          document.getElementById("toolCount").textContent = "";
+          renderQuick();
+          return;
+        }
+        renderTools();
+        renderQuick();
+      }
 
-function renderTools() {
-  const box = document.getElementById("tools");
-  const q = document.getElementById("toolFilter").value.trim().toLowerCase();
-  const rows = q
-    ? _tools.filter(t => (`${t.name} ${t.description || ""}`).toLowerCase().includes(q))
-    : _tools;
-  document.getElementById("toolCount").textContent = q
-    ? `${rows.length} of ${_tools.length} match`
-    : `${_tools.length} tools`;
-  if (!rows.length) {
-    box.innerHTML = `<div class="empty">no tool matches &ldquo;${escapeHtml(q)}&rdquo;. `
-      + `Clear the filter to see all ${_tools.length}.</div>`;
-    return;
-  }
-  // The filter box lives in the markup, not in this string: rewriting the card on every
-  // keystroke would detach the input the caret is sitting in.
-  box.innerHTML = `
+      function renderTools() {
+        const box = document.getElementById("tools");
+        const q = document
+          .getElementById("toolFilter")
+          .value.trim()
+          .toLowerCase();
+        const rows = q
+          ? _tools.filter((t) =>
+              `${t.name} ${t.description || ""}`.toLowerCase().includes(q),
+            )
+          : _tools;
+        document.getElementById("toolCount").textContent = q
+          ? `${rows.length} of ${_tools.length} match`
+          : `${_tools.length} tools`;
+        if (!rows.length) {
+          box.innerHTML =
+            `<div class="empty">no tool matches &ldquo;${escapeHtml(q)}&rdquo;. ` +
+            `Clear the filter to see all ${_tools.length}.</div>`;
+          return;
+        }
+        // The filter box lives in the markup, not in this string: rewriting the card on every
+        // keystroke would detach the input the caret is sitting in.
+        box.innerHTML = `
     <table>
       <thead><tr><th>Tool</th><th>Agent</th><th>Risk</th><th>Confirm</th><th>Policy</th><th>Description</th></tr></thead>
       <tbody>
-        ${rows.map(t => `
+        ${rows
+          .map(
+            (t) => `
           <tr>
             <td><strong>${escapeHtml(t.name)}</strong></td>
             <td class="muted">${escapeHtml(t.agent)}</td>
@@ -1261,148 +2497,357 @@ function renderTools() {
             <td>${t.requires_confirmation ? "yes" : "no"}</td>
             <td>${policyCell(t.name)}</td>
             <td class="muted">${escapeHtml(t.description)}</td>
-          </tr>`).join("")}
+          </tr>`,
+          )
+          .join("")}
       </tbody>
     </table>`;
-  box.querySelectorAll("[data-revoke]").forEach(b =>
-    b.onclick = () => changePolicy(b.dataset.revoke, "revoke"));
-  box.querySelectorAll("[data-restore]").forEach(b =>
-    b.onclick = () => changePolicy(b.dataset.restore, "restore"));
-}
+        box
+          .querySelectorAll("[data-revoke]")
+          .forEach(
+            (b) => (b.onclick = () => changePolicy(b.dataset.revoke, "revoke")),
+          );
+        box
+          .querySelectorAll("[data-restore]")
+          .forEach(
+            (b) =>
+              (b.onclick = () => changePolicy(b.dataset.restore, "restore")),
+          );
+      }
 
-const stopNote = () => document.getElementById("stopNote");
-function setNote(text) { if (stopNote()) stopNote().textContent = text; }
+      const stopNote = () => document.getElementById("stopNote");
+      function setNote(text) {
+        if (stopNote()) stopNote().textContent = text;
+      }
 
-let _policy = {};
-const POST_JSON = { "Content-Type": "application/json" };
+      let _policy = {};
+      const POST_JSON = { "Content-Type": "application/json" };
 
-function policyCell(name) {
-  if (name === "emergency_stop") {
-    return '<span class="muted">safety interlock</span>';
-  }
-  const row = _policy[name];
-  if (row) {
-    return `<span class="revoked">REVOKED</span> `
-         + `<button class="forget" data-restore="${escapeHtml(name)}">Restore</button>`;
-  }
-  return `<button class="forget" data-revoke="${escapeHtml(name)}">Revoke</button>`;
-}
+      function policyCell(name) {
+        if (name === "emergency_stop") {
+          return '<span class="muted">safety interlock</span>';
+        }
+        const row = _policy[name];
+        if (row) {
+          return (
+            `<span class="revoked">REVOKED</span> ` +
+            `<button class="forget" data-restore="${escapeHtml(name)}">Restore</button>`
+          );
+        }
+        return `<button class="forget" data-revoke="${escapeHtml(name)}">Revoke</button>`;
+      }
 
-async function loadPolicy() {
-  try {
-    const res = await fetch("/permissions/policy", { headers: authHeaders() });
-    if (!res.ok) return;
-    const rows = await res.json();
-    _policy = {};
-    // The engine honours one row per tool and device; a grant row is not a denial, and only a
-    // denial makes the tool read REVOKED here.
-    rows.forEach(r => { if (r.granted === 0) _policy[r.tool] = r; });
-  } catch (e) { /* the card keeps its last real reading rather than showing a guess */ }
-  if (typeof renderTools === "function" && _tools.length) renderTools();
-}
+      async function loadPolicy() {
+        try {
+          const res = await fetch("/permissions/policy", {
+            headers: authHeaders(),
+          });
+          if (!res.ok) return;
+          const rows = await res.json();
+          _policy = {};
+          // The engine honours one row per tool and device; a grant row is not a denial, and only a
+          // denial makes the tool read REVOKED here.
+          rows.forEach((r) => {
+            if (r.granted === 0) _policy[r.tool] = r;
+          });
+        } catch (e) {
+          /* the card keeps its last real reading rather than showing a guess */
+        }
+        if (typeof renderTools === "function" && _tools.length) renderTools();
+      }
 
-async function changePolicy(name, action) {
-  const res = await fetch(`/permissions/${encodeURIComponent(name)}/${action}`, {
-    method: "POST", headers: authHeaders(POST_JSON), body: JSON.stringify({})
-  });
-  const body = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    setNote(`refused: ${body.detail || "HTTP " + res.status}`);
-    return;
-  }
-  await loadPolicy();
-  setNote(action === "revoke"
-    ? `${body.tool} revoked${body.state && body.state.blocked ? " and now blocked" : ""}`
-    : (body.restored ? `${body.tool} follows its declared policy again` : body.reason));
-}
+      async function changePolicy(name, action) {
+        const res = await fetch(
+          `/permissions/${encodeURIComponent(name)}/${action}`,
+          {
+            method: "POST",
+            headers: authHeaders(POST_JSON),
+            body: JSON.stringify({}),
+          },
+        );
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          setNote(`refused: ${body.detail || "HTTP " + res.status}`);
+          return;
+        }
+        await loadPolicy();
+        setNote(
+          action === "revoke"
+            ? `${body.tool} revoked${body.state && body.state.blocked ? " and now blocked" : ""}`
+            : body.restored
+              ? `${body.tool} follows its declared policy again`
+              : body.reason,
+        );
+      }
 
-async function emergencyStop() {
-  setNote("stopping…");
-  const res = await fetch("/emergency_stop", { method: "POST", headers: authHeaders(POST_JSON) });
-  if (!res.ok) { setNote(`the stop was refused (HTTP ${res.status})`); return; }
-  const body = await res.json();
-  const r = body.result || {};
-  setNote(r.verified === false ? `stopped, but not everything: ${(r.message || "").slice(0, 120)}`
-                               : (r.message || "stop carried out"));
-}
+      async function emergencyStop() {
+        setNote("stopping…");
+        const res = await fetch("/emergency_stop", {
+          method: "POST",
+          headers: authHeaders(POST_JSON),
+        });
+        if (!res.ok) {
+          setNote(`the stop was refused (HTTP ${res.status})`);
+          return;
+        }
+        const body = await res.json();
+        const r = body.result || {};
+        setNote(
+          r.verified === false
+            ? `stopped, but not everything: ${(r.message || "").slice(0, 120)}`
+            : r.message || "stop carried out",
+        );
+      }
 
-document.getElementById("stopAll").onclick = emergencyStop;
+      document.getElementById("stopAll").onclick = emergencyStop;
 
-async function send() {
-  const input = document.getElementById("cmd");
-  const text = input.value.trim();
-  if (!text) return;
-  document.getElementById("reply").textContent = "…thinking";
-  // Our own in-flight state, not a claim about the world: the request has left
-  // this page and no answer has come back yet.
-  renderState("EXECUTING", "");
-  renderWorkflow("");
-  try {
-    const res = await fetch(API + "/command", {
-      method: "POST",
-      headers: authHeaders({ "Content-Type": "application/json" }),
-      body: JSON.stringify({ text, source: "dashboard" }),
-    });
-    if (res.status === 401) throw new Error("session missing or expired. Reload the dashboard.");
-    if (!res.ok) throw new Error("/command -> " + res.status);
-    const data = await res.json();
-    let out = data.reply;
-    if (data.confirmation_id) out += `\n\n[pending confirmation ${data.confirmation_id}]`;
-    document.getElementById("reply").textContent = out;
-    renderState(pipelineState(data), (data.actions && data.actions.length
-      ? (data.actions[0].tool || "") : (data.intent || "")));
-    renderWorkflow(data.job_id);
-    input.value = "";
-  } catch (e) {
-    // A transport failure tells us nothing about whether the action happened,
-    // so this is UNKNOWN, never FAILED: the request may well have been carried
-    // out server-side before the connection dropped.
-    document.getElementById("reply").textContent = "Error: " + e.message;
-    renderState("UNKNOWN", "no response from Vantage");
-    renderWorkflow("");
-  }
-  refresh();
-}
+      async function send() {
+        const input = document.getElementById("cmd");
+        const text = input.value.trim();
+        if (!text) return;
+        document.getElementById("reply").textContent = "…thinking";
+        // Our own in-flight state, not a claim about the world: the request has left
+        // this page and no answer has come back yet.
+        renderState("EXECUTING", "");
+        renderWorkflow("");
+        try {
+          const res = await fetch(API + "/command", {
+            method: "POST",
+            headers: authHeaders({ "Content-Type": "application/json" }),
+            body: JSON.stringify({ text, source: "dashboard" }),
+          });
+          if (res.status === 401)
+            throw new Error(
+              "session missing or expired. Reload the dashboard.",
+            );
+          if (!res.ok) throw new Error("/command -> " + res.status);
+          const data = await res.json();
+          let out = data.reply;
+          if (data.confirmation_id)
+            out +=
+              "\n\nThis needs your approval — open the Approvals panel to review it.";
+          document.getElementById("reply").textContent = out;
+          renderState(
+            pipelineState(data),
+            data.actions && data.actions.length
+              ? data.actions[0].tool || ""
+              : data.intent || "",
+          );
+          renderWorkflow(data.job_id);
+          input.value = "";
+        } catch (e) {
+          // A transport failure tells us nothing about whether the action happened,
+          // so this is UNKNOWN, never FAILED: the request may well have been carried
+          // out server-side before the connection dropped.
+          document.getElementById("reply").textContent = "Error: " + e.message;
+          renderState("UNKNOWN", "no response from Vantage");
+          renderWorkflow("");
+        }
+        refresh();
+      }
 
-function tick() {
-  document.getElementById("clock").textContent = new Date().toLocaleString();
-}
+      function tick() {
+        document.getElementById("clock").textContent =
+          new Date().toLocaleString();
+      }
 
-function refresh() {
-  // The devices card reads the peripheral state, so it goes second; if health
-  // cannot be reached at all, render devices from their own data anyway.
-  loadPeripherals().catch(() => loadDevices().catch(() => {}));
-  loadConfirmations().catch(() => {});
-  loadAudit().catch(() => {});
-  loadMemory().catch(() => {});
-  loadVoice().catch(() => {});
-  loadMetrics().catch(() => {});
-  loadPrivacy().catch(() => {});
-  loadTools().catch(() => {});
-  loadPolicy().catch(() => {});
-}
+      function refresh() {
+        // The devices card reads the peripheral state, so it goes second; if health
+        // cannot be reached at all, render devices from their own data anyway.
+        loadPeripherals().catch(() => loadDevices().catch(() => {}));
+        loadConfirmations().catch(() => {});
+        loadAudit().catch(() => {});
+        loadMemory().catch(() => {});
+        loadVoice().catch(() => {});
+        loadMetrics().catch(() => {});
+        loadPrivacy().catch(() => {});
+        loadTools().catch(() => {});
+        loadPolicy().catch(() => {});
+      }
 
-document.getElementById("send").onclick = send;
-document.getElementById("cmd").addEventListener("keydown", e => { if (e.key === "Enter") send(); });
-document.getElementById("toolFilter").addEventListener("input", renderTools);
-setInterval(tick, 1000);
-tick();
+      document.getElementById("send").onclick = send;
+      document.getElementById("cmd").addEventListener("keydown", (e) => {
+        if (e.key === "Enter") send();
+      });
+      document
+        .getElementById("toolFilter")
+        .addEventListener("input", renderTools);
+      setInterval(tick, 1000);
+      tick();
 
-// Nothing may be fetched before the session exists, or every card would show a
-// 401 for a page that is actually fine.
-authenticate().then(() => {
-  refresh();
-  // Read once, then on demand: a permission changes when the user changes it in System
-  // Settings, and polling it means spawning a helper every eight seconds for a value
-  // that cannot have moved. The card has its own "Check again".
-  loadPermissions().catch(() => {});
-  // Same rule for launchd: asked once at load, and again when the user acts or presses
-  // Check again. Polling a service manager every eight seconds buys nothing.
-  loadPersistence().catch(() => {});
-  setInterval(refresh, 8000);
-}).catch(e => {
-  document.getElementById("reply").textContent = "Not authorised: " + e.message;
-});
-</script>
-</body>
+      // Nothing may be fetched before the session exists, or every card would show a
+      // 401 for a page that is actually fine.
+      authenticate()
+        .then(() => {
+          refresh();
+          // Read once, then on demand: a permission changes when the user changes it in System
+          // Settings, and polling it means spawning a helper every eight seconds for a value
+          // that cannot have moved. The card has its own "Check again".
+          loadPermissions().catch(() => {});
+          // Same rule for launchd: asked once at load, and again when the user acts or presses
+          // Check again. Polling a service manager every eight seconds buys nothing.
+          loadPersistence().catch(() => {});
+          loadProviders().catch(() => {});
+          setInterval(refresh, 8000);
+        })
+        .catch((e) => {
+          document.getElementById("reply").textContent =
+            "Not authorised: " + e.message;
+        });
+      // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+      // AI Providers card
+
+      async function loadProviders() {
+        const list = document.getElementById("providersList");
+        const count = document.getElementById("providerCount");
+        if (!list || !count) return;
+        try {
+          const resp = await fetch(API + "/ai/providers", {
+            headers: authHeaders(),
+          });
+          if (!resp.ok) {
+            list.innerHTML = `<span class="muted">${resp.status}</span>`;
+            return;
+          }
+          const providers = await resp.json();
+          count.textContent =
+            providers.length +
+            " provider" +
+            (providers.length !== 1 ? "s" : "");
+          if (providers.length === 0) {
+            list.innerHTML =
+              '<span class="muted">No API keys configured.</span>';
+          } else {
+            list.innerHTML = providers
+              .map(
+                (p) =>
+                  `<div class="provider-row">
+              <span class="dot ${p.verified ? "ok" : p.configured ? "warn" : "off"}"></span>
+              <span class="label">${escapeHtml(p.display_name || p.provider_id)}</span>
+              <button class="icon-btn" onclick="testKey('${escapeHtml(p.provider_id)}')" title="Test">&#x21bb;</button>
+              <button class="icon-btn danger" onclick="removeKey('${escapeHtml(p.provider_id)}')" title="Remove">&#x2715;</button>
+            </div>`,
+              )
+              .join("");
+          }
+        } catch {
+          list.innerHTML = '<span class="muted">offline</span>';
+        }
+      }
+
+      function showAddKeyForm() {
+        const form = document.getElementById("addKeyForm");
+        const sel = document.getElementById("providerSelect");
+        sel.innerHTML = "";
+        const known = [
+          { id: "openai", label: "OpenAI" },
+          { id: "anthropic", label: "Anthropic" },
+          { id: "google", label: "Google AI" },
+          { id: "deepseek", label: "DeepSeek" },
+          { id: "groq", label: "Groq" },
+          { id: "mistral", label: "Mistral" },
+          { id: "togetherai", label: "Together AI" },
+          { id: "xai", label: "xAI" },
+          { id: "perplexity", label: "Perplexity" },
+        ];
+        known.forEach((p) => {
+          const opt = document.createElement("option");
+          opt.value = p.id;
+          opt.textContent = p.label;
+          sel.appendChild(opt);
+        });
+        form.style.display = "flex";
+        document.getElementById("addKeyBtn").style.display = "none";
+      }
+
+      function hideAddKeyForm() {
+        document.getElementById("addKeyForm").style.display = "none";
+        document.getElementById("addKeyBtn").style.display = "";
+      }
+
+      async function storeKey() {
+        const sel = document.getElementById("providerSelect");
+        const inp = document.getElementById("keyInput");
+        const providerId = sel.value;
+        const apiKey = inp.value.trim();
+        if (!providerId || !apiKey) return;
+        try {
+          const resp = await fetch(
+            API + "/ai/providers/" + providerId + "/store",
+            {
+              method: "POST",
+              headers: authHeaders({ "Content-Type": "application/json" }),
+              body: JSON.stringify({ api_key: apiKey }),
+            },
+          );
+          if (!resp.ok) {
+            const err = await resp.json().catch(() => ({}));
+            alert("Store failed: " + (err.detail || resp.status));
+            return;
+          }
+          inp.value = "";
+          hideAddKeyForm();
+          loadProviders();
+        } catch (e) {
+          alert("Store failed: " + e.message);
+        }
+      }
+
+      async function removeKey(providerId) {
+        if (!confirm("Remove stored key for " + providerId + "?")) return;
+        try {
+          const resp = await fetch(
+            API + "/ai/providers/" + providerId + "/credentials",
+            {
+              method: "DELETE",
+              headers: authHeaders(),
+            },
+          );
+          if (!resp.ok) {
+            const err = await resp.json().catch(() => ({}));
+            alert("Remove failed: " + (err.detail || resp.status));
+            return;
+          }
+          loadProviders();
+        } catch (e) {
+          alert("Remove failed: " + e.message);
+        }
+      }
+
+      async function testKey(providerId) {
+        try {
+          const resp = await fetch(
+            API + "/ai/providers/" + providerId + "/test",
+            {
+              method: "POST",
+              headers: authHeaders(),
+            },
+          );
+          const data = await resp.json().catch(() => ({}));
+          if (resp.ok && data.success) {
+            alert(providerId + " test: OK — " + (data.message || "verified"));
+          } else {
+            alert(
+              providerId +
+                " test: FAILED — " +
+                (data.detail || data.message || resp.status),
+            );
+          }
+          loadProviders();
+        } catch (e) {
+          alert("Test failed: " + e.message);
+        }
+      }
+
+      // Wire AI Providers buttons
+      document.getElementById("addKeyBtn").onclick = showAddKeyForm;
+      document.getElementById("cancelKeyBtn").onclick = hideAddKeyForm;
+      document.getElementById("submitKeyBtn").onclick = storeKey;
+      document.getElementById("keyInput").addEventListener("keydown", (e) => {
+        if (e.key === "Enter") storeKey();
+      });
+
+      // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    </script>
+  </body>
 </html>

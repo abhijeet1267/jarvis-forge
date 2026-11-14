@@ -1,474 +1,1417 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<meta name="jarvis-bootstrap" content="__JARVIS_BOOTSTRAP__" />
-<title>Vantage AI Chat</title>
-<style>
-:root {
-  --bg: #f5f7fa;
-  --panel: #ffffff;
-  --ink: #1b2230;
-  --muted: #6b7688;
-  --line: #e2e7ef;
-  --accent: #2f6df6;
-  --on-accent: #ffffff;
-  --ok: #16a34a;
-  --warn: #d97706;
-  --bad: #dc2626;
-  --radius: 10px;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #0b1220;
-    --panel: #0f172a;
-    --ink: #e6edf7;
-    --muted: #8b98ab;
-    --line: #1c2332;
-    --accent: #6ea8ff;
-    --on-accent: #0f172a;
-    --on-ok: #34d399;
-    --on-warn: #fbbf24;
-    --on-bad: #f87171;
-  }
-}
-
-* { box-sizing: border-box; }
-body {
-  margin: 0; background: var(--bg); color: var(--ink);
-  font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-}
-
-header {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 12px 16px; background: var(--panel); border-bottom: 1px solid var(--line);
-  position: sticky; top: 0; z-index: 5;
-}
-
-.header-left { display: flex; align-items: center; gap: 12px; }
-header h1 { font-size: 16px; margin: 0; }
-
-.provider-row, .model-row, .connection-row {
-  display: flex; align-items: center; gap: 8px;
-  font-size: 12px; color: var(--muted);
-}
-
-.select-wrapper { position: relative; }
-select {
-  appearance: none;
-  background: var(--bg);
-  border: 1px solid var(--line);
-  color: var(--ink);
-  padding: 6px 24px 6px 8px;
-  border-radius: 6px;
-  font-size: 12px;
-  cursor: pointer;
-}
-select:disabled { opacity: 0.6; cursor: not-allowed; }
-select-option.selected { color: var(--accent); font-weight: 600; }
-select-arrow {
-  position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
-  pointer-events: none; color: var(--muted);
-}
-
-main { max-width: 900px; margin: 0 auto; padding: 16px; }
-
-.conversation-container {
-  display: flex; flex-direction: column;
-  min-height: 400px; background: var(--panel);
-  border: 1px solid var(--line); border-radius: var(--radius);
-  overflow: hidden;
-}
-
-.messages-area {
-  flex: 1; overflow-y: auto; padding: 16px;
-  display: flex; flex-direction: column; gap: 12px;
-}
-
-.message {
-  display: flex; flex-direction: column;
-  max-width: 85%;
-  padding: 12px 14px;
-  border-radius: var(--radius);
-  background: var(--bg);
-  border: 1px solid var(--line);
-  word-wrap: break-word;
-}
-
-.message.user {
-  align-self: flex-end;
-  background: var(--accent);
-  color: var(--on-accent);
-  border-color: transparent;
-}
-
-.message.ai {
-  align-self: flex-start;
-  border-left: 3px solid var(--accent);
-}
-
-.message-content { line-height: 1.5; }
-
-.message-meta {
-  display: flex; align-items: center; gap: 8px;
-  font-size: 11px; opacity: 0.8; margin-top: 6px;
-}
-
-.status-indicator {
-  display: inline-block; width: 8px; height: 8px;
-  border-radius: 50%; margin-right: 6px;
-}
-.status-connected { background: var(--ok); }
-.status-unavailable { background: var(--bad); }
-.status-streaming { background: var(--warn); animation: pulse 1s infinite; }
-
-@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
-
-.composer-area {
-  display: flex; gap: 8px; padding: 12px;
-  border-top: 1px solid var(--line);
-  background: var(--bg);
-}
-
-.composer-input {
-  flex: 1;
-  padding: 12px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: var(--panel);
-  color: var(--ink);
-  font-size: 14px;
-  resize: none;
-  min-height: 44px;
-  max-height: 200px;
-  font-family: inherit;
-}
-
-.send-button {
-  padding: 10px 20px;
-  background: var(--accent);
-  color: var(--on-accent);
-  border: none;
-  border-radius: var(--radius);
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  white-space: nowrap;
-}
-
-.send-button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.control-bar {
-  display: flex; gap: 8px; margin-bottom: 12px;
-  flex-wrap: wrap;
-}
-
-.control-button {
-  padding: 8px 14px;
-  background: var(--bg);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  color: var(--ink);
-  font-size: 12px;
-  cursor: pointer;
-}
-
-.control-button:hover:not(:disabled) {
-  background: var(--line);
-}
-
-.empty-state {
-  text-align: center; padding: 40px; color: var(--muted);
-}
-
-.tool-request {
-  background: var(--warn);
-  color: #000;
-  padding: 16px;
-  margin: 8px 16px;
-  border-radius: var(--radius);
-  border: 1px solid var(--warn);
-}
-
-.loading-dots::after {
-  content: "";
-  display: inline-block;
-  width: 12px;
-  height: 12px;
-  border: 2px solid var(--accent);
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-</style>
-</head>
-<body>
-<header>
-  <div class="header-left">
-    <h1>VANTAGE AI</h1>
-  </div>
-  <div style="display:flex;gap:12px;align-items:center;">
-    <span id="provider-status"></span>
-    <button id="new-chat-btn" class="control-button">New Chat</button>
-  </div>
-</header>
-
-<main>
-  <div class="control-bar">
-    <div class="select-wrapper">
-      Provider:
-      <select id="provider-select">
-        <option value="auto" selected>Auto (default)</option>
-      </select>
-    </div>
-    <div class="select-wrapper">
-      Plan:
-      <label><input type="checkbox" id="free-first-check" checked> Free first</label>
-      <label><input type="checkbox" id="paid-fallback"> Allow paid fallback</label>
-    </div>
-    <button id="health-btn" class="control-button">Connection Health</button>
-  </div>
-
-  <div class="conversation-container">
-    <div class="messages-area" id="messages-area">
-      <div class="empty-state">
-        Welcome to Vantage AI. Select a provider below or use Auto mode.<br/>
-        Connect providers in Settings → AI Connections first.
-      </div>
-    </div>
-  </div>
-
-  <div class="composer-area">
-    <textarea class="composer-input" id="message-input" placeholder="Type your message..."></textarea>
-    <button class="send-button" id="send-button" disabled>Send</button>
-  </div>
-
-  <div id="tool-request-area"></div>
-</main>
-
-<script>
-// Global state
-const state = {
-  currentChat: null,
-  conversations: [],
-  providers: [],
-  bootstrapToken: document.querySelector('meta[name="jarvis-bootstrap"]')?.content || "",
-};
-
-// Fetch provider list on load
-async function initProviders() {
-  const response = await fetch("/ai/providers", authHeaders());
-  if (!response.ok) return;
-  
-  state.providers = await response.json();
-  updateProviderSelector();
-}
-
-function updateProviderSelector() {
-  const select = document.getElementById("provider-select");
-  select.innerHTML = '<option value="auto" selected>Auto (default)</option>';
-  
-  for (const p of state.providers) {
-    if (p.enabled && (p.configured || p.type === "openai")) {
-      const option = document.createElement("option");
-      option.value = p.provider_id;
-      option.textContent = p.display_name;
-      
-      if (p.verified) {
-        option.classList.add("selected");
-      } else {
-        option.disabled = true;
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="jarvis-bootstrap" content="__JARVIS_BOOTSTRAP__" />
+    <title>Vantage AI Chat</title>
+    <style>
+      :root {
+        --bg: #f5f7fa;
+        --panel: #ffffff;
+        --ink: #1b2230;
+        --muted: #6b7688;
+        --line: #e2e7ef;
+        --accent: #2f6df6;
+        --on-accent: #ffffff;
+        --ok: #16a34a;
+        --warn: #d97706;
+        --bad: #dc2626;
+        --radius: 10px;
       }
-      
-      select.appendChild(option);
-    }
-  }
-}
 
-// Auth headers
-function authHeaders() {
-  return {"X-JARVIS-Token": window.sessionToken || ""};
-}
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #0b1220;
+          --panel: #0f172a;
+          --ink: #e6edf7;
+          --muted: #8b98ab;
+          --line: #1c2332;
+          --accent: #6ea8ff;
+          --on-accent: #0f172a;
+          --on-ok: #34d399;
+          --on-warn: #fbbf24;
+          --on-bad: #f87171;
+        }
+      }
 
-// Create chat session
-async function createChatSession(title = "New conversation") {
-  const response = await fetch("/ai/chats", {
-    method: "POST",
-    headers: authHeaders(),
-    body: JSON.stringify({ title })
-  });
-  if (!response.ok) throw new Error("Failed to create chat");
-  const chat = await response.json();
-  state.currentChat = chat;
-  state.conversations.push(chat);
-  return chat;
-}
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--ink);
+        font:
+          14px/1.5 -apple-system,
+          BlinkMacSystemFont,
+          "Segoe UI",
+          Roboto,
+          sans-serif;
+      }
 
-// Save message to conversation
-async function saveMessage(conversationId, role, content, providerMeta = {}) {
-  const response = await fetch(`/ai/chats/${conversationId}/messages`, {
-    method: "POST",
-    headers: authHeaders(),
-    body: JSON.stringify({
-      role, content, provider_meta: providerMeta
-    })
-  });
-  if (!response.ok) throw new Error("Failed to save message");
-  return await response.json();
-}
+      header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 12px 16px;
+        background: var(--panel);
+        border-bottom: 1px solid var(--line);
+        position: sticky;
+        top: 0;
+        z-index: 5;
+      }
 
-// Send message to AI provider
-async function sendMessageToAI(text) {
-  const providerId = document.getElementById("provider-select").value;
-  const freeFirst = document.getElementById("free-first-check").checked;
-  const paidFallback = document.getElementById("paid-fallback").checked;
-  
-  const response = await fetch("/ai/chat/send", {
-    method: "POST",
-    headers: authHeaders(),
-    body: JSON.stringify({
-      text,
-      conversation_id: state.currentChat.id,
-      provider_preference: providerId !== "auto" ? providerId : undefined,
-      free_first: freeFirst,
-      allow_paid_fallback: paidFallback
-    })
-  });
-  
-  return response;
-}
+      .header-left {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+      header h1 {
+        font-size: 16px;
+        margin: 0;
+      }
 
-// Update messages area
-function appendMessage(role, content, providerMeta = {}) {
-  const area = document.getElementById("messages-area");
-  const messageDiv = document.createElement("div");
-  messageDiv.className = `message ${role}`;
-  
-  let contentHtml = content.replace(/\n/g, "<br>");
-  
-  messageDiv.innerHTML = `
-    <div class="message-content">${contentHtml}</div>
-    ${providerMeta ? `
-    <div class="message-meta">
-      <span>${providerMeta.provider || "Vantage"}</span>
-      ${providerMeta.model ? `<span>${providerMeta.model}</span>` : ""}
-      ${providerMeta.connection_type ? `<span>[${providerMeta.connection_type}]</span>` : ""}
-    </div>` : ""}
-  `;
-  
-  // Remove empty state if present
-  const emptyState = area.querySelector(".empty-state");
-  if (emptyState) emptyState.remove();
-  
-  area.appendChild(messageDiv);
-  area.scrollTop = area.scrollHeight;
-}
+      .provider-row,
+      .model-row,
+      .connection-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 12px;
+        color: var(--muted);
+      }
 
-// Show loading indicator
-function showLoading(provider = "AI") {
-  const area = document.getElementById("messages-area");
-  const loadingDiv = document.createElement("div");
-  loadingDiv.className = "message ai";
-  loadingDiv.id = "loading-indicator";
-  loadingDiv.innerHTML = `
+      .select-wrapper {
+        position: relative;
+      }
+      select {
+        appearance: none;
+        background: var(--bg);
+        border: 1px solid var(--line);
+        color: var(--ink);
+        padding: 6px 24px 6px 8px;
+        border-radius: 6px;
+        font-size: 12px;
+        cursor: pointer;
+      }
+      select:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
+      select-option.selected {
+        color: var(--accent);
+        font-weight: 600;
+      }
+      select-arrow {
+        position: absolute;
+        right: 8px;
+        top: 50%;
+        transform: translateY(-50%);
+        pointer-events: none;
+        color: var(--muted);
+      }
+
+      main {
+        max-width: 900px;
+        margin: 0 auto;
+        padding: 16px;
+      }
+
+      .history-panel {
+        max-width: 900px;
+        margin: 12px auto 0;
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        overflow: hidden;
+      }
+      .history-panel[hidden] {
+        display: none;
+      }
+      .history-title {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 10px 14px;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--muted);
+        border-bottom: 1px solid var(--line);
+      }
+      .history-count {
+        font-weight: 400;
+      }
+      .history-list {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        max-height: 240px;
+        overflow-y: auto;
+      }
+      .history-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 9px 14px;
+        border-bottom: 1px solid var(--line);
+        cursor: pointer;
+      }
+      .history-item:last-child {
+        border-bottom: none;
+      }
+      .history-item:hover {
+        background: var(--bg);
+      }
+      .history-item.current {
+        border-left: 3px solid var(--accent);
+        padding-left: 11px;
+      }
+      .history-name {
+        flex: 1;
+        font-size: 13px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .history-meta {
+        font-size: 11px;
+        color: var(--muted);
+        white-space: nowrap;
+      }
+      .history-empty {
+        padding: 14px;
+        font-size: 12px;
+        color: var(--muted);
+      }
+
+      .conversation-container {
+        display: flex;
+        flex-direction: column;
+        min-height: 400px;
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        overflow: hidden;
+      }
+
+      .messages-area {
+        flex: 1;
+        overflow-y: auto;
+        padding: 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+
+      .message {
+        display: flex;
+        flex-direction: column;
+        max-width: 85%;
+        padding: 12px 14px;
+        border-radius: var(--radius);
+        background: var(--bg);
+        border: 1px solid var(--line);
+        word-wrap: break-word;
+      }
+
+      .message.user {
+        align-self: flex-end;
+        background: var(--accent);
+        color: var(--on-accent);
+        border-color: transparent;
+      }
+
+      .message.ai {
+        align-self: flex-start;
+        border-left: 3px solid var(--accent);
+      }
+
+      .message-content {
+        line-height: 1.5;
+        /* The body is set as text, so its newlines must be honoured here. */
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+
+      .message-meta {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 11px;
+        opacity: 0.8;
+        margin-top: 6px;
+      }
+
+      .status-indicator {
+        display: inline-block;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        margin-right: 6px;
+      }
+      .status-connected {
+        background: var(--ok);
+      }
+      .status-unavailable {
+        background: var(--bad);
+      }
+      .status-streaming {
+        background: var(--warn);
+        animation: pulse 1s infinite;
+      }
+
+      @keyframes pulse {
+        0%,
+        100% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.5;
+        }
+      }
+
+      .composer-area {
+        display: flex;
+        gap: 8px;
+        padding: 12px;
+        border-top: 1px solid var(--line);
+        background: var(--bg);
+      }
+
+      .composer-input {
+        flex: 1;
+        padding: 12px;
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        background: var(--panel);
+        color: var(--ink);
+        font-size: 14px;
+        resize: none;
+        min-height: 44px;
+        max-height: 200px;
+        font-family: inherit;
+      }
+
+      .send-button {
+        padding: 10px 20px;
+        background: var(--accent);
+        color: var(--on-accent);
+        border: none;
+        border-radius: var(--radius);
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        white-space: nowrap;
+      }
+
+      .send-button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+
+      .control-bar {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 12px;
+        flex-wrap: wrap;
+      }
+
+      .control-button {
+        padding: 8px 14px;
+        background: var(--bg);
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        color: var(--ink);
+        font-size: 12px;
+        cursor: pointer;
+      }
+
+      .control-button:hover:not(:disabled) {
+        background: var(--line);
+      }
+
+      .empty-state {
+        text-align: center;
+        padding: 40px;
+        color: var(--muted);
+      }
+
+      .tool-request {
+        background: var(--warn);
+        color: #000;
+        padding: 16px;
+        margin: 8px 16px;
+        border-radius: var(--radius);
+        border: 1px solid var(--warn);
+      }
+
+      /* Approvals ---------------------------------------------------------
+         An action the backend's gate is holding until a person answers. The
+         card shows the server's own one-line description of what will happen,
+         so the page cannot show a different story from the one the person
+         approves. */
+      .approval-card {
+        margin: 8px 16px;
+        padding: 12px 14px;
+        border: 1px solid var(--warn);
+        border-radius: var(--radius);
+        background: var(--panel);
+      }
+
+      .approval-title {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--ink);
+      }
+
+      .approval-detail {
+        font-size: 12px;
+        color: var(--muted);
+        margin-top: 4px;
+        overflow-wrap: anywhere;
+      }
+
+      .approval-actions {
+        display: flex;
+        gap: 8px;
+        margin-top: 10px;
+      }
+
+      .approval-button {
+        padding: 5px 12px;
+        font-size: 12px;
+        border-radius: var(--radius);
+        border: 1px solid var(--line);
+        background: var(--bg);
+        color: var(--ink);
+        cursor: pointer;
+      }
+
+      .approval-button.approve {
+        background: var(--ok);
+        border-color: var(--ok);
+        color: var(--on-ok);
+      }
+
+      .approval-button.deny {
+        background: transparent;
+        color: var(--muted);
+      }
+
+      .approval-button:disabled {
+        opacity: 0.6;
+        cursor: default;
+      }
+
+      /* Attachments ------------------------------------------------------- */
+      .attachment-area {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 0 16px 10px;
+        flex-wrap: wrap;
+      }
+
+      .attachment-status {
+        font-size: 12px;
+        color: var(--muted);
+        flex: 1 1 200px;
+        min-width: 0;
+        overflow-wrap: anywhere;
+      }
+
+      .attachment-status.error {
+        color: var(--bad);
+      }
+
+      /* The result of processing an attachment: what it said, and whether it
+         was read at all. The text is the point, so it gets the room. */
+      .attachment-card {
+        margin: 8px 16px;
+        padding: 12px 14px;
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        background: var(--bg);
+      }
+
+      .attachment-name {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--ink);
+        overflow-wrap: anywhere;
+      }
+
+      .attachment-state {
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--muted);
+        margin: 2px 0 6px;
+      }
+
+      .attachment-state.processed {
+        color: var(--ok, #22c55e);
+      }
+
+      .attachment-state.error {
+        color: var(--bad);
+      }
+
+      .attachment-body {
+        font-size: 13px;
+        line-height: 1.5;
+        color: var(--ink);
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+        max-height: 320px;
+        overflow-y: auto;
+      }
+
+      .loading-dots::after {
+        content: "";
+        display: inline-block;
+        width: 12px;
+        height: 12px;
+        border: 2px solid var(--accent);
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+      }
+
+      @keyframes spin {
+        0% {
+          transform: rotate(0deg);
+        }
+        100% {
+          transform: rotate(360deg);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="header-left">
+        <h1>VANTAGE AI</h1>
+      </div>
+      <div style="display: flex; gap: 12px; align-items: center">
+        <span id="provider-status"></span>
+        <button
+          id="history-btn"
+          class="control-button"
+          aria-expanded="false"
+          title="Show previous conversations"
+        >
+          History
+        </button>
+        <button id="new-chat-btn" class="control-button">New Chat</button>
+      </div>
+    </header>
+
+    <!-- Previous conversations. Without this the page started a new chat on
+         every load and had no way back to the one just written. -->
+    <div class="history-panel" id="history-panel" hidden>
+      <div class="history-title">
+        <span>Conversations</span>
+        <span id="history-count" class="history-count"></span>
+      </div>
+      <ul class="history-list" id="history-list">
+        <li class="history-empty">No conversations yet.</li>
+      </ul>
+    </div>
+
+    <main>
+      <div class="control-bar">
+        <div class="select-wrapper">
+          Provider:
+          <select id="provider-select">
+            <option value="auto" selected>Auto (default)</option>
+          </select>
+        </div>
+        <div class="select-wrapper">
+          Plan:
+          <label
+            ><input type="checkbox" id="free-first-check" checked /> Free
+            first</label
+          >
+          <label
+            ><input type="checkbox" id="paid-fallback" /> Allow paid
+            fallback</label
+          >
+        </div>
+        <button id="health-btn" class="control-button">
+          Connection Health
+        </button>
+      </div>
+
+      <div class="conversation-container">
+        <div class="messages-area" id="messages-area">
+          <div class="empty-state">
+            Welcome to Vantage AI. Select a provider below or use Auto mode.<br />
+            Connect providers in Settings → AI Connections first.
+          </div>
+        </div>
+      </div>
+
+      <div class="composer-area">
+        <textarea
+          class="composer-input"
+          id="message-input"
+          placeholder="Type your message..."
+        ></textarea>
+        <button class="send-button" id="send-button" disabled>Send</button>
+      </div>
+
+      <!-- Attachments: a file picker, the files chosen, and what the pipeline
+           made of them. The result is the point -- a screenshot's text, a
+           document's text, a recording's transcript -- and the honest reason
+           when there is none. -->
+      <div class="attachment-area">
+        <input
+          type="file"
+          id="attachment-input"
+          multiple
+          accept="image/png,image/jpeg,image/gif,image/webp,application/pdf,audio/wav,audio/mp3,audio/mpeg,text/plain"
+          style="display: none"
+        />
+        <button
+          class="control-button"
+          id="attach-button"
+          type="button"
+          title="Attach a file to the next message"
+        >
+          Attach
+        </button>
+        <div id="attachment-status" class="attachment-status"></div>
+      </div>
+
+      <div id="tool-request-area"></div>
+    </main>
+
+    <script>
+      // Global state
+      const state = {
+        currentChat: null,
+        conversations: [],
+        providers: [],
+        // Files the user has chosen but not yet sent. They are uploaded when
+        // the message they belong to is saved -- an attachment needs a
+        // message_id, and a message does not exist until it is sent.
+        pendingFiles: [],
+        bootstrapToken:
+          document.querySelector('meta[name="jarvis-bootstrap"]')?.content ||
+          "",
+        // The session token this page's requests carry. The bootstrap above is
+        // single-use and is *spent* to buy this; it is not a credential the
+        // API accepts. It used to be read and never used, while the header
+        // read `window.sessionToken` -- a value nothing ever set -- so every
+        // request went out with an empty token and came back 401.
+        sessionToken: "",
+      };
+
+      // Fetch provider list on load
+      async function initProviders() {
+        const response = await fetch("/ai/providers", authHeaders());
+        if (!response.ok) return;
+
+        state.providers = await response.json();
+        updateProviderSelector();
+      }
+
+      function updateProviderSelector() {
+        const select = document.getElementById("provider-select");
+        select.innerHTML =
+          '<option value="auto" selected>Auto (default)</option>';
+
+        for (const p of state.providers) {
+          if (p.enabled && (p.configured || p.type === "openai")) {
+            const option = document.createElement("option");
+            option.value = p.provider_id;
+            option.textContent = p.display_name;
+
+            if (p.verified) {
+              option.classList.add("selected");
+            } else {
+              option.disabled = true;
+            }
+
+            select.appendChild(option);
+          }
+        }
+      }
+
+      // Auth headers
+      // The headers every API call carries.
+      //
+      // `Content-Type: application/json` belongs here, not on each call: a
+      // `fetch` whose body is a JSON *string* and whose Content-Type is unset
+      // sends the body as `text/plain`, and the API answers 422 ("Input should
+      // be a valid dictionary") because it is reading the string, not the
+      // object. Every POST in this page was doing that.
+      function authHeaders() {
+        return {
+          "X-JARVIS-Token": state.sessionToken || "",
+          "Content-Type": "application/json",
+        };
+      }
+
+      // Buy a session with the single-use bootstrap the page was served with.
+      // The bootstrap is spent here and never sent to the API again.
+      async function authenticate() {
+        if (!state.bootstrapToken) {
+          return; // auth is off; every route answers without a credential
+        }
+        const res = await fetch("/auth/session", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ bootstrap: state.bootstrapToken }),
+        });
+        if (!res.ok) throw new Error(res.status + " -- reload this page");
+        const data = await res.json();
+        state.sessionToken = data.session_token || "";
+        if (!state.sessionToken) {
+          throw new Error("empty session -- reload this page");
+        }
+      }
+
+      // Create chat session
+      async function createChatSession(title = "New conversation") {
+        const response = await fetch("/ai/chats", {
+          method: "POST",
+          headers: authHeaders(),
+          body: JSON.stringify({ title }),
+        });
+        if (!response.ok) throw new Error("Failed to create chat");
+        const chat = await response.json();
+        state.currentChat = chat;
+        state.conversations.push(chat);
+        renderHistory();
+        return chat;
+      }
+
+      // ------------------------------------------------------------------
+      // Conversation history
+      //
+      // The page used to start a brand-new conversation on every load, so a
+      // chat was unreachable from the page that wrote it as soon as the tab
+      // closed. The conversations were never lost -- only unlistable.
+      // ------------------------------------------------------------------
+
+      function relativeTime(iso) {
+        if (!iso) return "";
+        const then = new Date(iso);
+        if (isNaN(then)) return "";
+        const secs = Math.max(0, (Date.now() - then.getTime()) / 1000);
+        if (secs < 60) return "just now";
+        if (secs < 3600) return `${Math.floor(secs / 60)}m ago`;
+        if (secs < 86400) return `${Math.floor(secs / 3600)}h ago`;
+        if (secs < 604800) return `${Math.floor(secs / 86400)}d ago`;
+        return then.toLocaleDateString();
+      }
+
+      async function loadConversations() {
+        const response = await fetch("/ai/chats", authHeaders());
+        if (!response.ok) throw new Error("Could not list conversations");
+        state.conversations = await response.json();
+        renderHistory();
+        return state.conversations;
+      }
+
+      function renderHistory() {
+        const list = document.getElementById("history-list");
+        const count = document.getElementById("history-count");
+        list.innerHTML = "";
+        count.textContent = state.conversations.length
+          ? `${state.conversations.length}`
+          : "";
+        if (!state.conversations.length) {
+          const empty = document.createElement("li");
+          empty.className = "history-empty";
+          empty.textContent = "No conversations yet.";
+          list.appendChild(empty);
+          return;
+        }
+        for (const chat of state.conversations) {
+          const item = document.createElement("li");
+          item.className = "history-item";
+          item.dataset.chatId = chat.id;
+          if (state.currentChat && chat.id === state.currentChat.id) {
+            item.classList.add("current");
+          }
+
+          const name = document.createElement("span");
+          name.className = "history-name";
+          // A title is stored text, not markup: never interpolate it as HTML.
+          name.textContent = chat.title || "Untitled";
+          name.title = chat.title || "Untitled";
+
+          const meta = document.createElement("span");
+          meta.className = "history-meta";
+          const n = chat.message_count;
+          meta.textContent = [
+            n != null ? `${n} msg` : "",
+            relativeTime(chat.updated_at || chat.created_at),
+          ]
+            .filter(Boolean)
+            .join(" · ");
+
+          item.appendChild(name);
+          item.appendChild(meta);
+          item.addEventListener("click", () => openConversation(chat.id, true));
+          list.appendChild(item);
+        }
+      }
+
+      function clearTranscript() {
+        document.getElementById("messages-area").innerHTML = "";
+      }
+
+      function showEmptyState(text) {
+        const area = document.getElementById("messages-area");
+        const node = document.createElement("div");
+        node.className = "empty-state";
+        node.textContent = text;
+        area.appendChild(node);
+      }
+
+      /// Open an existing conversation: adopt it, load its turns in order, and
+      /// render them. Returns false if the server no longer has it.
+      async function openConversation(chatId, closeHistory = false) {
+        const response = await fetch(
+          `/ai/chats/${encodeURIComponent(chatId)}/messages?limit=200`,
+          authHeaders(),
+        );
+        if (!response.ok) {
+          appendMessage("error", "That conversation could not be loaded.", {});
+          return false;
+        }
+        const turns = await response.json();
+        const summary = state.conversations.find((c) => c.id === chatId) || {
+          id: chatId,
+          title: "Conversation",
+        };
+        state.currentChat = summary;
+        clearTranscript();
+        if (!turns.length) {
+          showEmptyState("This conversation has no messages yet.");
+        }
+        for (const turn of turns) {
+          appendMessage(turn.role, turn.content, parseMeta(turn.provider_meta));
+        }
+        renderHistory();
+        if (closeHistory) toggleHistory(false);
+        return true;
+      }
+
+      function parseMeta(raw) {
+        if (!raw) return {};
+        if (typeof raw === "object") return raw;
+        try {
+          return JSON.parse(raw);
+        } catch {
+          return {};
+        }
+      }
+
+      function toggleHistory(force) {
+        const panel = document.getElementById("history-panel");
+        const btn = document.getElementById("history-btn");
+        const show = force != null ? force : panel.hidden;
+        panel.hidden = !show;
+        btn.setAttribute("aria-expanded", String(show));
+        if (show) loadConversations().catch(() => {});
+      }
+
+      // ------------------------------------------------------------------
+      // Start: resume the most recent conversation, or begin a new one.
+      //
+      // It used to always create a new one, so a reload - or another device -
+      // silently stranded every previous chat.
+      // ------------------------------------------------------------------
+      async function startConversation() {
+        let chats = [];
+        try {
+          chats = await loadConversations();
+        } catch (err) {
+          console.error("Could not list conversations:", err);
+        }
+        if (chats.length) {
+          const opened = await openConversation(chats[0].id);
+          if (opened) return;
+        }
+        await createChatSession();
+        showEmptyState("New conversation started. What would you like to do?");
+      }
+
+      // Save message to conversation
+      async function saveMessage(
+        conversationId,
+        role,
+        content,
+        providerMeta = {},
+      ) {
+        const response = await fetch(`/ai/chats/${conversationId}/messages`, {
+          method: "POST",
+          headers: authHeaders(),
+          body: JSON.stringify({
+            role,
+            content,
+            provider_meta: providerMeta,
+          }),
+        });
+        if (!response.ok) throw new Error("Failed to save message");
+        return await response.json();
+      }
+
+      // Send message to AI provider
+      async function sendMessageToAI(text) {
+        const providerId = document.getElementById("provider-select").value;
+        const freeFirst = document.getElementById("free-first-check").checked;
+        const paidFallback = document.getElementById("paid-fallback").checked;
+
+        const response = await fetch("/ai/chat/send", {
+          method: "POST",
+          headers: authHeaders(),
+          body: JSON.stringify({
+            text,
+            conversation_id: state.currentChat.id,
+            provider_preference: providerId !== "auto" ? providerId : undefined,
+            free_first: freeFirst,
+            allow_paid_fallback: paidFallback,
+          }),
+        });
+
+        return response;
+      }
+
+      // ------------------------------------------------------------------
+      // Approvals
+      //
+      // The backend's gate holds a consequential action until a person
+      // answers. The card shows the server's own one-line description of what
+      // will happen, so the page cannot tell a different story from the one
+      // the person is approving. Answering sends the approver's session,
+      // because the backend records *who* answered.
+      // ------------------------------------------------------------------
+
+      function renderApprovals(confirmations) {
+        const area = document.getElementById("tool-request-area");
+        area.innerHTML = "";
+        for (const confirmation of confirmations) {
+          area.appendChild(buildApprovalCard(confirmation));
+        }
+      }
+
+      function buildApprovalCard(confirmation) {
+        const card = document.createElement("div");
+        card.className = "approval-card";
+
+        const title = document.createElement("div");
+        title.className = "approval-title";
+        title.textContent =
+          "Needs your approval: " +
+          (confirmation.tool || "an action").replace(/_/g, " ");
+        card.appendChild(title);
+
+        // The server's preview is what will happen. The page does not rebuild
+        // that from the parameters -- getting it subtly wrong is exactly what
+        // an approval card exists to prevent.
+        if (confirmation.preview) {
+          const detail = document.createElement("div");
+          detail.className = "approval-detail";
+          detail.textContent = confirmation.preview;
+          card.appendChild(detail);
+        }
+
+        const actions = document.createElement("div");
+        actions.className = "approval-actions";
+
+        const approve = document.createElement("button");
+        approve.className = "approval-button approve";
+        approve.textContent = "Approve";
+        approve.addEventListener("click", () =>
+          resolveApproval(confirmation, true, actions),
+        );
+
+        const deny = document.createElement("button");
+        deny.className = "approval-button deny";
+        deny.textContent = "Deny";
+        deny.addEventListener("click", () =>
+          resolveApproval(confirmation, false, actions),
+        );
+
+        actions.appendChild(approve);
+        actions.appendChild(deny);
+        card.appendChild(actions);
+        return card;
+      }
+
+      async function refreshApprovals() {
+        try {
+          const response = await fetch("/confirmations", authHeaders());
+          if (!response.ok) {
+            renderApprovals([]);
+            return;
+          }
+          renderApprovals(await response.json());
+        } catch (_) {
+          // A failure to list the approvals is not shown as an error: the gate
+          // is still holding the action whether or not this page can show it.
+          renderApprovals([]);
+        }
+      }
+
+      // What can be said about the result.
+      //
+      // "done" and "confirmed" are different facts: an action can report that
+      // it ran without the effect being observed. Saying only "done" would
+      // let a person read an unverified result as a verified one -- which is
+      // the oldest rule in this project, and the one a result screen breaks
+      // most easily.
+      function verificationSuffix(action) {
+        if (action.verification === "success") return " (confirmed)";
+        if (action.verification === "failed")
+          return " (the effect was not observed)";
+        if (action.verification === "unknown") return " (not verified)";
+        return "";
+      }
+
+      async function resolveApproval(confirmation, approve, actions) {
+        for (const button of actions.querySelectorAll("button")) {
+          button.disabled = true;
+        }
+        try {
+          const params = new URLSearchParams({
+            approve: approve ? "true" : "false",
+            session_id: "dashboard",
+          });
+          const response = await fetch(
+            `/confirm/${encodeURIComponent(confirmation.confirmation_id)}?${params}`,
+            { method: "POST", headers: authHeaders() },
+          );
+          if (!response.ok) {
+            appendMessage("error", "Could not answer that approval.");
+          } else {
+            const body = await response.json();
+            const reply = body.reply || (approve ? "Approved." : "Denied.");
+            appendMessage(approve ? "assistant" : "error", reply);
+            if (approve && body.actions && body.actions.length) {
+              for (const action of body.actions) {
+                appendMessage(
+                  action.ok ? "assistant" : "error",
+                  action.ok
+                    ? `${action.tool}: ${action.message || "done"}${verificationSuffix(action)}`
+                    : `${action.tool} failed: ${action.error || "unknown reason"}`,
+                );
+              }
+            }
+          }
+        } catch (err) {
+          appendMessage(
+            "error",
+            "Failed: " + (err && err.message ? err.message : err),
+          );
+        }
+        await refreshApprovals();
+      }
+
+      // ------------------------------------------------------------------
+      // Attachments
+      //
+      // The order matters and is the contract:
+      //   1. save the message   -> it has an id
+      //   2. upload each file   -> the upload needs that id
+      //   3. process them       -> the pipeline extracts what it can
+      //   4. read the result    -> and say what it found
+      //
+      // Step 4 is the one people care about. A screenshot was uploaded to
+      // read, not to be stored, so the text is what gets shown -- and when
+      // there is none, the reason is shown instead of a blank panel.
+      // ------------------------------------------------------------------
+
+      function attachmentStatus(text, kind = "") {
+        const el = document.getElementById("attachment-status");
+        el.textContent = text;
+        el.className = "attachment-status" + (kind ? " " + kind : "");
+      }
+
+      function renderPendingFiles() {
+        if (!state.pendingFiles.length) {
+          attachmentStatus("");
+          return;
+        }
+        const names = state.pendingFiles.map((f) => f.name).join(", ");
+        attachmentStatus(
+          `${state.pendingFiles.length} file(s) ready to send: ${names}`,
+        );
+      }
+
+      async function uploadAttachment(file, messageId) {
+        // The upload is a multipart form: the file itself, plus the id of the
+        // message it belongs to.
+        const form = new FormData();
+        form.append("file", file);
+        form.append("message_id", messageId);
+
+        const response = await fetch("/ai/attachments/upload", {
+          method: "POST",
+          // The token, but NOT the JSON content type: a multipart body
+          // carries its own boundary in the Content-Type header, and
+          // overriding it with `application/json` makes the server read a
+          // multipart body as JSON and refuse it.
+          headers: { "X-JARVIS-Token": state.sessionToken || "" },
+          body: form,
+        });
+        if (!response.ok) {
+          let detail = "upload failed";
+          try {
+            const body = await response.json();
+            detail = body.detail || detail;
+          } catch (_) {
+            /* the body was not JSON; the status is the message */
+          }
+          throw new Error(detail);
+        }
+        return await response.json();
+      }
+
+      async function processAttachments(attachmentIds) {
+        const response = await fetch("/ai/process-attachments", {
+          method: "POST",
+          headers: { ...authHeaders(), "Content-Type": "application/json" },
+          body: JSON.stringify({ attachment_ids: attachmentIds }),
+        });
+        if (!response.ok) throw new Error("processing failed");
+        return await response.json();
+      }
+
+      // What the pipeline found, as a line a person can read.
+      function describeResult(result) {
+        if (!result) return "Not processed yet.";
+        const status = result.status || "";
+        if (status === "error") {
+          return (
+            "Could not process: " +
+            (result.reason || result.error || "unknown reason")
+          );
+        }
+        if (status === "unsupported") {
+          return "No processing is defined for this kind of file.";
+        }
+        if (status !== "processed") {
+          return "Status: " + (status || "unknown");
+        }
+        // Text first -- it is the point of the attachment.
+        if (result.text) {
+          return result.text;
+        }
+        if (result.text_note) return result.text_note;
+        if (result.transcript) return result.transcript;
+        if (result.summary) return result.summary;
+        return "Processed, but nothing was extracted.";
+      }
+
+      function appendAttachmentCard(file, result) {
+        const area = document.getElementById("messages-area");
+        const card = document.createElement("div");
+        card.className = "attachment-card";
+
+        const body = describeResult(result);
+        // The extracted text is untrusted input -- it is shown as text, never
+        // as markup, so a file cannot smuggle HTML into this page.
+        const bodyNode = document.createElement("div");
+        bodyNode.className = "attachment-body";
+        bodyNode.textContent = body;
+
+        const nameNode = document.createElement("div");
+        nameNode.className = "attachment-name";
+        nameNode.textContent = file.name;
+
+        const statusNode = document.createElement("div");
+        statusNode.className =
+          "attachment-state " + ((result && result.status) || "unknown");
+        statusNode.textContent =
+          result && result.status ? result.status : "unknown";
+
+        card.appendChild(nameNode);
+        card.appendChild(statusNode);
+        card.appendChild(bodyNode);
+
+        const emptyState = area.querySelector(".empty-state");
+        if (emptyState) emptyState.remove();
+        area.appendChild(card);
+        area.scrollTop = area.scrollHeight;
+      }
+
+      // Upload the chosen files against the message, process them, and show
+      // what came out. A failure is reported per file -- one unreadable file
+      // must not hide the ones that worked.
+      async function attachFilesToMessage(messageId) {
+        const files = state.pendingFiles.slice();
+        state.pendingFiles = [];
+        renderPendingFiles();
+        if (!files.length) return;
+
+        attachmentStatus("Uploading...");
+        const uploaded = [];
+        for (const file of files) {
+          try {
+            const done = await uploadAttachment(file, messageId);
+            uploaded.push({ file, attachmentId: done.attachment_id });
+          } catch (err) {
+            appendAttachmentCard(file, {
+              status: "error",
+              reason: err.message || "upload failed",
+            });
+          }
+        }
+        if (!uploaded.length) {
+          attachmentStatus("Nothing was uploaded.", "error");
+          return;
+        }
+
+        attachmentStatus("Reading...");
+        let outcome;
+        try {
+          outcome = await processAttachments(
+            uploaded.map((u) => u.attachmentId),
+          );
+        } catch (err) {
+          attachmentStatus("Could not process the files.", "error");
+          for (const u of uploaded) {
+            appendAttachmentCard(u.file, {
+              status: "error",
+              reason: err.message || "processing failed",
+            });
+          }
+          return;
+        }
+
+        const byId = {};
+        for (const r of outcome.results || []) byId[r.attachment_id] = r;
+        for (const u of uploaded) {
+          appendAttachmentCard(u.file, byId[u.attachmentId]);
+        }
+        const done = outcome.processed_count || 0;
+        attachmentStatus(
+          done
+            ? `${done} of ${uploaded.length} processed.`
+            : "None of the files could be processed.",
+          done ? "" : "error",
+        );
+      }
+
+      // Update messages area
+      //
+      // The message body is model output and stored user text, so it is set
+      // with textContent: a reply (or a resumed turn) that contains markup is
+      // shown as the words it is, never rendered as a document. The provider
+      // meta is this page's own vocabulary and is built as nodes for the same
+      // reason.
+      function appendMessage(role, content, providerMeta = {}) {
+        const area = document.getElementById("messages-area");
+        const messageDiv = document.createElement("div");
+        messageDiv.className = `message ${role}`;
+
+        const contentNode = document.createElement("div");
+        contentNode.className = "message-content";
+        contentNode.textContent = String(content ?? "");
+        messageDiv.appendChild(contentNode);
+
+        if (providerMeta && (providerMeta.provider || providerMeta.model)) {
+          const meta = document.createElement("div");
+          meta.className = "message-meta";
+          const parts = [
+            providerMeta.provider || "Vantage",
+            providerMeta.model,
+            providerMeta.connection_type
+              ? `[${providerMeta.connection_type}]`
+              : "",
+          ].filter(Boolean);
+          for (const part of parts) {
+            const span = document.createElement("span");
+            span.textContent = part;
+            meta.appendChild(span);
+          }
+          messageDiv.appendChild(meta);
+        }
+
+        // Remove empty state if present
+        const emptyState = area.querySelector(".empty-state");
+        if (emptyState) emptyState.remove();
+
+        area.appendChild(messageDiv);
+        area.scrollTop = area.scrollHeight;
+      }
+
+      // Show loading indicator
+      function showLoading(provider = "AI") {
+        const area = document.getElementById("messages-area");
+        const loadingDiv = document.createElement("div");
+        loadingDiv.className = "message ai";
+        loadingDiv.id = "loading-indicator";
+        loadingDiv.innerHTML = `
     <div class="message-content">
       <span class="status-indicator status-streaming"></span>
       <span>${provider} is thinking...</span>
     </div>
   `;
-  area.appendChild(loadingDiv);
-  area.scrollTop = area.scrollHeight;
-}
+        area.appendChild(loadingDiv);
+        area.scrollTop = area.scrollHeight;
+      }
 
-function hideLoading() {
-  const indicator = document.getElementById("loading-indicator");
-  if (indicator) indicator.remove();
-}
+      function hideLoading() {
+        const indicator = document.getElementById("loading-indicator");
+        if (indicator) indicator.remove();
+      }
 
-// Enable/disable send button based on input
-function toggleSendButton() {
-  const input = document.getElementById("message-input");
-  const sendBtn = document.getElementById("send-button");
-  sendBtn.disabled = input.value.trim().length === 0;
-}
+      // Enable/disable send button based on input
+      function toggleSendButton() {
+        const input = document.getElementById("message-input");
+        const sendBtn = document.getElementById("send-button");
+        sendBtn.disabled = input.value.trim().length === 0;
+      }
 
-// Handle send
-async function handleSend() {
-  const input = document.getElementById("message-input");
-  const text = input.value.trim();
-  if (!text) return;
-  
-  input.value = "";
-  toggleSendButton();
-  showLoading();
-  
-  try {
-    const userMsg = await saveMessage(state.currentChat.id, "user", text);
-    appendMessage("user", text);
-    
-    const response = await sendMessageToAI(text);
-    hideLoading();
-    
-    if (!response.ok) {
-      const error = await response.json();
-      appendMessage("error", `AI request failed: ${error.detail || "Unknown error"}`, {});
-      return;
-    }
-    
-    const result = await response.json();
-    const aiText = result.response || "No response received.";
-    
-    const providerMeta = {
-      provider: result.provider || "Vantage AI",
-      model: result.model || undefined,
-      connection_type: result.connection_type || "api"
-    };
-    
-    await saveMessage(state.currentChat.id, "assistant", aiText, providerMeta);
-    appendMessage("ai", aiText, providerMeta);
-    
-  } catch (err) {
-    hideLoading();
-    appendMessage("error", `Error: ${err.message}`, {});
-  }
-}
+      // Handle send
+      async function handleSend() {
+        const input = document.getElementById("message-input");
+        const text = input.value.trim();
+        // A message with only an attachment is still a message: the person
+        // uploaded a file to be read.
+        const hasFiles = state.pendingFiles.length > 0;
+        if (!text && !hasFiles) return;
 
-// New chat button
-document.getElementById("new-chat-btn").addEventListener("click", async () => {
-  await createChatSession(`Conversation ${state.conversations.length + 1}`);
-  document.getElementById("messages-area").innerHTML = 
-    '<div class="empty-state">New conversation started. What would you like to do?</div>';
-});
+        input.value = "";
+        toggleSendButton();
+        showLoading();
 
-// Health check button
-document.getElementById("health-btn").addEventListener("click", async () => {
-  const response = await fetch("/ai/connection-health", authHeaders());
-  if (!response.ok) return;
-  
-  const health = await response.json();
-  console.log("Connection Health:", health);
-  alert(JSON.stringify(health, null, 2));
-});
+        try {
+          const userMsg = await saveMessage(state.currentChat.id, "user", text);
+          appendMessage("user", text);
 
-// Initialize
-initProviders();
-createChatSession();
+          // The attachment needs the message id, so it goes after the message
+          // is saved -- and its result is shown alongside it.
+          if (hasFiles) {
+            await attachFilesToMessage(userMsg.id);
+          }
 
-// Event listeners
-document.getElementById("send-button").addEventListener("click", handleSend);
-document.getElementById("message-input").addEventListener("keyup", (e) => {
-  if (e.key === "Enter" && !e.shiftKey) {
-    e.preventDefault();
-    handleSend();
-  }
-});
-document.getElementById("message-input").addEventListener("input", toggleSendButton);
-</script>
-</body>
+          const response = await sendMessageToAI(text);
+          hideLoading();
+
+          if (!response.ok) {
+            const error = await response.json();
+            appendMessage(
+              "error",
+              `AI request failed: ${error.detail || "Unknown error"}`,
+              {},
+            );
+            return;
+          }
+
+          const result = await response.json();
+          const aiText = result.response || "No response received.";
+
+          // A message can leave an action waiting for a person, so the
+          // approvals are re-read after every answer.
+          refreshApprovals();
+
+          const providerMeta = {
+            provider: result.provider || "Vantage AI",
+            model: result.model || undefined,
+            connection_type: result.connection_type || "api",
+          };
+
+          await saveMessage(
+            state.currentChat.id,
+            "assistant",
+            aiText,
+            providerMeta,
+          );
+          appendMessage("ai", aiText, providerMeta);
+        } catch (err) {
+          hideLoading();
+          appendMessage("error", `Error: ${err.message}`, {});
+        }
+      }
+
+      // New chat button
+      document
+        .getElementById("new-chat-btn")
+        .addEventListener("click", async () => {
+          await createChatSession(
+            `Conversation ${state.conversations.length + 1}`,
+          );
+          clearTranscript();
+          showEmptyState(
+            "New conversation started. What would you like to do?",
+          );
+          renderHistory();
+        });
+
+      document
+        .getElementById("history-btn")
+        .addEventListener("click", () => toggleHistory());
+
+      // Health check button
+      document
+        .getElementById("health-btn")
+        .addEventListener("click", async () => {
+          const response = await fetch("/ai/connection-health", authHeaders());
+          if (!response.ok) return;
+
+          const health = await response.json();
+          console.log("Connection Health:", health);
+          alert(JSON.stringify(health, null, 2));
+        });
+
+      // Initialize.
+      //
+      // The session comes first: every call below it needs a credential, and
+      // a call made before the session exists is a 401. The bootstrap is
+      // spent here, once.
+      authenticate()
+        .then(() => {
+          initProviders();
+          refreshApprovals();
+          startConversation().catch((e) =>
+            console.error("Could not start a conversation:", e),
+          );
+        })
+        .catch((e) => {
+          attachmentStatus("Could not start a session: " + e.message, "error");
+          console.error("AI chat could not establish a session:", e);
+        });
+
+      // Event listeners
+      document
+        .getElementById("send-button")
+        .addEventListener("click", handleSend);
+      document
+        .getElementById("message-input")
+        .addEventListener("keyup", (e) => {
+          if (e.key === "Enter" && !e.shiftKey) {
+            e.preventDefault();
+            handleSend();
+          }
+        });
+      document
+        .getElementById("message-input")
+        .addEventListener("input", toggleSendButton);
+
+      // Attach: the button opens the picker, the picker stages the files.
+      // They are uploaded when the message is sent, because an upload needs
+      // the id of the message the file belongs to.
+      document.getElementById("attach-button").addEventListener("click", () => {
+        document.getElementById("attachment-input").click();
+      });
+      document
+        .getElementById("attachment-input")
+        .addEventListener("change", (event) => {
+          const chosen = Array.from(event.target.files || []);
+          if (!chosen.length) return;
+          state.pendingFiles = state.pendingFiles.concat(chosen);
+          event.target.value = "";
+          renderPendingFiles();
+        });
+    </script>
+  </body>
 </html>

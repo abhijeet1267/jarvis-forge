@@ -360,7 +360,13 @@ def test_a_button_promising_a_site_says_so_to_the_router(planner, page):
     import re
 
     html = (REPO / "dashboard" / page).read_text(encoding="utf-8")
-    say = re.search(r'label:\s*"Open a site".*?say:\s*"([^"]+)"', html, re.S).group(1)
+    # The page declares quick actions as a phrase table -- `["site", "open_url",
+    # "open the {site} site"]` -- not a labelled object, so pull the `say` out of the
+    # entry whose tool is open_url. The invariant is unchanged: that sentence must name
+    # a medium, so "calendar" types a URL and never an application.
+    m = re.search(r'\[\s*"[^"]+"\s*,\s*"open_url"\s*,\s*"([^"]+)"\s*\]', html)
+    assert m, f"{page} has no open_url quick action to inspect"
+    say = m.group(1)
     assert "site" in say or "website" in say, f"{page} types {say!r}, which names no medium"
     for answer in ("calendar", "google", "github.com"):
         typed = say.replace("{site}", answer)

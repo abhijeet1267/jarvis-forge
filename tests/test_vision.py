@@ -18,6 +18,7 @@ from pathlib import Path
 import pytest
 
 from jarvis.core.models import PlannedAction, PolicyDecision, RiskLevel
+from jarvis.config import get_settings
 from jarvis.tools.base import ToolContext
 from jarvis.tools.vision import (
     ACTION_TOOLS,
@@ -271,6 +272,44 @@ def test_find_text_needs_a_query(sample_image: Path) -> None:
 
 def test_ocr_availability_is_a_boolean() -> None:
     assert isinstance(ocr_available(), bool)
+
+
+def test_the_first_recognition_works_when_the_helper_is_not_cached(tmp_path) -> None:
+    """The first call on a machine with no cached helper must work.
+
+    The helper is compiled on first use. The compile returned the helper's
+    path but never recorded it, so `available()` answered "yes" while the
+    binary it was about to run was still None -- and the call failed with
+    "OCR did not complete: No such file or directory: 'None'". Only the
+    *second* call worked, because by then the helper was on disk and the
+    cached path was taken. The bug was invisible on any machine where the
+    helper had already been built, which is why it survived.
+    """
+    from jarvis.vision.ocr import OCRBackend
+
+    backend = OCRBackend.__new__(OCRBackend)
+    # A home with no compiled helper in it, and the state a fresh backend has.
+    backend.settings = get_settings().model_copy(update={"home": tmp_path})
+    backend._binary = None
+    backend._failure = ""
+    backend._ever_succeeded = False
+    backend._stalls = 0
+    backend._last_timeout = None
+    backend._cooldown_until = 0.0
+    backend._gw_log = None
+
+    pytest.importorskip("PIL")
+    from PIL import Image, ImageDraw
+
+    image = Image.new("RGB", (600, 200), "white")
+    draw = ImageDraw.Draw(image)
+    draw.text((30, 40), "Project AMR status report", fill="black")
+    target = tmp_path / "first_call.png"
+    image.save(target)
+
+    result = backend.read_text(str(target))
+    assert result["ok"], result.get("error") or result
+    assert "AMR" in result["text"], result
 
 
 # ---------------------------------------------------------------------------

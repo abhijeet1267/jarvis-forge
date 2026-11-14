@@ -110,11 +110,22 @@ async def schedule_task(
 # ---------------------------------------------------------------------------
 # Read
 # ---------------------------------------------------------------------------
-async def list_schedules(ctx: ToolContext, include_cancelled: bool = False) -> Any:
-    """List scheduled jobs."""
+async def list_schedules(ctx: ToolContext, include_cancelled: bool = False,
+                         query: str = "") -> Any:
+    """List scheduled jobs.
+
+    A ``query`` narrows the list to the jobs whose name contains it, so a
+    lookup that is *searched* by the name the person gave answers "which
+    one did you mean" rather than "what is scheduled".
+    """
     jobs = _store().list(include_cancelled=include_cancelled)
+    needle = (query or "").strip().lower()
+    if needle:
+        jobs = [j for j in jobs if needle in (j.name or "").lower()]
     if not jobs:
-        return ok("list_schedules", "You have nothing scheduled.", device=ctx.device_id, schedules=[])
+        message = (f"No schedules match {query!r}." if needle
+                   else "You have nothing scheduled.")
+        return ok("list_schedules", message, device=ctx.device_id, schedules=[])
 
     lines = [f"{j.name} — {j.recurrence.describe()}" for j in jobs[:5]]
     return ok(
@@ -269,11 +280,11 @@ SPECS = [
             agent="scheduler",
             risk=RiskLevel.READ,
             allowed_devices=["laptop_main"],
-            parameters={"include_cancelled": "bool"},
+            parameters={"include_cancelled": "bool", "query": "string"},
             tags=["scheduler", "read"],
             provides_identifiers={"schedule_id": {"items": "schedules", "id": "schedule_id",
-                                                 "label": "name"}},
-
+                                                 "label": "name",
+                                                 "lookup": "query"}},
         ),
         list_schedules,
     ),

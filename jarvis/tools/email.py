@@ -188,15 +188,23 @@ async def search_email(
             "search_email",
             f"I found no {scope}" + (f" matching {query!r}." if query else "."),
             device=ctx.device_id,
+            verified=True,
             provider=provider.name,
             provider_status=status.value,
             results=[],
         )
 
+    shown = "; ".join(
+        f"{m.subject or '(no subject)'} from {m.sender or 'unknown sender'}"
+        for m in messages[:3]
+    )
+    more = f" (+{len(messages) - 3} more)" if len(messages) > 3 else ""
     return ok(
         "search_email",
-        f"I found {len(messages)} message(s)" + (f" matching {query!r}." if query else "."),
+        f"I found {len(messages)} message(s)" + (f" matching {query!r}." if query else ".")
+        + f" {shown}{more}.",
         device=ctx.device_id,
+        verified=True,
         provider=provider.name,
         provider_status=status.value,
         results=[m.as_dict() for m in messages],
@@ -225,10 +233,19 @@ async def read_email(ctx: ToolContext, uid: str = "") -> Any:
             provider_status=ProviderStatus.REAL_EMPTY.value,
         )
 
+    body = (message.get("body") or "").strip()
+    if body:
+        excerpt = " ".join(body.split())
+        if len(excerpt) > 300:
+            excerpt = excerpt[:300] + "…"
+        detail = f" \"{excerpt}\""
+    else:
+        detail = ""
     return ok(
         "read_email",
-        f"{message['subject'] or '(no subject)'} — from {message['from']}",
+        f"{message['subject'] or '(no subject)'} — from {message['from']}.{detail}",
         device=ctx.device_id,
+        verified=True,
         provider=provider.name,
         provider_status=ProviderStatus.HAS_RESULTS.value,
         # NB: not `message=` -- that collides with ok()'s own parameter.
@@ -258,6 +275,7 @@ async def summarize_email(ctx: ToolContext, query: str = "", limit: int = 5) -> 
             "summarize_email",
             "There is nothing to summarise.",
             device=ctx.device_id,
+            verified=True,
             provider=provider.name,
             provider_status=status.value,
             items=[],
@@ -274,10 +292,16 @@ async def summarize_email(ctx: ToolContext, query: str = "", limit: int = 5) -> 
         for m in messages
     ]
     unread = sum(1 for m in messages if m.unread)
+    shown = "; ".join(
+        f"{m.subject or '(no subject)'} from {m.sender or 'unknown sender'}"
+        for m in messages[:3]
+    )
+    more = f" (+{len(messages) - 3} more)" if len(messages) > 3 else ""
     return ok(
         "summarize_email",
-        f"{len(items)} message(s), {unread} unread. Top: {items[0]['subject'] or '(no subject)'}",
+        f"{len(items)} message(s), {unread} unread. {shown}{more}.",
         device=ctx.device_id,
+        verified=True,
         provider=provider.name,
         provider_status=status.value,
         items=items,
@@ -355,6 +379,9 @@ async def draft_email(
         "draft_email",
         f"Drafted an email to {draft.to[0]}. Nothing has been sent.",
         device=ctx.device_id,
+        # The row was just written by this call; the insert is the confirmation,
+        # the same rule create_event follows for the calendar read-back.
+        verified=True,
         draft_id=draft_id,
         preview=draft.preview(),
         to=draft.to,
@@ -377,6 +404,82 @@ def latest_draft() -> Optional[Dict[str, Any]]:
     )
     return dict(rows[0]) if rows else None
 
+
+async def task_from_email(ctx: ToolContext, uid: str = "", title: str = "",
+                          due: str = "", priority: str = "normal") -> Any:
+    """Turn a message into a planner task that links back to it.
+
+    The task's title comes from the person, or from the message's subject — never
+    from the body, which would file a paragraph as a task title. The message's uid
+    and sender are recorded in the task's detail, so the work traces back to what
+    prompted it. Nothing is sent and the message is not altered.
+    """
+    from .planner import add_task as _add_task
+
+    if not str(uid).strip():
+        return fail("task_from_email", "Which message should the task come from?",
+                    device=ctx.device_id)
+
+    provider = get_email_provider(ctx.settings)
+    message = provider.read(uid)
+    if message is None:
+        return fail("task_from_email", f"No message {uid!r} in this mailbox.",
+                    device=ctx.device_id)
+
+    subject = str(message.get("subject") or "").strip()
+    sender = str(message.get("from") or "").strip()
+    task_title = str(title).strip() or (f"Follow up: {subject}" if subject else
+                                        "Follow up on an email")
+    reference = f"From an email: {subject or '(no subject)'}"
+    if sender:
+        reference += f" — {sender}"
+    reference += f" [uid {uid}]"
+
+    result = await _add_task(ctx, title=task_title, due=due, priority=priority)
+    if result.ok:
+        # Record the link without changing the task's visible title.
+        from ..core.orchestrator import JarvisCore
+
+        created = (result.output or {}).get("task")
+        ref = (created or {}).get("task_ref") if isinstance(created, dict) else None
+        if ref:
+            updated = JarvisCore().planner_service.update_task(ref, detail=reference)
+            # Refresh the copy in the response so the caller sees the link it just
+            # recorded. Returning the pre-update task meant the API answered with a
+            # task whose detail did not yet mention the email, which reads as "the
+            # link was not made" to anyone checking.
+            if updated is not None:
+                result.output["task"] = updated.as_dict()
+        result.output["email"] = {"uid": uid, "subject": subject, "from": sender}
+        result.message = (f"Added “{task_title}” from the email "
+                          f"“{subject or '(no subject)'}”.")
+    return result
+
+async def task_from_email_named(ctx: ToolContext, query: str = "") -> Any:
+    """Find the message a query names, then file a task linked to it.
+
+    Refuses rather than guessing when the query matches more than one message: a
+    task attached to the wrong email is worse than being asked which one.
+    """
+    query = str(query).strip()
+    if not query:
+        return fail("task_from_email_named", "Which email should the task come from?",
+                    device=ctx.device_id)
+    provider = get_email_provider(ctx.settings)
+    found = provider.search(query=query, limit=5)
+    if not read_status(found).read_succeeded:
+        return fail("task_from_email_named", "I could not read the mailbox.",
+                    device=ctx.device_id)
+    matches = list(found)
+    if not matches:
+        return fail("task_from_email_named",
+                    f"No email matched {query!r}.", device=ctx.device_id)
+    if len(matches) > 1:
+        names = "; ".join(f"{m.subject or '(no subject)'} from {m.sender}" for m in matches[:3])
+        return fail("task_from_email_named",
+                    f"{len(matches)} messages match {query!r}: {names}. Which one?",
+                    device=ctx.device_id)
+    return await task_from_email(ctx, uid=matches[0].uid)
 
 async def send_email(
     ctx: ToolContext,
@@ -473,10 +576,45 @@ SPECS = [
             allowed_devices=["laptop_main"],
             parameters={"query": "string", "unread_only": "bool", "limit": "int"},
             tags=["email", "read"],
-            provides_identifiers={"uid": {"items": "results", "id": "uid", "label": "subject"}},
-
+            # The `lookup` key says which parameter carries the name the person
+            # called the message. A search tool already takes a query, so the
+            # lookup turns "which message did you mean" into a search rather
+            # than a listing of whatever the default window holds.
+            provides_identifiers={"uid": {"items": "results", "id": "uid",
+                                          "label": "subject",
+                                          "lookup": "query"}},
         ),
         search_email,
+    ),
+    (
+        ToolSpec(
+            name="task_from_email_named",
+            description="Find a message by a search phrase and file a task linked to it.",
+            agent="email",
+            risk=RiskLevel.LOW,
+            requires_confirmation=False,
+            reversible=True,
+            parameters={"query": "string"},
+            required_parameters=["query"],
+            tags=["email", "planner"],
+        ),
+        task_from_email_named,
+    ),
+    (
+        ToolSpec(
+            name="task_from_email",
+            description=("Create a planner task from a message, linked back to it. "
+                         "Sends nothing and does not change the message."),
+            agent="email",
+            risk=RiskLevel.LOW,
+            requires_confirmation=False,
+            reversible=True,
+            parameters={"uid": "string", "title": "string", "due": "string",
+                        "priority": "string"},
+            required_parameters=["uid"],
+            tags=["email", "planner"],
+        ),
+        task_from_email,
     ),
     (
         ToolSpec(

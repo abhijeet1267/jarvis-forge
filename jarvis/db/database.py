@@ -65,6 +65,85 @@ CREATE TABLE IF NOT EXISTS messages (
     created_at      TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+-- One row per conversation: the email a follow-up ("read that one", "summarize
+-- the second one") points at. Keyed by session_id -- the same key the messages,
+-- confirmations and audit rows use -- so a selection made in one conversation
+-- cannot be reached from another. Only identifiers and display labels live
+-- here; the body is always fetched through the message-read path.
+CREATE TABLE IF NOT EXISTS email_selections (
+    session_id  TEXT PRIMARY KEY,
+    uid         TEXT NOT NULL DEFAULT '',
+    subject     TEXT NOT NULL DEFAULT '',
+    sender      TEXT NOT NULL DEFAULT '',
+    provider    TEXT NOT NULL DEFAULT '',
+    candidates  TEXT NOT NULL DEFAULT '[]',  -- JSON array of the last search's rows
+    updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- A user's own to-do item (the daily planner), distinct from `tasks`/`task_steps`
+-- which are *workflow* runs with a goal and steps. This is the thing a person
+-- writes down: "finish the AMR report by Friday", with a due date, priority,
+-- estimate and an explicit status. One row per task; persisted across restarts.
+CREATE TABLE IF NOT EXISTS vantage_tasks (
+    task_ref     TEXT PRIMARY KEY,
+    title        TEXT NOT NULL,
+    detail       TEXT NOT NULL DEFAULT '',
+    status       TEXT NOT NULL DEFAULT 'open',   -- open | done | cancelled
+    priority     TEXT NOT NULL DEFAULT 'normal', -- low | normal | high | urgent
+    due_at       TEXT,                           -- ISO-8601 local, or NULL
+    start_at     TEXT,                           -- ISO-8601 local, or NULL
+    estimate_minutes INTEGER NOT NULL DEFAULT 0,
+    -- JSON array of task_refs this task waits on. A task with unfinished
+    -- dependencies is *blocked*, reported as such rather than listed as doable.
+    depends_on   TEXT NOT NULL DEFAULT '[]',
+    source       TEXT NOT NULL DEFAULT 'user',   -- user | calendar | workflow
+    project      TEXT NOT NULL DEFAULT '',
+    -- When it was completed, and the evidence the person gave (free text).
+    done_at      TEXT,
+    evidence     TEXT NOT NULL DEFAULT '',
+    created_at   TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at   TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- A drafted social/professional post (LinkedIn and similar). Vantage can write,
+-- edit, schedule and remind; it does NOT publish -- there is no approved posting
+-- integration, and a draft that looks published would be a lie.
+CREATE TABLE IF NOT EXISTS post_drafts (
+    draft_id     TEXT PRIMARY KEY,
+    channel      TEXT NOT NULL DEFAULT 'linkedin',
+    body         TEXT NOT NULL,
+    status       TEXT NOT NULL DEFAULT 'draft',  -- draft | scheduled | published
+    scheduled_for TEXT,                          -- ISO local, or NULL
+    contact      TEXT NOT NULL DEFAULT '',       -- optional audience/recipient note
+    created_at   TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at   TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- What was said in a meeting. Vantage did not attend and has no audio, so this
+-- is the person's own account, kept so it can be revisited and so the action
+-- items can be traced back to the meeting they came from.
+CREATE TABLE IF NOT EXISTS meeting_notes (
+    note_id      TEXT PRIMARY KEY,
+    event_uid    TEXT NOT NULL,
+    meeting      TEXT NOT NULL DEFAULT '',
+    notes        TEXT NOT NULL DEFAULT '',
+    action_items TEXT NOT NULL DEFAULT '[]',   -- JSON array of the agreed items
+    created_at   TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_meeting_notes_event ON meeting_notes(event_uid);
+
+-- Which due tasks have already produced a notification. Without this the
+-- notifier would fire again on every tick for the same overdue task, which
+-- trains a person to ignore the banner -- the opposite of a reminder.
+CREATE TABLE IF NOT EXISTS notified_tasks (
+    task_ref     TEXT PRIMARY KEY,
+    notified_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_vantage_tasks_status ON vantage_tasks(status);
+CREATE INDEX IF NOT EXISTS idx_vantage_tasks_due ON vantage_tasks(due_at);
+
 CREATE TABLE IF NOT EXISTS tasks (
     job_id       TEXT PRIMARY KEY,
     goal         TEXT NOT NULL,

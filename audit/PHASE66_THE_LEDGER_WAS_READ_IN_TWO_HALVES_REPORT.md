@@ -8,14 +8,14 @@ except the device rows.
 
 `GET /metrics` with the master token, and the same numbers read straight out of SQLite:
 
-| What | Before |
-| --- | --- |
-| rows in `action_logs` | **525** |
-| `/metrics.audit.sampled` | 500 — `recent(limit=500)`, `ORDER BY created_at DESC` → the **newest** 500 |
-| `/metrics.audit.chain_checked` | 495 — `verify_chain(limit=500)`, `ORDER BY created_at ASC` → the **oldest** 500 |
-| rows never chain-verified | **25**, not stated anywhere |
-| rows never counted in `by_result` | the oldest 25, not stated anywhere |
-| chain verdict | `chain_intact: false`, no reason, no row id, nothing about which half was looked at |
+| What                                                    | Before                                                                                                                                                                                                                                                                                                    |
+| ------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| rows in `action_logs`                                   | **525**                                                                                                                                                                                                                                                                                                   |
+| `/metrics.audit.sampled`                                | 500 — `recent(limit=500)`, `ORDER BY created_at DESC` → the **newest** 500                                                                                                                                                                                                                                |
+| `/metrics.audit.chain_checked`                          | 495 — `verify_chain(limit=500)`, `ORDER BY created_at ASC` → the **oldest** 500                                                                                                                                                                                                                           |
+| rows never chain-verified                               | **25**, not stated anywhere                                                                                                                                                                                                                                                                               |
+| rows never counted in `by_result`                       | the oldest 25, not stated anywhere                                                                                                                                                                                                                                                                        |
+| chain verdict                                           | `chain_intact: false`, no reason, no row id, nothing about which half was looked at                                                                                                                                                                                                                       |
 | `action_logs` rows whose `result` is not a status token | **8** — 6 with `result='forged'` and 2 holding a whole response sentence from an early build (`"Your laptop battery is at 82% (charging)."`, `"Opening Visual Studio Code on your macos machine."`); the 2 sentence rows sit older than the newest-500 window, so **no published count ever showed them** |
 
 Two surfaces, one table, different halves. The dangerous part is not the split, it is that a green
@@ -30,7 +30,7 @@ exactly where a tamper a week later would live.
     ledger), `unverified` (what a bounded walk did not reach), and `break_details` (per-break
     reason + `log_id` + position, next to the existing `breaks` count).
   - `result_value_counts()` asks the table for every distinct `result` value, because
-    windowing a *count* is how the 2 sentence rows went invisible.
+    windowing a _count_ is how the 2 sentence rows went invisible.
   - `seal_chain(force=False)`: a plain call is unchanged (returns 0 on an already-sealed ledger, so
     `test_security.py::test_seal_chain_is_idempotent` still holds). `force=True` re-hashes and then
     **writes its own event row**, because a re-sealed chain proves only that nothing changed after
@@ -55,17 +55,17 @@ exactly where a tamper a week later would live.
 
 Red first: 7 failed and 3 errored before the change, and the failures were the interesting ones.
 
-| Test | Pins |
-| --- | --- |
-| `test_verification_reaches_the_newest_record` | Edits the **last** record — the one the old ASC window never walked — and requires `ok=False` with that `log_id` named. This is the regression that matters most and it was invisible before |
-| `test_the_verifier_reports_what_it_checked_and_what_it_did_not` | A bounded walk is allowed only if it admits the bound: `verified_of` is the ledger, `unverified` is 425 for a 100-row window |
-| `test_a_break_carries_the_reason_on_the_surface` | A break reports its reason and its row id |
-| `test_early_rows_that_stored_a_sentence_are_counted_whole_ledger_not_by_window` | The 2 sentence rows are labelled `legacy_message`, counted, and never invented into a status |
-| `test_no_surface_invents_a_status_for_a_value_it_does_not_know` | `forged` stays `forged` in the buckets; the row is not smoothed into `success` |
-| `test_seal_chain_without_force_still_refuses_to_touch_a_sealed_ledger` | The old contract, kept |
-| `test_a_forced_reseal_leaves_the_ledger_verifying` | 525 re-hashed, and `verified_of` is then 526 because the seal wrote its own event row |
-| `test_a_forced_reseal_is_recorded_as_an_event` | The re-seal date is *in* the ledger, not only in a log file |
-| three `chain_render` tests | The shipped `auditChainLine`, extracted from `dashboard/index.html` and **run under node** with the exact payload keys `/metrics` publishes, including the "not verified" case |
+| Test                                                                            | Pins                                                                                                                                                                                         |
+| ------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `test_verification_reaches_the_newest_record`                                   | Edits the **last** record — the one the old ASC window never walked — and requires `ok=False` with that `log_id` named. This is the regression that matters most and it was invisible before |
+| `test_the_verifier_reports_what_it_checked_and_what_it_did_not`                 | A bounded walk is allowed only if it admits the bound: `verified_of` is the ledger, `unverified` is 425 for a 100-row window                                                                 |
+| `test_a_break_carries_the_reason_on_the_surface`                                | A break reports its reason and its row id                                                                                                                                                    |
+| `test_early_rows_that_stored_a_sentence_are_counted_whole_ledger_not_by_window` | The 2 sentence rows are labelled `legacy_message`, counted, and never invented into a status                                                                                                 |
+| `test_no_surface_invents_a_status_for_a_value_it_does_not_know`                 | `forged` stays `forged` in the buckets; the row is not smoothed into `success`                                                                                                               |
+| `test_seal_chain_without_force_still_refuses_to_touch_a_sealed_ledger`          | The old contract, kept                                                                                                                                                                       |
+| `test_a_forced_reseal_leaves_the_ledger_verifying`                              | 525 re-hashed, and `verified_of` is then 526 because the seal wrote its own event row                                                                                                        |
+| `test_a_forced_reseal_is_recorded_as_an_event`                                  | The re-seal date is _in_ the ledger, not only in a log file                                                                                                                                  |
+| three `chain_render` tests                                                      | The shipped `auditChainLine`, extracted from `dashboard/index.html` and **run under node** with the exact payload keys `/metrics` publishes, including the "not verified" case               |
 
 The fixture isolation note matters: `get_db()` is a process singleton pointed at conftest's session
 database, so a test that writes 525 rows there would pollute every later module and count rows it did
@@ -107,8 +107,8 @@ the last page) and nothing was clicked.
 
 ## 5. A wrong claim of mine, corrected the hard way
 
-My previous summary said: *"the bundle loads the repo source, so one restart closes it — no rebuild
-required."* That is the pre-Phase-36 behaviour, and it was wrong: `launcher.resolve_project_dir()`
+My previous summary said: _"the bundle loads the repo source, so one restart closes it — no rebuild
+required."_ That is the pre-Phase-36 behaviour, and it was wrong: `launcher.resolve_project_dir()`
 returns `Contents/Resources/app` (its own staged copy) **before** it consults `project_path.txt`.
 The restarted app answered `GET /openapi.json` → **200, 82,556 bytes** for exactly that reason.
 
@@ -121,20 +121,20 @@ Proof this time was taken from inside the deployed bundle, not from the repo:
 
 Then the live host, no token:
 
-| Request | Before this phase | Now |
-| --- | --- | --- |
-| `GET http://127.0.0.1:8765/openapi.json` | 200, 82,556 B | **404, 22 B** |
-| `GET http://172.20.168.82:8765/openapi.json` (the Wi-Fi address) | 200, 82,556 B | **404, 22 B** |
-| `/docs`, `/redoc`, `/docs/oauth2-redirect` | 200 | **404** |
-| `GET /` | 200, body advertised `"docs": "/docs"` | 200, `{"name":"Vantage Core","version":"0.1.0","dashboard":"/dashboard","tools":148}` |
-| `GET /health` with the token | 200 | 200, `tools 148`, `provider openai` |
+| Request                                                          | Before this phase                      | Now                                                                                   |
+| ---------------------------------------------------------------- | -------------------------------------- | ------------------------------------------------------------------------------------- |
+| `GET http://127.0.0.1:8765/openapi.json`                         | 200, 82,556 B                          | **404, 22 B**                                                                         |
+| `GET http://172.20.168.82:8765/openapi.json` (the Wi-Fi address) | 200, 82,556 B                          | **404, 22 B**                                                                         |
+| `/docs`, `/redoc`, `/docs/oauth2-redirect`                       | 200                                    | **404**                                                                               |
+| `GET /`                                                          | 200, body advertised `"docs": "/docs"` | 200, `{"name":"Vantage Core","version":"0.1.0","dashboard":"/dashboard","tools":148}` |
+| `GET /health` with the token                                     | 200                                    | 200, `tools 148`, `provider openai`                                                   |
 
 The hole the "check all is working" sweep found is now closed on the machine that had it open.
 
 **The archive was verified by launching it, not by listing it.** `Vantage.app.zip` was re-made with
 `ditto -c -k --keepParent` (1,176,964 B) and `vantage-source.zip` with the project's usual exclusions
 (2,614,391 B). Extracting the app archive with `unzip` and running `codesign --verify` reported
-*a sealed resource is missing or invalid* -- which was the extraction tool, not the artifact: with
+_a sealed resource is missing or invalid_ -- which was the extraction tool, not the artifact: with
 `ditto -x -k` the same archive verifies silently. The proof that mattered came next: the
 **ditto-extracted copy in `/tmp`**, launched with its own recorded interpreter against a fresh
 `JARVIS_HOME` on port 8918, answered
@@ -161,9 +161,9 @@ historical audit rows needs an explicit yes rather than an inference from "fix a
 
 What it would do, precisely, if you say go:
 
-| `log_id` | created | tool | intent |
-| --- | --- | --- | --- |
-| `LEGACY-TEST` | 2020-01-01T00:00:00+00:00 | get_time | legacy |
+| `log_id`           | created                   | tool     | intent        |
+| ------------------ | ------------------------- | -------- | ------------- |
+| `LEGACY-TEST`      | 2020-01-01T00:00:00+00:00 | get_time | legacy        |
 | `LOG-c21a56032ad3` | 2026-09-25T14:01:49+00:00 | get_time | tamper-target |
 | `LOG-088c35e5a397` | 2026-09-25T14:03:04+00:00 | get_time | tamper-target |
 | `LOG-26a595850d0c` | 2026-09-25T14:05:50+00:00 | get_time | tamper-target |
@@ -173,7 +173,7 @@ What it would do, precisely, if you say go:
 All six are `UPDATE`s written by `tests/test_security.py` against the default home, before conftest
 gave each session its own — `tests/conftest.py` isolates `JARVIS_HOME` today, so this cannot recur.
 They are not actions your assistant took. Deleting them costs 525 → 519 rows and forces the re-seal,
-after which the chain verifies but proves only what happened *from that moment*; the re-seal writes
+after which the chain verifies but proves only what happened _from that moment_; the re-seal writes
 its own ledger row and the backup directory keeps the pre-repair bytes. The 2 `legacy_message` rows
 are **real actions mislabelled by an old build** and I would not touch them: the honest fix already
 shipped — they are now named, counted, and visible — and rewriting them would invent a status that
@@ -185,14 +185,14 @@ including these six regardless of what you decide about the database.
 The user chose **delete and re-seal**. Run against the real ledger, app stopped, with a second backup
 taken immediately before (`jarvis.db.pre-repair-2`):
 
-| Step | `verify_chain()` |
-| --- | --- |
-| before | `ok=False`, checked 520 of 525, 5 breaks, first bad `LEGACY-TEST` |
-| 6 rows deleted | `ok=False`, checked 513 of 519, **6 breaks**, `previous-hash mismatch (a record was removed or reordered)` |
-| `seal_chain(force=True)` | **`ok=True`, checked 520 of 520, 0 breaks, 0 unverified** |
+| Step                     | `verify_chain()`                                                                                           |
+| ------------------------ | ---------------------------------------------------------------------------------------------------------- |
+| before                   | `ok=False`, checked 520 of 525, 5 breaks, first bad `LEGACY-TEST`                                          |
+| 6 rows deleted           | `ok=False`, checked 513 of 519, **6 breaks**, `previous-hash mismatch (a record was removed or reordered)` |
+| `seal_chain(force=True)` | **`ok=True`, checked 520 of 520, 0 breaks, 0 unverified**                                                  |
 
 The middle row is the point of the whole exercise being done in one go: deleting a row does not leave
-a shorter valid chain, it leaves a *broken* one, because the successor's `prev_hash` names the row that
+a shorter valid chain, it leaves a _broken_ one, because the successor's `prev_hash` names the row that
 is gone. The re-seal wrote its own event -- `audit chain re-hashed 519 records on
 2026-10-06T03:18:53+00:00` -- so the ledger itself records that its guarantee starts there.
 
@@ -208,15 +208,15 @@ before anyone treats an unwatched panel as a monitor.
 
 ## 7. Numbers, re-measured
 
-| Measure | Before | After |
-| --- | --- | --- |
-| Tests | 2408 | **2419** (11 new) |
-| Test modules | 92 | **93** |
-| Phase reports | 67 | **68** |
-| Ledger rows / chain coverage on the live host | 495 of a hidden 500 window | **520 of 525, unverified 0, reason published** |
-| Route objects / distinct paths / authored decorators | 118 / 111 / 118 | **unchanged** — `/metrics` gained fields, not a route |
-| Tools / gated / planner rules / DB tables | 148 / 32 / 52 / 32 | unchanged |
-| Browser verification | n/a | **DONE**, 1440×900, live DOM text above, 0 console messages, no overflow |
+| Measure                                              | Before                     | After                                                                    |
+| ---------------------------------------------------- | -------------------------- | ------------------------------------------------------------------------ |
+| Tests                                                | 2408                       | **2419** (11 new)                                                        |
+| Test modules                                         | 92                         | **93**                                                                   |
+| Phase reports                                        | 67                         | **68**                                                                   |
+| Ledger rows / chain coverage on the live host        | 495 of a hidden 500 window | **520 of 525, unverified 0, reason published**                           |
+| Route objects / distinct paths / authored decorators | 118 / 111 / 118            | **unchanged** — `/metrics` gained fields, not a route                    |
+| Tools / gated / planner rules / DB tables            | 148 / 32 / 52 / 32         | unchanged                                                                |
+| Browser verification                                 | n/a                        | **DONE**, 1440×900, live DOM text above, 0 console messages, no overflow |
 
 ## 8. What this phase did not do
 

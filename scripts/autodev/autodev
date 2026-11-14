@@ -40,8 +40,6 @@ PIDF = AUTODEV / "supervisor.pid"
 LOGS = AUTODEV / "logs"
 REPORT = AUTODEV / "worker-report.json"
 CHECKPOINTS = AUTODEV / "checkpoints"
-PROMPT_TPL = Path(__file__).resolve().parent / "worker_prompt.md"
-
 BUDGET_CAP_HOURS = 24.0
 DEFAULT_HOURS = 12.0
 WRAPUP_FRACTION = 0.10
@@ -143,6 +141,52 @@ def check_prereqs() -> list[str]:
     return problems
 
 
+def probe_worker_auth() -> tuple[bool, str]:
+    """Probe whether a spawned headless worker can authenticate at all.
+
+    In a desktop-managed session the auth token is delivered to the *current*
+    process via a host-managed mechanism that spawned child `claude -p`
+    processes do not inherit, so a spawned worker exits with "Not logged in".
+    Detecting this up front lets the supervisor refuse to start a run it could
+    never authenticate, instead of burning the budget on unauthenticated
+    workers. We deliberately do NOT try to inherit or inject the auth token —
+    bypassing authentication is not something this tool will do.
+    """
+    if not shutil.which("claude"):
+        return False, "`claude` CLI not found on PATH"
+    probe_log = LOGS / "auth-probe.log"
+    LOGS.mkdir(parents=True, exist_ok=True)
+    cmd = [
+        "claude", "-p",
+        "--output-format", "stream-json", "--verbose",
+        "--permission-mode", "acceptEdits",
+        "--allowedTools", "Read",
+        "--", "Reply with exactly: AUTH_OK",
+    ]
+    try:
+        with open(probe_log, "wb") as out:
+            proc = subprocess.run(
+                cmd, cwd=REPO, stdout=out, stderr=subprocess.STDOUT,
+                timeout=90, start_new_session=True,
+            )
+    except subprocess.TimeoutExpired:
+        return True, "auth probe timed out (inconclusive; per-worker check will catch a real failure)"
+    except Exception as e:  # noqa: BLE001
+        return True, f"auth probe inconclusive: {e}"
+    try:
+        tail = probe_log.read_bytes().decode("utf-8", "replace")[-2000:]
+    except OSError:
+        return True, "auth probe could not read its log (inconclusive)"
+    if "Not logged in" in tail or "Please run /login" in tail:
+        return False, (
+            "the headless worker is not logged in in this environment "
+            "(the desktop-managed auth token is not inherited by spawned "
+            "`claude -p` processes). Provide ANTHROPIC_AUTH_TOKEN in the "
+            "environment or run the worker from an authenticated session."
+        )
+    return True, "worker authenticated"
+
+
 def new_run(hours: float) -> dict:
     hours = min(hours, BUDGET_CAP_HOURS)
     started = datetime.now(timezone.utc)
@@ -181,9 +225,47 @@ def pick_next(tasks: dict, state: dict) -> str | None:
 
 
 def worker_prompt(task: dict) -> str:
-    tpl = PROMPT_TPL.read_text()
-    return (tpl.replace("__TASK_JSON__", json.dumps(task, indent=2, ensure_ascii=False))
-                .replace("__REPO__", str(REPO)))
+    """Build the worker prompt in code. The rules text is built here (not read
+    from a .md file) so a markdown formatter cannot mangle the placeholders."""
+    rules = (
+        "Rules — these are binding:\n"
+        "- Define the acceptance criteria from the task, then implement the smallest change that satisfies them.\n"
+        "- Run the exact verification commands relevant to the task; record each command and its result.\n"
+        "- Add or update tests for behavior you change. A mocked integration is not end-to-end.\n"
+        "- Do NOT: push to any remote, publish releases, delete unrelated files, touch files outside this repo,\n"
+        "  weaken or delete failing tests to make them pass, disable TLS verification, widen security allowlists\n"
+        "  to silence tests, or hardcode secrets. Pre-existing uncommitted changes that are not yours: leave alone.\n"
+        "- If a required permission or external prerequisite is unavailable, mark the task blocked with the exact\n"
+        "  missing prerequisite — do not pretend it is done.\n"
+        "- Commit your own completed, tested work locally to main with a message starting with\n"
+        '  "autodev: " and ending with the Co-Authored-By line that CLAUDE.md specifies.\n'
+        "- Keep the diff scoped: if you find unrelated problems, record them as blockers/next recommendations\n"
+        "  instead of fixing them in this task.\n\n"
+        "When you are finished (success, failure, or blocked), write a single JSON file to\n"
+        ".autodev/worker-report.json with exactly this shape:\n\n"
+        "{\n"
+        '  "task_id": "<your task id>",\n'
+        '  "status": "completed | failed | blocked | skipped",\n'
+        '  "summary": "<one or two sentences>",\n'
+        '  "commands": ["<the verification commands you ran>", "..."],\n'
+        '  "evidence": ["<exit code / key output per command>", "..."],\n'
+        '  "commit": "<sha or null>",\n'
+        '  "blockers": ["<anything the next worker must know>", "..."],\n'
+        '  "next_recommendation": "<the single most useful next task, one line>"\n'
+        "}\n\n"
+        "This file is the ONLY way your result is recorded. Write it last, even if you failed."
+    )
+    task_json = json.dumps(task, indent=2, ensure_ascii=False)
+    return (
+        f"You are the autonomous development worker for VANTAGE / JARVIS Forge in {REPO}.\n\n"
+        "Read, in this order, before doing anything else:\n\n"
+        "1. CLAUDE.md at the repo root (resume protocol, commands, security invariants).\n"
+        "2. docs/PROJECT_STATUS.md (current health; update it when you finish).\n"
+        "3. .autodev/tasks.json (the queue; your task is below).\n\n"
+        "Your task:\n\n"
+        f"{task_json}\n\n"
+        f"{rules}"
+    )
 
 
 def launch_worker(task: dict) -> tuple[subprocess.Popen, str, Path]:
@@ -247,8 +329,21 @@ def merge_report(tasks: dict, state: dict, task_id: str, rep: dict) -> None:
     state["last_worker_session"] = state.get("last_worker_session")
 
 
+def _worker_log_says_not_logged_in(log_path: Path) -> bool:
+    """A worker that exits having never logged in cannot do any work. Detect the
+    auth failure so the supervisor stops cleanly instead of retry-looping —
+    in a desktop-managed environment the auth token is not inherited by spawned
+    processes, so no amount of retrying will authenticate the worker."""
+    try:
+        tail = log_path.read_bytes().decode("utf-8", "replace")[-4000:]
+    except OSError:
+        return False
+    return ("Not logged in" in tail) or ("Please run /login" in tail)
+
+
 def run_worker(task: dict, state: dict, deadline: datetime) -> bool:
-    """Run one worker for the task. Returns True if budget exhausted mid-task."""
+    """Run one worker for the task. Returns True if the run should stop
+    (budget exhausted, stop requested, or the worker cannot authenticate)."""
     state["current_task"] = task["id"]
     state["updated"] = now_iso()
     atomic_write_json(STATE, state)
@@ -271,6 +366,22 @@ def run_worker(task: dict, state: dict, deadline: datetime) -> bool:
             atomic_write_json(STATE, state)
             return True
         time.sleep(10)
+    # Worker exited. If it never logged in, unattended work is impossible in
+    # this environment — stop cleanly rather than retry-looping.
+    if _worker_log_says_not_logged_in(log_path):
+        state["phase"] = "blocked"
+        state["blocked_reason"] = (
+            "claude worker is not logged in in this environment "
+            "(auth token not inherited by spawned processes). "
+            "Run the worker from an authenticated session or provide "
+            "ANTHROPIC_AUTH_TOKEN."
+        )
+        state["current_task"] = None
+        state["updated"] = now_iso()
+        atomic_write_json(STATE, state)
+        print("autodev: worker is not logged in — unattended work is not "
+              "possible in this environment. Stopping (blocked).")
+        return True
     state["current_task"] = None
     state["updated"] = now_iso()
     atomic_write_json(STATE, state)
@@ -301,6 +412,24 @@ def do_start(hours: float) -> int:
         print("Prerequisites not met:")
         for p in problems:
             print(f"  - {p}")
+        return 1
+    # Preflight: can a spawned headless worker authenticate at all? In a
+    # desktop-managed session the auth token is not inherited by spawned
+    # `claude -p` processes, so an unattended run could never do work. Detect
+    # it up front and record a clean "blocked" run rather than burning the
+    # budget on unauthenticated workers. We do NOT try to inherit/inject the
+    # auth token — bypassing authentication is not something this tool does.
+    auth_ok, auth_reason = probe_worker_auth()
+    if not auth_ok:
+        state = new_run(hours)
+        state["phase"] = "blocked"
+        state["blocked_reason"] = auth_reason
+        atomic_write_json(STATE, state)
+        print("autodev: worker cannot authenticate in this environment; run "
+              "refused (recorded as blocked, not started).")
+        print(f"  reason: {auth_reason}")
+        print("  provide ANTHROPIC_AUTH_TOKEN in the environment, or run the")
+        print("  worker from an authenticated session, then `autodev resume`.")
         return 1
     if supervisor_alive():
         print("A supervisor is already running (see `autodev status`).")

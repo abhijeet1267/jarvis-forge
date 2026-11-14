@@ -5,12 +5,12 @@ Closes: **63-A** (the phone names no vendor) and **63-B** (`provider_paths` had 
 
 ## 1. Measured first
 
-| Check | Result |
-| --- | --- |
-| `grep -n "health\|llm\|model\|provider" dashboard/phone.html` | **nothing** — the page in a person's hand cannot say whether rules or a vendor answers, five phases after the vendor became selectable (Phase 60) and two after the laptop's panel grew a badge that names it (Phase 63) |
-| `grep -rn "provider_paths" jarvis/ dashboard/ tests/` | published at `jarvis/api/app.py:645`; the only reader in the whole repository was a test |
-| `PHONE_ALLOWED` | 8 paths + the `/confirm/` prefix; `/health`, `/audit`, `/privacy/delete` answer a phone session **403** (Phase 58's narrowing) |
-| `provider_capabilities()` with an unusable `JARVIS_AI_PROVIDER` | returned **2 keys**; with a working one, **4** — so asking "and screen text?" on the refusal path got silence, which reads as "nothing to report" rather than "nobody looked" |
+| Check                                                           | Result                                                                                                                                                                                                                   |
+| --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `grep -n "health\|llm\|model\|provider" dashboard/phone.html`   | **nothing** — the page in a person's hand cannot say whether rules or a vendor answers, five phases after the vendor became selectable (Phase 60) and two after the laptop's panel grew a badge that names it (Phase 63) |
+| `grep -rn "provider_paths" jarvis/ dashboard/ tests/`           | published at `jarvis/api/app.py:645`; the only reader in the whole repository was a test                                                                                                                                 |
+| `PHONE_ALLOWED`                                                 | 8 paths + the `/confirm/` prefix; `/health`, `/audit`, `/privacy/delete` answer a phone session **403** (Phase 58's narrowing)                                                                                           |
+| `provider_capabilities()` with an unusable `JARVIS_AI_PROVIDER` | returned **2 keys**; with a working one, **4** — so asking "and screen text?" on the refusal path got silence, which reads as "nothing to report" rather than "nobody looked"                                            |
 
 ## 2. The design decision, taken in the open
 
@@ -26,7 +26,9 @@ worker already refetches from the network before it will consider a cache.
 
 ```html
 <meta name="jarvis-bootstrap" content="__JARVIS_BOOTSTRAP__" />
-<script type="application/json" id="jarvis-model">__JARVIS_MODEL_JSON__</script>
+<script type="application/json" id="jarvis-model">
+  __JARVIS_MODEL_JSON__
+</script>
 ```
 
 `model_status(settings)` builds it from the same `provider_capabilities()` the panel reads, with the
@@ -60,14 +62,14 @@ can close the script element it sits in.
 
 ## 4. Tests — 14, red first as 7 failures and 4 errors
 
-| Group | What is pinned |
-| --- | --- |
-| `model_status` (3) | no key → `rules (no key)` and no vendor named; key + provider → the vendor that would be called; unusable name → the refusal, naming what it refused |
-| `provider_capabilities` shape | four keys in the healthy **and** the refusal branch, and neither vision nor stt left blank |
-| the served page (3) | the JSON block is present and parses to the six fields; `__JARVIS_MODEL_JSON__` never survives to a phone; the master token and `api_token`/`secret`/`Bearer` appear nowhere in the injected data |
-| the gate (2) | `PHONE_ALLOWED` equals the set Phase 58 shipped, asserted as an **equality** with a diff in the failure message, and a real phone session minted from `/phone` → 200 on `/tools`, **403** on `/health`, `/audit`, `/privacy/delete` |
-| the shipped renderer (4) | `modelLine` extracted from the page and run **under node**: rules state, vendor state with the boundary sentence, refusal state, and `{}` → `unknown` rather than blank |
-| the shell (1) | the cache name has advanced to v3 and the old caches are deleted on activate |
+| Group                         | What is pinned                                                                                                                                                                                                                      |
+| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `model_status` (3)            | no key → `rules (no key)` and no vendor named; key + provider → the vendor that would be called; unusable name → the refusal, naming what it refused                                                                                |
+| `provider_capabilities` shape | four keys in the healthy **and** the refusal branch, and neither vision nor stt left blank                                                                                                                                          |
+| the served page (3)           | the JSON block is present and parses to the six fields; `__JARVIS_MODEL_JSON__` never survives to a phone; the master token and `api_token`/`secret`/`Bearer` appear nowhere in the injected data                                   |
+| the gate (2)                  | `PHONE_ALLOWED` equals the set Phase 58 shipped, asserted as an **equality** with a diff in the failure message, and a real phone session minted from `/phone` → 200 on `/tools`, **403** on `/health`, `/audit`, `/privacy/delete` |
+| the shipped renderer (4)      | `modelLine` extracted from the page and run **under node**: rules state, vendor state with the boundary sentence, refusal state, and `{}` → `unknown` rather than blank                                                             |
+| the shell (1)                 | the cache name has advanced to v3 and the old caches are deleted on activate                                                                                                                                                        |
 
 **Full suite: 2433 passed, 0 failed in 140.11 s** (2419 + 14).
 
@@ -76,10 +78,10 @@ can close the script element it sits in.
 Three isolated hosts (`JARVIS_HOME=$(mktemp -d)`, ports 8921/8922/8923, loopback, fake keys, the
 user's home untouched). The injected block, read from what each actually served:
 
-| Host | `answered_by` | vision / stt |
-| --- | --- | --- |
-| no key | `rules (no key)` | `openai-shaped, not provider-routed` |
-| `JARVIS_AI_PROVIDER=gemini` + key | `gemini` | `openai-shaped, not provider-routed` |
+| Host                               | `answered_by`                                                                                           | vision / stt                                  |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------- | --------------------------------------------- |
+| no key                             | `rules (no key)`                                                                                        | `openai-shaped, not provider-routed`          |
+| `JARVIS_AI_PROVIDER=gemini` + key  | `gemini`                                                                                                | `openai-shaped, not provider-routed`          |
 | `JARVIS_AI_PROVIDER=mistral` + key | `refused: JARVIS_AI_PROVIDER='mistral' is not a provider this build can talk to. Known: gemini, openai` | `not asked -- the vendor could not be chosen` |
 
 Neither of the two keyed hosts contacted anyone: the logs hold **0** references to
@@ -107,22 +109,22 @@ the delivered app was re-checked with one authenticated `GET /health` → 200.
 
 ## 6. Numbers
 
-| Measure | Before | After |
-| --- | --- | --- |
-| Tests | 2419 | **2433** (14 new) |
-| Test modules | 93 | **94** |
-| Phase reports | 68 | **69** |
-| Route objects / paths / authored decorators | 118 / 111 / 118 | **unchanged** — no route was added |
-| `PHONE_ALLOWED` paths | 8 | **8** |
-| Tools / gated / planner rules / tables | 148 / 32 / 52 / 32 | unchanged |
-| Versioned lines | 76,144 | **76,467** (shipped 44,444 · tests 31,405) |
-| Browser verification | Phase 66, laptop panel 1440×900 | **phone page, 375×812 mobile emulation, 0 console messages** |
+| Measure                                     | Before                          | After                                                        |
+| ------------------------------------------- | ------------------------------- | ------------------------------------------------------------ |
+| Tests                                       | 2419                            | **2433** (14 new)                                            |
+| Test modules                                | 93                              | **94**                                                       |
+| Phase reports                               | 68                              | **69**                                                       |
+| Route objects / paths / authored decorators | 118 / 111 / 118                 | **unchanged** — no route was added                           |
+| `PHONE_ALLOWED` paths                       | 8                               | **8**                                                        |
+| Tools / gated / planner rules / tables      | 148 / 32 / 52 / 32              | unchanged                                                    |
+| Versioned lines                             | 76,144                          | **76,467** (shipped 44,444 · tests 31,405)                   |
+| Browser verification                        | Phase 66, laptop panel 1440×900 | **phone page, 375×812 mobile emulation, 0 console messages** |
 
 ## 7. What this phase did not do
 
 - Did not widen any gate. `PHONE_ALLOWED` is pinned by equality, and the live 403s are in §5.
 - Did not contact a vendor, and did not pretend otherwise.
-- Did not delete the 6 `forged` audit rows *at the time of writing* — asked directly on 2026-10-06,
+- Did not delete the 6 `forged` audit rows _at the time of writing_ — asked directly on 2026-10-06,
   the user chose delete and re-seal, and it was done: the chain now reads
   `intact · 520 of 520 verified`, with the before/mid/after numbers and the re-seal's own ledger row
   in `audit/PHASE66_THE_LEDGER_WAS_READ_IN_TWO_HALVES_REPORT.md` §6.1.
@@ -141,15 +143,15 @@ the delivered app was re-checked with one authenticated `GET /health` → 200.
 The phone page and the worker ship inside the bundle, so this phase required a rebuild (see the
 Phase 66 note: `launcher.resolve_project_dir()` prefers `Contents/Resources/app` over the checkout).
 
-| Step | Result |
-| --- | --- |
-| `build_app.py` | built, `codesign verify: ok` |
-| staged copies checked before deploying | `modelLine` ×2 in `dashboard/phone.html`, `jarvis-phone-shell-v3` ×3 in `dashboard/sw.js`, `doc_routes` ×2 in `jarvis/api/app.py`, `not asked` ×2 in `jarvis/gateway/providers.py`, and the `__JARVIS_MODEL_JSON__` placeholder present in the staged page (it is replaced at serve time, not at build time) |
-| deployed bundle signature | `codesign --verify --deep --strict` → valid on disk, satisfies its Designated Requirement |
-| delivered app, live | `GET /phone` → the injected block, `{"llm_enabled": false, "answered_by": "rules (no key)", "chat": "openai", "embed": "openai", "vision": "openai-shaped, not provider-routed", "stt": "openai-shaped, not provider-routed"}`; `grep -c __JARVIS_MODEL_JSON__` on the served page → **0**; `GET /sw.js` → `jarvis-phone-shell-v3`; `GET /` → no `docs` key, 148 tools; `/openapi.json`, `/docs`, `/redoc`, `/docs/oauth2-redirect` → **404** |
-| delivered app, browser | the same page at **375×812 mobile emulation**: line text read from the DOM, `scrollWidth` 375 = viewport, no overflow, 38 px tall at 13 px, 3 cards, **6 registry-driven quick actions** still present, **0 console messages** |
-| archives | `Vantage.app.zip` 1,178,320 B and `vantage-source.zip` 2,629,409 B, both rebuilt from this tree; the extracted app archive verifies (`codesign` silent) and carries `modelLine` and the v3 shell; the source archive contains the Phase 67 test file and report |
-| documents refreshed in `~/Downloads/Vantage/` | `README.md`, `VANTAGE_CURRENT_STATE.md`, `VANTAGE_FINAL_ACCEPTANCE_REPORT.md`, `PHASE67_THE_PHONE_SAYS_WHO_ANSWERS_REPORT.md` |
+| Step                                          | Result                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| --------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `build_app.py`                                | built, `codesign verify: ok`                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| staged copies checked before deploying        | `modelLine` ×2 in `dashboard/phone.html`, `jarvis-phone-shell-v3` ×3 in `dashboard/sw.js`, `doc_routes` ×2 in `jarvis/api/app.py`, `not asked` ×2 in `jarvis/gateway/providers.py`, and the `__JARVIS_MODEL_JSON__` placeholder present in the staged page (it is replaced at serve time, not at build time)                                                                                                                                  |
+| deployed bundle signature                     | `codesign --verify --deep --strict` → valid on disk, satisfies its Designated Requirement                                                                                                                                                                                                                                                                                                                                                     |
+| delivered app, live                           | `GET /phone` → the injected block, `{"llm_enabled": false, "answered_by": "rules (no key)", "chat": "openai", "embed": "openai", "vision": "openai-shaped, not provider-routed", "stt": "openai-shaped, not provider-routed"}`; `grep -c __JARVIS_MODEL_JSON__` on the served page → **0**; `GET /sw.js` → `jarvis-phone-shell-v3`; `GET /` → no `docs` key, 148 tools; `/openapi.json`, `/docs`, `/redoc`, `/docs/oauth2-redirect` → **404** |
+| delivered app, browser                        | the same page at **375×812 mobile emulation**: line text read from the DOM, `scrollWidth` 375 = viewport, no overflow, 38 px tall at 13 px, 3 cards, **6 registry-driven quick actions** still present, **0 console messages**                                                                                                                                                                                                                |
+| archives                                      | `Vantage.app.zip` 1,178,320 B and `vantage-source.zip` 2,629,409 B, both rebuilt from this tree; the extracted app archive verifies (`codesign` silent) and carries `modelLine` and the v3 shell; the source archive contains the Phase 67 test file and report                                                                                                                                                                               |
+| documents refreshed in `~/Downloads/Vantage/` | `README.md`, `VANTAGE_CURRENT_STATE.md`, `VANTAGE_FINAL_ACCEPTANCE_REPORT.md`, `PHASE67_THE_PHONE_SAYS_WHO_ANSWERS_REPORT.md`                                                                                                                                                                                                                                                                                                                 |
 
 One operational note, because it cost two minutes and the next reader should not lose them: after the
 old server was stopped, the first `open` of the new bundle did nothing -- LaunchServices still saw the

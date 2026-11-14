@@ -359,3 +359,107 @@ def test_ci_builds_the_bundle_it_documents():
 
     assert "python build_app.py" in workflow, (
         "the README tells readers to build the app; CI is what proves that still works")
+
+
+# ---------------------------------------------------------------------------
+# 25-F -- the README's other published counts, guarded the same way
+# ---------------------------------------------------------------------------
+def test_the_readme_counts_the_api_routes_it_ships():
+    """The README published **118** API routes; the app has more than that.
+
+    The route count was the one badge row with no guard, so it drifted the
+    furthest -- the tool count and the planner-route count were both pinned,
+    and the route count was not. It is pinned now.
+    """
+    import re
+
+    readme = (REPO / "README.md").read_text()
+    claimed = int(re.search(r"API routes\s*\|\s*\*\*(\d+)\*\*", readme).group(1))
+    source = (REPO / "jarvis" / "api" / "app.py").read_text()
+    measured = sum(source.count(f'@app.{verb}("')
+                   for verb in ("get", "post", "put", "patch", "delete"))
+
+    assert claimed == measured, (
+        f"the app declares {measured} API routes; the README still advertises {claimed}")
+
+
+def test_the_readme_counts_the_gated_tools_out_of_the_whole():
+    """A gate count that is out of date is a gate count nobody can trust.
+
+    The README said "32 of 148" when the registry held 35 gated tools out of
+    154. The number a reader quotes is the number that has to be right.
+    """
+    import re
+
+    from jarvis.tools import build_default_registry
+
+    readme = (REPO / "README.md").read_text()
+    match = re.search(r"Confirmation-gated\s*\|\s*\*\*(\d+)\*\*\s*of\s*(\d+)", readme)
+    assert match, "the README no longer publishes a gated-tool count"
+    claimed_gated, claimed_total = int(match.group(1)), int(match.group(2))
+
+    registry = build_default_registry()
+    specs = registry.all()
+    measured_gated = sum(1 for s in specs if s.requires_confirmation)
+    measured_total = len(specs)
+
+    assert (claimed_gated, claimed_total) == (measured_gated, measured_total), (
+        f"the registry holds {measured_gated} gated tools out of {measured_total}; "
+        f"the README says {claimed_gated} of {claimed_total}")
+
+
+def test_the_readme_counts_the_risk_tiers_it_ships():
+    """The risk tiers are the table that says what a sentence can reach."""
+    import re
+
+    from jarvis.core.models import RiskLevel
+    from jarvis.tools import build_default_registry
+
+    readme = (REPO / "README.md").read_text()
+    match = re.search(r"Risk tiers\s*\|\s*read (\d+) · low (\d+) · external (\d+) · "
+                      r"destructive (\d+) · physical (\d+)", readme)
+    assert match, "the README no longer publishes the risk tiers"
+    claimed = tuple(int(g) for g in match.groups())
+
+    registry = build_default_registry()
+    measured = tuple(
+        sum(1 for s in registry.all() if s.risk is tier)
+        for tier in (RiskLevel.READ, RiskLevel.LOW, RiskLevel.EXTERNAL,
+                     RiskLevel.DESTRUCTIVE, RiskLevel.PHYSICAL)
+    )
+
+    assert claimed == measured, (
+        f"the registry's risk tiers are {measured}; the README says {claimed}")
+
+
+def test_the_release_doc_publishes_the_current_suite_figures():
+    """The release document's numbers are the ones someone installs from.
+
+    It carried "2800 passed / 38 skipped" while the suite was at 2992/33, and
+    the test that guards the README's suite count did not exist, so nothing
+    noticed.
+    """
+    import re
+
+    readme = (REPO / "README.md").read_text()
+    release = (REPO / "docs" / "RELEASE_AND_BUILD.md").read_text()
+
+    # The number the release doc publishes must be the number the README
+    # publishes: they are the same suite.
+    def _suite_row(text):
+        match = re.search(r"Test suite\s*\|\s*\*\*(\d+) passed", text)
+        assert match, "no published suite count"
+        return int(match.group(1))
+
+    assert _suite_row(release) == _suite_row(readme), (
+        "the release document and the README publish different suite counts")
+
+    # And the skipped figure must not be published as zero.
+    match = re.search(r"Test suite\s*\|\s*\*\*\d+ passed · (\d+) failed · (\d+) skipped",
+                      release)
+    assert match, "the release document no longer publishes the skipped count"
+    skipped = int(match.group(2))
+    assert skipped > 0, (
+        "the release document publishes 0 skipped, but the suite skips "
+        "environment-gated tests; a reader would look for failures that are "
+        "not failures")

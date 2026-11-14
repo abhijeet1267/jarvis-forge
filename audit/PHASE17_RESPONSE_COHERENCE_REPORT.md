@@ -10,21 +10,21 @@ No Phase 17 brief was supplied. The two open items that Phase 16 itself left, an
 that need **no new capability, no new vocabulary and no user decision**, were taken
 as the phase:
 
-* **16-D** — the ledger now recorded `no_action`, but `handle()`'s reply-only branch
+- **16-D** — the ledger now recorded `no_action`, but `handle()`'s reply-only branch
   still returned `decision=PolicyDecision.EXECUTE` for a command that executed
   nothing. The answer contradicted its own audit record.
-* **the audit card half of 16-D** — the dashboard's ledger card coloured every token
+- **the audit card half of 16-D** — the dashboard's ledger card coloured every token
   that was not `success`/`blocked`/`denied` amber, so `no_action` sat in the same
   colour as `failure`.
 
 Explicitly **not** attempted, because each is waiting on a decision or an
 authorisation rather than on work:
 
-* **16-F** — authentication failures in the hash chain (the flooding-vs-accountability
+- **16-F** — authentication failures in the hash chain (the flooding-vs-accountability
   trade-off; §8 of the Phase 16 report). Needs the user's call.
-* Any new `PolicyDecision` enum member (16-D's alternative fix, which touches every
+- Any new `PolicyDecision` enum member (16-D's alternative fix, which touches every
   consumer of `decision`).
-* Hardware, read route, notification tool, memory-deletion redesign, desktop bundle,
+- Hardware, read route, notification tool, memory-deletion redesign, desktop bundle,
   RT-3 / R-2 / R-11-R-14, LLM planner.
 
 A numbering note, so the trail stays readable: Phase 16's §9 and §12 both call the
@@ -38,14 +38,14 @@ of 16-D.
 
 `JARVIS_HOME` isolated, all six reply-only commands through the real pipeline:
 
-| Command | `decision` | actions | ledger `result` |
-| --- | --- | --- | --- |
-| transfer this file to my phone. | `EXECUTE` | 0 | `no_action` |
-| what is my phone battery? | `EXECUTE` | 0 | `no_action` |
-| design this system. | `EXECUTE` | 0 | `no_action` |
-| flibbertigibbet the wozzle. | `EXECUTE` | 0 | `no_action` |
-| send it. | `EXECUTE` | 0 | `no_action` |
-| help | `EXECUTE` | 0 | `no_action` |
+| Command                         | `decision` | actions | ledger `result` |
+| ------------------------------- | ---------- | ------- | --------------- |
+| transfer this file to my phone. | `EXECUTE`  | 0       | `no_action`     |
+| what is my phone battery?       | `EXECUTE`  | 0       | `no_action`     |
+| design this system.             | `EXECUTE`  | 0       | `no_action`     |
+| flibbertigibbet the wozzle.     | `EXECUTE`  | 0       | `no_action`     |
+| send it.                        | `EXECUTE`  | 0       | `no_action`     |
+| help                            | `EXECUTE`  | 0       | `no_action`     |
 
 Six for six, the response claimed execution while the row written in the same call
 denied it. The clarification branch (`:271`) already left `decision` unset, so the
@@ -54,7 +54,7 @@ two no-execution returns disagreed with each other as well.
 Consumers of `decision` were enumerated before touching it, so the change could not
 silently break one: `dashboard/index.html:259` (`data.decision === "BLOCK"`),
 `orchestrator.py:436` (`response.decision = response.decision or EXECUTE`, on the
-*end* path that the reply-only branch never reaches), and assertions in
+_end_ path that the reply-only branch never reaches), and assertions in
 `tests/test_pipeline.py`. Nothing read `EXECUTE` as "something ran" on this branch.
 
 ---
@@ -73,14 +73,14 @@ so nothing consuming `decision` had to learn one.
 A named `auditTone(result)` mapping replaces the inline "is it success?" ternary, and
 the audit card calls it:
 
-| Ledger token | Tone | Meaning |
-| --- | --- | --- |
-| `success` | ok | verified work |
-| `recovered` | warn | failed, then recovered |
-| `failure`, `unverified`, `blocked`, `denied` | bad | did not happen / refused by policy |
-| `expired`, `awaiting_confirmation`, `clarification` | warn | waiting on the user |
-| `no_action` | **muted** | nothing was going to run, and that was the answer |
-| anything unrecognised | warn | a new token is never silently green |
+| Ledger token                                        | Tone      | Meaning                                           |
+| --------------------------------------------------- | --------- | ------------------------------------------------- |
+| `success`                                           | ok        | verified work                                     |
+| `recovered`                                         | warn      | failed, then recovered                            |
+| `failure`, `unverified`, `blocked`, `denied`        | bad       | did not happen / refused by policy                |
+| `expired`, `awaiting_confirmation`, `clarification` | warn      | waiting on the user                               |
+| `no_action`                                         | **muted** | nothing was going to run, and that was the answer |
+| anything unrecognised                               | warn      | a new token is never silently green               |
 
 Presentation only. The card reads the ledger's own `result`; nothing here supplies a
 state.
@@ -92,15 +92,15 @@ state.
 Real server on `127.0.0.1:8899`, scratch home, dashboard bootstrap → session token,
 ledger read straight from `action_logs`:
 
-| Command | `decision` | actions | ledger | agrees |
-| --- | --- | --- | --- | --- |
-| transfer this file to my phone. | null | 0 | `no_action` | yes |
-| what is my phone battery? | null | 0 | `no_action` | yes |
-| design this system. | null | 0 | `no_action` | yes |
-| send it. | null | 0 | `no_action` | yes |
-| help | null | 0 | `no_action` | yes |
-| what is the time? | EXECUTE | 1 | `success` | yes |
-| show me my laptop battery. | EXECUTE | 1 | `success` | yes |
+| Command                         | `decision` | actions | ledger      | agrees |
+| ------------------------------- | ---------- | ------- | ----------- | ------ |
+| transfer this file to my phone. | null       | 0       | `no_action` | yes    |
+| what is my phone battery?       | null       | 0       | `no_action` | yes    |
+| design this system.             | null       | 0       | `no_action` | yes    |
+| send it.                        | null       | 0       | `no_action` | yes    |
+| help                            | null       | 0       | `no_action` | yes    |
+| what is the time?               | EXECUTE    | 1       | `success`   | yes    |
+| show me my laptop battery.      | EXECUTE    | 1       | `success`   | yes    |
 
 `agrees` is two checks, not one: `decision==EXECUTE` iff `len(actions)>0`, **and** the
 ledger row's `request_id` equals the response's. Both hold for all seven. Distinct
@@ -130,15 +130,15 @@ vocabulary decision, not a presentation fix, so it is recorded rather than inven
 
 Red → green, watched:
 
-* `test_refusal_does_not_report_execution` — 6 parametrised failures, each naming the
+- `test_refusal_does_not_report_execution` — 6 parametrised failures, each naming the
   `EXECUTE` claim.
-* `test_refusal_over_the_api_never_reads_as_executed` — 6 failures, asserting on the
+- `test_refusal_over_the_api_never_reads_as_executed` — 6 failures, asserting on the
   serialised wire rather than the object, because `decision` is what the dashboard
   branches on.
-* `test_page_ships_audit_tone_mapping` — 1 clean failure ("no token-to-tone mapping
+- `test_page_ships_audit_tone_mapping` — 1 clean failure ("no token-to-tone mapping
   exists in the shipped page").
-* `test_decision_and_action_count_never_disagree` — the invariant as one property.
-* 10 parametrised tone assertions.
+- `test_decision_and_action_count_never_disagree` — the invariant as one property.
+- 10 parametrised tone assertions.
 
 Held-green throughout (the other half of the proof): the three
 `test_executed_command_still_reports_execution` cases assert `EXECUTE` is still
@@ -175,11 +175,11 @@ edit here that could have broken a consumer silently.
 
 ## 8. Files modified
 
-| File | Change |
-| --- | --- |
-| `jarvis/core/orchestrator.py` | `plan.direct_reply` return no longer claims `decision=EXECUTE` |
-| `dashboard/index.html` | `auditTone(result)` named mapping; audit card uses it |
-| `tests/test_phase17_response_coherence.py` | new, 29 tests |
+| File                                       | Change                                                         |
+| ------------------------------------------ | -------------------------------------------------------------- |
+| `jarvis/core/orchestrator.py`              | `plan.direct_reply` return no longer claims `decision=EXECUTE` |
+| `dashboard/index.html`                     | `auditTone(result)` named mapping; audit card uses it          |
+| `tests/test_phase17_response_coherence.py` | new, 29 tests                                                  |
 
 No earlier report was edited.
 
@@ -208,7 +208,7 @@ Still branch `main` with **no commits** — `git rev-list --count HEAD` fails wi
 `unknown revision or path`, 17 untracked top-level entries. Phases 10-17 remain
 unreviewable as a diff.
 
-* staged: no · committed: no · pushed: no. No git write operation was performed.
+- staged: no · committed: no · pushed: no. No git write operation was performed.
 
 Cleanup: server stopped; scratch homes `/tmp/p15home*`, `/tmp/p16home*`,
 `/tmp/p17home` left for inspection; `~/.jarvis-forge` untouched.

@@ -1,21 +1,21 @@
 # Phase 48 — A name that stays the same
 
 Closed 2026-10-04. Closes **38-B / 39-E / 40-A** — the item the delivery README had been
-telling the user to *live with* for thirteen phases:
+telling the user to _live with_ for thirteen phases:
 
-> *"The address is your laptop's wifi address, and the router hands that out again whenever the
-> lease renews. It changed once today (…169.34 became …169.185) without anything being touched."*
+> _"The address is your laptop's wifi address, and the router hands that out again whenever the
+> lease renews. It changed once today (…169.34 became …169.185) without anything being touched."_
 
 ---
 
 ## 1. What was measured before anything was written
 
-| Question | Measurement |
-|---|---|
-| Does the machine have a stable name? | `scutil --get LocalHostName` → `Abhijeets-MacBook-Air-2`; `hostname` → `Abhijeets-MacBook-Air-2.local` |
-| Is mDNS alive? | `mDNSResponder` pid 450 |
+| Question                                         | Measurement                                                                                                                                 |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| Does the machine have a stable name?             | `scutil --get LocalHostName` → `Abhijeets-MacBook-Air-2`; `hostname` → `Abhijeets-MacBook-Air-2.local`                                      |
+| Is mDNS alive?                                   | `mDNSResponder` pid 450                                                                                                                     |
 | **Is the name published on the wifi interface?** | `dns-sd -G v4 <name>.local` → `Add … IF 1 … 127.0.0.1` **and `Add … IF 12 … 172.20.169.185`** — an A record on the wifi interface, TTL 4500 |
-| Does the app accept it? | `Host: Abhijeets-MacBook-Air-2.local:8765` → **400**, in LAN mode, while `Host: 172.20.169.185` → 200 |
+| Does the app accept it?                          | `Host: Abhijeets-MacBook-Air-2.local:8765` → **400**, in LAN mode, while `Host: 172.20.169.185` → 200                                       |
 
 The name existed, was advertised on the LAN, and was refused by the one thing that decides
 whether a request is allowed in. So the gap was never "there is no stable address"; it was this
@@ -71,8 +71,8 @@ elif origin not in settings.allowed_origins():
 So the page loaded, the bootstrap code was spent on a 403, and every call after it was
 unauthorised — a laptop-shaped brick. Two fixes, because both halves were wrong:
 
-* the name is **advertised in the form a browser will send** (lowercased), and
-* the origin comparison **ignores host case**, because the host part of a URL is
+- the name is **advertised in the form a browser will send** (lowercased), and
+- the origin comparison **ignores host case**, because the host part of a URL is
   case-insensitive by definition and a person typing the mixed-case name should not be refused.
 
 This is the pattern the whole program keeps hitting: a claim verified by a request is not a
@@ -140,38 +140,38 @@ bookmark that does.
 And it bounds what the name can promise: with no IPv4 on the interface, `dns-sd` now answers
 `No Such Record` on the wifi interface and only `127.0.0.1` overall. The name is still
 advertised and still accepted -- it resolves to an address the machine owns -- but a phone could
-not reach this laptop by name *or* number in that state. The name survives a lease renewal; it
+not reach this laptop by name _or_ number in that state. The name survives a lease renewal; it
 does not manufacture a lease. See 48-F.
 
 ## 7. Numbers, re-measured
 
-| | before | after | how |
-|---|---|---|---|
-| Test suite | 1896 passed · 0 failed | **1915 passed · 0 failed · 0 skipped** (88.3 s) | `JARVIS_HOME=$(mktemp -d) .venv/bin/python -m pytest -q` |
-| Phase 48 tests | 0 | **19** | `tests/test_phase48_a_name_that_stays_the_same.py` |
-| Test modules | 74 | **75** | `ls tests/test_*.py | wc -l` |
-| Phase reports | 49 | **50** (this file) | `ls audit/*.md | wc -l` |
-| Lines | 63.1k | **63,472** — 39,003 source · 24,469 tests | `wc -l` |
-| Routes | 112 (106 paths) | 112 (106 paths) — unchanged | `len(app.routes)` |
-| Name-addressed request | 400 | **200**, page fully usable | live, above |
+|                        | before                 | after                                           | how                                                      |
+| ---------------------- | ---------------------- | ----------------------------------------------- | -------------------------------------------------------- |
+| Test suite             | 1896 passed · 0 failed | **1915 passed · 0 failed · 0 skipped** (88.3 s) | `JARVIS_HOME=$(mktemp -d) .venv/bin/python -m pytest -q` |
+| Phase 48 tests         | 0                      | **19**                                          | `tests/test_phase48_a_name_that_stays_the_same.py`       |
+| Test modules           | 74                     | **75**                                          | `ls tests/test_*.py                                      | wc -l` |
+| Phase reports          | 49                     | **50** (this file)                              | `ls audit/*.md                                           | wc -l` |
+| Lines                  | 63.1k                  | **63,472** — 39,003 source · 24,469 tests       | `wc -l`                                                  |
+| Routes                 | 112 (106 paths)        | 112 (106 paths) — unchanged                     | `len(app.routes)`                                        |
+| Name-addressed request | 400                    | **200**, page fully usable                      | live, above                                              |
 
 ## 8. Open items
 
-* **48-A — cross-device resolution is inferred, not observed.** The A record is published on
+- **48-A — cross-device resolution is inferred, not observed.** The A record is published on
   the wifi interface (`dns-sd` above), which is the mechanism a phone uses, but there is no
   second device in this test environment to type the name. The claim "your phone can now find
   the laptop by name after a lease renewal" rests on the record being advertised, not on a
   phone having done it. One tap on the user's phone closes it.
-* **48-B — Android may not resolve `.local` at all**, which is why the address is still printed.
+- **48-B — Android may not resolve `.local` at all**, which is why the address is still printed.
   On such a handset the original problem remains: the number changes. The real fixes are mDNS on
   the router, a DHCP reservation, or the self-signed-https path — none of which this phase did.
-* **48-C — the name is only advertised while it resolves to this machine.** On networks where the
+- **48-C — the name is only advertised while it resolves to this machine.** On networks where the
   responder is blocked (some guest/isolated-wifi APs), the panel silently falls back to the
-  address. Correct behaviour, but the user is not told *why* the name disappeared.
-* **48-D — the 60 s name cache means a lease change is visible up to a minute late**, and the
+  address. Correct behaviour, but the user is not told _why_ the name disappeared.
+- **48-D — the 60 s name cache means a lease change is visible up to a minute late**, and the
   cache is per process: a restart re-asks. Both are deliberate, neither is measured under a real
   renewal.
-* **48-E — `/auth/session`'s 403 was found by hand in a browser, and the suite only learned about
+- **48-E — `/auth/session`'s 403 was found by hand in a browser, and the suite only learned about
   it afterwards.** The general shape — "the page loads and every API call fails" — has no guard
   that would catch the next variant (a wrong origin list, a stripped header) without a real
   browser in the loop.

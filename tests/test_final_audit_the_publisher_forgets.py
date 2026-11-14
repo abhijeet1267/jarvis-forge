@@ -40,25 +40,35 @@ def _harness():
 def test_the_newest_closed_phase_is_still_in_the_published_history():
     """The last row is the one a reader looks at, and it is the first one the harness dropped.
 
-    Read as a guard, not a snapshot: the floor is taken from the repository -- the highest phase
-    number with a written-up report -- and the newest of those must appear in the file the charts
-    are drawn from.
+    Read as a guard, not a snapshot: the floor is the newest phase whose report records a
+    *measured* full-suite run ("N passed, M failed"), and that phase must appear in the file
+    the charts are drawn from. The chart is a transcription of measured runs, so its floor is
+    a measured phase -- not the highest-numbered `PHASE*.md`, which also matches in-progress
+    WIP reports (74-90 right now) that have not run a full suite and so have no number to
+    transcribe. Counting those would set the floor to a phase the chart was never supposed to
+    hold.
     """
     import re
 
-    numbers = set()
+    measured = set()
     for path in (ROOT / "audit").glob("PHASE*.md"):
         match = re.match(r"PHASE(\d+)", path.name)
-        if match:
-            numbers.add(int(match.group(1)))
-    assert numbers, "no phase reports found: the guard itself is broken"
-    newest = max(numbers)
+        if not match:
+            continue
+        text = path.read_text(encoding="utf-8", errors="replace")
+        # A measured full-suite run, as the committed reports record it: "N passed, M failed".
+        # Focused-only runs ("Focused tests: 5 passed") do not count -- the chart tracks
+        # full-suite numbers, so a focused-only phase is not a chart row.
+        if re.search(r"\b\d+ passed, \d+ failed\b", text):
+            measured.add(int(match.group(1)))
+    assert measured, "no phase report records a measured full-suite run: the guard itself is broken"
+    newest = max(measured)
 
     stored = json.loads((ROOT / "benchmarks" / "suite_history.json").read_text())["phases"]
     names = " ".join(row["phase"] for row in stored)
     assert re.search(rf"\b{newest}\b", names), (
-        f"audit/ has a Phase {newest} report and suite_history.json has no row for it -- the "
-        "chart's data source lost a phase")
+        f"audit/ has a Phase {newest} report with a measured full-suite run but "
+        "suite_history.json has no row for it -- the chart's data source lost a phase")
 
 
 def test_running_the_harness_keeps_the_rows_it_did_not_write(tmp_path, monkeypatch):

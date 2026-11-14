@@ -18,602 +18,1041 @@
   confirmation, verification and the audit row still sit behind every tap.
 -->
 <html lang="en">
-<head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<meta name="jarvis-bootstrap" content="__JARVIS_BOOTSTRAP__" />
-<script type="application/json" id="jarvis-model">__JARVIS_MODEL_JSON__</script>
-<link rel="manifest" href="/manifest.webmanifest" />
-<link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
-<link rel="apple-touch-icon" href="/icons/icon-192.png" />
-<!-- A meta tag cannot read a CSS variable, so this one colour is a literal by necessity. -->
-<meta name="theme-color" content="#0d1117" />
-<!-- iOS installs from these, and unlike Chrome it does not require a secure context:
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="jarvis-bootstrap" content="__JARVIS_BOOTSTRAP__" />
+    <script type="application/json" id="jarvis-model">
+      __JARVIS_MODEL_JSON__
+    </script>
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link
+      rel="icon"
+      type="image/png"
+      sizes="192x192"
+      href="/icons/icon-192.png"
+    />
+    <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+    <!-- A meta tag cannot read a CSS variable, so this one colour is a literal by necessity. -->
+    <meta name="theme-color" content="#0d1117" />
+    <!-- iOS installs from these, and unlike Chrome it does not require a secure context:
      an iPhone on the LAN can add this to its home screen over plain http. -->
-<meta name="apple-mobile-web-app-capable" content="yes" />
-<meta name="mobile-web-app-capable" content="yes" />
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-<meta name="apple-mobile-web-app-title" content="Vantage" />
-<title>Vantage — phone</title>
-<style>
-  /* Dark on purpose: this page is a companion held in the dark, and the laptop panel's
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta
+      name="apple-mobile-web-app-status-bar-style"
+      content="black-translucent"
+    />
+    <meta name="apple-mobile-web-app-title" content="Vantage" />
+    <title>Vantage — phone</title>
+    <style>
+      /* Dark on purpose: this page is a companion held in the dark, and the laptop panel's
      dark block is the palette it borrows. Every colour the page paints is named here. */
-  :root {
-    color-scheme: dark;
-    --bg: #0d1117;
-    --panel: #161b22;
-    --ink: #e6edf3;
-    --muted: #9198a1;
-    --line: #21262d;
-    --accent: #4c8dff;
-    --ok: #3fb950;
-    --warn: #d29922;
-    --bad: #f85149;
-    --radius: 10px;
-    --radius-sm: 8px;
-    --on-accent: #0b1220;
-    --ghost-bg: #21262d;
-    --ghost-ink: #adbac7;
-    --field-line: #30363d;
-    --deny-bg: #6e2a2a;
-    --focus: #6ea8ff;
-    /* The two colours this page has that the laptop panel does not: its send button
+      :root {
+        color-scheme: dark;
+        --bg: #0d1117;
+        --panel: #161b22;
+        --ink: #e6edf3;
+        --muted: #9198a1;
+        --line: #21262d;
+        --accent: #4c8dff;
+        --ok: #3fb950;
+        --warn: #d29922;
+        --bad: #f85149;
+        --radius: 10px;
+        --radius-sm: 8px;
+        --on-accent: #0b1220;
+        --ghost-bg: #21262d;
+        --ghost-ink: #adbac7;
+        --field-line: #30363d;
+        --deny-bg: #6e2a2a;
+        --focus: #6ea8ff;
+        /* The two colours this page has that the laptop panel does not: its send button
        shipped green. Re-named here rather than re-typed, and not switched to the
        panel's blue -- changing a primary action's colour is a design decision, and
        this page has no reviewer. Tracked as an open item, not a solved one. */
-    --go: #238636;
-    --on-go: #ffffff;
-  }
-  * { box-sizing: border-box; }
-  body { margin: 0; padding: 14px; background: var(--bg); color: var(--ink);
-         font: 16px/1.45 -apple-system, "Segoe UI", Roboto, sans-serif; }
-  h1 { font-size: 17px; margin: 0 0 4px; letter-spacing: .01em; }
-  .sub { color: var(--muted); font-size: 13px; margin-bottom: 14px; }
-  .card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
-          padding: 12px; margin-bottom: 12px; }
-  .row { display: flex; gap: 8px; align-items: center; }
-  input, button { font: inherit; border-radius: var(--radius-sm); }
-  input { flex: 1; min-width: 0; padding: 11px 12px; background: var(--bg);
-          color: var(--ink); border: 1px solid var(--field-line); }
-  button { padding: 11px 14px; border: 0; background: var(--go); color: var(--on-go);
-           font-weight: 600; transition: filter .12s ease, transform .06s ease; }
-  button.deny { background: var(--deny-bg); }
-  button.ghost { background: var(--ghost-bg); color: var(--ghost-ink); font-weight: 500; }
-  button.stop { background: var(--bad); color: var(--on-go); font-weight: 600; }
-  button:hover { filter: brightness(1.14); }
-  button:active { transform: translateY(1px); }
-  button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
-  button:disabled { opacity: .5; filter: none; transform: none; cursor: not-allowed; }
-  ul { list-style: none; margin: 0; padding: 0; }
-  li { padding: 9px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
-  li:last-child { border-bottom: 0; }
-  .chip { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px;
-          font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
-          border: 1px solid var(--field-line); color: var(--ghost-ink); margin-right: 6px; }
-  .ok { color: var(--ok); } .warn { color: var(--warn); } .bad { color: var(--bad); }
-  .detail { color: var(--muted); font-size: 12px; display: block; margin-top: 3px; }
+        --go: #238636;
+        --on-go: #ffffff;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        padding: 14px;
+        background: var(--bg);
+        color: var(--ink);
+        font:
+          16px/1.45 -apple-system,
+          "Segoe UI",
+          Roboto,
+          sans-serif;
+      }
+      h1 {
+        font-size: 17px;
+        margin: 0 0 4px;
+        letter-spacing: 0.01em;
+      }
+      .sub {
+        color: var(--muted);
+        font-size: 13px;
+        margin-bottom: 14px;
+      }
+      .card {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        padding: 12px;
+        margin-bottom: 12px;
+      }
+      .row {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+      }
+      input,
+      button {
+        font: inherit;
+        border-radius: var(--radius-sm);
+      }
+      input {
+        flex: 1;
+        min-width: 0;
+        padding: 11px 12px;
+        background: var(--bg);
+        color: var(--ink);
+        border: 1px solid var(--field-line);
+      }
+      button {
+        padding: 11px 14px;
+        border: 0;
+        background: var(--go);
+        color: var(--on-go);
+        font-weight: 600;
+        transition:
+          filter 0.12s ease,
+          transform 0.06s ease;
+      }
+      button.deny {
+        background: var(--deny-bg);
+      }
+      button.ghost {
+        background: var(--ghost-bg);
+        color: var(--ghost-ink);
+        font-weight: 500;
+      }
+      button.stop {
+        background: var(--bad);
+        color: var(--on-go);
+        font-weight: 600;
+      }
+      button:hover {
+        filter: brightness(1.14);
+      }
+      button:active {
+        transform: translateY(1px);
+      }
+      button:focus-visible {
+        outline: 2px solid var(--focus);
+        outline-offset: 2px;
+      }
+      button:disabled {
+        opacity: 0.5;
+        filter: none;
+        transform: none;
+        cursor: not-allowed;
+      }
+      ul {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+      }
+      li {
+        padding: 9px 0;
+        border-bottom: 1px solid var(--line);
+        font-size: 14px;
+      }
+      li:last-child {
+        border-bottom: 0;
+      }
+      .chip {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 999px;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        border: 1px solid var(--field-line);
+        color: var(--ghost-ink);
+        margin-right: 6px;
+      }
+      .ok {
+        color: var(--ok);
+      }
+      .warn {
+        color: var(--warn);
+      }
+      .bad {
+        color: var(--bad);
+      }
+      .detail {
+        color: var(--muted);
+        font-size: 12px;
+        display: block;
+        margin-top: 3px;
+      }
 
-  /* Quick actions: the sentences a person actually says, as targets to tap. They fill
+      /* Quick actions: the sentences a person actually says, as targets to tap. They fill
      the text box instead of firing a private endpoint, so nothing bypasses the pipeline. */
-  .quick { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
-  .quick button { flex: 1 1 auto; min-width: 108px; min-height: 44px; padding: 10px 12px;
-                  font-size: 14px; font-weight: 500; background: var(--ghost-bg);
-                  color: var(--ink); border: 1px solid var(--line); }
-  .microw { margin-top: 8px; align-items: flex-start; }
-  .microw #mic { min-width: 74px; }
-  .microw #mic.rec { background: var(--bad); color: var(--on-go); animation: pulse 1.4s infinite; }
-  .microw #micline { flex: 1; margin: 0; font-size: 12px; line-height: 1.4;
-                     /* The advice names a marker path, and one unbreakable 70-character
+      .quick {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-bottom: 10px;
+      }
+      .quick button {
+        flex: 1 1 auto;
+        min-width: 108px;
+        min-height: 44px;
+        padding: 10px 12px;
+        font-size: 14px;
+        font-weight: 500;
+        background: var(--ghost-bg);
+        color: var(--ink);
+        border: 1px solid var(--line);
+      }
+      .microw {
+        margin-top: 8px;
+        align-items: flex-start;
+      }
+      .microw #mic {
+        min-width: 74px;
+      }
+      .microw #mic.rec {
+        background: var(--bad);
+        color: var(--on-go);
+        animation: pulse 1.4s infinite;
+      }
+      .microw #micline {
+        flex: 1;
+        margin: 0;
+        font-size: 12px;
+        line-height: 1.4;
+        /* The advice names a marker path, and one unbreakable 70-character
                         token was measured pushing this page to 627px inside a 375px
                         viewport -- horizontal scroll on a phone. */
-                     overflow-wrap: anywhere; min-width: 0; }
-  /* The reason a mic is dead shows in one line; the remedy opens on demand. The server's
+        overflow-wrap: anywhere;
+        min-width: 0;
+      }
+      /* The reason a mic is dead shows in one line; the remedy opens on demand. The server's
      advice is one 530-character sentence, which measured as 101px of text wall under a
      disabled button on a 375px screen. */
-  #micline details { margin-top: 4px; }
-  #micline summary { cursor: pointer; color: var(--accent); font-size: 12px; }
-  #micline summary:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
-  #micline details p { margin: 4px 0 0; color: var(--muted); }
-  @keyframes pulse { 50% { opacity: .62; } }
-  @media (prefers-reduced-motion: reduce) {
-    * { animation: none !important; transition: none !important; }
-    button:active { transform: none; }
-  }
-</style>
-</head>
-<body>
-  <h1>Vantage on this laptop</h1>
-  <div class="sub" id="status">checking…</div>
+      #micline details {
+        margin-top: 4px;
+      }
+      #micline summary {
+        cursor: pointer;
+        color: var(--accent);
+        font-size: 12px;
+      }
+      #micline summary:focus-visible {
+        outline: 2px solid var(--focus);
+        outline-offset: 2px;
+      }
+      #micline details p {
+        margin: 4px 0 0;
+        color: var(--muted);
+      }
+      @keyframes pulse {
+        50% {
+          opacity: 0.62;
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        * {
+          animation: none !important;
+          transition: none !important;
+        }
+        button:active {
+          transform: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Vantage on this laptop</h1>
+    <div class="sub" id="status">checking…</div>
 
-  <div class="card">
-    <div class="row">
-      <button id="pair">Pair with this laptop</button>
-      <button id="refresh" class="ghost">Refresh</button>
-    </div>
-    <!-- Signing out ends this handset's session and nothing else. A phone gets lost;
+    <div class="card">
+      <div class="row">
+        <button id="pair">Pair with this laptop</button>
+        <button id="refresh" class="ghost">Refresh</button>
+      </div>
+      <!-- Signing out ends this handset's session and nothing else. A phone gets lost;
          "stop being authorised from this device" should not require revoking every
          credential on the laptop. -->
-    <div class="row">
-      <button id="signout" class="ghost">Sign out on this phone</button>
+      <div class="row">
+        <button id="signout" class="ghost">Sign out on this phone</button>
+      </div>
+      <div id="pairline" class="sub" style="margin: 10px 0 0"></div>
     </div>
-    <div id="pairline" class="sub" style="margin:10px 0 0"></div>
-  </div>
 
-  <div class="card">
-    <!-- Rendered from /tools: a tap is only offered for a capability this laptop has. -->
-    <div class="quick" id="quick" role="group" aria-label="Quick actions">
-      <span class="sub" style="margin:0">checking what this laptop can do…</span>
-    </div>
-    <div class="row">
-      <input id="cmd" placeholder="what is my battery?" autocomplete="off" />
-      <button id="send">Send</button>
-    </div>
-    <div class="row">
-      <!-- §30: the stop has to be reachable from the phone without typing a sentence, and it
+    <div class="card">
+      <!-- Quick actions: the sentences a person actually says, as targets to tap. They fill
+     the text box instead of firing a private endpoint, so nothing bypasses the pipeline. -->
+      <div class="quick" id="quick" role="group" aria-label="Quick actions">
+        <span class="sub" style="margin: 0">loading tools…</span>
+      </div>
+      <div class="row">
+        <input id="cmd" placeholder="what is my battery?" autocomplete="off" />
+        <button id="send">Send</button>
+      </div>
+      <div class="row">
+        <!-- §30: the stop has to be reachable from the phone without typing a sentence, and it
            must not ask first. The text below is the laptop's own report, including the part
            it cannot stop. -->
-      <button id="stop" class="stop" aria-label="Emergency stop">Emergency stop</button>
-      <div class="sub micline" id="stopline">stops what is running now; asks nothing first</div>
+        <button id="stop" class="stop" aria-label="Emergency stop">
+          Emergency stop
+        </button>
+        <div class="sub micline" id="stopline">
+          stops what is running now; asks nothing first
+        </div>
+      </div>
+      <div class="row microw">
+        <button
+          id="mic"
+          class="ghost"
+          aria-label="Speak a command to the laptop"
+          disabled
+        >
+          Mic
+        </button>
+        <div class="sub micline" id="micline">
+          checking the laptop&rsquo;s microphone…
+        </div>
+      </div>
+      <div class="sub micline" id="modelline">
+        checking what answers on this laptop…
+      </div>
+      <ul id="log"></ul>
     </div>
-    <div class="row microw">
-      <button id="mic" class="ghost" aria-label="Speak a command to the laptop" disabled>Mic</button>
-      <div class="sub micline" id="micline">checking the laptop&rsquo;s microphone…</div>
+
+    <div class="card" id="approvals">
+      <strong style="font-size: 14px">Waiting for you</strong>
+      <ul id="conf">
+        <li class="sub">nothing pending</li>
+      </ul>
     </div>
-    <div class="sub micline" id="modelline">checking what answers on this laptop…</div>
-    <ul id="log"></ul>
-  </div>
 
-  <div class="card" id="approvals">
-    <strong style="font-size:14px">Waiting for you</strong>
-    <ul id="conf"><li class="sub">nothing pending</li></ul>
-  </div>
+    <script>
+      const API = "";
+      const BOOTSTRAP =
+        (document.querySelector('meta[name="jarvis-bootstrap"]') || {})
+          .content || "";
 
-<script>
-const API = "";
-const BOOTSTRAP = (document.querySelector('meta[name="jarvis-bootstrap"]') || {}).content || "";
+      // Stable per device: pairing a phone twice should not create two devices.
+      // The key is "jarvis.device" on purpose -- renaming it would un-pair every
+      // handset that already paired, which is the whole point of a stable identity.
+      const DEVICE =
+        localStorage.getItem("jarvis.device") ||
+        "phone_" + Math.random().toString(36).slice(2, 8);
+      localStorage.setItem("jarvis.device", DEVICE);
 
-// Token is stored in an HttpOnly cookie set by the server — no page JavaScript can read it.
-// We manage the token lifecycle via cookies instead of window variables.
-let token = ""; // Unused here; cookie access is automatic on subsequent requests
+      // Token is stored in an HttpOnly cookie set by the server — no page JavaScript can read it.
+      // We manage the token lifecycle via cookies instead of window variables.
+      let token = ""; // Unused here; cookie access is automatic on subsequent requests
 
-let lastConf = null;
-let lastQuick = null;
-// Set once when the laptop refuses this page's own credential. The poll ends on it.
-let authLost = false;
-let pollTimer = null;
-// Stable per device: pairing a phone twice should not create two devices.
-const DEVICE = localStorage.getItem("jarvis.device") || ("phone_" + Math.random().toString(36).slice(2, 8));
-localStorage.setItem("jarvis.device", DEVICE);
+      // Set when this page's own credential is refused (401), so the poll can stop
+      // rather than repeat a refused call every four seconds. It was ASSIGNED at the
+      // 401 branch and READ by `refresh()` without ever being declared: in sloppy
+      // mode the assignment quietly creates a global, but the *read* happens first
+      // and throws `ReferenceError: authLost is not defined`. That killed the poll
+      // on its first statement, so this page made no /devices and no /confirmations
+      // request at all — the device list and the pending-approval list never
+      // populated. Declared here, next to the other page state.
+      let authLost = false;
 
-// The sentences worth tapping, in the words a person uses. `say` is what gets typed into
-// the command box, and `{site}` / `{name}` / `{subject}` ask for the one word the tap
-// cannot know. Each is checked in the test suite against the real planner, because a
-// button whose sentence routes to another tool is a button that does the wrong thing.
-const QUICK = [
-  { label: "Battery", tool: "get_battery_status", say: "what is my battery" },
-  { label: "Storage", tool: "check_storage", say: "check storage" },
-  { label: "Open project", tool: "open_project_folder", say: "open my project" },
-  { label: "Find a file", tool: "find_and_open", say: "find {name} and open it" },
-  { label: "Open a site", tool: "open_url", say: "open the {site} site" },
-  { label: "Explain", tool: "ask_question", say: "explain {subject}" }
-];
+      // The poll's timer. Same defect: assigned by `setInterval` at the bottom and
+      // cleared by `refresh()` when the credential is lost, but never declared.
+      let pollTimer = null;
 
-const SLOT_ASK = {
-  site: "Which site? (opens in the browser)",
-  name: "What should I look for?",
-  subject: "Explain what? (one topic, up to 8 words)"
-};
+      // The conversation's session id, as the server names it.
+      //
+      // This is NOT the credential -- the credential is the HttpOnly cookie above,
+      // which no page script can read. This is the id of the *conversation* the
+      // backend started for this phone, handed back in every `/command` response
+      // as `session_id`. The backend records it as "who asked", and the
+      // self-approval guard compares the approver's session against the
+      // requester's. Without it the page's own approvals were un-attributable
+      // and a phone could approve its own request.
+      let sessionId = "";
 
-async function login() {
-  if (!BOOTSTRAP) return;              // auth off: routes answer without a credential
-  const res = await fetch(API + "/auth/session", {
-    method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ bootstrap: BOOTSTRAP }),
-    credentials: "include",  // Send cookie automatically
-  });
-  if (res.ok) {
-    const data = await res.json();
-    if (!data.session_token) {
-      set("status", "this page's code was already used — reload it from the laptop", "bad");
-    } else {
-      // Cookie is now sent automatically via credentials: include
-      set("status", "connected", "ok");
-    }
-  } else {
-    set("status", "this page's code was already used — reload it from the laptop", "bad");
-  }
-}
+      // Signatures of the last render of each list, so a poll that finds nothing
+      // new does not rewrite the nodes. Same defect as the two above: read before
+      // assignment, so `refresh()` threw `ReferenceError: lastConf is not defined`
+      // and the approval list never painted -- the button a person needs to tap
+      // was never on the screen.
+      let lastConf = null;
+      let lastQuick = null;
 
-const headers = () => ({ "Content-Type": "application/json" });
-function set(id, text, cls) {
-  const el = document.getElementById(id);
-  el.className = id === "status" ? ("sub " + (cls || "")) : el.className;
-  el.textContent = text;
-}
-function esc(s) { return String(s == null ? "" : s).replace(/[&<>"]/g, c =>
-  ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
-function line(html) { document.getElementById("log").insertAdjacentHTML("afterbegin", html); }
+      // Who answers a sentence here, in the phone's own words: which vendor would be called, and
+      // which reads do not go through it. Naming a vendor no key will reach, or letting an unusable
+      // selection borrow a vendor's name, is the pair of over-claims this project removed twice
+      // already (Phase 60 on the panel, Phase 63 on the badge). The value is rendered by the route
+      // that serves this page, so the phone needs no new endpoint and no wider surface to say it.
+      function modelLine(m) {
+        m = m || {};
+        const answered = String(m.answered_by || "unknown");
+        let text =
+          answered.indexOf("rules") === 0
+            ? "answers: rules · no vendor on this laptop"
+            : "answers: " + answered;
+        const reach = m.vision || m.stt;
+        if (reach) text += " — screen text and voice are " + reach;
+        return text;
+      }
 
-async function stopEverything() {
-  const note = document.getElementById("stopline");
-  note.textContent = "stopping…";
-  let res;
-  try {
-    res = await fetch("/emergency_stop", { method: "POST", headers: headers(), credentials: "include" });
-  } catch (e) {
-    note.textContent = "the laptop did not answer";
-    return;
-  }
-  if (!res.ok) {
-    note.textContent = "the stop was refused (HTTP " + res.status + ")";
-    return;
-  }
-  const body = await res.json();
-  const r = body.result || {};
-  const words = (r.message || "no report").trim();
-  note.textContent = r.verified === false ? "stopped, but not everything" : "stop carried out";
-  line(`<li><strong>Emergency stop</strong> &middot; ${esc(words)}</li>`);
-}
-document.getElementById("stop").onclick = stopEverything;
+      // The install path: a worker plus the manifest above is what makes the browser offer
+      // "Add to Home Screen". It caches the shell only, so a command never reads back a
+      // stored answer.
+      (function fillModelLine() {
+        const el = document.getElementById("modelline");
+        if (!el) return; // an older cached shell has no such element
+        let model = null;
+        try {
+          const node = document.getElementById("jarvis-model");
+          model = node ? JSON.parse(node.textContent || "{}") : null;
+        } catch (err) {
+          model = null; // unparseable data is reported, never guessed over
+        }
+        el.textContent = model
+          ? modelLine(model)
+          : "answers: unknown (this laptop sent no model state)";
+      })();
 
-async function call(path, method, body) {
-  const res = await fetch(API + path, {
-    method: method || "GET", headers: headers(),
-    body: method ? JSON.stringify(body || {}) : undefined,
-    credentials: "include",  // Send cookie automatically
-  });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    // A 401 here means this page's own credential was refused (expired, or signed out
-    // on this phone). Remember it: the next poll will fail for exactly the same reason,
-    // and a console full of identical 401s is noise that hides the one line the person
-    // holding the phone needs.
-    if (res.status === 401) authLost = true;
-    throw new Error((res.status === 401 ? "credential refused — reload this page "
-                                        : "") +
-                    (data.detail || ("HTTP " + res.status)));
-  }
-  return data;
-}
+      if ("serviceWorker" in navigator) {
+        navigator.serviceWorker.register("/sw.js").catch(() => {});
+      }
 
-async function pair() {
-  set("pairline", "asking the laptop to trust this phone…");
-  try {
-    await call("/devices/pair/request", "POST", { device_id: DEVICE, device_name: "Phone" });
-    set("pairline", "requested. Approve it on the laptop (or here, once you are in).", "warn");
-  } catch (err) { set("pairline", "pairing: " + err.message, "bad"); }
-  await refresh();
-}
+      async function login() {
+        if (!BOOTSTRAP) return; // auth off: routes answer without a credential
+        const res = await fetch(API + "/auth/session", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ bootstrap: BOOTSTRAP }),
+          credentials: "include", // Send cookie automatically
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (!data.session_token) {
+            set(
+              "status",
+              "this page's code was already used — reload it from the laptop",
+              "bad",
+            );
+          } else {
+            // Cookie is now sent automatically via credentials: include
+            set("status", "connected", "ok");
+          }
+        } else {
+          set(
+            "status",
+            "this page's code was already used — reload it from the laptop",
+            "bad",
+          );
+        }
+      }
 
-async function send() {
-  const input = document.getElementById("cmd");
-  const text = input.value.trim();
-  if (!text) return;
-  input.value = "";
-  line(`<li><span class="chip">you</span>${esc(text)}</li>`);
-  try {
-    const data = await call("/command", "POST", { text, source: "phone" });
-    const tone = (data.decision === "BLOCK") ? "bad" : (data.needs_confirmation ? "warn" : "ok");
-    line(`<li><span class="chip ${tone}">${esc(data.decision || "answered")}</span>`
-         + `<span>${esc(data.reply)}</span>`
-         + `<span class="detail">${esc((data.actions || []).map(a => a.tool).join(", ") || "no action")}</span></li>`);
-  } catch (err) {
-    line(`<li><span class="chip bad">error</span><span>${esc(err.message)}</span></li>`);
-  }
-  await refresh();
-}
+      const headers = () => ({ "Content-Type": "application/json" });
+      function set(id, text, cls) {
+        const el = document.getElementById(id);
+        el.className = id === "status" ? "sub " + (cls || "") : el.className;
+        el.textContent = text;
+      }
+      function esc(s) {
+        return String(s == null ? "" : s).replace(
+          /[&<>"]/g,
+          (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c],
+        );
+      }
+      function line(html) {
+        document.getElementById("log").insertAdjacentHTML("afterbegin", html);
+      }
 
-// A tap asks for the word the button cannot know, then types the whole sentence and
-// sends it. An empty answer sends nothing: a literal "{site}" is not a site.
-function tap(action) {
-  const answers = {};
-  let missing = false;
-  (action.say.match(/\{\w+\}/g) || []).forEach(slot => {
-    const key = slot.slice(1, -1);
-    if (answers[key] === undefined) {
-      const answer = (prompt(SLOT_ASK[key] || (key + "?"), "") || "").trim();
-      if (!answer) missing = true;
-      answers[key] = answer;
-    }
-  });
-  if (missing) return;
-  const text = action.say.replace(/\{(\w+)\}/g, (_, key) => answers[key]);
-  document.getElementById("cmd").value = text;
-  send();
-}
+      async function stopEverything() {
+        const note = document.getElementById("stopline");
+        note.textContent = "stopping…";
+        let res;
+        try {
+          res = await fetch("/emergency_stop", {
+            method: "POST",
+            headers: headers(),
+            credentials: "include",
+          });
+        } catch (e) {
+          note.textContent = "the laptop did not answer";
+          return;
+        }
+        if (!res.ok) {
+          note.textContent = "the stop was refused (HTTP " + res.status + ")";
+          return;
+        }
+        const body = await res.json();
+        const r = body.result || {};
+        const words = (r.message || "no report").trim();
+        note.textContent =
+          r.verified === false
+            ? "stopped, but not everything"
+            : "stop carried out";
+        line(`<li><strong>Emergency stop</strong> &middot; ${esc(words)}</li>`);
+      }
+      document.getElementById("stop").onclick = stopEverything;
 
-// Rendered once per registry change, and only against tools that exist: the day the
-// laptop loses a capability the button has to disappear with it, not survive as a lie.
-async function loadQuick() {
-  let names;
-  try {
-    names = (await call("/tools")).map(t => t.name);
-  } catch (err) {
-    document.getElementById("quick").innerHTML =
-      `<span class="sub" style="margin:0">cannot read what this laptop can do — ${esc(err.message)}</span>`;
-    return;
-  }
-  const live = QUICK.filter(a => names.indexOf(a.tool) !== -1);
-  const signature = live.map(a => a.tool).join(",");
-  if (signature === lastQuick) return;
-  lastQuick = signature;
-  document.getElementById("quick").innerHTML = live.length
-    ? live.map((a, i) => `<button data-i="${i}" aria-label="${esc("Ask Vantage: " + a.label)}"`
-        + `>${esc(a.label)}</button>`).join("")
-    : '<span class="sub" style="margin:0">this laptop reports none of those capabilities</span>';
-  document.getElementById("quick").querySelectorAll("button")
-    .forEach(btn => btn.onclick = () => tap(live[Number(btn.dataset.i)]));
-}
+      async function call(path, method, body) {
+        const res = await fetch(API + path, {
+          method: method || "GET",
+          headers: headers(),
+          body: method ? JSON.stringify(body || {}) : undefined,
+          credentials: "include", // Send cookie automatically
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          // A 401 here means this page's own credential was refused (expired, or signed out
+          // on this phone). Remember it: the next poll will fail for exactly the same reason,
+          // and a console full of identical 401s is noise that hides the one line the person
+          // holding the phone needs.
+          if (res.status === 401) authLost = true;
+          throw new Error(
+            (res.status === 401
+              ? "credential refused — reload this page "
+              : "") + (data.detail || "HTTP " + res.status),
+          );
+        }
+        return data;
+      }
 
-// -- microphone -------------------------------------------------------------
-// Three things can stop a spoken word, and they need three different sentences:
-//   1. the laptop has never been asked (`untested`) -- so the attempt is the point,
-//   2. the laptop was asked and macOS said no (`refused`), and
-//   3. this browser will not hand the page a microphone, which it refuses on any
-//      insecure origin -- so over plain http on a LAN address `getUserMedia` is absent.
-// `can_listen` means *proven here*, which a fresh install is not; gating the button on
-// that alone would make the first transcription impossible, because the first attempt is
-// the only thing that ever produces the proof. `may_try` is the field a client offers.
-const mic = document.getElementById("mic");
-let earState = "untested";
-let mayTry = false;
-let earReason = "checking the laptop's microphone…";
-let recorder = null;
-let chunks = [];
-let recording = false;
+      async function pair() {
+        set("pairline", "asking the laptop to trust this phone…");
+        try {
+          await call("/devices/pair/request", "POST", {
+            device_id: DEVICE,
+            device_name: "Phone",
+          });
+          set(
+            "pairline",
+            "requested. Approve it on the laptop (or here, once you are in).",
+            "warn",
+          );
+        } catch (err) {
+          set("pairline", "pairing: " + err.message, "bad");
+        }
+        await refresh();
+      }
 
-function browserHasMic() {
-  return !!(window.MediaRecorder && navigator.mediaDevices
-            && navigator.mediaDevices.getUserMedia);
-}
+      async function send() {
+        const input = document.getElementById("cmd");
+        const text = input.value.trim();
+        if (!text) return;
+        input.value = "";
+        line(`<li><span class="chip">you</span>${esc(text)}</li>`);
+        try {
+          const data = await call("/command", "POST", {
+            text,
+            source: "phone",
+          });
+          // Keep the session the server started for this conversation, so an
+          // approval sent from this page can be attributed to this page.
+          if (data.session_id) sessionId = data.session_id;
+          const tone =
+            data.decision === "BLOCK"
+              ? "bad"
+              : data.needs_confirmation
+                ? "warn"
+                : "ok";
+          line(
+            `<li><span class="chip ${tone}">${esc(data.decision || "answered")}</span>` +
+              `<span>${esc(data.reply)}</span>` +
+              `<span class="detail">${esc((data.actions || []).map((a) => a.tool).join(", ") || "no action")}</span></li>`,
+          );
+        } catch (err) {
+          line(
+            `<li><span class="chip bad">error</span><span>${esc(err.message)}</span></li>`,
+          );
+        }
+        await refresh();
+      }
 
-function paintMic() {
-  mic.disabled = !(mayTry && browserHasMic());
-  if (!mic.disabled) {
-    micNote(earState === "proven" ? "tap to speak, tap again to stop"
-                                  : "never tried on this laptop — tap and it will find out",
-            "", "");
-    return;
-  }
-  if (earState === "refused") { micNote("the laptop has no working microphone.", earReason, "warn"); return; }
-  if (earState === "untested") { micNote("this laptop has never been asked to listen.", earReason, "warn"); return; }
-  micNote("the laptop can hear, but this browser will not hand the page a microphone on "
-    + "an insecure address — open it over https or from the laptop itself", "", "warn");
-}
+      // A tap asks for the word the button cannot know, then types the whole sentence and
+      // sends it. An empty answer sends nothing: a literal "{site}" is not a site.
+      function tap(action) {
+        const answers = {};
+        let missing = false;
+        (action.say.match(/\{\w+\}/g) || []).forEach((slot) => {
+          const key = slot.slice(1, -1);
+          if (answers[key] === undefined) {
+            const answer = (
+              prompt(SLOT_ASK[key] || key + "?", "") || ""
+            ).trim();
+            if (!answer) missing = true;
+            answers[key] = answer;
+          }
+        });
+        if (missing) return;
+        const text = action.say.replace(/\{(\w+)\}/g, (_, key) => answers[key]);
+        document.getElementById("cmd").value = text;
+        send();
+      }
 
-// One line of reason, the remedy behind it. Built with nodes rather than a string
-// because the advice comes from the server and is not markup this page controls.
-function micNote(short, advice, cls) {
-  const note = document.getElementById("micline");
-  note.className = "sub micline " + (cls || "");
-  note.textContent = short;
-  if (!advice || advice === short) return;
-  const more = document.createElement("details");
-  const sum = document.createElement("summary");
-  sum.textContent = "how to give this laptop ears";
-  const body = document.createElement("p");
-  body.textContent = advice;
-  more.appendChild(sum);
-  more.appendChild(body);
-  note.appendChild(more);
-}
+      // Build quick actions dynamically from live tool registry
+      // Maps common natural language phrases to tools
+      const TOOLS_QUICK_PHRASES = [
+        ["battery", "get_battery_status", "what is my battery"],
+        ["storage", "check_storage", "check storage"],
+        ["project", "open_project_folder", "open my project"],
+        ["find file", "find_and_open", "find {name} and open it"],
+        ["site", "open_url", "open the {site} site"],
+        ["explain", "ask_question", "explain {subject}"],
+        ["clipboard", "read_clipboard", "what's on clipboard"],
+        ["processes", "list_applications", "what apps are running"],
+      ];
 
-async function loadEars() {
-  let stt = null;
-  try { stt = (await call("/voice/status")).stt; } catch (err) { stt = null; }
-  if (!stt) {
-    earState = "untested";
-    mayTry = false;
-    earReason = "cannot read the laptop's voice state — pair or reload this page";
-    paintMic();
-    return;
-  }
-  earState = stt.state || (stt.can_listen ? "proven" : "untested");
-  mayTry = typeof stt.may_try === "boolean" ? stt.may_try : !!stt.can_listen;
-  earReason = stt.advice || "this laptop has no working microphone backend";
-  paintMic();
-}
+      async function loadQuick() {
+        let names;
+        try {
+          names = (await call("/tools")).map((t) => t.name);
+        } catch (err) {
+          document.getElementById("quick").innerHTML =
+            `<span class="sub" style="margin:0">cannot read what this laptop can do — ${esc(err.message)}</span>`;
+          return;
+        }
 
-async function stopMic() {
-  recording = false;
-  mic.textContent = "Mic";
-  mic.classList.remove("rec");
-  if (recorder && recorder.state !== "inactive") recorder.stop();
-}
+        // Build dynamic quick actions from live tools
+        const live = TOOLS_QUICK_PHRASES.filter(([keyword, tool, say]) =>
+          names.includes(tool),
+        ).map(([keyword, tool, say]) => ({
+          label: keyword.replace("_", " ").toUpperCase(),
+          tool,
+          say,
+        }));
 
-function startMic() {
-  chunks = [];
-  navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
-    recorder = new MediaRecorder(stream);
-    recorder.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
-    recorder.onstop = () => {
-      stream.getTracks().forEach(t => t.stop());
-      transcribe();
-    };
-    recorder.start();
-    recording = true;
-    mic.textContent = "Stop";
-    mic.classList.add("rec");
-    set("micline", "listening — tap Stop when you have said it", "ok");
-  }).catch(err => {
-    set("micline", "this browser refused the microphone: " + err.message, "bad");
-  });
-}
+        const signature = live.map((a) => a.tool).join(",");
+        if (signature === lastQuick) return;
+        lastQuick = signature;
 
-async function transcribe() {
-  if (!chunks.length) { set("micline", "recorded nothing, so nothing was sent", "warn"); return; }
-  set("micline", "turning that into text on the laptop…", "");
-  const blob = new Blob(chunks, { type: recorder && recorder.mimeType ? recorder.mimeType : "audio/webm" });
-  const form = new FormData();
-  form.append("file", blob, "voice.webm");
-  const res = await fetch(API + "/voice/transcribe", {
-    method: "POST",
-    headers: token ? { "X-JARVIS-Token": token } : {},
-    body: form,
-  }).catch(() => null);
-  if (!res) { set("micline", "the laptop did not answer — nothing was transcribed", "bad"); return; }
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok || !data.ok || !data.text) {
-    // The reason comes from the server, which is the only place that knows which
-    // backends it tried. Repeating it here is what makes a dead mic fixable.
-    set("micline", data.error || data.detail || "no text came back from that recording", "bad");
-    return;
-  }
-  set("micline", "heard: " + data.text, "ok");
-  document.getElementById("cmd").value = data.text;
-  // Whatever the laptop just learned about its own ears, this page should too: an
-  // attempt is what turns `untested` into `proven` or `refused`.
-  loadEars();
-  send();
-}
+        document.getElementById("quick").innerHTML = live.length
+          ? live
+              .map(
+                (a, i) =>
+                  `<button data-i="${i}" aria-label="${esc("Ask Vantage: " + a.label)}"` +
+                  `>${esc(a.label)}</button>`,
+              )
+              .join("")
+          : '<span class="sub" style="margin:0">this laptop reports no quick actions available</span>';
 
-async function resolve(id, approve) {
-  try {
-    const data = await call(`/confirm/${encodeURIComponent(id)}?approve=${approve ? 1 : 0}`, "POST", {});
-    line(`<li><span class="chip ${approve ? "ok" : "bad"}">${approve ? "approved" : "denied"}</span>`
-         + `<span>${esc(data.reply)}</span></li>`);
-  } catch (err) { line(`<li><span class="chip bad">error</span><span>${esc(err.message)}</span></li>`); }
-  await refresh();
-}
+        document
+          .getElementById("quick")
+          .querySelectorAll("button")
+          .forEach(
+            (btn) => (btn.onclick = () => tap(live[Number(btn.dataset.i)])),
+          );
+      }
 
-function rowsOf(data, key) {
-  // /devices and /confirmations answer with a bare list. Reading only an object of
-  // the form {key: [...]} is how this page once showed "nothing pending" while a
-  // confirmation was in fact waiting, because `list.confirmations` was undefined.
-  return Array.isArray(data) ? data : ((data || {})[key] || []);
-}
+      // -- microphone -------------------------------------------------------------
+      // Three things can stop a spoken word, and they need three different sentences:
+      //   1. the laptop has never been asked (`untested`) -- so the attempt is the point,
+      //   2. the laptop was asked and macOS said no (`refused`), and
+      //   3. this browser will not hand the page a microphone, which it refuses on any
+      //      insecure origin -- so over plain http on a LAN address `getUserMedia` is absent.
+      // `can_listen` means *proven here*, which a fresh install is not; gating the button on
+      // that alone would make the first transcription impossible, because the first attempt is
+      // the only thing that ever produces the proof. `may_try` is the field a client offers.
+      const mic = document.getElementById("mic");
+      let earState = "untested";
+      let mayTry = false;
+      let earReason = "checking the laptop's microphone…";
+      let recorder = null;
+      let chunks = [];
+      let recording = false;
 
-async function refresh() {
-  // Checked before anything is awaited, because the two calls below swallow their own
-  // rejections (`catch(() => [])`) and a guard parked in the catch below is therefore
-  // unreachable -- measured: the console went from 12 refused calls to 129 while that
-  // version sat in place.
-  if (authLost) {
-    if (pollTimer) clearInterval(pollTimer);
-    set("status", "signed out or expired on this phone — reload to use it again", "bad");
-    return;
-  }
-  try {
-    const [devices, pending] = await Promise.all([
-      call("/devices").catch(() => []),
-      call("/confirmations").catch(() => []),
-    ]);
-    const mine = rowsOf(devices, "devices").find(d => d.device_id === DEVICE);
-    const paired = !!(mine && (mine.paired || mine.auth_state === "paired"));
-    set("status", paired ? "paired as " + DEVICE
-                         : "not paired — this phone can ask, and wait for approval",
-        paired ? "ok" : "warn");
-    document.getElementById("pairline").textContent = paired
-      ? "paired. Anything Vantage wants to do still asks you first." : document.getElementById("pairline").textContent;
+      function browserHasMic() {
+        return !!(
+          window.MediaRecorder &&
+          navigator.mediaDevices &&
+          navigator.mediaDevices.getUserMedia
+        );
+      }
 
-    const box = document.getElementById("conf");
-    const list = rowsOf(pending, "confirmations");
-    // Repaint only when the set changed. `refresh()` runs every 4 s, and rewriting the
-    // nodes on every pass detaches the button a tap has just landed on -- on a phone
-    // that eats the approval. Found by tapping Approve in a real browser.
-    const signature = list.map(c => c.confirmation_id + ":" + c.state).join(",");
-    if (signature !== lastConf) {
-      lastConf = signature;
-      box.innerHTML = list.length ? list.map(c => `
+      function paintMic() {
+        mic.disabled = !(mayTry && browserHasMic());
+        if (!mic.disabled) {
+          micNote(
+            earState === "proven"
+              ? "tap to speak, tap again to stop"
+              : "never tried on this laptop — tap and it will find out",
+            "",
+            "",
+          );
+          return;
+        }
+        if (earState === "refused") {
+          micNote("the laptop has no working microphone.", earReason, "warn");
+          return;
+        }
+        if (earState === "untested") {
+          micNote(
+            "this laptop has never been asked to listen.",
+            earReason,
+            "warn",
+          );
+          return;
+        }
+        micNote(
+          "the laptop can hear, but this browser will not hand the page a microphone on " +
+            "an insecure address — open it over https or from the laptop itself",
+          "",
+          "warn",
+        );
+      }
+
+      // One line of reason, the remedy behind it. Built with nodes rather than a string
+      // because the advice comes from the server and is not markup this page controls.
+      function micNote(short, advice, cls) {
+        const note = document.getElementById("micline");
+        note.className = "sub micline " + (cls || "");
+        note.textContent = short;
+        if (!advice || advice === short) return;
+        const more = document.createElement("details");
+        const sum = document.createElement("summary");
+        sum.textContent = "how to give this laptop ears";
+        const body = document.createElement("p");
+        body.textContent = advice;
+        more.appendChild(sum);
+        more.appendChild(body);
+        note.appendChild(more);
+      }
+
+      async function loadEars() {
+        let stt = null;
+        try {
+          stt = (await call("/voice/status")).stt;
+        } catch (err) {
+          stt = null;
+        }
+        if (!stt) {
+          earState = "untested";
+          mayTry = false;
+          earReason =
+            "cannot read the laptop's voice state — pair or reload this page";
+          paintMic();
+          return;
+        }
+        earState = stt.state || (stt.can_listen ? "proven" : "untested");
+        mayTry =
+          typeof stt.may_try === "boolean" ? stt.may_try : !!stt.can_listen;
+        earReason =
+          stt.advice || "this laptop has no working microphone backend";
+        paintMic();
+      }
+
+      async function stopMic() {
+        recording = false;
+        mic.textContent = "Mic";
+        mic.classList.remove("rec");
+        if (recorder && recorder.state !== "inactive") recorder.stop();
+      }
+
+      function startMic() {
+        chunks = [];
+        navigator.mediaDevices
+          .getUserMedia({ audio: true })
+          .then((stream) => {
+            recorder = new MediaRecorder(stream);
+            recorder.ondataavailable = (e) => {
+              if (e.data && e.data.size) chunks.push(e.data);
+            };
+            recorder.onstop = () => {
+              stream.getTracks().forEach((t) => t.stop());
+              transcribe();
+            };
+            recorder.start();
+            recording = true;
+            mic.textContent = "Stop";
+            mic.classList.add("rec");
+            set("micline", "listening — tap Stop when you have said it", "ok");
+          })
+          .catch((err) => {
+            set(
+              "micline",
+              "this browser refused the microphone: " + err.message,
+              "bad",
+            );
+          });
+      }
+
+      async function transcribe() {
+        if (!chunks.length) {
+          set("micline", "recorded nothing, so nothing was sent", "warn");
+          return;
+        }
+        set("micline", "turning that into text on the laptop…", "");
+        const blob = new Blob(chunks, {
+          type:
+            recorder && recorder.mimeType ? recorder.mimeType : "audio/webm",
+        });
+        const form = new FormData();
+        form.append("file", blob, "voice.webm");
+        const res = await fetch(API + "/voice/transcribe", {
+          method: "POST",
+          headers: token ? { "X-JARVIS-Token": token } : {},
+          body: form,
+        }).catch(() => null);
+        if (!res) {
+          set(
+            "micline",
+            "the laptop did not answer — nothing was transcribed",
+            "bad",
+          );
+          return;
+        }
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.ok || !data.text) {
+          // The reason comes from the server, which is the only place that knows which
+          // backends it tried. Repeating it here is what makes a dead mic fixable.
+          set(
+            "micline",
+            data.error ||
+              data.detail ||
+              "no text came back from that recording",
+            "bad",
+          );
+          return;
+        }
+        set("micline", "heard: " + data.text, "ok");
+        document.getElementById("cmd").value = data.text;
+        // Whatever the laptop just learned about its own ears, this page should too: an
+        // attempt is what turns `untested` into `proven` or `refused`.
+        loadEars();
+        send();
+      }
+
+      async function resolve(id, approve) {
+        try {
+          // The approver's session must travel with the answer.
+          //
+          // The self-approval guard refuses a narrow surface (the phone)
+          // approving its own request, and it decides that from TWO facts: the
+          // approver's session and the surface the request was raised on. The
+          // page was sending neither -- the session id was empty -- so the
+          // guard's own condition could not be evaluated and the phone
+          // approved its own request. Measured in the confirmation ledger:
+          // `approved_by_session == requested_by_session`.
+          //
+          // The session id is not a secret here: it is the conversation's id,
+          // handed back in every `/command` response, and it is what the
+          // backend records as "who asked". The Android client sends the same
+          // value on approve and deny.
+          const session = sessionId
+            ? `&session_id=${encodeURIComponent(sessionId)}`
+            : "";
+          const data = await call(
+            `/confirm/${encodeURIComponent(id)}?approve=${approve ? 1 : 0}${session}`,
+            "POST",
+            {},
+          );
+          line(
+            `<li><span class="chip ${approve ? "ok" : "bad"}">${approve ? "approved" : "denied"}</span>` +
+              `<span>${esc(data.reply)}</span></li>`,
+          );
+        } catch (err) {
+          line(
+            `<li><span class="chip bad">error</span><span>${esc(err.message)}</span></li>`,
+          );
+        }
+        await refresh();
+      }
+
+      function rowsOf(data, key) {
+        // /devices and /confirmations answer with a bare list. Reading only an object of
+        // the form {key: [...]} is how this page once showed "nothing pending" while a
+        // confirmation was in fact waiting, because `list.confirmations` was undefined.
+        return Array.isArray(data) ? data : (data || {})[key] || [];
+      }
+
+      async function refresh() {
+        // Checked before anything is awaited, because the two calls below swallow their own
+        // rejections (`catch(() => [])`) and a guard parked in the catch below is therefore
+        // unreachable -- measured: the console went from 12 refused calls to 129 while that
+        // version sat in place.
+        if (authLost) {
+          if (pollTimer) clearInterval(pollTimer);
+          set(
+            "status",
+            "signed out or expired on this phone — reload to use it again",
+            "bad",
+          );
+          return;
+        }
+        try {
+          const [devices, pending] = await Promise.all([
+            call("/devices").catch(() => []),
+            call("/confirmations").catch(() => []),
+          ]);
+          const mine = rowsOf(devices, "devices").find(
+            (d) => d.device_id === DEVICE,
+          );
+          const paired = !!(
+            mine &&
+            (mine.paired || mine.auth_state === "paired")
+          );
+          set(
+            "status",
+            paired
+              ? "paired as " + DEVICE
+              : "not paired — this phone can ask, and wait for approval",
+            paired ? "ok" : "warn",
+          );
+          document.getElementById("pairline").textContent = paired
+            ? "paired. Anything Vantage wants to do still asks you first."
+            : document.getElementById("pairline").textContent;
+
+          const box = document.getElementById("conf");
+          const list = rowsOf(pending, "confirmations");
+          // Repaint only when the set changed. `refresh()` runs every 4 s, and rewriting the
+          // nodes on every pass detaches the button a tap has just landed on -- on a phone
+          // that eats the approval. Found by tapping Approve in a real browser.
+          const signature = list
+            .map((c) => c.confirmation_id + ":" + c.state)
+            .join(",");
+          if (signature !== lastConf) {
+            lastConf = signature;
+            box.innerHTML = list.length
+              ? list
+                  .map(
+                    (c) => `
         <li><span class="chip warn">confirm</span>${esc(c.tool)}
           <span class="detail">${esc(c.preview || "")}</span>
           <div class="row" style="margin-top:8px">
             <button data-id="${esc(c.confirmation_id)}" data-approve="1">Approve</button>
             <button class="deny" data-id="${esc(c.confirmation_id)}" data-approve="0">Deny</button>
-          </div></li>`).join("")
-        : '<li class="sub">nothing pending</li>';
-      box.querySelectorAll("button").forEach(btn => btn.onclick = () =>
-        resolve(btn.dataset.id, btn.dataset.approve === "1"));
-    }
-  } catch (err) {
-    set("status", err.message, "bad");
-  }
-  // After the quick actions land, because that render is what moves the rest of
-  // the page -- this is where a deep link's landing has to be re-applied.
-  loadQuick().catch(() => {}).then(() => applyFocus(true));
-}
+          </div></li>`,
+                  )
+                  .join("")
+              : '<li class="sub">nothing pending</li>';
+            box
+              .querySelectorAll("button")
+              .forEach(
+                (btn) =>
+                  (btn.onclick = () =>
+                    resolve(btn.dataset.id, btn.dataset.approve === "1")),
+              );
+          }
+        } catch (err) {
+          set("status", err.message, "bad");
+        }
+        // After the quick actions land, because that render is what moves the rest of
+        // the page -- this is where a deep link's landing has to be re-applied.
+        loadQuick()
+          .catch(() => {})
+          .then(() => applyFocus(true));
+      }
 
-document.getElementById("pair").onclick = pair;
-document.getElementById("refresh").onclick = () => { loadEars(); refresh(); };
-document.getElementById("send").onclick = send;
-document.getElementById("mic").onclick = () => (recording ? stopMic() : startMic());
-document.getElementById("cmd").addEventListener("keydown", e => { if (e.key === "Enter") send(); });
+      document.getElementById("pair").onclick = pair;
+      document.getElementById("refresh").onclick = () => {
+        loadEars();
+        refresh();
+      };
+      document.getElementById("send").onclick = send;
+      document.getElementById("mic").onclick = () =>
+        recording ? stopMic() : startMic();
+      document.getElementById("cmd").addEventListener("keydown", (e) => {
+        if (e.key === "Enter") send();
+      });
 
-// Signing out is the one action that must survive every other failure here: if the
-// laptop is unreachable the session is still live on this handset, so the button
-// reports what it could not establish rather than pretending the token is gone.
-document.getElementById("signout").onclick = async () => {
-  const line = document.getElementById("pairline");
-  line.textContent = "signing out…";
-  try {
-    const res = await fetch(API + "/auth/session", {
-      method: "DELETE", headers: headers(),
-    });
-    const body = await res.json().catch(() => ({}));
-    if (res.ok && body.revoked) {
-      token = "";
-      line.textContent = "signed out on this phone. Pair again to use it.";
-    } else {
-      line.textContent = body.detail || `the laptop refused (HTTP ${res.status})`;
-    }
-  } catch (e) {
-    line.textContent = "the laptop did not answer, so this phone is still signed in";
-  }
-};
+      // Signing out is the one action that must survive every other failure here: if the
+      // laptop is unreachable the session is still live on this handset, so the button
+      // reports what it could not establish rather than pretending the token is gone.
+      document.getElementById("signout").onclick = async () => {
+        const line = document.getElementById("pairline");
+        line.textContent = "signing out…";
+        try {
+          const res = await fetch(API + "/auth/session", {
+            method: "DELETE",
+            headers: headers(),
+          });
+          const body = await res.json().catch(() => ({}));
+          if (res.ok && body.revoked) {
+            token = "";
+            line.textContent =
+              "signed out on this phone. Pair again to use it.";
+          } else {
+            line.textContent =
+              body.detail || `the laptop refused (HTTP ${res.status})`;
+          }
+        } catch (e) {
+          line.textContent =
+            "the laptop did not answer, so this phone is still signed in";
+        }
+      };
 
-// A link can name the card to land on (`/phone?focus=approvals`) -- the useful half
-// of what a store-installed app would call a deep link: a notification about a
-// pending approval should open the approval, not the top of a page you then hunt
-// through. Scroll, then focus, so a keyboard or screen reader arrives with it.
-//
-// Measured in a 320x568 viewport, the one-shot version of this failed: the scroll
-// ran before /tools had rendered the quick actions above the card, so by the time
-// the page settled the card was below the fold again. The landing is therefore
-// re-applied once, after the first refresh resolves -- and only once, because
-// hijacking the scroll position every 4 seconds would be worse than the bug.
-const FOCUS_CARDS = { approvals: "approvals" };
-const focusCard = FOCUS_CARDS[(new URLSearchParams(location.search).get("focus") || "")];
-let focusApplied = false;
+      // A link can name the card to land on (`/phone?focus=approvals`) -- the useful half
+      // of what a store-installed app would call a deep link: a notification about a
+      // pending approval should open the approval, not the top of a page you then hunt
+      // through. Scroll, then focus, so a keyboard or screen reader arrives with it.
+      //
+      // Measured in a 320x568 viewport, the one-shot version of this failed: the scroll
+      // ran before /tools had rendered the quick actions above the card, so by the time
+      // the page settled the card was below the fold again. The landing is therefore
+      // re-applied once, after the first refresh resolves -- and only once, because
+      // hijacking the scroll position every 4 seconds would be worse than the bug.
+      const FOCUS_CARDS = { approvals: "approvals" };
+      const focusCard =
+        FOCUS_CARDS[new URLSearchParams(location.search).get("focus") || ""];
+      let focusApplied = false;
 
-// Only the settled call is allowed to mark the landing as done. The first version of
-// this marked it at parse time, so the correction after the render returned early and
-// the card stayed below the fold -- the flag has to mean "applied with the layout
-// finished", not "attempted".
-function applyFocus(settled) {
-  if (!focusCard || focusApplied) return;
-  const el = document.getElementById(focusCard);
-  if (!el) return;
-  el.scrollIntoView({ block: "start" });
-  el.setAttribute("tabindex", "-1");
-  el.focus({ preventScroll: true });
-  if (settled) focusApplied = true;
-}
+      // Only the settled call is allowed to mark the landing as done. The first version of
+      // this marked it at parse time, so the correction after the render returned early and
+      // the card stayed below the fold -- the flag has to mean "applied with the layout
+      // finished", not "attempted".
+      function applyFocus(settled) {
+        if (!focusCard || focusApplied) return;
+        const el = document.getElementById(focusCard);
+        if (!el) return;
+        el.scrollIntoView({ block: "start" });
+        el.setAttribute("tabindex", "-1");
+        el.focus({ preventScroll: true });
+        if (settled) focusApplied = true;
+      }
 
-applyFocus(false);
+      applyFocus(false);
 
-login().then(() => { loadEars(); refresh(); });
-pollTimer = setInterval(refresh, 4000);
+      login().then(() => {
+        loadEars();
+        refresh();
+      });
+      pollTimer = setInterval(refresh, 4000);
 
-// The install path: a worker plus the manifest above is what makes the browser offer
-// "Add to Home Screen". It caches the shell only, so a command never reads back a
-// stored answer.
-(function fillModelLine() {
-  const el = document.getElementById("modelline");
-  if (!el) return;                        // an older cached shell has no such element
-  let model = null;
-  try {
-    const node = document.getElementById("jarvis-model");
-    model = node ? JSON.parse(node.textContent || "{}") : null;
-  } catch (err) {
-    model = null;                         // unparseable data is reported, never guessed over
-  }
-  el.textContent = model ? modelLine(model)
-                         : "answers: unknown (this laptop sent no model state)";
-})();
+      // The install path: a worker plus the manifest above is what makes the browser offer
+      // "Add to Home Screen". It caches the shell only, so a command never reads back a
+      // stored answer.
+      (function fillModelLine() {
+        const el = document.getElementById("modelline");
+        if (!el) return; // an older cached shell has no such element
+        let model = null;
+        try {
+          const node = document.getElementById("jarvis-model");
+          model = node ? JSON.parse(node.textContent || "{}") : null;
+        } catch (err) {
+          model = null; // unparseable data is reported, never guessed over
+        }
+        el.textContent = model
+          ? modelLine(model)
+          : "answers: unknown (this laptop sent no model state)";
+      })();
 
-if ("serviceWorker" in navigator) {
-  navigator.serviceWorker.register("/sw.js").catch(() => {});
-}
-</script>
-</body>
+      if ("serviceWorker" in navigator) {
+        navigator.serviceWorker.register("/sw.js").catch(() => {});
+      }
+    </script>
+  </body>
 </html>

@@ -9,12 +9,12 @@ self-signed certificate (measured below)
 
 ## 1. Measured before anything was changed
 
-| Half of the ask | Reality, measured |
-|---|---|
-| a laptop application | `build_app.py:125` copied **no source**: the bundle held `launcher.py` plus `project_path.txt` containing `/Users/abhijeetmiskin/AppData/jarv/jarvis-forge`. The `.app` was a pointer at this checkout — the Phase 10 defect (an app that exits 1 because its recorded directory moved) still shipped, 26 phases later. |
-| connecting from it | 35-D: nothing in `app/launcher.py` set LAN mode, and a Finder-launched app never sees `export JARVIS_LAN_MODE=1`. So the phone work of Phase 35 was unreachable from the app a user would actually double-click. |
-| a mobile application | No Android SDK, no `adb`, no device attached. What *is* installable without a build chain is a web app the browser itself installs — which needs a manifest, icons and a service worker. None existed. |
-| and does a browser accept it on a LAN | Unmeasured going in. Measured in §4: it depends on the certificate, and Chrome says no. |
+| Half of the ask                       | Reality, measured                                                                                                                                                                                                                                                                                                       |
+| ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| a laptop application                  | `build_app.py:125` copied **no source**: the bundle held `launcher.py` plus `project_path.txt` containing `/Users/abhijeetmiskin/AppData/jarv/jarvis-forge`. The `.app` was a pointer at this checkout — the Phase 10 defect (an app that exits 1 because its recorded directory moved) still shipped, 26 phases later. |
+| connecting from it                    | 35-D: nothing in `app/launcher.py` set LAN mode, and a Finder-launched app never sees `export JARVIS_LAN_MODE=1`. So the phone work of Phase 35 was unreachable from the app a user would actually double-click.                                                                                                        |
+| a mobile application                  | No Android SDK, no `adb`, no device attached. What _is_ installable without a build chain is a web app the browser itself installs — which needs a manifest, icons and a service worker. None existed.                                                                                                                  |
+| and does a browser accept it on a LAN | Unmeasured going in. Measured in §4: it depends on the certificate, and Chrome says no.                                                                                                                                                                                                                                 |
 
 ## 2. What changed
 
@@ -27,7 +27,7 @@ inline `shutil` call precisely so it can be tested without codesigning anything.
 
 **The laptop has a switch of its own.** `jarvis/config.py` gained `lan_mode_state()` /
 `set_lan_mode()`: one word in `<home>/lan_mode`, read as a boolean and never evaluated. The
-control panel gained a checkbox, *"Allow devices on my wifi to connect"*, which writes it and
+control panel gained a checkbox, _"Allow devices on my wifi to connect"_, which writes it and
 restarts the server. The launcher deliberately does not import `jarvis.config` — it has to work
 when the thing it manages is broken — so both sides are pinned to the same file by
 `test_the_apps_switch_is_the_same_file_the_server_reads`.
@@ -81,19 +81,18 @@ serviceWorker.register()   SecurityError: ... An SSL certificate error occurred
 beforeinstallprompt        never fired (2.5 s)
 ```
 
-So: **accepting the certificate warning is not enough.** The page loads, logs in (`/auth/session`
-200) and polls `200` forever after — but Chrome will not register a worker for a script whose
+So: **accepting the certificate warning is not enough.** The page loads, logs in (`/auth/session` 200) and polls `200` forever after — but Chrome will not register a worker for a script whose
 origin it does not trust, and without a worker there is no install prompt. What that leaves, stated
 without padding:
 
-* **iPhone** — installs today over plain http on the LAN. iOS offers *Add to Home Screen* without
+- **iPhone** — installs today over plain http on the LAN. iOS offers _Add to Home Screen_ without
   demanding a secure context, and the `apple-mobile-web-app-capable` / `-title` / status-bar tags
   added here make it launch standalone. Verified: the tags are in the served page. **Not verified:
   the install itself, because there is no iPhone here.**
-* **Android** — works as a page over http or https; installs as an app only against a certificate
+- **Android** — works as a page over http or https; installs as an app only against a certificate
   the handset trusts, which a self-signed LAN cert is not. Real options are a domain with a proper
   certificate, or a packaged APK, and this machine can build neither.
-* **The encryption is still worth having** — with `JARVIS_HTTPS_ENABLED=true` the session
+- **The encryption is still worth having** — with `JARVIS_HTTPS_ENABLED=true` the session
   credential stops crossing the wifi in cleartext, which was a named issue at the end of Phase 35.
 
 The page's worker registration is guarded, and a test runs that shipped snippet under Node with
@@ -103,7 +102,7 @@ throwing at startup.
 ## 5. A guard that refused the configuration it exists to protect
 
 Running the built app found this, and no test had: `lan_startup_problems()` demanded a non-empty
-`api_token`, but on a first start the token is generated *during* startup. A fresh install that
+`api_token`, but on a first start the token is generated _during_ startup. A fresh install that
 turned wifi access on was therefore refused by a check for a file it was about to create — the
 guard blocked the one configuration it is meant to make safe. It now refuses when authentication
 is off, which is the actual danger. The Phase 35 test that pinned the old wording still passes;
@@ -134,30 +133,30 @@ check earning its keep, and the reason the rebuild is part of this phase rather 
 
 ## 7. Re-measured
 
-| | before | after |
-|---|---|---|
-| tests passing | 1683 | **1710** |
-| API routes | 105 | **108** (manifest, worker, icons) |
-| tools / confirmation-gated | 128 / 27 | 128 / 27 (unchanged) |
-| test modules / reports | 59 / 37 | **60 / 38** |
-| a built `.app` that runs after being moved | no — it exited on a stale pointer | **yes, verified from `/tmp`** |
-| opening the door from the laptop app | required a terminal | **a checkbox** |
-| phone install | a browser tab | manifest + icons + worker; iOS standalone tags. Chrome install measured as blocked by the untrusted certificate |
+|                                            | before                            | after                                                                                                           |
+| ------------------------------------------ | --------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| tests passing                              | 1683                              | **1710**                                                                                                        |
+| API routes                                 | 105                               | **108** (manifest, worker, icons)                                                                               |
+| tools / confirmation-gated                 | 128 / 27                          | 128 / 27 (unchanged)                                                                                            |
+| test modules / reports                     | 59 / 37                           | **60 / 38**                                                                                                     |
+| a built `.app` that runs after being moved | no — it exited on a stale pointer | **yes, verified from `/tmp`**                                                                                   |
+| opening the door from the laptop app       | required a terminal               | **a checkbox**                                                                                                  |
+| phone install                              | a browser tab                     | manifest + icons + worker; iOS standalone tags. Chrome install measured as blocked by the untrusted certificate |
 
 ## 8. Carried forward
 
-* **36-A** Android installability needs a certificate the handset trusts. The self-signed path
+- **36-A** Android installability needs a certificate the handset trusts. The self-signed path
   encrypts but does not install; nothing here can produce or test a trusted cert or an APK.
-* **36-B** the iOS install is asserted from the tags the page serves, not from an iPhone.
-* **36-C** the checkbox restarts the server; a user mid-command sees a few seconds of nothing, and
-  the panel does not yet show *why* a restart is happening.
-* **36-D** `python_path.txt` still records an absolute interpreter, so a bundle moved to another
+- **36-B** the iOS install is asserted from the tags the page serves, not from an iPhone.
+- **36-C** the checkbox restarts the server; a user mid-command sees a few seconds of nothing, and
+  the panel does not yet show _why_ a restart is happening.
+- **36-D** `python_path.txt` still records an absolute interpreter, so a bundle moved to another
   machine needs a Python with the requirements installed — the source travels, the runtime does
   not. Embedding an interpreter is a different project (and the reason "self-contained" above is
   about code, not about the whole environment).
-* **36-E** the service worker precaches by exact path list; a future second client page has to be
+- **36-E** the service worker precaches by exact path list; a future second client page has to be
   added to it or it silently never caches.
-* Still open from before, untouched: 35-A/B/C, 34-A/B/C, 32-A/B/C, 33-A/B/C, 30-B/C/D, 29-A/C/D,
+- Still open from before, untouched: 35-A/B/C, 34-A/B/C, 32-A/B/C, 33-A/B/C, 30-B/C/D, 29-A/C/D,
   28-A (synonym half), 27-A/B/C, 26-B, 23-E, hardware BLOCKED, LLM planner, unattended workflows,
   and the `-rs` CI change that would finally name the runner's six skips.
 
@@ -177,5 +176,3 @@ workflow runs `python -m pytest -q`, so no `SKIPPED` reason reaches either log (
 test copying `jarvis/` and `dashboard/` into a temp directory — was measured and cleared: 0.09 s
 for all three staging tests. The cause is **not identified here**, and no substitute was invented
 for it.
-
-

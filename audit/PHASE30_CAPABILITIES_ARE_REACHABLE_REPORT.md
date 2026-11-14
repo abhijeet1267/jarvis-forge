@@ -15,7 +15,7 @@ registered tools                              127
 tool names appearing nowhere in planner.py     28   (the 28-A figure)
 ```
 
-Counting names in the source says how many routes were *hand-written*, not how many
+Counting names in the source says how many routes were _hand-written_, not how many
 capabilities a person can actually ask for. So the same registry was walked a second time,
 behaviourally: for every tool, say its own name words out loud and see what comes back.
 
@@ -27,7 +27,7 @@ for                                                  46 of 127
 ```
 
 Forty-six, not twenty-eight. `read_file`, `get_time`, `open_app`, `close_app`, `copy_file`,
-`list_events` all *have* routes and all were dead ends when named plainly, because their
+`list_events` all _have_ routes and all were dead ends when named plainly, because their
 route is keyed on some other phrasing. The 28-A number had been reporting 28 of a gap of
 46 — the difference is not a rounding argument but a category error, and it was computed
 from the one artefact, `planner.py`, that cannot measure behaviour.
@@ -57,24 +57,24 @@ answer a user gets, not about a source file:
 ```
 
 And one that was not a defect: `"list car metrics"` was answered with `get_car_status`,
-whose reply — *"Your car adapter is not connected…"* — is true, just not what was asked.
+whose reply — _"Your car adapter is not connected…"_ — is true, just not what was asked.
 Recorded as a specificity gap rather than fixed (30-C below).
 
 ## 2. What changed
 
 **A registry-derived fallback route, last in the chain** (`_capability_fallback`). A tool is
-reached when the sentence contains *all* of its own name words (function words ignored,
+reached when the sentence contains _all_ of its own name words (function words ignored,
 singular and plural folded together, at least two words required so one keyword never plans
 anything). Then:
 
-* if the tool requires nothing, or the sentence supplies what it requires, the action is
+- if the tool requires nothing, or the sentence supplies what it requires, the action is
   emitted — **after** `ToolRegistry.validate_params` says it is complete, so this route
   cannot structurally repeat Phase 29's "claim an action it cannot fill";
-* if the argument is missing, the user gets a question built from the tool's own
+- if the argument is missing, the user gets a question built from the tool's own
   `description`, which is human language the registry already carries. It never names a
-  field: *"I can read one message in full — your sentence does not say which one. Say it
-  with the name or id, like "read email <which one>"?"*;
-* if two tools fit the same words, it asks which, quoting both descriptions, and runs
+  field: _"I can read one message in full — your sentence does not say which one. Say it
+  with the name or id, like "read email <which one>"?"_;
+- if two tools fit the same words, it asks which, quoting both descriptions, and runs
   nothing.
 
 Values are taken from three shapes only — a quoted phrase, an id the system issues
@@ -84,14 +84,14 @@ about rather than half-served.
 
 **Three advertising routes now yield to a sentence that names a capability** (`_help`, the
 `_calendar` decline, the `_car` catch-all). The rule is narrow on purpose: it is applied at
-three named sites, not in the dispatch loop. A route that *lists what it can do* is
+three named sites, not in the dispatch loop. A route that _lists what it can do_ is
 describing the system and should lose to a sentence naming one part of it; a route that
-*refuses* must not, because silently preferring a keyword match over a refusal would be a
+_refuses_ must not, because silently preferring a keyword match over a refusal would be a
 way of talking past the permission engine. Case-by-case routes still run first and still win
 wherever they fit.
 
-**Two leaks fixed at their source.** `_coding` asks *"Which workspace? Give me its id
-(WS-…)"* instead of emitting `workspace_id=""`; `_scheduler` asks for the schedule id
+**Two leaks fixed at their source.** `_coding` asks _"Which workspace? Give me its id
+(WS-…)"_ instead of emitting `workspace_id=""`; `_scheduler` asks for the schedule id
 instead of emitting `schedule_id=""` for pause/resume/cancel. The second one was found by
 the new sweep, not by a human — see §4.
 
@@ -160,9 +160,9 @@ phone and no README in the sandbox home — a reachability fix is not a data fix
    29-C had described this blind spot correctly and then left it; here it was holding live
    defects.
 3. **A route can advertise a capability the router does not have.** The calendar decline
-   said *"create or cancel events"* in its own text while `cancel_event` was unreachable by
+   said _"create or cancel events"_ in its own text while `cancel_event` was unreachable by
    any sentence. That is a different kind of untrue from a mislabelled state: the reply was
-   accurate about the *tool* and false about the *product*.
+   accurate about the _tool_ and false about the _product_.
 4. **Fixing reachability found a safety hole behind it.** `sweep_expired_memories` had been
    LOW-and-unconfirmed for exactly as long as it had been unreachable; the two facts were
    load-bearing for each other. Making a capability typeable is a security change, and the
@@ -175,10 +175,10 @@ fail: 40 of 56 failing on the first run (the fallback did not exist), then 68 te
 the shadowing fixes were specified. Includes two registry-wide sweeps that do not depend on
 this phase's sentences:
 
-* `test_every_registered_tool_is_reachable_when_its_own_name_is_said` — no tool may be
+- `test_every_registered_tool_is_reachable_when_its_own_name_is_said` — no tool may be
   answered `not_understood` when its name is spelled out. This is the test that would have
   caught the 46.
-* `test_no_tool_in_the_registry_is_reachable_only_to_leak_its_field_names` — for every
+- `test_no_tool_in_the_registry_is_reachable_only_to_leak_its_field_names` — for every
   tool, a name sentence plus three value shapes; no emitted action may be one the registry
   itself would refuse, and no reply may contain `missing required parameter`.
 
@@ -192,49 +192,49 @@ tests, nothing removed, no assertion weakened to get there.
 
 ## 6. Re-measured
 
-| metric | before | after | how |
-| --- | --- | --- | --- |
-| tools registered | 127 | 127 | `core.tools.all()` |
-| names absent from `planner.py` | 28 | 25 | source grep — **and this metric is retired; see §4.1** |
-| tools that answer `not_understood` to their own name | 46 | **0** | registry walk through `planner.parse` |
-| …reaching an action from a bare name | 50 | 69 | same walk, `plan.actions` |
-| …getting a question about the argument | 28 | 55 | same walk, `reply_kind == clarification` |
-| …answered with a route's refusal | 3 | 3 | unchanged; all three are path-guard refusals |
-| ledger rows leaking a schema name (live run) | 3 known phrases | 0 | `/audit` over HTTP, 12 rows |
-| confirmation-gated tools | 25 | 26 | 30-A |
-| §45 safety matrix | 5 of 6 | 5 of 6 | `benchmarks/safety_run.py` — `turn on heater` still prints FAIL on purpose (22-G) |
-| suite | 1487 | 1555 | `python -m pytest -q` |
+| metric                                               | before          | after  | how                                                                               |
+| ---------------------------------------------------- | --------------- | ------ | --------------------------------------------------------------------------------- |
+| tools registered                                     | 127             | 127    | `core.tools.all()`                                                                |
+| names absent from `planner.py`                       | 28              | 25     | source grep — **and this metric is retired; see §4.1**                            |
+| tools that answer `not_understood` to their own name | 46              | **0**  | registry walk through `planner.parse`                                             |
+| …reaching an action from a bare name                 | 50              | 69     | same walk, `plan.actions`                                                         |
+| …getting a question about the argument               | 28              | 55     | same walk, `reply_kind == clarification`                                          |
+| …answered with a route's refusal                     | 3               | 3      | unchanged; all three are path-guard refusals                                      |
+| ledger rows leaking a schema name (live run)         | 3 known phrases | 0      | `/audit` over HTTP, 12 rows                                                       |
+| confirmation-gated tools                             | 25              | 26     | 30-A                                                                              |
+| §45 safety matrix                                    | 5 of 6          | 5 of 6 | `benchmarks/safety_run.py` — `turn on heater` still prints FAIL on purpose (22-G) |
+| suite                                                | 1487            | 1555   | `python -m pytest -q`                                                             |
 
 The three columns of the registry walk are one tally with the fallback removed from the
 chain and then restored, so they sum to 127 both times. "Reaching an action" rose 50 → 69
 and the question column rose 28 → 55: of the tools that already answered a bare name with
-*something*, none lost their action; the 26 that moved into being asked about were the ones
+_something_, none lost their action; the 26 that moved into being asked about were the ones
 whose sentence named a capability without its argument, and the previous answer for most of
 them was `not_understood`, not a successful call.
 
-The "reaching an action" figure *fell* from 81 to 69 and that is the correct direction: of
+The "reaching an action" figure _fell_ from 81 to 69 and that is the correct direction: of
 the tools that used to answer a bare name with an action, several now answer with a question
 because the sentence named a tool whose arguments it did not supply — an action emitted with
 empty required parameters was never a success, it was a BLOCK wearing an intent.
 
 ## 7. Carried forward
 
-* **30-A is closed here**, not deferred: the tier fix shipped in the same commit as the route
+- **30-A is closed here**, not deferred: the tier fix shipped in the same commit as the route
   that makes the tool typeable. Its lesson stays open as a rule — any phase that makes a
   capability reachable owes a review of that capability's gate in the same change.
-* **30-B** reachability is by *name words*, not by meaning. "ping my phone" is not matched
+- **30-B** reachability is by _name words_, not by meaning. "ping my phone" is not matched
   (`ping_device` needs the word "device"), and no synonym table exists. The alias vocabulary
   is the next real gain, and it is also the thing that will produce false matches if added
   carelessly — which is why this phase did not add one.
-* **30-C** an earlier route still wins where it claims the sentence, even when it reads the
+- **30-C** an earlier route still wins where it claims the sentence, even when it reads the
   request less precisely: "list car metrics" answers with car status. Honest, but not what
   was asked. The `_capability_matches` yield rule was applied at three advertising sites
   only; the `_car` telemetry branch is the next candidate.
-* **30-D** 55 capabilities answer with a question because their id-shaped argument is not in
+- **30-D** 55 capabilities answer with a question because their id-shaped argument is not in
   the sentence and the system never offers the list. `list_workspaces` → "close the
   workspace" is two sentences apart and no route connects them; a "list, then pick" plan
   would close it, and Phase 14's multi-step machinery already exists to carry it.
-* Everything already open: 28-A **narrowed, not closed** (name-words reachability is now
+- Everything already open: 28-A **narrowed, not closed** (name-words reachability is now
   total; synonym reachability is 30-B), 29-A, 29-B, 29-C (this phase closed its scheduler
   and coding instances and replaced the sweep with a behavioural one), 29-D, 27-A…D, 26-B,
   the `ToolSpec.parameters` residual, 22-G, 23-E, mic/speech TCC, 15-F, 14-D, 16-F,
@@ -255,8 +255,8 @@ Committed and pushed to `main` on `abhijeet1267/jarvis-forge`:
 
 Run `36846991516`, both jobs green:
 
-| job | result | pytest line | wall |
-| --- | --- | --- | --- |
+| job            | result  | pytest line                                   | wall                 |
+| -------------- | ------- | --------------------------------------------- | -------------------- |
 | `suite (3.11)` | success | `1549 passed, 6 skipped, 1 warning in 65.94s` | 10:06:16 → 10:07:46Z |
 | `suite (3.12)` | success | `1549 passed, 6 skipped, 1 warning in 83.78s` | 10:06:19 → 10:08:17Z |
 
@@ -264,7 +264,7 @@ Run `36846991516`, both jobs green:
 all exist on the runner and none of them was quietly dropped between the two machines. The
 6 skips are the same six Phase 29 accounted for -- five `skipif(not HAS_BATTERY)` and the
 `dist/`-gated bundle check -- so no phase-30 test is among them, which matters here more
-than usual: this phase's two headline tests walk the *whole registry* (every tool's own name
+than usual: this phase's two headline tests walk the _whole registry_ (every tool's own name
 through the planner; every emitted action back through `validate_params`), and a sweep like
 that is only worth its claim if it ran on a machine that is not the one that wrote it.
 The runner has no battery, no built bundle and a cold `JARVIS_HOME`, and the reachability
@@ -273,4 +273,3 @@ sweep still reports 0 dead ends and 0 leaked field names there.
 `Build the desktop bundle` and `Upload measured benchmark data` ran on 3.11 and are gated
 off on 3.12 (`ci.yml:53,73`), and the benchmark step regenerated `suite_history.json` and
 the figures from this tree -- including the Phase 30 row: 1555 collected, 1555 passed, 0 failed.
-

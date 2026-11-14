@@ -10,14 +10,14 @@ was measured against what this machine can actually build and verify.
 
 ## 1. Measured before anything was changed
 
-| Part of the ask | Reality, measured |
-|---|---|
-| "connect them" — a phone reaching the API | `security/auth.py:132` accepted a `Host` only from `LOOPBACK_HOSTS`; `config.py:36` binds `127.0.0.1`. A phone on the same wifi was refused twice over. |
-| a client to connect *with* | `devices/pairing.py` has request/pending/approve/secret; `api/app.py` exposes `/devices/pair/*`, `/confirmations`, `/command`, `/devices/{id}/endpoint`. **No page anywhere spoke them.** The protocol had a server side and no client side. |
-| "check qoder is working" | `/Applications/Qoder.app` and `~/.qoder/bin/qoder-computer-use/` exist; nothing in 127 tools could ask about them. |
-| an Android install | No Android SDK, no `adb`, no device attached: `ls ~/Library/Android 2>/dev/null` → nothing. An APK cannot be built, signed, installed or verified here. |
-| a Windows build | Platform is `darwin/arm64`. A `.exe`/`.msi` produced here could not be run once, so it could not be truthfully called working. |
-| voice on "any sound, command which i set" | `voice/wakeword.py` matches configurable phrases **against transcripts**; `voice/audio.py` probes the microphone. There is no always-on audio detector, and Microphone + Speech Recognition need a TCC grant this session cannot request. |
+| Part of the ask                           | Reality, measured                                                                                                                                                                                                                            |
+| ----------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| "connect them" — a phone reaching the API | `security/auth.py:132` accepted a `Host` only from `LOOPBACK_HOSTS`; `config.py:36` binds `127.0.0.1`. A phone on the same wifi was refused twice over.                                                                                      |
+| a client to connect _with_                | `devices/pairing.py` has request/pending/approve/secret; `api/app.py` exposes `/devices/pair/*`, `/confirmations`, `/command`, `/devices/{id}/endpoint`. **No page anywhere spoke them.** The protocol had a server side and no client side. |
+| "check qoder is working"                  | `/Applications/Qoder.app` and `~/.qoder/bin/qoder-computer-use/` exist; nothing in 127 tools could ask about them.                                                                                                                           |
+| an Android install                        | No Android SDK, no `adb`, no device attached: `ls ~/Library/Android 2>/dev/null` → nothing. An APK cannot be built, signed, installed or verified here.                                                                                      |
+| a Windows build                           | Platform is `darwin/arm64`. A `.exe`/`.msi` produced here could not be run once, so it could not be truthfully called working.                                                                                                               |
+| voice on "any sound, command which i set" | `voice/wakeword.py` matches configurable phrases **against transcripts**; `voice/audio.py` probes the microphone. There is no always-on audio detector, and Microphone + Speech Recognition need a TCC grant this session cannot request.    |
 
 So the deliverable that exists today is the laptop's own door and a page on the other side of it.
 The rest is written down as what is missing rather than shipped as a file that has never run.
@@ -95,7 +95,7 @@ and used it. Findings, in the order they appeared:
    the button under the finger. The list now repaints only when its signature changes.
 
 None of the three is visible to a Python test that only checks the HTML contains the right paths.
-Two of them are now covered by tests that run the page's *own shipped JavaScript* through Node
+Two of them are now covered by tests that run the page's _own shipped JavaScript_ through Node
 against a real API response (`test_phase35…:5`), which is how this project already tests
 `dashboard/index.html`; the tap-timing fix is verified by hand and recorded as a gap, not as a
 test that does not exist.
@@ -110,7 +110,7 @@ Red-first, then green. `tests/test_phase35_reach_the_laptop.py` — 30 tests: th
 loopback still works; a LAN address is refused with the mode off and accepted only when the
 machine owns it; a foreign hostname is never accepted, in either mode; the guard's own cases plus
 the two real-startup paths (refuses unsafely, boots honestly); the printed address reaches a
-*piped* log — proven non-vacuous, it fails in 40 s with the `flush=True` removed, because stdout
+_piped_ log — proven non-vacuous, it fails in 40 s with the `flush=True` removed, because stdout
 is block-buffered when the desktop app pipes it; the page speaks only existing endpoints; the
 credential and list-shape contracts; pairing round-trip; the probe's tier, its three answers, its
 honest "absent" answer without inventing a version, and its refusal of a hostile name.
@@ -127,38 +127,38 @@ returned three real papers, so the skip is arXiv throttling, not this code.
 
 ## 6. Re-measured
 
-| | before | after |
-|---|---|---|
-| tests passing | 1653 | **1683** |
-| tools | 127 | **128** (read tier 68 → 69) |
-| API routes | 104 | **105** |
-| confirmation-gated | 27 | 27 (the new tool is READ and stays unasked) |
-| test modules / reports | 58 / 36 | **59 / 37** |
-| a phone can drive the laptop | no | **yes, over the LAN address, in a browser** |
+|                              | before  | after                                       |
+| ---------------------------- | ------- | ------------------------------------------- |
+| tests passing                | 1653    | **1683**                                    |
+| tools                        | 127     | **128** (read tier 68 → 69)                 |
+| API routes                   | 104     | **105**                                     |
+| confirmation-gated           | 27      | 27 (the new tool is READ and stays unasked) |
+| test modules / reports       | 58 / 36 | **59 / 37**                                 |
+| a phone can drive the laptop | no      | **yes, over the LAN address, in a browser** |
 
 ## 7. Carried forward
 
-* **35-A** the page's `send()`, `resolve()` and poll timing are hand-verified only; a DOM harness
+- **35-A** the page's `send()`, `resolve()` and poll timing are hand-verified only; a DOM harness
   would keep the three defects above dead.
-* **35-B** LAN mode trusts *every* interface the machine reports — a VPN or hotspot adapter is as
+- **35-B** LAN mode trusts _every_ interface the machine reports — a VPN or hotspot adapter is as
   accepted as the wifi. There is no per-interface allowlist.
-* **35-C** a session minted from the page's bootstrap can drive the laptop as `laptop_main`
+- **35-C** a session minted from the page's bootstrap can drive the laptop as `laptop_main`
   without the device ever being paired, so pairing is advisory on that path. Verified live: the
   command above ran from an unpaired browser. Either the session carries a device identity the
   policy engine consults, or the page says pairing is not what authorises a command.
-* **35-D** the packaged `.app` has no way to turn LAN on — `app/launcher.py` never sets it — so a
+- **35-D** the packaged `.app` has no way to turn LAN on — `app/launcher.py` never sets it — so a
   double-clicked install stays laptop-only until the user exports a variable by hand.
-* **Not delivered, and not pretending otherwise.** Android: no SDK/`adb`/device on this machine, so
+- **Not delivered, and not pretending otherwise.** Android: no SDK/`adb`/device on this machine, so
   no APK was built or run; a phone on the same wifi can use `/phone` today, which is a web page,
   not an installable app. Windows: nothing built, because nothing could be executed here.
   Voice: wakeword matching runs over transcripts; there is no always-on audio detector, and the
   Microphone/Speech Recognition grants are the user's to give.
-* **"Give Qoder the next instruction" remains unstarted deliberately.** `qoder` is not on `PATH`;
+- **"Give Qoder the next instruction" remains unstarted deliberately.** `qoder` is not on `PATH`;
   `~/.qoder/bin/qoder-computer-use` is a directory holding an app, not a CLI entry point. Writing a
   tool that shells out to a path this machine does not have would produce a tool that reports
   success on a command that never ran — the exact failure this program has been spending 34 phases
   removing. The read-only half (`check_agent_status`) is what can be honest today.
-* Previously carried and untouched by this phase: 26-B, 27-A/B/C, 28-A (synonym half), 29-A/C/D,
+- Previously carried and untouched by this phase: 26-B, 27-A/B/C, 28-A (synonym half), 29-A/C/D,
   30-B/C/D, 32-A/B/C, 33-A/B/C, 34-A/B/C, 23-E, hardware BLOCKED, LLM planner, unattended
   workflows.
 
@@ -181,7 +181,7 @@ this machine reported green. The three are recorded here because each says somet
    a laptop that happens to have the app. Fixed by giving the tests a bundle root of their own
    (`bundle_root`), which also makes the "absent app" test actually guarantee absence.
 2. Fixing (1) exposed a real defect in the tool: the running-process needle was built with
-   `installed.rstrip(".app")`, which strips *characters*, not the suffix. `Arena.app` became the
+   `installed.rstrip(".app")`, which strips _characters_, not the suffix. `Arena.app` became the
    needle `aren`, `Opera.app` became `oper` — a running app would be reported as not running for
    any name ending in `a`, `p` or `.`. Now `removesuffix(".app")`, with a test naming the case.
 3. Both subprocess tests timed out: `_SERVER_TIMEOUT = 40 s` was sized by this machine, where the
@@ -231,6 +231,3 @@ The page was re-opened under iPhone-class emulation (390×844, touch, mobile UA)
 address. It renders without horizontal overflow, the command row stays on one line, and the
 buttons are comfortably tappable — so "phone client" is a claim about a phone-sized viewport and
 not merely a narrow browser window. Nothing in the suite verifies this; it is recorded as observed.
-
-
-

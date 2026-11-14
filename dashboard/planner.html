@@ -1,0 +1,1637 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="jarvis-bootstrap" content="__JARVIS_BOOTSTRAP__" />
+    <title>Vantage — Planner</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #121418;
+        --panel: #1a1d23;
+        --panel-2: #22262e;
+        --text: #e6e8ec;
+        --muted: #9aa1ad;
+        --line: #2c313a;
+        --accent: #6ea8fe;
+        --ok: #4cc38a;
+        --warn: #e0a44a;
+        --bad: #e06a6a;
+      }
+      @media (prefers-color-scheme: light) {
+        :root {
+          color-scheme: light;
+          --bg: #f6f7f9;
+          --panel: #ffffff;
+          --panel-2: #f0f2f5;
+          --text: #1a1d23;
+          --muted: #5c6470;
+          --line: #d9dee6;
+          --accent: #2563eb;
+          --ok: #1f8a5b;
+          --warn: #9a6512;
+          --bad: #b03030;
+        }
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font:
+          14px/1.5 -apple-system,
+          BlinkMacSystemFont,
+          "Segoe UI",
+          sans-serif;
+      }
+      header {
+        display: flex;
+        align-items: baseline;
+        gap: 12px;
+        padding: 16px 22px;
+        border-bottom: 1px solid var(--line);
+      }
+      header h1 {
+        font-size: 17px;
+        margin: 0;
+        font-weight: 600;
+      }
+      header .spacer {
+        flex: 1;
+      }
+      header a {
+        color: var(--muted);
+        text-decoration: none;
+        font-size: 13px;
+      }
+      header a:hover {
+        color: var(--accent);
+      }
+      #status {
+        font-size: 12px;
+        color: var(--muted);
+      }
+      main {
+        max-width: 1180px;
+        margin: 0 auto;
+        padding: 22px;
+        display: grid;
+        gap: 18px;
+        grid-template-columns: 1.15fr 1fr;
+        align-items: start;
+      }
+      @media (max-width: 880px) {
+        main {
+          grid-template-columns: 1fr;
+        }
+      }
+      section {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 16px;
+      }
+      section h2 {
+        font-size: 13px;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--muted);
+        margin: 0 0 12px;
+        font-weight: 600;
+      }
+      .next {
+        background: linear-gradient(180deg, var(--panel-2), var(--panel));
+      }
+      .next .title {
+        font-size: 17px;
+        font-weight: 600;
+        margin: 0 0 4px;
+      }
+      .next .rule {
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .next .empty {
+        color: var(--muted);
+      }
+      ul {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+      }
+      li.row {
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+        padding: 8px 0;
+        border-top: 1px solid var(--line);
+      }
+      li.row:first-child {
+        border-top: 0;
+      }
+      .grow {
+        flex: 1;
+        min-width: 0;
+      }
+      .t {
+        font-weight: 500;
+        overflow-wrap: anywhere;
+      }
+      .m {
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .pill {
+        display: inline-block;
+        font-size: 11px;
+        padding: 1px 7px;
+        border-radius: 999px;
+        border: 1px solid var(--line);
+        color: var(--muted);
+        margin-right: 4px;
+      }
+      .pill.urgent {
+        color: var(--bad);
+        border-color: var(--bad);
+      }
+      .pill.high {
+        color: var(--warn);
+        border-color: var(--warn);
+      }
+      .pill.blocked {
+        color: var(--warn);
+        border-color: var(--warn);
+      }
+      .pill.overdue {
+        color: var(--bad);
+        border-color: var(--bad);
+      }
+      .pill.done {
+        color: var(--ok);
+        border-color: var(--ok);
+      }
+      button {
+        font: inherit;
+        font-size: 12px;
+        cursor: pointer;
+        color: var(--text);
+        background: var(--panel-2);
+        border: 1px solid var(--line);
+        border-radius: 7px;
+        padding: 4px 9px;
+      }
+      button:hover {
+        border-color: var(--accent);
+      }
+      button.primary {
+        background: var(--accent);
+        color: #0b1220;
+        border-color: var(--accent);
+        font-weight: 600;
+      }
+      form.add {
+        display: grid;
+        gap: 8px;
+        grid-template-columns: 2fr 1fr auto;
+      }
+      form.add input,
+      form.add select {
+        font: inherit;
+        background: var(--panel-2);
+        color: var(--text);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 7px 10px;
+      }
+      form.add button {
+        align-self: stretch;
+        padding: 7px 14px;
+      }
+      .task-tools {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 10px;
+      }
+      .task-tools input,
+      .task-tools select {
+        font: inherit;
+        font-size: 13px;
+        background: var(--panel-2);
+        color: var(--text);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 6px 10px;
+        min-width: 0;
+      }
+      .task-tools input {
+        flex: 1;
+      }
+      .err {
+        color: var(--bad);
+        font-size: 12px;
+        min-height: 16px;
+      }
+      .warnbox {
+        border: 1px solid var(--warn);
+        color: var(--warn);
+        border-radius: 8px;
+        padding: 8px 10px;
+        font-size: 12px;
+        margin-bottom: 10px;
+      }
+      .muted {
+        color: var(--muted);
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Planner</h1>
+      <span id="status">connecting…</span>
+      <span class="spacer"></span>
+      <a href="/planner" style="font-weight: 600">Planner</a>
+      <a href="/operator">Operator</a>
+      <a href="/work">Work</a>
+      <a href="/dashboard">Dashboard</a>
+      <a href="/ai-connections">AI Providers</a>
+    </header>
+
+    <main>
+      <div style="display: grid; gap: 18px">
+        <section>
+          <h2>Daily briefing</h2>
+          <button id="briefing-now">Show my briefing</button>
+          <span class="m" id="briefing-note"></span>
+          <pre
+            id="briefing-text"
+            hidden
+            style="
+              white-space: pre-wrap;
+              font: inherit;
+              margin: 10px 0 0;
+              padding: 12px;
+              background: var(--panel-2);
+              border-radius: 8px;
+              max-height: 420px;
+              overflow: auto;
+            "
+          ></pre>
+        </section>
+
+        <section class="next" aria-live="polite">
+          <h2>Next up</h2>
+          <div style="margin-bottom: 10px">
+            <button class="primary" id="start-day">Start my day</button>
+            <button id="begin-work">Begin work</button>
+            <span class="m" id="start-day-note"></span>
+            <div id="begin-work-out" class="m" style="margin-top: 8px"></div>
+          </div>
+          <div id="next-action">
+            <span class="empty">Nothing to do right now.</span>
+          </div>
+        </section>
+
+        <section id="attention-section" hidden>
+          <h2>Needs attention</h2>
+          <ul id="needs-attention">
+            <li class="muted">—</li>
+          </ul>
+        </section>
+
+        <section>
+          <h2>Add a task</h2>
+          <form class="add" id="add-form">
+            <input
+              id="title"
+              placeholder="What needs doing?"
+              autocomplete="off"
+              required
+            />
+            <select id="priority" aria-label="Priority">
+              <option value="normal">Normal</option>
+              <option value="high">High</option>
+              <option value="urgent">Urgent</option>
+              <option value="low">Low</option>
+            </select>
+            <button class="primary" type="submit">Add</button>
+          </form>
+          <div class="err" id="err"></div>
+        </section>
+
+        <section>
+          <h2>Plan a goal</h2>
+          <form class="add" id="goal-form">
+            <input
+              id="goal"
+              placeholder="Ship the AMR demo by Friday"
+              autocomplete="off"
+            />
+            <input
+              id="goal-project"
+              placeholder="Project (optional)"
+              autocomplete="off"
+            />
+            <button class="primary" type="submit">Plan</button>
+          </form>
+          <div class="err" id="goal-err"></div>
+          <div class="m" id="goal-note"></div>
+        </section>
+
+        <section>
+          <h2>Reminders &amp; notifications</h2>
+          <div class="m" id="notify-status">Checking…</div>
+          <button id="notify-test" style="margin-top: 8px">
+            Send a test notification
+          </button>
+          <span class="m" id="notify-note"></span>
+        </section>
+
+        <section>
+          <h2>This week</h2>
+          <button id="weekly-report">Show my weekly report</button>
+          <div id="weekly-out" class="m" style="margin-top: 8px"></div>
+        </section>
+
+        <section>
+          <h2>Tasks</h2>
+          <div class="task-tools">
+            <input
+              id="task-search"
+              type="search"
+              placeholder="Search tasks…"
+              autocomplete="off"
+              aria-label="Search tasks"
+            />
+            <select id="task-filter" aria-label="Filter tasks">
+              <option value="all">All open</option>
+              <option value="urgent-high">Urgent &amp; high</option>
+              <option value="overdue">Overdue</option>
+              <option value="blocked">Blocked</option>
+              <option value="project">With a project</option>
+            </select>
+          </div>
+          <div class="m" id="task-count"></div>
+          <ul id="tasks">
+            <li class="muted">Loading…</li>
+          </ul>
+        </section>
+      </div>
+
+      <div style="display: grid; gap: 18px">
+        <section>
+          <h2>Prepare for a meeting</h2>
+          <form class="add" id="meeting-form">
+            <input
+              id="meeting-name"
+              placeholder="Meeting name (blank for the next one)"
+              autocomplete="off"
+            />
+            <button class="primary" type="submit">Prepare</button>
+          </form>
+          <div class="err" id="meeting-err"></div>
+          <div id="meeting-brief"></div>
+          <div id="meeting-past" style="margin-top: 10px"></div>
+          <div id="meeting-followup" hidden style="margin-top: 12px">
+            <textarea
+              id="meeting-notes"
+              rows="3"
+              placeholder="What was said, and what did you agree to do? One action per line."
+              style="
+                width: 100%;
+                background: var(--panel-2);
+                color: var(--text);
+                border: 1px solid var(--line);
+                border-radius: 8px;
+                padding: 8px;
+                font: inherit;
+              "
+            ></textarea>
+            <button class="primary" id="meeting-save" style="margin-top: 8px">
+              Save notes &amp; create tasks
+            </button>
+            <span class="m" id="meeting-followup-note"></span>
+          </div>
+        </section>
+
+        <section>
+          <h2>Today’s agenda</h2>
+          <div id="calendar-warning" class="warnbox" hidden></div>
+          <form class="add" id="event-form" style="margin-bottom: 10px">
+            <input
+              id="event-title"
+              placeholder="Event title"
+              autocomplete="off"
+              required
+            />
+            <input
+              id="event-when"
+              placeholder="tomorrow at 3 PM"
+              autocomplete="off"
+              required
+            />
+            <button class="primary" type="submit">Add event</button>
+          </form>
+          <div class="err" id="event-err"></div>
+          <ul id="events">
+            <li class="muted">Loading…</li>
+          </ul>
+          <div id="conflicts"></div>
+          <div class="m" style="margin-top: 6px">
+            Cancelling an event asks first — it cannot be undone.
+          </div>
+        </section>
+
+        <section>
+          <h2>Overdue &amp; blocked</h2>
+          <ul id="attention">
+            <li class="muted">—</li>
+          </ul>
+        </section>
+
+        <section>
+          <h2>Scheduled automations</h2>
+          <div id="sched-err" class="err"></div>
+          <ul id="schedules">
+            <li class="muted">Loading…</li>
+          </ul>
+          <form class="add" id="sched-form" style="margin-top: 12px">
+            <input
+              id="sched-action"
+              list="sched-actions"
+              placeholder="Action: briefing or reminder"
+              autocomplete="off"
+            />
+            <datalist id="sched-actions">
+              <option value="briefing"></option>
+              <option value="reminder"></option>
+            </datalist>
+            <div class="m" id="sched-action-list" style="margin-top: 4px"></div>
+            <input
+              id="sched-when"
+              placeholder="every morning at 8"
+              autocomplete="off"
+            />
+            <input
+              id="sched-message"
+              placeholder="Reminder text (optional)"
+              autocomplete="off"
+            />
+            <button class="primary" type="submit">Schedule</button>
+          </form>
+          <div class="m" style="margin-top: 6px">
+            Each run is re-checked against permissions. Pause, resume or cancel
+            anytime.
+          </div>
+        </section>
+      </div>
+    </main>
+
+    <script>
+      (function () {
+        const BOOTSTRAP =
+          (document.querySelector('meta[name="jarvis-bootstrap"]') || {})
+            .content || "";
+        let sessionToken = "";
+
+        const el = (tag, props = {}, kids = []) => {
+          const node = document.createElement(tag);
+          Object.assign(node, props);
+          (Array.isArray(kids) ? kids : [kids]).forEach((k) =>
+            node.appendChild(
+              typeof k === "string" ? document.createTextNode(k) : k,
+            ),
+          );
+          return node;
+        };
+        const statusEl = document.getElementById("status");
+        const errEl = document.getElementById("err");
+
+        async function establishSession() {
+          const res = await fetch("/auth/session", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ bootstrap: BOOTSTRAP }),
+          });
+          if (!res.ok) throw new Error("session failed (" + res.status + ")");
+          const data = await res.json();
+          sessionToken = data.session_token || "";
+          if (!sessionToken) throw new Error("no session token issued");
+        }
+        const headers = () => ({ "X-JARVIS-Token": sessionToken });
+        const headersJson = () => ({
+          "X-JARVIS-Token": sessionToken,
+          "Content-Type": "application/json",
+        });
+
+        function fmtDue(iso) {
+          if (!iso) return "";
+          const d = new Date(iso);
+          if (isNaN(d)) return "";
+          return d.toLocaleString(undefined, {
+            month: "short",
+            day: "numeric",
+            hour: "numeric",
+            minute: "2-digit",
+          });
+        }
+
+        function taskRow(t) {
+          const pills = [];
+          if (t.priority && t.priority !== "normal")
+            pills.push(
+              el("span", { className: "pill " + t.priority }, t.priority),
+            );
+          if (t.overdue)
+            pills.push(el("span", { className: "pill overdue" }, "overdue"));
+          if (t.blocked)
+            pills.push(el("span", { className: "pill blocked" }, "blocked"));
+          const meta = [];
+          if (t.due_at) meta.push("due " + fmtDue(t.due_at));
+          if (t.estimate_minutes) meta.push(t.estimate_minutes + "m");
+          if (t.project) meta.push(t.project);
+          const grow = el("div", { className: "grow" }, [
+            el("div", { className: "t" }, t.title),
+            meta.length ? el("div", { className: "m" }, meta.join(" · ")) : "",
+            pills.length ? el("div", { style: "margin-top:4px" }, pills) : "",
+          ]);
+          const done = el("button", {}, "Done");
+          done.addEventListener("click", async () => {
+            done.disabled = true;
+            try {
+              const r = await fetch(
+                "/planner/tasks/" +
+                  encodeURIComponent(t.task_ref) +
+                  "/complete",
+                {
+                  method: "POST",
+                  headers: headersJson(),
+                  body: JSON.stringify({}),
+                },
+              );
+              if (!r.ok) throw new Error("HTTP " + r.status);
+              await refresh();
+            } catch (e) {
+              errEl.textContent = "Could not complete task: " + e.message;
+              done.disabled = false;
+            }
+          });
+          return el("li", { className: "row" }, [grow, done]);
+        }
+
+        function renderAgenda(a) {
+          // Calendar honesty: an unread calendar is NOT an empty day.
+          const warn = document.getElementById("calendar-warning");
+          if (a.calendar_read_failed) {
+            warn.hidden = false;
+            warn.textContent =
+              "Your calendar could not be read — the events below may be incomplete. This is not an empty day.";
+          } else {
+            warn.hidden = true;
+          }
+          const evUl = document.getElementById("events");
+          evUl.textContent = "";
+          if (!a.events || !a.events.length) {
+            evUl.appendChild(
+              el(
+                "li",
+                { className: "muted" },
+                a.calendar_read_failed
+                  ? "No events could be read."
+                  : "Nothing scheduled today.",
+              ),
+            );
+          } else {
+            a.events.forEach((e) => {
+              const when = e.start
+                ? new Date(e.start).toLocaleTimeString(undefined, {
+                    hour: "numeric",
+                    minute: "2-digit",
+                  })
+                : "";
+              const row = el("li", { className: "row" }, [
+                el("div", { className: "m", style: "min-width:74px" }, when),
+                el("div", { className: "grow" }, [
+                  el("div", { className: "t" }, e.title || "(untitled)"),
+                  e.location ? el("div", { className: "m" }, e.location) : "",
+                ]),
+              ]);
+              // The page listed events with no action beside them; cancelling was
+              // reachable only by typing a sentence. It asks first, because a
+              // cancelled event cannot be restored.
+              if (e.uid) {
+                const cancel = el("button", {}, "Cancel");
+                cancel.addEventListener("click", async () => {
+                  if (
+                    !window.confirm(
+                      'Cancel "' + (e.title || "this event") + '"?',
+                    )
+                  )
+                    return;
+                  cancel.disabled = true;
+                  try {
+                    const rr = await fetch(
+                      "/calendar/events/" +
+                        encodeURIComponent(e.uid) +
+                        "/cancel",
+                      {
+                        method: "POST",
+                        headers: headersJson(),
+                        body: JSON.stringify({ confirm: true }),
+                      },
+                    );
+                    const data = await rr.json();
+                    if (!rr.ok)
+                      throw new Error(data.detail || "HTTP " + rr.status);
+                    if (!data.ok)
+                      throw new Error(data.message || "not cancelled");
+                    await refresh();
+                  } catch (err) {
+                    document.getElementById("calendar-warning").hidden = false;
+                    document.getElementById("calendar-warning").textContent =
+                      "Could not cancel: " + err.message;
+                    cancel.disabled = false;
+                  }
+                });
+                row.appendChild(cancel);
+              }
+              evUl.appendChild(row);
+            });
+          }
+          const conf = document.getElementById("conflicts");
+          conf.textContent = "";
+          if (a.conflicts && a.conflicts.length) {
+            conf.appendChild(
+              el(
+                "div",
+                { className: "warnbox", style: "margin-top:10px" },
+                a.conflicts
+                  .map(
+                    (c) =>
+                      "Conflict: ‘" + c.first + "’ overlaps ‘" + c.second + "’",
+                  )
+                  .join(" · "),
+              ),
+            );
+          }
+        }
+
+        // The briefing was reachable only by *scheduling* one — there was no way
+        // to read it now, even though the route already exists.
+        document
+          .getElementById("briefing-now")
+          .addEventListener("click", async () => {
+            const note = document.getElementById("briefing-note");
+            const box = document.getElementById("briefing-text");
+            note.textContent = "Assembling…";
+            try {
+              const r = await fetch("/briefing", { headers: headers() });
+              if (!r.ok) throw new Error("HTTP " + r.status);
+              const d = await r.json();
+              box.textContent = d.text || "";
+              box.hidden = !d.text;
+              const unknown = (d.unknown || []).length;
+              note.textContent = d.text
+                ? unknown
+                  ? "Generated " +
+                    d.generated_at +
+                    " · " +
+                    unknown +
+                    " section(s) unknown."
+                  : ""
+                : "The briefing came back empty.";
+            } catch (e) {
+              note.textContent = "Could not build the briefing: " + e.message;
+            }
+          });
+
+        // Creating an event is LOW and reversible, so it skips the cancel-style
+        // confirmation. A start time the parser cannot understand is reported,
+        // never guessed: being booked into the wrong hour is worse than being asked.
+        document
+          .getElementById("event-form")
+          .addEventListener("submit", async (ev) => {
+            ev.preventDefault();
+            const err = document.getElementById("event-err");
+            err.textContent = "";
+            const title = document.getElementById("event-title").value.trim();
+            const when = document.getElementById("event-when").value.trim();
+            if (!title || !when) return;
+            try {
+              const r = await fetch("/calendar/events", {
+                method: "POST",
+                headers: headersJson(),
+                body: JSON.stringify({ title: title, start: when }),
+              });
+              const d = await r.json();
+              if (!r.ok) throw new Error(d.detail || "HTTP " + r.status);
+              if (!d.ok) throw new Error(d.message || "not created");
+              document.getElementById("event-title").value = "";
+              document.getElementById("event-when").value = "";
+              await refresh();
+            } catch (e) {
+              err.textContent = "Could not add the event: " + e.message;
+            }
+          });
+
+        function renderNext(a) {
+          const box = document.getElementById("next-action");
+          box.textContent = "";
+          if (!a.next_action) {
+            box.appendChild(
+              el("span", { className: "empty" }, "Nothing to do right now."),
+            );
+            return;
+          }
+          const t = a.next_action.task;
+          box.appendChild(el("div", { className: "title" }, t.title));
+          const bits = [];
+          if (t.due_at) bits.push("due " + fmtDue(t.due_at));
+          if (t.estimate_minutes) bits.push(t.estimate_minutes + " min");
+          box.appendChild(
+            el(
+              "div",
+              { className: "rule" },
+              (bits.length ? bits.join(" · ") + " — " : "") +
+                "chosen as the " +
+                a.next_action.rule,
+            ),
+          );
+        }
+
+        function renderAttention(a) {
+          const ul = document.getElementById("attention");
+          ul.textContent = "";
+          const rows = [];
+          (a.overdue || []).forEach((t) => rows.push([t, "overdue"]));
+          (a.blocked || []).forEach((t) => rows.push([t, "blocked"]));
+          if (!rows.length) {
+            ul.appendChild(
+              el("li", { className: "muted" }, "Nothing overdue or blocked."),
+            );
+            return;
+          }
+          rows.forEach(([t, why]) => {
+            ul.appendChild(
+              el("li", { className: "row" }, [
+                el("div", { className: "grow" }, [
+                  el("div", { className: "t" }, t.title),
+                  el(
+                    "div",
+                    { className: "m" },
+                    why === "overdue"
+                      ? "overdue — due " + fmtDue(t.due_at)
+                      : "blocked — waiting on " +
+                          (t.depends_on || []).join(", "),
+                  ),
+                ]),
+              ]),
+            );
+          });
+        }
+
+        let latestTasks = [];
+
+        function taskMatches(t) {
+          const q = document
+            .getElementById("task-search")
+            .value.trim()
+            .toLowerCase();
+          const mode = document.getElementById("task-filter").value;
+          if (q) {
+            const hay = (
+              t.title +
+              " " +
+              (t.detail || "") +
+              " " +
+              (t.project || "") +
+              " " +
+              (t.task_ref || "")
+            ).toLowerCase();
+            if (!hay.includes(q)) return false;
+          }
+          if (mode === "urgent-high")
+            return t.priority === "urgent" || t.priority === "high";
+          if (mode === "overdue") return !!t.overdue;
+          if (mode === "blocked") return !!t.blocked;
+          if (mode === "project") return !!t.project;
+          return true;
+        }
+
+        function renderTasks() {
+          const list = document.getElementById("tasks");
+          const count = document.getElementById("task-count");
+          list.textContent = "";
+          if (!latestTasks.length) {
+            count.textContent = "";
+            list.appendChild(
+              el("li", { className: "muted" }, "No open tasks. Add one above."),
+            );
+            return;
+          }
+          const shown = latestTasks.filter(taskMatches);
+          count.textContent =
+            shown.length === latestTasks.length
+              ? latestTasks.length + " open task(s)."
+              : "Showing " +
+                shown.length +
+                " of " +
+                latestTasks.length +
+                " open task(s).";
+          if (!shown.length) {
+            list.appendChild(
+              el(
+                "li",
+                { className: "muted" },
+                "No tasks match your search or filter.",
+              ),
+            );
+            return;
+          }
+          shown.forEach((t) => list.appendChild(taskRow(t)));
+        }
+
+        async function refresh() {
+          const [tasksRes, agendaRes] = await Promise.all([
+            fetch("/planner/tasks", { headers: headers() }),
+            fetch("/planner/today", { headers: headers() }),
+          ]);
+          if (tasksRes.status === 401 || agendaRes.status === 401) {
+            statusEl.textContent = "session lost — reload";
+            return;
+          }
+          const tasks = await tasksRes.json();
+          const agenda = await agendaRes.json();
+
+          latestTasks = tasks;
+          renderTasks();
+
+          renderNext(agenda);
+          renderAgenda(agenda);
+          renderAttention(agenda);
+          await refreshSchedules();
+          await refreshAttention();
+          statusEl.textContent = "connected";
+        }
+
+        // ---- scheduled automations -------------------------------------
+        function fmtWhen(iso) {
+          if (!iso) return "—";
+          const d = new Date(iso);
+          if (isNaN(d)) return "—";
+          return d.toLocaleString(undefined, {
+            month: "short",
+            day: "numeric",
+            hour: "numeric",
+            minute: "2-digit",
+          });
+        }
+
+        function scheduleRow(j) {
+          const pills = [el("span", { className: "pill" }, j.status)];
+          if (j.failure_count > 0)
+            pills.push(
+              el(
+                "span",
+                { className: "pill overdue" },
+                j.failure_count + " failed",
+              ),
+            );
+          if (j.requires_confirmation)
+            pills.push(
+              el("span", { className: "pill blocked" }, "needs approval"),
+            );
+          const grow = el("div", { className: "grow" }, [
+            el("div", { className: "t" }, j.name + " · " + j.action),
+            el("div", { className: "m" }, j.schedule),
+            el(
+              "div",
+              { className: "m" },
+              "next run " +
+                fmtWhen(j.next_run) +
+                " · last " +
+                fmtWhen(j.last_run) +
+                " · " +
+                j.run_count +
+                " run(s)",
+            ),
+            j.last_error
+              ? el(
+                  "div",
+                  { className: "m", style: "color:var(--bad)" },
+                  "last error: " + j.last_error,
+                )
+              : "",
+            j.last_result
+              ? el("div", { className: "m" }, "last result: " + j.last_result)
+              : "",
+            el("div", { style: "margin-top:4px" }, pills),
+          ]);
+          const actions = el("div", {
+            style: "display:flex; gap:6px; flex-wrap:wrap",
+          });
+          const mk = (label, action, cls) => {
+            const b = el("button", cls ? { className: cls } : {}, label);
+            b.addEventListener("click", async () => {
+              b.disabled = true;
+              try {
+                const r = await fetch(
+                  "/schedules/" +
+                    encodeURIComponent(j.schedule_id) +
+                    "/" +
+                    action,
+                  { method: "POST", headers: headers() },
+                );
+                if (!r.ok) throw new Error("HTTP " + r.status);
+                await refreshSchedules();
+              } catch (e) {
+                document.getElementById("sched-err").textContent =
+                  "Could not " + action + " schedule: " + e.message;
+                b.disabled = false;
+              }
+            });
+            return b;
+          };
+          if (j.status === "paused")
+            actions.appendChild(mk("Resume", "resume"));
+          else if (j.status === "active")
+            actions.appendChild(mk("Pause", "pause"));
+          actions.appendChild(mk("Run now", "run"));
+          const hist = el("button", {}, "History");
+          hist.addEventListener("click", () => toggleHistory(j, grow));
+          actions.appendChild(hist);
+          const edit = el("button", {}, "Edit");
+          edit.addEventListener("click", () => editSchedule(j, grow));
+          actions.appendChild(edit);
+          actions.appendChild(mk("Cancel", "cancel"));
+          return el("li", { className: "row" }, [grow, actions]);
+        }
+
+        async function toggleHistory(job, container) {
+          const existing = container.querySelector(".sched-history");
+          if (existing) {
+            existing.remove();
+            return;
+          }
+          const box = el(
+            "div",
+            { className: "sched-history", style: "margin-top:6px" },
+            "Loading…",
+          );
+          container.appendChild(box);
+          try {
+            const r = await fetch(
+              "/schedules/" + encodeURIComponent(job.schedule_id),
+              { headers: headers() },
+            );
+            if (!r.ok) throw new Error("HTTP " + r.status);
+            const data = await r.json();
+            const runs = data.history || [];
+            box.textContent = "";
+            if (!runs.length) {
+              box.appendChild(el("div", { className: "m" }, "No runs yet."));
+              return;
+            }
+            runs.slice(0, 8).forEach((run) => {
+              const outcome = run.outcome || "?";
+              const cls =
+                outcome === "executed"
+                  ? "ok"
+                  : outcome === "failed" || outcome === "blocked"
+                    ? "bad"
+                    : "warn";
+              box.appendChild(
+                el("div", { style: "margin-top:3px" }, [
+                  el("span", { className: "pill " + cls }, outcome),
+                  el(
+                    "span",
+                    { className: "m" },
+                    " " +
+                      String(run.started_at || "")
+                        .replace("T", " ")
+                        .slice(0, 16) +
+                      (run.detail ? " — " + run.detail : ""),
+                  ),
+                ]),
+              );
+            });
+          } catch (e) {
+            box.textContent = "Could not load history: " + e.message;
+          }
+        }
+
+        async function editSchedule(job, container) {
+          if (container.querySelector(".sched-edit")) return;
+          const form = el("form", {
+            className: "sched-edit",
+            style:
+              "margin-top:6px; display:grid; grid-template-columns: 1fr 1fr auto; gap:6px",
+          });
+          const nameIn = el("input", {
+            value: job.name || "",
+            placeholder: "name",
+          });
+          const whenIn = el("input", {
+            value: job.schedule || "",
+            placeholder: "every morning at 8",
+          });
+          const save = el(
+            "button",
+            { className: "primary", type: "submit" },
+            "Save",
+          );
+          form.append(nameIn, whenIn, save);
+          container.appendChild(form);
+          form.addEventListener("submit", async (ev) => {
+            ev.preventDefault();
+            document.getElementById("sched-err").textContent = "";
+            try {
+              const r = await fetch(
+                "/schedules/" + encodeURIComponent(job.schedule_id),
+                {
+                  method: "PATCH",
+                  headers: headersJson(),
+                  body: JSON.stringify({
+                    name: nameIn.value.trim(),
+                    schedule: whenIn.value.trim(),
+                  }),
+                },
+              );
+              if (!r.ok) {
+                let d = "HTTP " + r.status;
+                try {
+                  d = (await r.json()).detail || d;
+                } catch (_) {}
+                throw new Error(d);
+              }
+              await refreshSchedules();
+            } catch (e) {
+              document.getElementById("sched-err").textContent =
+                "Could not save: " + e.message;
+            }
+          });
+        }
+
+        // "Start my day" reports the plan. "Begin work" acts on it: opens the next
+        // task's project and shows the exact prompt to hand the agent. It never
+        // starts the agent itself — that action asks first, on the Work page.
+        document
+          .getElementById("begin-work")
+          .addEventListener("click", async () => {
+            const out = document.getElementById("begin-work-out");
+            out.textContent = "Planning and opening your project…";
+            try {
+              const r = await fetch("/planner/begin-work", {
+                method: "POST",
+                headers: headersJson(),
+                body: "{}",
+              });
+              if (!r.ok) throw new Error("HTTP " + r.status);
+              const data = await r.json();
+              out.textContent = "";
+              out.appendChild(
+                el("div", { className: "t" }, data.headline || ""),
+              );
+              if (data.opened_project && data.opened_project.attempted) {
+                out.appendChild(
+                  el(
+                    "div",
+                    { className: "m" },
+                    (data.opened_project.ok ? "Opened: " : "Could not open: ") +
+                      (data.opened_project.message || ""),
+                  ),
+                );
+              } else {
+                out.appendChild(
+                  el(
+                    "div",
+                    { className: "m" },
+                    "No project to open for the next task.",
+                  ),
+                );
+              }
+              if (data.agent && data.agent.prompt) {
+                out.appendChild(
+                  el(
+                    "div",
+                    { className: "m" },
+                    "Next prompt for " +
+                      (data.agent.agent || "the agent") +
+                      ": " +
+                      data.agent.prompt,
+                  ),
+                );
+                out.appendChild(
+                  el("div", { className: "m" }, data.agent.note || ""),
+                );
+              }
+              await refresh();
+            } catch (e) {
+              out.textContent = "Could not begin work: " + e.message;
+            }
+          });
+
+        document
+          .getElementById("start-day")
+          .addEventListener("click", async () => {
+            const note = document.getElementById("start-day-note");
+            note.textContent = "Assembling…";
+            try {
+              const r = await fetch("/planner/start-day", {
+                method: "POST",
+                headers: headersJson(),
+                body: "{}",
+              });
+              if (!r.ok) throw new Error("HTTP " + r.status);
+              const data = await r.json();
+              note.textContent = data.headline || "";
+              await refresh();
+            } catch (e) {
+              note.textContent = "Could not assemble the day: " + e.message;
+            }
+          });
+
+        function renderMeetingBrief(data) {
+          const box = document.getElementById("meeting-brief");
+          const err = document.getElementById("meeting-err");
+          box.textContent = "";
+          err.textContent = "";
+          if (!data.ok) {
+            err.textContent = data.reason || "Could not prepare that meeting.";
+            (data.candidates || []).forEach((c) => {
+              box.appendChild(
+                el(
+                  "div",
+                  { className: "m" },
+                  "Candidate: " +
+                    (c.title || "(untitled)") +
+                    " — " +
+                    (c.start ? new Date(c.start).toLocaleString() : ""),
+                ),
+              );
+            });
+            return;
+          }
+          const m = data.meeting || {};
+          box.appendChild(
+            el("div", { className: "t" }, m.title || "(untitled)"),
+          );
+          box.appendChild(
+            el(
+              "div",
+              { className: "m" },
+              (m.start ? new Date(m.start).toLocaleString() : "") +
+                (m.location ? " · " + m.location : ""),
+            ),
+          );
+          if (data.conflict) {
+            box.appendChild(
+              el(
+                "div",
+                { className: "warnbox", style: "margin-top:8px" },
+                "Overlaps ‘" + (data.conflict.title || "another event") + "’.",
+              ),
+            );
+          }
+          const ul = el("ul", {});
+          (data.talking_points || []).forEach((p) =>
+            ul.appendChild(el("li", {}, p)),
+          );
+          box.appendChild(ul);
+          if (data.email_error) {
+            box.appendChild(
+              el("div", { className: "m" }, "Note: " + data.email_error),
+            );
+          }
+          if (data.workflow && data.workflow.length) {
+            box.appendChild(
+              el(
+                "div",
+                { className: "m" },
+                "Steps: " + data.workflow.join(" · "),
+              ),
+            );
+          }
+          box.appendChild(el("div", { className: "m" }, data.note || ""));
+          // Only after a meeting was really found: notes need something to attach to.
+          lastMeetingUid = m.uid || "";
+          document.getElementById("meeting-followup").hidden = !lastMeetingUid;
+          if (lastMeetingUid) loadMeetingNotes(lastMeetingUid);
+        }
+
+        let lastMeetingUid = "";
+
+        // Notes are stored, not just displayed: reopening a meeting shows what was
+        // written last time instead of an empty box pretending nothing happened.
+        async function loadMeetingNotes(uid) {
+          const box = document.getElementById("meeting-past");
+          box.textContent = "";
+          try {
+            const r = await fetch(
+              "/meetings/" + encodeURIComponent(uid) + "/notes",
+              { headers: headers() },
+            );
+            if (!r.ok) return;
+            const data = await r.json();
+            if (!data.count) return;
+            box.appendChild(
+              el(
+                "div",
+                { className: "m" },
+                data.count + " earlier note(s) for this meeting:",
+              ),
+            );
+            data.notes.slice(0, 3).forEach((n) => {
+              box.appendChild(
+                el(
+                  "div",
+                  {
+                    className: "m",
+                    style: "margin-top:4px;white-space:pre-wrap",
+                  },
+                  "· " + (n.notes || "(no notes)").slice(0, 400),
+                ),
+              );
+              if (n.action_items && n.action_items.length) {
+                box.appendChild(
+                  el(
+                    "div",
+                    { className: "m" },
+                    "  → " + n.action_items.join("; "),
+                  ),
+                );
+              }
+            });
+          } catch (e) {
+            /* a failed read must not hide the notes box */
+          }
+        }
+
+        document
+          .getElementById("meeting-save")
+          .addEventListener("click", async () => {
+            const note = document.getElementById("meeting-followup-note");
+            const notes = document.getElementById("meeting-notes").value;
+            if (!lastMeetingUid) {
+              note.textContent = "Prepare a meeting first.";
+              return;
+            }
+            note.textContent = "Saving…";
+            try {
+              const r = await fetch(
+                "/meetings/" +
+                  encodeURIComponent(lastMeetingUid) +
+                  "/follow-up",
+                {
+                  method: "POST",
+                  headers: headersJson(),
+                  body: JSON.stringify({ notes: notes }),
+                },
+              );
+              if (!r.ok) throw new Error("HTTP " + r.status);
+              const data = await r.json();
+              note.textContent = data.created_count
+                ? "Created " + data.created_count + " task(s) from these notes."
+                : data.note;
+              if (lastMeetingUid) await loadMeetingNotes(lastMeetingUid);
+              if (data.created_count) await refresh();
+            } catch (e) {
+              note.textContent = "Could not save: " + e.message;
+            }
+          });
+
+        document
+          .getElementById("meeting-form")
+          .addEventListener("submit", async (ev) => {
+            ev.preventDefault();
+            const name = document.getElementById("meeting-name").value.trim();
+            const box = document.getElementById("meeting-brief");
+            document.getElementById("meeting-err").textContent = "";
+            box.textContent = "Assembling…";
+            try {
+              const r = await fetch("/meetings/prepare", {
+                method: "POST",
+                headers: headersJson(),
+                body: JSON.stringify({ meeting: name }),
+              });
+              if (!r.ok) throw new Error("HTTP " + r.status);
+              renderMeetingBrief(await r.json());
+            } catch (e) {
+              box.textContent = "";
+              document.getElementById("meeting-err").textContent =
+                "Could not prepare the meeting: " + e.message;
+            }
+          });
+
+        // Reminders fire through the system's own notification centre. The
+        // distinction matters: "accepted" is not "you saw it".
+        async function loadNotifyStatus() {
+          const box = document.getElementById("notify-status");
+          try {
+            const r = await fetch("/notifications/status", {
+              headers: headers(),
+            });
+            const d = await r.json();
+            box.textContent = d.detail || "";
+            document.getElementById("notify-test").disabled = !d.macos_banner;
+            box.title = d.note || "";
+          } catch (e) {
+            box.textContent = "Could not check notification support.";
+          }
+        }
+
+        document
+          .getElementById("notify-test")
+          .addEventListener("click", async () => {
+            const note = document.getElementById("notify-note");
+            note.textContent = "Sending…";
+            try {
+              const r = await fetch("/notifications/test", {
+                method: "POST",
+                headers: headersJson(),
+                body: JSON.stringify({
+                  message: "This is a test notification from Vantage.",
+                }),
+              });
+              const d = await r.json();
+              note.textContent =
+                d.detail || (d.accepted ? "Requested." : "Refused.");
+            } catch (e) {
+              note.textContent = "Could not send: " + e.message;
+            }
+          });
+
+        // The report is built only from work recorded as completed, so an empty
+        // week reads as an empty week rather than a padded one.
+        document
+          .getElementById("weekly-report")
+          .addEventListener("click", async () => {
+            const out = document.getElementById("weekly-out");
+            out.textContent = "Building from recorded work…";
+            try {
+              const r = await fetch("/reports/weekly", { headers: headers() });
+              if (!r.ok) throw new Error("HTTP " + r.status);
+              const data = await r.json();
+              out.textContent = "";
+              out.appendChild(
+                el(
+                  "div",
+                  { className: "t" },
+                  data.completed_count +
+                    " task(s) completed in the last " +
+                    data.days +
+                    " days",
+                ),
+              );
+              if (!data.completed_count) {
+                out.appendChild(
+                  el(
+                    "div",
+                    { className: "m" },
+                    "Nothing was recorded as completed, so there is no progress to report.",
+                  ),
+                );
+              }
+              Object.keys(data.by_project || {})
+                .sort()
+                .forEach((proj) => {
+                  out.appendChild(
+                    el(
+                      "div",
+                      { className: "m", style: "margin-top:6px" },
+                      proj + ": " + data.by_project[proj].join("; "),
+                    ),
+                  );
+                });
+              out.appendChild(
+                el(
+                  "div",
+                  { className: "m", style: "margin-top:6px" },
+                  "Still open: " +
+                    data.open_count +
+                    (data.overdue.length
+                      ? ", " + data.overdue.length + " overdue."
+                      : "."),
+                ),
+              );
+              if (data.jobs && data.jobs.length) {
+                out.appendChild(
+                  el(
+                    "div",
+                    { className: "m" },
+                    data.jobs.length + " job(s) finished.",
+                  ),
+                );
+              }
+            } catch (e) {
+              out.textContent = "Could not build the report: " + e.message;
+            }
+          });
+
+        async function refreshAttention() {
+          const section = document.getElementById("attention-section");
+          const ul = document.getElementById("needs-attention");
+          try {
+            const r = await fetch("/attention", { headers: headers() });
+            if (!r.ok) {
+              section.hidden = true;
+              return;
+            }
+            const data = await r.json();
+            const items = data.items || [];
+            section.hidden = items.length === 0;
+            ul.textContent = "";
+            items.forEach((it) => {
+              const link =
+                it.surface === "work"
+                  ? "/work"
+                  : it.surface === "operator"
+                    ? "/operator"
+                    : "/planner";
+              ul.appendChild(
+                el("li", { className: "row" }, [
+                  el("div", { className: "grow" }, [
+                    el("div", { className: "t" }, it.title),
+                    it.detail ? el("div", { className: "m" }, it.detail) : "",
+                  ]),
+                  el("a", { href: link, className: "m" }, "Open"),
+                ]),
+              );
+            });
+          } catch (e) {
+            section.hidden = true;
+          }
+        }
+
+        async function refreshSchedules() {
+          const ul = document.getElementById("schedules");
+          try {
+            const r = await fetch("/schedules", { headers: headers() });
+            if (!r.ok) throw new Error("HTTP " + r.status);
+            const data = await r.json();
+            const jobs = data.schedules || [];
+            ul.textContent = "";
+            if (!jobs.length) {
+              ul.appendChild(
+                el("li", { className: "muted" }, "No scheduled automations."),
+              );
+            } else {
+              jobs.forEach((j) => ul.appendChild(scheduleRow(j)));
+            }
+          } catch (e) {
+            ul.textContent = "";
+            ul.appendChild(
+              el("li", { className: "muted" }, "Could not load schedules."),
+            );
+          }
+        }
+
+        document
+          .getElementById("task-search")
+          .addEventListener("input", renderTasks);
+        document
+          .getElementById("task-filter")
+          .addEventListener("change", renderTasks);
+
+        document
+          .getElementById("add-form")
+          .addEventListener("submit", async (ev) => {
+            ev.preventDefault();
+            errEl.textContent = "";
+            const title = document.getElementById("title").value.trim();
+            if (!title) return;
+            const priority = document.getElementById("priority").value;
+            try {
+              const r = await fetch("/planner/tasks", {
+                method: "POST",
+                headers: headersJson(),
+                body: JSON.stringify({ title, priority }),
+              });
+              if (!r.ok) throw new Error("HTTP " + r.status);
+              document.getElementById("title").value = "";
+              await refresh();
+            } catch (e) {
+              errEl.textContent = "Could not add task: " + e.message;
+            }
+          });
+
+        // Populate the datalist from the registry, not from two hard-coded names:
+        // the scheduler already supports far more, and a person cannot ask for an
+        // action they cannot discover.
+        async function loadSchedulableActions() {
+          const list = document.getElementById("sched-actions");
+          const note = document.getElementById("sched-action-list");
+          try {
+            const r = await fetch("/schedules/actions", { headers: headers() });
+            const data = await r.json();
+            const actions = data.actions || [];
+            list.textContent = "";
+            actions.forEach((a) => {
+              const opt = document.createElement("option");
+              opt.value = a.action;
+              if (a.description) opt.label = a.description.slice(0, 70);
+              list.appendChild(opt);
+            });
+            note.textContent =
+              (data.unattended_count ?? actions.length) +
+              " of " +
+              actions.length +
+              " actions run unattended; " +
+              (data.needs_approval_count ?? 0) +
+              " stop and wait for your approval " +
+              "on every run.";
+          } catch (e) {
+            note.textContent = "Could not list schedulable actions.";
+          }
+        }
+
+        document
+          .getElementById("sched-form")
+          .addEventListener("submit", async (ev) => {
+            ev.preventDefault();
+            const schedErr = document.getElementById("sched-err");
+            schedErr.textContent = "";
+            const action = document.getElementById("sched-action").value.trim();
+            const when = document.getElementById("sched-when").value.trim();
+            const message = document
+              .getElementById("sched-message")
+              .value.trim();
+            if (!action || !when) {
+              schedErr.textContent =
+                "Give an action (briefing or reminder) and when to run it.";
+              return;
+            }
+            if (!["briefing", "reminder"].includes(action)) {
+              schedErr.textContent =
+                "Only 'briefing' or 'reminder' can be scheduled.";
+              return;
+            }
+            const params =
+              action === "reminder" ? { message: message || "Reminder" } : {};
+            try {
+              const r = await fetch("/schedules", {
+                method: "POST",
+                headers: headersJson(),
+                body: JSON.stringify({ action, schedule: when, params }),
+              });
+              if (!r.ok) {
+                let detail = "HTTP " + r.status;
+                try {
+                  detail = (await r.json()).detail || detail;
+                } catch (_) {}
+                throw new Error(detail);
+              }
+              document.getElementById("sched-when").value = "";
+              document.getElementById("sched-message").value = "";
+              await refreshSchedules();
+            } catch (e) {
+              schedErr.textContent = "Could not schedule: " + e.message;
+            }
+          });
+
+        document
+          .getElementById("goal-form")
+          .addEventListener("submit", async (ev) => {
+            ev.preventDefault();
+            const goal = document.getElementById("goal").value.trim();
+            const project = document
+              .getElementById("goal-project")
+              .value.trim();
+            const ge = document.getElementById("goal-err");
+            const note = document.getElementById("goal-note");
+            ge.textContent = "";
+            note.textContent = "";
+            if (!goal) return;
+            try {
+              const r = await fetch("/planner/plan-goal", {
+                method: "POST",
+                headers: headersJson(),
+                body: JSON.stringify({ goal, project }),
+              });
+              if (!r.ok) throw new Error("HTTP " + r.status);
+              const data = await r.json();
+              note.textContent = data.note || "";
+              document.getElementById("goal").value = "";
+              await refresh();
+            } catch (e) {
+              ge.textContent = "Could not plan: " + e.message;
+            }
+          });
+
+        (async () => {
+          try {
+            await establishSession();
+            await refresh();
+            await loadNotifyStatus();
+            await loadSchedulableActions();
+          } catch (e) {
+            statusEl.textContent = "not connected";
+            errEl.textContent = e.message;
+          }
+        })();
+      })();
+    </script>
+  </body>
+</html>

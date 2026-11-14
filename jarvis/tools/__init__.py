@@ -8,28 +8,36 @@ dashboard can show the live catalogue.
 from __future__ import annotations
 
 from ..core.models import ToolSpec
+from ..config import get_settings
 from ..db.database import get_db
+from ..integrations import mcp_client
 from ..logging_setup import get_logger
 from ..registry.tools import ToolRegistry
 from . import (
     agents,
     browser,
+    browser_tools,
     coding_agent,
     apps,
     calendar,
     car,
+    clipboard,
     coding,
     design,
     desktop,
     email,
     files,
+    google_tasks,
     home,
     knowledge,
     laptop_center,
+    mcp_tools,
+    n8n_tools,
     memory_controls,
     memory_tools,
     phone,
     persistence,
+    planner,
     research,
     robotics,
     scheduler,
@@ -50,6 +58,7 @@ def _all_specs():
         *browser.SPECS,
         *coding_agent.SPECS,
         *apps.SPECS,
+        *clipboard.SPECS,
         *files.SPECS,
         *system.SPECS,
         *storage.SPECS,
@@ -58,8 +67,13 @@ def _all_specs():
         *phone.SPECS,
         *email.SPECS,
         *calendar.SPECS,
+        *google_tasks.SPECS,
+        *mcp_tools.specs_for(mcp_client.active_connector() or
+                             mcp_client.connector_from_settings(get_settings())),
+        *n8n_tools.specs_for(),
         *scheduler.SPECS,
         *memory_controls.SPECS,
+        *planner.SPECS,
         *research.SPECS,
         *coding.SPECS,
         *laptop_center.SPECS,
@@ -73,6 +87,7 @@ def _all_specs():
         *websearch.SPECS,
         *persistence.SPECS,
         *desktop.SPECS,
+        *browser_tools.SPECS,
     ]
 
 

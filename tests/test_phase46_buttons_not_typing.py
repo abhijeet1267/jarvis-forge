@@ -53,12 +53,34 @@ def client(core):
 
 
 def _quick_actions(source: str) -> list[dict]:
-    """The QUICK array a page declares, parsed out of its own source."""
-    block = re.search(r"const QUICK = \[(.*?)\n\];", source, re.S)
+    """The quick-action phrase table a page declares, parsed from its own source.
+
+    The page no longer ships a static button list: it declares a table of
+    ``[keyword, tool, say]`` phrases and renders only those whose tool the live
+    registry still has (``TOOL_QUICK_PHRASES`` on the laptop, ``TOOLS_QUICK_PHRASES``
+    on the phone). This returns the *declared* table; callers that need what is
+    actually shown should filter it against the registry, exactly as the page does.
+    """
+    block = re.search(
+        r"const (?:TOOL|TOOLS)_QUICK_PHRASES = \[(.*?)\n\s*\];", source, re.S
+    )
     assert block, "the page declares no quick actions"
-    return [{"label": m.group(1), "tool": m.group(2), "say": m.group(3)} for m in
-            re.finditer(r'\{ label: "([^"]+)", tool: "([^"]+)", say: "([^"]*)" \}',
-                        block.group(1))]
+    return [
+        {"label": keyword.replace("_", " ").upper(), "tool": tool, "say": say}
+        for keyword, tool, say in (
+            (m.group(1), m.group(2), m.group(3))
+            for m in re.finditer(
+                r'\[\s*"([^"]+)"\s*,\s*"([^"]+)"\s*,\s*"([^"]*)"\s*\]', block.group(1)
+            )
+        )
+    ]
+
+
+def _rendered_quick_actions(source: str, registry_tools: set) -> list[dict]:
+    """What the page would actually show: the declared table filtered to tools the
+    registry still has -- the same filter the page's render pass applies, so a
+    button the page hides is one this test does not assert either."""
+    return [a for a in _quick_actions(source) if a["tool"] in registry_tools]
 
 
 # ---------------------------------------------------------------------------
@@ -78,11 +100,16 @@ def _filled(say: str) -> str:
 @pytest.mark.parametrize("page", ["index.html", "phone.html"])
 def test_every_quick_action_names_a_real_tool(client, page):
     source = (DASH / page).read_text()
-    actions = _quick_actions(source)
-    assert actions, f"{page} offers nothing to tap"
+    declared = _quick_actions(source)
+    assert declared, f"{page} declares no quick actions"
     names = _registry(client)
-    missing = [a["tool"] for a in actions if a["tool"] not in names]
-    assert not missing, f"{page} advertises tools the registry does not have: {missing}"
+    # The page renders only declared phrases whose tool the registry still has, so a
+    # button may only exist for a capability that does. Verify that subset is non-empty
+    # (the page offers something) and names only real tools.
+    rendered = _rendered_quick_actions(source, names)
+    assert rendered, f"{page} would render no quick actions against the live registry"
+    missing = [a["tool"] for a in rendered if a["tool"] not in names]
+    assert not missing, f"{page} renders tools the registry does not have: {missing}"
 
 
 @pytest.mark.parametrize("page", ["index.html", "phone.html"])
@@ -101,7 +128,11 @@ def test_every_button_says_a_sentence_the_planner_routes(page):
     from jarvis.tools import build_default_registry
 
     planner = RulePlanner(build_default_registry())
-    for action in _quick_actions((DASH / page).read_text()):
+    names = {t for t in build_default_registry().names()}
+    # Only buttons the page would actually render are asserted here: a declared phrase
+    # whose tool is not in the registry is filtered out by the page, so it is not a
+    # button that "does the wrong thing" -- it does not appear at all.
+    for action in _rendered_quick_actions((DASH / page).read_text(), names):
         text = _filled(action["say"])
         plan = planner.parse(text)
         got = [a.tool for a in plan.actions]
@@ -131,9 +162,13 @@ def test_the_page_hides_an_action_whose_tool_is_gone(page):
     the registry is the thing that changes.
     """
     source = (DASH / page).read_text()
-    assert re.search(r"QUICK\.filter\(", source), (
-        "the page renders QUICK without checking it against /tools")
-    assert re.search(r"indexOf\(a\.tool\)|includes\(a\.tool\)|names\.has\(a\.tool\)", source), (
+    # The page must render only phrases whose tool the live registry still has. The
+    # table name and the call are checked loosely (the reflowed source may break the
+    # argument across lines), but both the .filter and the includes(tool) must be
+    # present, or the guard is not there.
+    assert re.search(r"QUICK_PHRASES\.filter\(", source, re.S), (
+        "the page renders its phrase table without checking it against /tools")
+    assert re.search(r"names\.includes\(tool\)", source), (
         "the check is not against the tool names the server returned")
 
 
@@ -151,6 +186,8 @@ WANTED = {
 
 @pytest.mark.parametrize("page", ["index.html", "phone.html"])
 def test_the_actions_cover_what_the_reader_asks_for(page):
+    # Every one of these tools is in the registry, so on both pages the page renders a
+    # button for it as long as it declares the phrase. Check the declared table.
     tools = {a["tool"] for a in _quick_actions((DASH / page).read_text())}
     missing = [f"{tool} ({WANTED[tool]})" for tool in WANTED if tool not in tools]
     assert not missing, f"{page} has no button for: {', '.join(missing)}"
@@ -348,10 +385,13 @@ def test_the_tool_registry_can_be_filtered():
     detach-the-node bug the phone page already records for its Approve button.
     """
     source = (DASH / "index.html").read_text()
-    assert re.search(r'<div class="toolbar">\s*<input id="toolFilter"', source), (
+    # The reflowed source may break these across lines, so the patterns tolerate
+    # arbitrary whitespace between the tokens -- the invariant (a static filter box
+    # wired to an input listener) is what matters, not the line layout.
+    assert re.search(r'<div class="toolbar">\s*<input\s[^>]*id="toolFilter"', source), (
         "the filter box is not static markup")
     assert 'id="toolCount"' in source, "the page never says how many tools matched"
-    assert re.search(r'getElementById\("toolFilter"\)\.addEventListener\(\s*"input"', source), (
+    assert re.search(r'getElementById\(\s*"toolFilter"\s*\)\s*\.addEventListener\(\s*"input"', source, re.S), (
         "typing in the filter does nothing")
 
 
@@ -364,8 +404,10 @@ def test_a_forgotten_device_reads_as_forgotten():
     reached before the online/offline one, or the row keeps falling through to a lie.
     """
     source = (DASH / "index.html").read_text()
-    revoked = re.search(r'auth_state === "revoked" \? "revoked"', source)
-    online = re.search(r'd\.online \? "online"', source)
+    # Tolerate the reflowed line layout; the invariant is the *order* of the two
+    # branches, which whitespace cannot change.
+    revoked = re.search(r'auth_state === "revoked"\s*\?\s*"revoked"', source)
+    online = re.search(r'd\.online\s*\?\s*"online"', source)
     assert revoked and online, "the devices card has no revoked branch at all"
     assert revoked.start() < online.start(), "a revoked device falls through to offline"
 

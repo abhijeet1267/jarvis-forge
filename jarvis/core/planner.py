@@ -93,6 +93,10 @@ _CAR_NEEDS_CAR_WORD = {
 }
 
 
+def n8n_mod_tool_name(key: str) -> str:
+    """The tool name an n8n registry key registers under."""
+    return f"n8n__{key}"
+
 @dataclass
 class Intent:
     """A parsed intent before it becomes a plan."""
@@ -106,11 +110,32 @@ class Intent:
     #: Carried through to the plan so the orchestrator can look the candidates up in the
     #: registry rather than making the user recite an id (Phase 33).
     missing_identifiers: Tuple[str, ...] = ()
+    #: The thing the sentence named, if it named one. "cancel my Design Review event"
+    #: names *Design Review*; an identifier lookup needs that name to find the row.
+    named_thing: str = ""
     #: Is this note a question the user can answer to proceed? ``None`` means "read
     #: it from the wording", which is safe here because the wording being read is the
     #: route's own sentence, not the user's punctuation. Set it to ``False`` where a
     #: note states something unavailable instead of asking for something missing.
     clarification: Optional[bool] = None
+    #: The plan's reply kind, when the route knows it.
+    #:
+    #: A note-only intent normally becomes a `declined` plan, which the
+    #: orchestrator answers with the note and nothing else. A route that is
+    #: saying "the rules did not find an action for this, but the model
+    #: might" says so here, and the plan becomes `not_understood` -- the
+    #: kind the orchestrator routes to the model, first for an answer and
+    #: then for a proposal.
+    reply_kind: Optional[str] = None
+    #: A demonstrative ("read that one", "summarize the second one") points
+    #: at the message the conversation selected. Carried to the orchestrator,
+    #: which holds the per-session selection and turns it into a real action.
+    #: ``None`` (default) means the sentence named its own target; ``""`` means
+    #: the selected one; an ordinal word/number means a pick from the last list.
+    referent: Optional[str] = None
+    #: The body of a reply the sentence already carries ("reply to that one
+    #: saying thanks"). Goes into the draft, never invented.
+    referent_body: str = ""
 
 
 # Reasons a capability cannot answer *right now*, named for what is actually
@@ -165,6 +190,12 @@ class RulePlanner:
         self.tools = tools
         self.apps = apps or AppRegistry()
         self._rules: List[RuleFn] = [
+            # First, because the sentence says "workflow": a rule that shares a
+            # word with it ("daily agenda", "repository maintenance") would
+            # otherwise claim it and answer a different question. The rule is
+            # narrow enough -- it needs the word workflow/n8n/automation -- that
+            # it cannot steal a sentence that is not about automation.
+            self._automation,
             self._emergency_stop,
             self._help,
             self._vantage_self,
@@ -188,7 +219,18 @@ class RulePlanner:
             self._project,
             self._list_directory,
             self._compress,
+            # Ahead of the file rules: "delete the task to call Sam" names a
+            # planner object, and `_delete` would otherwise propose deleting a
+            # file called "the task to call Sam".
+            self._cancel_task,
             self._delete,
+            self._begin_work,
+            self._running_apps,
+            self._review_downloads,
+            self._reschedule_unfinished,
+            # Ahead of the file rules: "copy hello to the clipboard" was read as a
+            # copy_file from a file called "hello".
+            self._clipboard,
             self._copy_move,
             self._write_file,
             self._append_file,
@@ -196,6 +238,9 @@ class RulePlanner:
             self._find_and_open,
             self._open_standard_folder,
             self._open_url,
+            self._page_actions,
+            self._read_page,
+            self._focus_app,
             self._open_app,
             self._research,
             self._vision,
@@ -204,11 +249,19 @@ class RulePlanner:
             self._search_files,
             self._design,
             self._laptop_center_prompt,
+            self._schedule_coding_block,
             self._coding,
             self._device_management,
             self._transfer,
+            self._task_from_email,
+            # A sentence carrying a cadence is a *schedule*, and the scheduler must
+            # see it before any single-action rule claims the verb inside it. "every
+            # morning at 8 check the battery" was answering the battery question now
+            # and silently dropping the "every morning".
             self._scheduler,
+            self._planner,
             self._email,
+            self._availability,
             self._calendar,
             self._home,
             self._robotics,
@@ -246,16 +299,32 @@ class RulePlanner:
             intent="unknown",
             reply_kind="not_understood",
             direct_reply=(
-                "I understood the words but not the goal yet. You don't have to remember "
-                'a command list -- things I can do right now: "what is a train", '
-                '"open github.com", "check storage", "open my project", "find my report", '
-                '"what is my battery", "remember that ...", "what did I work on yesterday".'
+                "I understood the words but not the goal yet. With an AI provider "
+                "configured (Settings → AI Providers) I can answer any question "
+                "conversationally. Without one, things I can do right now include: "
+                '"what is a train", "open github.com", "check storage", '
+                '"open my project", "what is my battery", "find my report", '
+                '"remember that ...".'
             ),
             planner="rules",
         )
 
+    _CADENCE = re.compile(
+        r"\b(?:every|each)\s+(?:\d+\s*)?(?:day|morning|evening|night|afternoon|weekday|"
+        r"week|monday|tuesday|wednesday|thursday|friday|saturday|sunday|"
+        r"\d+\s*(?:minutes?|mins?|hours?|hrs?))\b", re.I)
+
     def _first_intent(self, text: str, raw: str) -> Optional[Intent]:
         """Run the rule chain and return the first intent that matches."""
+        # A cadence anywhere in the sentence makes it a schedule. Answered before
+        # the chain, because several single-action rules ("check the battery",
+        # "show my running applications") match the verb inside a scheduled
+        # sentence and would answer *now*, silently dropping the "every morning".
+        if self._CADENCE.search(raw):
+            scheduled = self._scheduler(text, raw)
+            if scheduled is not None and scheduled.tool:
+                return scheduled
+
         for rule in self._rules:
             try:
                 intent = rule(text, raw)
@@ -329,10 +398,28 @@ class RulePlanner:
                 else _asks_for_something(intent.note)
             plan.direct_reply = intent.note
             plan.missing_identifiers = list(intent.missing_identifiers)
-            if ask:
+            plan.named_thing = intent.named_thing
+            plan.referent = intent.referent
+            plan.referent_body = intent.referent_body
+            if intent.reply_kind:
+                # The route knows what kind of note this is -- a request the
+                # model may be able to act on, rather than a refusal.
+                plan.reply_kind = intent.reply_kind
+                if intent.reply_kind == "not_understood":
+                    plan.needs_clarification = False
+            elif ask:
                 plan.reply_kind = "clarification"
                 plan.needs_clarification = True
                 plan.clarification_question = intent.note
+            elif intent.name == "smalltalk":
+                # A greeting is neither a refusal nor a question — it is the one note
+                # whose whole point is that the user is being conversational. Mark it
+                # "smalltalk" (which the orchestrator routes to the configured model) so
+                # a plain "hello" is answered conversationally when a model is available,
+                # instead of the hardcoded "add an API key" line. Before this, the
+                # fallthrough labelled it "declined", which is not in the orchestrator's
+                # conversational set and so never reached the model.
+                plan.reply_kind = "smalltalk"
             else:
                 plan.reply_kind = "declined"
             return plan
@@ -370,6 +457,139 @@ class RulePlanner:
         """Case-insensitive match against the original text, preserving case."""
         found = re.search(pattern, raw, re.I)
         return found.group(group) if found else None
+
+    #: Words that say *which* mailbox to read, not *what to search for*. The search
+    #: term is what is left once the medium ("email", "inbox"), the ask ("find",
+    #: "show me") and the connectives ("my", "the", "for", "about") are gone. A term
+    #: made only of these words means the person asked for the mailbox, not for a
+    #: message about a thing -- and asking for the mailbox is a search for nothing,
+    #: not a search for the words they said.
+    _EMAIL_FILTER_WORDS = frozenset({
+        "email", "emails", "mail", "mails", "message", "messages", "inbox", "post",
+        "find", "show", "search", "check", "read", "look", "see", "list", "get",
+        "me", "my", "our", "your", "the", "a", "an", "of", "for", "about", "from",
+        "on", "in", "is", "are", "any", "new", "latest", "recent", "unread",
+    })
+
+    @classmethod
+    def _email_search_term(cls, raw: str) -> str:
+        """The thing a mailbox request searches for, or ``""`` when it names none.
+
+        "find emails about the invoice" searches for *invoice*, not for the words
+        used to ask. Without this the route sent ``query=""`` and the provider
+        answered with the most recent messages -- a search that does not search,
+        and the first step of the email workflow was the one that never ran.
+        """
+        text = re.sub(r"[^A-Za-z0-9 _'-]", " ", raw or "")
+        words = text.split()
+        kept = [w for w in words if cls._stem(w.lower()) not in cls._EMAIL_FILTER_WORDS]
+        term = " ".join(kept).strip(" ,'-")
+        return term if 1 <= len(term) <= 120 else ""
+
+    #: A read-family verb acting on a message the conversation already dealt
+    #: with. Strong verbs (read / open / summarise / print) act on a message by
+    #: their own nature, so a bare "read it" is a referent even when the
+    #: sentence names no email word. Weak verbs (show / tell / give ...) are
+    #: general-language and may only consume a referent when the sentence is
+    #: email-flavoured -- otherwise "show me the one you built" would be
+    #: routed to a mail read. Reply verbs are strong too: "reply to that one"
+    #: points at a message by its nature, and the reply branch is the one that
+    #: owns that shape, so it must carry the reference here as well.
+    _EMAIL_REFERENT_STRONG_VERBS = re.compile(
+        r"\b(?:read|open|summar\w*|print|repl\w*|answer|respond|write back)\b", re.I)
+    _EMAIL_REFERENT_WEAK_VERBS = re.compile(
+        r"\b(?:show|look|tell|give|play)\b"
+        r"|\bwhat\s+(?:did|does|do)\s+(?:they|it|he|she|the\s+\w+)\s+sa(?:y|id)\b"
+        r"|\b(?:what\s+)?(?:more\s+)?about\b",
+        re.I,
+    )
+
+    #: A message named by pointing at what the conversation just showed, in the
+    #: person's own words. ``that email`` / ``it`` / ``the one you found`` are
+    #: referents. ``that invoice email`` is **not**: a name after the
+    #: demonstrative is the message itself, and the lookup must search for it
+    #: rather than reuse the last read -- so ``that``/``this`` count only when
+    #: nothing names the message after them.
+    _EMAIL_REFERENT_OBJECT = re.compile(
+        r"\bit\b"
+        r"|\b(?:that|this)\s+(?:one|email|e-mail|message)\b"
+        r"|\bthe\s+one\b"
+        r"|\b(?:that|this)\s*[,.!?\s]*$"
+        r"|\bthe\s+(?:email|e-mail|message|one)\s+you\s+(?:found|showed|sent|matched)\b",
+        re.I,
+    )
+
+    #: Ordinal words and numbers a person uses to pick from a list.
+    _EMAIL_REFERENT_ORDINAL = re.compile(
+        r"\b(?:the\s+)?(first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|last)\b"
+        r"(?:\s+(?:one|email|e-mail|message|it))?"
+        r"|\bnumber\s+(\d+)\b"
+        r"|\b(?:the\s+)?(\d+)(?:st|nd|rd|th)?\s+(?:one|email|e-mail|message)\b",
+        re.I,
+    )
+
+    #: What makes a weak-verb sentence ("show me ...") an email request: a
+    #: medium word, or an object that names a mailbox relationship on its own
+    #: ("that email", "the one you found"). A bare "show me it" has neither,
+    #: and must not become a mail read.
+    _EMAIL_REFERENT_EMAILISH = re.compile(
+        r"\b(?:emails?|e-?mails?|mail|message)\b"
+        r"|\byou\s+(?:found|showed|sent|matched)\b",
+        re.I,
+    )
+
+    def _email_referent(self, text: str, has_email_noun: bool) -> Optional[str]:
+        """What a demonstrative ("read that one", "the second one") points at.
+
+        Returns ``""`` for the message the conversation selected, the ordinal
+        word or number when the person picked from a list, and ``None`` when the
+        sentence names its own target (or is not a referent at all). The planner
+        has no memory of the conversation, so it only reports the reference; the
+        orchestrator, which holds the per-session selection, resolves it to a
+        real uid -- or says honestly that there is nothing to point at.
+
+        A demonstrative, by construction, usually names no email word -- that
+        is what "that one" means. Strong read verbs (read / open / summarise /
+        print) may therefore carry a referent without a signal: the
+        orchestrator is fail-closed, so the worst a referent with no
+        selection behind it does is say "there is no email to point at".
+        Weak verbs are general-language, so they need an email signal -- a
+        medium word or an object that names a mailbox relationship ("that
+        email", "the one you found") -- or they do not become references.
+        """
+        # Making a task from a message is a read of it, not a new operation on the
+        # world, so the same rule applies: a demonstrative names the selection.
+        if re.search(r"\b(?:task|todo|to-do|reminder)\b", text, re.I):
+            return "" if self._EMAIL_REFERENT_OBJECT.search(text) else None
+        if not self._EMAIL_REFERENT_STRONG_VERBS.search(text):
+            if not (self._EMAIL_REFERENT_WEAK_VERBS.search(text)
+                    and (has_email_noun or self._EMAIL_REFERENT_EMAILISH.search(text))):
+                return None
+        ordinal = self._EMAIL_REFERENT_ORDINAL.search(text)
+        if ordinal:
+            word, number, suffix = ordinal.group(1), ordinal.group(2), ordinal.group(3)
+            return (number or suffix or word).lower()
+        if self._EMAIL_REFERENT_OBJECT.search(text):
+            return ""
+        return None
+
+    @staticmethod
+    def _email_reply_body(raw: str) -> str:
+        """The words a reply already carries, or ``""`` when it does not.
+
+        "reply to that one saying thanks for the invoice" carries *thanks for
+        the invoice*. The lead-in ("reply to that one", "saying") is the
+        request, not the body, so it is stripped; what is left is drafted
+        verbatim. A reply with no "saying ..." clause gets an empty body, not
+        an invented one -- drafting an empty reply the person can edit is the
+        honest step.
+        """
+        match = re.search(
+            r"\b(?:saying|that\s+say|with\s+the\s+(?:body|text))\b\s*(.+)$",
+            raw, re.I)
+        if not match:
+            return ""
+        return RulePlanner._arg(match.group(1))
 
     # -- file creation / modification ----------------------------------------
     #
@@ -1114,6 +1334,13 @@ class RulePlanner:
         return Intent("web_search", tool="search_web", params={"query": what}, confidence=0.9)
 
     def _search_files(self, text: str, raw: str) -> Optional[Intent]:
+        # "find emails about..." / "search emails for..." belongs to the email
+        # route, not to file search. Without this gate, "find emails about the
+        # project proposal" was caught here (type_word "projects?" + find verb)
+        # and routed to search_files instead of email.
+        if re.search(r"\b(emails?|messages?|mail|inbox)\b", text):
+            return None
+
         # Trigger on a file-type word OR a filename-like token with an
         # extension, so "find nested.txt" works and not just "find my report".
         has_type_word = re.search(
@@ -1188,6 +1415,19 @@ class RulePlanner:
         if captured is None:
             return None
         path = self._arg(captured)
+        # "archive that event" / "archive my standup meeting" / "archive that
+        # schedule" is a calendar or managed-domain request, not a file to
+        # compress. The transfer rule runs before those rules, so it must defer
+        # (return None) -- otherwise "archive my standup meeting" becomes a
+        # proposal to compress a file literally named "my standup meeting". A
+        # file or folder whose name contains a domain word still wins (it looks
+        # like a file / names a container).
+        if self._names_a_domain_thing(path) and not self._looks_like_a_file(path):
+            return None
+        # "archive that email" is not a file to compress. A real folder called
+        # "emails/" still passes (it looks like a file); a mail message does not.
+        if self._names_an_email_thing(path) and not self._looks_like_a_file(path):
+            return self._email_not_supported("archive or compress")
         if not path or path.lower() in {"this", "that", "it"}:
             return Intent("compress", note="Which file or folder should I compress?")
         return Intent("compress", tool="compress_path", params={"path": path})
@@ -1197,6 +1437,20 @@ class RulePlanner:
         if captured is None:
             return None
         path = self._arg(captured)
+        # "delete my Design Review event" / "delete the paper about X" /
+        # "delete that schedule" is a request to remove a calendar or
+        # managed-domain entry, not to delete a file. Defer to the domain rule
+        # (calendar routes to cancel_event, behind its own confirmation) --
+        # otherwise this becomes a proposal to delete a file literally named
+        # after the entry. A file or folder whose name contains a domain word
+        # still wins.
+        if self._names_a_domain_thing(path) and not self._looks_like_a_file(path):
+            return None
+        # "delete that email" is a request to remove a mail message, not a file.
+        # The backend has no such operation, so decline honestly rather than
+        # deleting a file literally named "my invoice email".
+        if self._names_an_email_thing(path) and not self._looks_like_a_file(path):
+            return self._email_not_supported("delete")
         # Never infer a broad target from a vague pronoun.
         if not path or path.lower() in {"this", "that", "it", "these", "those", "them"}:
             return Intent(
@@ -1212,11 +1466,21 @@ class RulePlanner:
     def _copy_move(self, text: str, raw: str) -> Optional[Intent]:
         copy_match = re.search(r"\bcopy\b\s+(.+?)\s+to\s+(.+)", raw, re.I)
         if copy_match:
+            src = self._arg(copy_match.group(1))
+            # "copy that event to notes" / "copy that schedule to a file" is a
+            # calendar or managed-domain request, not a file to copy. Defer; a
+            # file or folder named after a domain entry still wins.
+            if self._names_a_domain_thing(src) and not self._looks_like_a_file(src):
+                return None
+            # "copy that email to notes" is not a file to copy. A folder really
+            # called "emails/" still passes (it looks like a file).
+            if self._names_an_email_thing(src) and not self._looks_like_a_file(src):
+                return self._email_not_supported("copy or save aside")
             return Intent(
                 "copy",
                 tool="copy_file",
                 params={
-                    "source": self._arg(copy_match.group(1)),
+                    "source": src,
                     "destination": self._arg(copy_match.group(2)),
                 },
             )
@@ -1224,6 +1488,12 @@ class RulePlanner:
         if move_match:
             src = move_match.group(1).strip()
             dst = move_match.group(2).strip()
+            # "move my invoice email to the trash" is a request to refile a mail
+            # message, not a file. Same guard shape as the calendar deferral
+            # below: on the subject, and only when the subject is not itself a
+            # file. The backend has no such operation, so decline honestly.
+            if self._names_an_email_thing(src) and not self._looks_like_a_file(src):
+                return self._email_not_supported("move or refile")
             # "move the amr to (1, 2)" is robot motion, not a file move -- defer
             # it to the robotics rule. A bare coordinate destination, or a short
             # robot reference (no path separator, no file extension) as the
@@ -1236,6 +1506,36 @@ class RulePlanner:
             )
             if is_coord or robot_phrase:
                 return None
+            # "move my Design Review event to tomorrow at 3pm" is a calendar
+            # request, not a file rename. The transfer rule runs before the
+            # calendar rule, so it has to defer here -- otherwise a request
+            # to *move an event* becomes a proposal to rename a file, and
+            # the person approves it.
+            #
+            # The deferral is on the *subject* (the thing being moved) and
+            # not on the destination, because the destination of a calendar
+            # move is a time ("tomorrow at 3pm") and the destination of a
+            # file move is a path.
+            #
+            # A subject that *is* a file wins over the domain words: a file
+            # called "event-log.txt" is a file, and refusing to move it
+            # because its name contains a domain noun is the same kind of
+            # wrong-domain reading this deferral exists to prevent. Covers
+            # calendar entries and the other managed domains.
+            if self._names_a_domain_thing(src) and not self._looks_like_a_file(src):
+                return None
+            # A move whose *destination* is a clock time is a calendar move, not a
+            # file rename: "reschedule Move probe sync to 5 PM" and "move the design
+            # review to 4 PM" both became `move_file` proposals, and the person was
+            # asked to approve a filesystem rename of a meeting. The destination of
+            # a file move is a path; the destination of a calendar move is a time.
+            is_clock_destination = bool(re.search(
+                r"\b\d{1,2}(?::\d{2})?\s*(?:am|pm)\b|\b\d{1,2}:\d{2}\b|"
+                r"\b(?:today|tomorrow|tonight|next\s+\w+|this\s+\w+)\b|"
+                r"\b(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b",
+                dst, re.I))
+            if is_clock_destination and not self._looks_like_a_file(src):
+                return None
             return Intent(
                 "move",
                 tool="move_file",
@@ -1246,7 +1546,171 @@ class RulePlanner:
             )
         return None
 
+    #: The words that name a calendar thing, used to defer the file-move
+    #: rule. Deliberately the *nouns* only: "move" and "to" are the rule's
+    #: own words, and a title that happens to contain one of them ("move
+    #: the budget to 2027") must not read as a calendar request.
+    _CALENDAR_SUBJECT = re.compile(
+        r"\b(calendar|event|events|meeting|meetings|appointment|appointments|"
+        r"invite|invitation|invitations|reschedule|rebook|attendee|"
+        r"availability|"
+        # Recurring-meeting names are calendar objects too, and without them
+        # "archive the standup" became a proposal to zip a file of that name.
+        r"standup|stand-up|sync|syncs|1:1|one-on-one|retro|retrospective|"
+        r"kickoff|kick-off|huddle|scrum|review|interview)\b", re.I)
+
+    def _names_a_calendar_thing(self, subject: str) -> bool:
+        """Whether the thing named is a calendar entry, not a file/folder.
+
+        The check is on the subject and not on the whole sentence: "move my
+        Design Review event to tomorrow" names an event, while "move the
+        report to the archive" does not. A subject that names a *container*
+        (a folder/directory/file) is a filesystem target, not a calendar
+        entry, so "compress the events folder" compresses a folder called
+        "events", not a calendar request.
+        """
+        subject = subject or ""
+        if self._SUBJECT_IS_A_CONTAINER.search(subject):
+            return False
+        return bool(self._CALENDAR_SUBJECT.search(subject))
+
+    #: The words that name an email message, used to keep the file routes from
+    #: treating a mail request as a file operation. The same cross-domain
+    #: misroute the calendar deferral guards, one verb family over: "archive
+    #: that email" must not become `compress_path("that email")`, and "move my
+    #: invoice email to the trash" must not become a `move_file`. These are the
+    #: *nouns* only, for the same reason as the calendar set.
+    _EMAIL_SUBJECT = re.compile(
+        r"\b(emails?|e-?mails?|mail|message|messages|inbox|mailbox)\b", re.I)
+
+    #: Container nouns: a subject that names one is a file/directory the person
+    # wants to manipulate, not a message or a calendar entry. "compress the
+    # events folder" and "move the emails folder to backup" target a folder
+    # that happens to be called "events"/"emails", and must not be read as a
+    # calendar or mail request. Shared by the calendar and email deferrals.
+    _SUBJECT_IS_A_CONTAINER = re.compile(
+        r"\b(folders?|directories?|dirs?|files?|paths?)\b", re.I)
+
+    def _names_an_email_thing(self, subject: str) -> bool:
+        """Whether the thing named is an email message, not a file.
+
+        Mirrors `_names_a_calendar_thing`: the check is on the subject, and the
+        caller additionally confirms it does not *look* like a file (a path or
+        extension). A subject that also names a container ("the emails folder")
+        is a directory, not a message, so it is not treated as mail either.
+        """
+        subject = subject or ""
+        if self._SUBJECT_IS_A_CONTAINER.search(subject):
+            return False
+        return bool(self._EMAIL_SUBJECT.search(subject))
+
+    #: Nouns that name an entry in one of the other managed domains, used to keep
+    # the file-mutating routes from treating a domain request as a file op. Same
+    # wrong-target-mutation class as the calendar and email deferrals: "delete the
+    # paper about growing agents" must not become `delete_file("the paper about
+    # growing agents")`. Deliberately the *nouns* only, and a conservative set --
+    # only the domain nouns audited to be misrouted (asset / paper / schedule /
+    # briefing / workspace). Broader words (note, project, report) route to the
+    # memory/file routes by design and are not added here.
+    _DOMAIN_SUBJECT = re.compile(
+        r"\b(asset|assets|paper|papers|schedule|schedules|briefing|briefings|"
+        r"workspace|workspaces)\b", re.I)
+
+    def _names_a_domain_thing(self, subject: str) -> bool:
+        """Whether the subject names a calendar or other managed-domain entry,
+        not a file -- the condition under which a file-mutating route must defer.
+
+        Superset of `_names_a_calendar_thing` (calendar nouns + the other
+        managed domains). Excludes subjects that name a *container* (a folder
+        or file, by extension or by container noun), so "compress the events
+        folder" still compresses a folder. The caller confirms the subject is
+        not a file; this gives the noun condition.
+        """
+        subject = subject or ""
+        if self._SUBJECT_IS_A_CONTAINER.search(subject):
+            return False
+        return bool(self._CALENDAR_SUBJECT.search(subject)
+                    or self._DOMAIN_SUBJECT.search(subject))
+
+    def _email_not_supported(self, action: str) -> Intent:
+        """An honest decline for an organize operation the mail backend lacks.
+
+        The mail providers (local maildir, IMAP/SMTP) implement search / read /
+        summarise / draft / send and nothing else. "archive that email", "move
+        my invoice email to work", "delete that email" have no real operation
+        to call, so a file route must not turn them into a file mutation and
+        the planner must not invent one. This says what the backend actually
+        does instead of pretending it can do the organize step.
+        """
+        return Intent(
+            "email",
+            note=(
+                f"I can't {action} a message — this mail backend has no such "
+                "operation. I can search for it, read it, summarise it, or "
+                "draft a reply."
+            ),
+            clarification=False,
+        )
+
+    @staticmethod
+    def _looks_like_a_file(subject: str) -> bool:
+        """Whether the subject names a file rather than a thing.
+
+        A path separator or a file extension is what makes it a file. The
+        sentence "move my Design Review event" has neither, so it is not one.
+        """
+        text = (subject or "").strip()
+        if not text:
+            return False
+        if "/" in text:
+            return True
+        return bool(re.search(r"\.[a-z0-9]{1,8}$", text, re.I))
+
+    def _focus_app(self, text: str, raw: str) -> Optional[Intent]:
+        """Bring a running application forward: "switch to Mail", "show me Finder".
+
+        Deliberately narrower than the open rule and checked before it, so asking
+        to switch to something does not launch a second copy.
+        """
+        captured = re.match(
+            r"\s*(?:switch|jump|bring|flip|move|go)\s+(?:me\s+)?(?:back\s+)?(?:to|over\s+to|into)\s+"
+            r"(?:the\s+|my\s+)?(?P<app>.+?)\s*$", raw, re.I)
+        if captured is None:
+            # "bring Finder to front" / "bring Finder forward" -- the app is named
+            # before the phrase, so the verb-first patterns above never see it.
+            captured = re.match(
+                r"\s*(?:bring|pull|put)\s+(?:the\s+|my\s+)?(?P<app>.+?)\s+"
+                r"(?:to\s+(?:the\s+)?)?(?:front|forward)\s*$", raw, re.I)
+        if captured is None:
+            captured = re.match(
+                r"\s*(?:focus|activate|bring\s+up)\s+(?:the\s+|my\s+)?(?P<app>.+?)\s*$",
+                raw, re.I)
+        if captured is None:
+            # "show me the mail app" is a switch; "show me that email" is not.
+            # Only a subject that names an *application* qualifies, which the
+            # resolver check below enforces -- the noun rules here keep the
+            # email/calendar routes from being stolen by a switch.
+            shown = re.match(
+                r"\s*show\s+me\s+(?:the\s+|my\s+)?(?P<app>.+?)\s*$", raw, re.I)
+            if shown and not re.search(
+                    r"\b(emails?|e-?mails?|mail|messages?|inbox|events?|calendar|"
+                    r"meeting|appointments?|files?|documents?)\b",
+                    shown.group("app"), re.I):
+                captured = shown
+        if captured is None:
+            return None
+        app = self.apps.resolve(self._arg(captured.group("app")))
+        if app is None:
+            return None
+        return Intent("focus_app", tool="focus_application", params={"app": app.key})
+
     def _close_app(self, text: str, raw: str) -> Optional[Intent]:
+        # "close the page you opened" / "close the browser tab" is Vantage's own
+        # browser session, not an application. `_close_app` would resolve "the
+        # page you opened" loosely enough to attempt quitting Chrome.
+        if re.search(r"\b(?:page|tab|browsing)\b|\byou\s+(?:opened|were)\b",
+                     text, re.I):
+            return None
         captured = self._match(r"\b(?:close|quit|exit)\b\s+(.+)", raw)
         if captured is None:
             return None
@@ -1256,6 +1720,347 @@ class RulePlanner:
         return Intent("close_app", tool="close_app", params={"app": app.key})
 
     _AGENT_NAMES = r"(?:claude(?:\s+code)?|the\s+coding\s+agent|cursor\s+agent)"
+
+
+    def _begin_work(self, text: str, raw: str) -> Optional[Intent]:
+        """Act on the plan: open the next task's project and offer the agent."""
+        import re as _re
+
+        if _re.match(r"\s*(?:begin|start)\s+(?:my\s+)?work\s*$", raw, _re.I) or _re.search(
+                r"\b(?:begin|start)\s+work\s+on\s+(?:the\s+)?next\b", text, _re.I):
+            return Intent("begin_work", tool="begin_work", params={})
+        return None
+
+    def _running_apps(self, text: str, raw: str) -> Optional[Intent]:
+        """What is running right now — installed-and-running, not the catalogue."""
+        import re as _re
+
+        # "every day at 6 PM show me my running applications" is a request to
+        # *schedule* the question, not to answer it now. The scheduler rule owns
+        # anything with a cadence; this one would otherwise answer immediately and
+        # the "every day" would be silently dropped.
+        if _re.search(r"\b(?:every|each)\b", text, _re.I):
+            return None
+
+        # Only the explicit "running applications" phrasing belongs here. Plain
+        # "what's running" is the laptop cockpit's question, which reports real
+        # processes rather than the launch catalogue.
+        if _re.search(r"\b(?:running|open|active)\s+applications?\b", text, _re.I):
+            return Intent("get_app_status", tool="get_app_status", params={})
+        return None
+
+    def _review_downloads(self, text: str, raw: str) -> Optional[Intent]:
+        """List what is in Downloads. It reviews; it never deletes.
+
+        Deliberately reads only — "clean up my downloads" was previously
+        unreachable, and the safe answer is to show what is there rather than to
+        offer a delete it cannot undo.
+        """
+        import re as _re
+
+        if not _re.search(r"\bdownloads\b", text, _re.I):
+            return None
+        if _re.search(r"\b(?:clean|clear|empty|purge|delete|remove|tidy)\b", text, _re.I):
+            return Intent(
+                "review_downloads",
+                note=("I will not delete anything from Downloads. Say \"show me my "
+                      "downloads\" and I will list what is there for you to decide."),
+                clarification=True,
+            )
+        if _re.search(r"\b(?:show|list|review|what(?:'s|\s+is)|see)\b", text, _re.I):
+            return Intent("review_downloads", tool="review_downloads", params={})
+        return None
+
+    def _page_actions(self, text: str, raw: str) -> Optional[Intent]:
+        """Read the page Vantage opened, and open one to read.
+
+        The browser tools are real (Playwright against an isolated session) but
+        the *read* was unreachable from a sentence, so a person could open a page
+        and then had no way to ask what was on it. Reading is a question and gets
+        a route; click, type and save deliberately do not -- Phase 28's line, kept
+        and now protected by two tests.
+
+        No session id is carried here: the tools fall back to the session this
+        conversation owns.
+        """
+        import re as _re
+
+        # "browse to <url>" opens Vantage's own controllable session, which is
+        # what read/click/type below act on. Plain "open <url>" keeps meaning the
+        # person's own browser -- it is logged in, and steering it would surprise.
+        browse = _re.match(
+            r"\s*(?:browse|navigate)\s+(?:to\s+)?(?P<url>\S+)\s*$", raw, _re.I)
+        if browse:
+            return Intent("browser_open", tool="browser_open",
+                          params={"url": browse.group("url")})
+
+        # "close the page you opened" / "stop browsing" ends Vantage's own
+        # session, not the person's browser. "close the browser" was reaching
+        # `close_app` and attempting to *quit Chrome* — a destructive act on the
+        # wrong thing, and unverifiable besides. `browser_close` was registered
+        # and unreachable.
+        if re.search(r"\b(?:close|stop|end|exit)\b.*\b(?:brows(?:er|ing)|page|tab)\b",
+                     text, _re.I) and re.search(
+                r"\b(?:page|tab|browsing)\b|\byou\s+(?:opened|were)\b", text, _re.I):
+            return Intent("browser_close", tool="browser_close", params={})
+
+        if _re.search(r"\b(?:read|what\s+does|summari[sz]e|what(?:'s|\s+is)\s+on)\b.*\b(?:page|site|website)\b", text, _re.I) or _re.fullmatch(
+                r"\s*(?:read|refresh)\s+(?:the\s+)?page\s*[.!]?\s*", text, _re.I):
+            return Intent("browser_read", tool="browser_read", params={})
+
+        # Deliberately NO rule for click/type/save. Phase 28 drew this line and two
+        # tests protect it: a sentence must not be able to *act* on a page. Those
+        # tools stay reachable as confirmable proposals, never as a typed route --
+        # a misheard "click buy" is not undoable. Reading is a question and is
+        # routed; acting is not.
+        return None
+
+    def _availability(self, text: str, raw: str) -> Optional[Intent]:
+        """Whether a named time is free — "am I free at 3 PM tomorrow".
+
+        Distinct from `find_free_time`, which answers "when is my next gap". This
+        is the question asked before agreeing to something.
+        """
+        import re as _re
+
+        # "do I have time at 3 tomorrow" is the same question as "am I free at 3",
+        # and it did not reach this rule at all — the vocabulary was "free /
+        # available / busy" only.
+        if not _re.search(r"\b(?:free|available|busy|have\s+time|any\s+time)\b",
+                          text, _re.I):
+            return None
+        # "find free time" asks for the next gap, which `find_free_time` answers;
+        # it is a different question from "am I free at 3".
+        if _re.search(r"\b(?:find|next|when\s+(?:is|am))\b.*\b(?:free\s+time|free\s+slot)\b",
+                      text, _re.I):
+            return None
+        # Capture everything after the preposition, then keep the longest prefix
+        # that parses as a time. A single regex kept truncating at the first
+        # boundary ("at 3 tomorrow" -> "3"), which is the right clock on the wrong
+        # day -- worse than not matching.
+        from ..integrations.calendar_provider import parse_datetime as _parse_when
+
+        # Scan the *whole sentence*, not just what follows a preposition: a time
+        # can sit on either side of one ("at 3 pm tomorrow", "tomorrow at 3 pm",
+        # "tomorrow 3 pm"). Prefix-trimming from a fixed anchor kept one half and
+        # dropped the other, which is how "tomorrow 3 pm" became the day's default
+        # hour and "tomorrow at 3 pm" lost its day.
+        stripped = _re.sub(
+            r"^\s*(?:am|are)\s+i\s+|\b(?:do\s+i\s+have\s+time|free|available|busy)\b",
+            " ", raw, flags=_re.I)
+        when_text = ""
+        words = stripped.split()
+        clock = _re.search(r"\d{1,2}(?::\d{2})?\s*(?:am|pm)?|\d{1,2}:\d{2}", stripped, _re.I)
+        clock_token = (clock.group(0).split()[0].lower() if clock else "")
+        for take in range(len(words), 0, -1):
+            trial = " ".join(words[:take])
+            if _parse_when(trial) is None:
+                continue
+            # The hour must survive: "3 pm tomorrow" trimmed to "tomorrow" parses
+            # fine and answers about the wrong hour.
+            if clock_token and clock_token not in trial.lower():
+                continue
+            when_text = trial
+            break
+        if not when_text:
+            # "am I free friday afternoon" names a day-part, not a clock. The day
+            # is what decides which calendar to read; the part narrows it, and the
+            # answer is honest about covering the whole day when it must.
+            daypart = _re.search(
+                r"\b(?P<when>(?:monday|tuesday|wednesday|thursday|friday|saturday|"
+                r"sunday|mon|tue|wed|thu|fri|sat|sun)"
+                r"(?:\s+(?:morning|afternoon|evening))?"
+                r"|(?:today|tomorrow)(?:\s+(?:morning|afternoon|evening))?)\b",
+                raw, _re.I)
+            if daypart:
+                return Intent("check_availability", tool="check_availability",
+                              params={"when": daypart.group("when").strip()})
+        if when_text:
+            return Intent("check_availability", tool="check_availability",
+                          params={"when": when_text})
+        # "am I free tomorrow" / "am I free next week" without a clock.
+        day = _re.search(r"\b(today|tomorrow|tonight|next\s+\w+|this\s+\w+)\b", raw, _re.I)
+        if day:
+            return Intent("check_availability", tool="check_availability",
+                          params={"when": day.group(1).lower()})
+        return None
+
+    def _clipboard(self, text: str, raw: str) -> Optional[Intent]:
+        """Read the clipboard, or copy text to it.
+
+        Reading is a question and gets a route. Writing destroys what was there,
+        so it stays confirmation-gated -- the tool carries that flag; the route
+        only ever names *what* to copy, never decides for the person.
+        """
+        import re as _re
+
+        # "the clipboard" and "my clipboard" are the same object, and people say
+        # the second one more often. Only the bare "the" form was accepted, so
+        # "what's on my clipboard" fell past this rule (to "understood the words
+        # but not the goal") while "what's on the clipboard" reached the tool.
+        # "whats" without the apostrophe is the same question. "in" is not
+        # accepted: "what's in my clipboard" was never a phrasing the tool
+        # answered, and widening the route for it is not this fix.
+        if _re.search(r"\b(?:what(?:'s|\s+is|s)?\s+(?:on|in)\s+(?:(?:the|my|your)\s+)?clipboard|"
+                      r"read\s+(?:(?:the|my|your)\s+)?clipboard|paste\s+it)\b", text, _re.I):
+            return Intent("read_clipboard", tool="read_clipboard", params={})
+
+        copy = _re.search(r"\b(?:copy|put)\s+(?P<what>.+?)\s+(?:to|onto|into|on)\s+"
+                          r"(?:(?:the|my|your)\s+)?clipboard\b",
+                          raw, _re.I)
+        if copy:
+            what = copy.group("what").strip()
+            if what:
+                return Intent("write_clipboard", tool="write_clipboard",
+                              params={"text": what})
+        return None
+
+    #: Phrases that name a schedulable action, in the order they win. Each maps to
+    #: a registered READ/LOW tool the scheduler may run unattended.
+    _SCHEDULED_ACTIONS: tuple = (
+        (r"\b(?:check|run)\s+(?:the\s+)?build\b|\bcheck build\b", "check_build"),
+        (r"\b(?:run|check)\s+(?:the\s+)?(?:test|tests|test suite)\b", "run_tests"),
+        (r"\bsystem status\b|\bcheck (?:the )?system\b", "system_status"),
+        (r"\brunning applications?\b|\bwhat(?:'s|\s+is)\s+running\b", "get_app_status"),
+        (r"\b(?:show|review|list)\s+(?:me\s+)?(?:my\s+)?downloads?\b", "review_downloads"),
+        (r"\b(?:check|read)\s+(?:the\s+)?clipboard\b", "read_clipboard"),
+        (r"\bcheck (?:the )?battery\b|\bbattery status\b", "get_battery_status"),
+        (r"\bcheck (?:the )?storage\b|\bdisk space\b", "check_storage"),
+        (r"\bprepare (?:the )?meeting\b|\bmeeting brief\b", "brief_meeting"),
+        (r"\b(?:plan|start) (?:my )?day\b", "plan_day"),
+        (r"\bweekly report\b", "weekly_report"),
+    )
+
+    def _scheduled_action(self, text: str, raw: str):
+        """(tool, params) for the action a scheduled sentence names, or None.
+
+        A schedule whose action is "reminder" and whose message is empty is a job
+        that fires and says nothing — which is what "every morning at 8 check the
+        build" used to create. The action comes from the phrase *after* the
+        cadence, so "every morning" cannot be read as the thing to do.
+        """
+        tail = raw
+        cadence = re.search(
+            r"\b(?:every|each)\s+[\w\s]{0,24}?(?:\bat\s+\d{1,2}(?::\d{2})?\s*(?:am|pm)?)?\b",
+            raw, re.I)
+        if cadence:
+            tail = raw[cadence.end():]
+        for pattern, tool in self._SCHEDULED_ACTIONS:
+            if not re.search(pattern, tail, re.I):
+                continue
+            # Only a tool the registry actually has can be scheduled. Two of these
+            # phrases name *workflow templates* (check build, run tests), not tools,
+            # and a schedule whose action does not exist fails at approval time with
+            # "I do not know an action called 'check_build'". Deferring to the
+            # reminder path is the honest fallback; inventing the name was not.
+            if self.tools.has(tool):
+                return (tool, {})
+            return None
+        return None
+
+    def _task_from_email(self, text: str, raw: str) -> Optional[Intent]:
+        """Turn a message into a planner task.
+
+        Runs before `_planner` (which read "create a task from that email" as a
+        task titled "from that email") and before `_email` (which read it as a
+        search). Both halves of the sentence are real: the referent belongs to the
+        email, the task belongs to the planner.
+        """
+        task_from_mail = re.search(
+            r"\b(?:task|todo|to-do|reminder)\b.*\b(?:from|for|about)\b.*"
+            r"\b(?:email|e-mail|message|inbox|it)\b", text, re.I) or re.search(
+            r"\b(?:email|message)\b.*\b(?:into|as)\s+(?:a\s+)?(?:task|todo|to-do)\b",
+            text, re.I)
+        if not task_from_mail:
+            return None
+        ref = self._email_referent(text, True)
+        if ref is not None:
+            return Intent("task_from_email", note="Linking the email to the task.",
+                          clarification=False, referent=ref, confidence=0.75)
+        named = re.search(
+            r"\b(?:from|about)\s+(?:the\s+)?(?:email|message)\s+(?:about|on|for)\s+"
+            r"(?P<q>.+?)\s*$", raw, re.I)
+        if named:
+            query = re.sub(r"^(?:the|a|an|my)\s+", "", named.group("q").strip(), flags=re.I)
+            return Intent("make_task_from_email", tool="task_from_email_named",
+                          params={"query": query.strip()})
+        return None
+
+    def _cancel_task(self, text: str, raw: str) -> Optional[Intent]:
+        """Cancel a planner task. Checked before the file rules.
+
+        "delete the task to call Sam" was a `delete_file` proposal on a file named
+        after the sentence -- there was no task-cancel tool at all, so the only
+        rule that matched was the filesystem one. A task object belongs to the
+        planner whatever verb is used.
+        """
+        import re as _re
+
+        if not _re.search(r"\b(?:task|todo|to-do)\b", text, _re.I):
+            return None
+        if not _re.search(r"\b(?:delete|remove|cancel|drop|scrap|get\s+rid\s+of)\b",
+                          text, _re.I):
+            return None
+        named = _re.search(
+            r"\b(?:task|todo|to-do)\s+(?:to\s+|called\s+|named\s+|about\s+)?"
+            r"(?P<t>.+?)\s*$", raw, _re.I)
+        title = self._arg(named.group("t")) if named else ""
+        return Intent("cancel_task", tool="cancel_task", params={"title": title or ""})
+
+    def _reschedule_unfinished(self, text: str, raw: str) -> Optional[Intent]:
+        """Move timed, unfinished work into real free time.
+
+        Checked before the file rules, which read "move X to Y" as a `move_file`
+        — "move unfinished tasks to available times" became a file move on a file
+        called "unfinished tasks".
+        """
+        import re as _re
+
+        if _re.search(r"\b(?:move|reschedule|push|shift|re-?arrange)\b", text, _re.I) and _re.search(
+                r"\b(?:unfinished|uncompleted|left\s*over|remaining|incomplete|overdue)\b",
+                text, _re.I):
+            return Intent("reschedule_unfinished", tool="reschedule_unfinished",
+                          params={"days": 5})
+        return None
+
+    def _schedule_coding_block(self, text: str, raw: str) -> Optional[Intent]:
+        """Book coding time into a real free slot.
+
+        Checked before `_coding`, which sees the word "coding" and asks for a
+        workspace id -- the wrong question for "arrange my coding time". Two
+        shapes are accepted, because people write both: a coding noun with an
+        optional duration ("arrange my coding time", "block 2 hours for the
+        engine") and a duration followed by its purpose ("block out 90 minutes
+        for the operator").
+        """
+        import re as _re
+
+        lead = r"\b(?:block(?:\s+out)?|arrange|schedule|book|set\s+aside)\s+"
+        duration = r"(?:(?P<dur>\d+)\s*(?P<unit>minutes?|mins?|hours?|hrs?)\s*(?:of\s+)?)?"
+        coding_noun = r"(?:coding|development|dev|focus)\s*(?:time|work|block|session)?"
+        purpose = r"(?:(?:for|on|to)\s+(?P<goal>.+?))?"
+
+        match = _re.search(
+            lead + r"(?:me\s+)?(?:(?:some|a|my)\s+)?" + duration
+            + r"(?:(?:coding|development|dev|focus)\s*(?:time|work|block|session)?\s*)"
+            + purpose + r"$", raw, _re.I)
+        if match is None:
+            match = _re.search(
+                lead + r"(?:me\s+)?(?:some\s+|a\s+)?" + duration +
+                r"(?:for|on|to)\s+(?P<goal2>.+?)\s*$", raw, _re.I)
+            if match is None or not match.group("dur"):
+                return None
+
+        goal = (self._arg(match.groupdict().get("goal")
+                          or match.groupdict().get("goal2") or "")
+                or "Coding time")
+        minutes = 90
+        if match.group("dur"):
+            minutes = int(match.group("dur"))
+            if _re.match(r"h", match.group("unit") or "", _re.I):
+                minutes *= 60
+        return Intent("schedule_coding", tool="schedule_coding",
+                      params={"goal": goal, "duration_minutes": minutes})
 
     def _coding_agent(self, text: str, raw: str) -> Optional[Intent]:
         """Ask the coding agent to do something, in a workspace.
@@ -1489,6 +2294,71 @@ class RulePlanner:
             return Intent("open_url", tool="open_url", params=params)
         return None
 
+    def _read_page(self, text: str, raw: str) -> Optional[Intent]:
+        """"What's on this page?" -- a read the browser could do but had no route to.
+
+        ``open_url`` opens a page in the person's own browser and reports the
+        URL it landed on. It never reads the page: a browser opened on a
+        logged-in session is the user's, and reading it would be reaching into
+        a session the person did not offer. The controlled browser is
+        different -- it is a session Vantage opened, with no cookies of the
+        user's and no access to anything they are signed into.
+
+        So "read the page", "what does this page say" and "summarise this
+        page" go to the controlled browser, and the answer is its text. The
+        text is the page's words, and the tool marks them as such.
+
+        Only the *read* is routed. Clicking and typing are confirmation-gated
+        and carry no route, for the same reason ``click_desktop`` has none: a
+        sentence must not be able to make the machine act. A model may
+        *propose* a click (R2.3), and a person presses the button.
+        """
+        if not re.search(r"\b(read|scrape|extract|what does|summar\w+|contents? of|"
+                         r"text on|page says)\b", text):
+            return None
+
+        from ..tools.browser import NAMED_SITES, normalise
+
+        #: Suffixes that look like a domain but are a document on disk. "read
+        #: notes.txt" is a request to read a file, not to open a web page --
+        #: and the file route is the one that can do it.
+        extensions = {"pdf", "txt", "md", "doc", "docx", "xls", "xlsx", "csv", "pptx",
+                      "png", "jpg", "jpeg", "gif", "heic", "zip", "tar", "gz", "json",
+                      "yaml", "yml", "py", "js", "ts", "rb", "go", "rs", "mp4", "mov",
+                      "mp3", "wav", "log", "ini", "env", "sql", "ipynb", "tsx"}
+
+        candidates = re.findall(r"(?:[\w-]+\.)+[a-z]{2,}(?:[/?#][\w./?%&=#-]*)?", raw, re.I)
+        domain_candidates = []
+        for token in candidates:
+            head = token.split("/")[0]
+            if head.rsplit(".", 1)[-1].lower() in extensions:
+                continue  # a document on disk, not a page on the web
+            url, problem = normalise(token)
+            if url:
+                domain_candidates.append(url)
+
+        # A page-word is required only when there is no domain to go on. A
+        # sentence that names a domain is asking about *that* page, whatever
+        # verb it uses -- "what does example.com say" is a request to read a
+        # page, not a request to read a file called "example.com" (which is
+        # what the file route built, inside a workspace that does not exist).
+        if not domain_candidates and not re.search(
+                r"\b(page|site|website|web|article|post|link|html)\b", text):
+            return None
+
+        for url in domain_candidates:
+            return Intent("browser_open", tool="browser_open", params={"url": url})
+
+        web_signal = re.search(r"\b(?:web|website|site|online)\b", text)
+        for name in sorted(NAMED_SITES, key=len, reverse=True):
+            if not re.search(rf"\b{re.escape(name)}\b", text):
+                continue
+            if self.apps.get(name) is not None and not web_signal:
+                return None
+            return Intent("browser_open", tool="browser_open",
+                          params={"url": NAMED_SITES[name]})
+        return None
+
     def _find_and_open(self, text: str, raw: str) -> Optional[Intent]:
         """"Find my resume and open it" -- two capabilities the build had, and no route.
 
@@ -1509,6 +2379,38 @@ class RulePlanner:
         return Intent("find_and_open", tool="find_and_open", params={"query": query})
 
     def _open_app(self, text: str, raw: str) -> Optional[Intent]:
+        # "open that email" is a request to read the message, not to launch Mail.
+        # The app resolver matches loosely enough that "that email" found the Mail
+        # application, so the app rule claimed a mail request -- the same
+        # cross-domain theft the calendar and file routes already guard against.
+        # A demonstrative plus a mail noun never names an application.
+        if re.search(r"\b(?:that|this|the)\s+(?:email|e-mail|message)\b", raw, re.I):
+            return None
+
+        # "open the readme in TextEdit" / "open report.pdf in Preview" -- a *document*
+        # opened in a named app. Checked before the folder branch, which only passes a
+        # folder to an editor and would otherwise let this fall through to read_file.
+        doc = re.search(
+            r"\bopen\b\s+(?:the\s+|my\s+)?(?P<doc>.+?)\s+(?:in|with)\s+(?P<app>.+?)\s*$",
+            raw, re.I)
+        if doc and doc.group("doc").strip():
+            app_name = self._arg(doc.group("app"))
+            app_spec = self.apps.resolve(app_name)
+            document = self._arg(doc.group("doc"))
+            if document and not Path(os.path.expanduser(document)).is_dir():
+                looks_like_doc = bool(
+                    re.search(r"\.[A-Za-z0-9]{1,8}$", document)
+                    or re.search(r"\b(file|document|readme|pdf|report|note)\b", text, re.I))
+                # A named app that is registered resolves to its key; a name that is
+                # not registered still goes to open_document, which fails honestly
+                # ("I could not find an application matching …") instead of the
+                # sentence being silently read as a file read.
+                if looks_like_doc and app_name:
+                    return Intent("open_document", tool="open_document",
+                                  params={"path": document,
+                                          "app": app_spec.key if app_spec else app_name},
+                                  confidence=0.85)
+
         # "open folder <path> in vscode" / "open <path> in vscode"
         m = re.search(
             r"\bopen\b\s+(?:the\s+)?(?:folder|directory)?\s*(?P<path>.+?)\s+in\s+(?P<app>.+?)\s*$",
@@ -1626,6 +2528,20 @@ class RulePlanner:
         if not researchy:
             return None
 
+        # "research vector databases" is the plain verb, and it was landing on
+        # arxiv: the word "research" alone is not a request for academic papers.
+        # Only a *paper* word (papers, literature, arxiv, citations) means the
+        # paper index; the bare verb means look it up on the web.
+        paper_word = re.search(
+            r"\b(papers?|literature|citation|citations|cite|references?|arxiv|"
+            r"related work|state of the art)\b", text)
+        if not paper_word and re.search(r"\b(research|look\s+up|find\s+out)\b", text):
+            query = re.sub(r"^\s*(?:please\s+)?(?:research|look\s+up|find\s+out\s+about)\s+",
+                           "", raw, flags=re.I).strip(" ?.!")
+            if not query:
+                return None
+            return Intent("search_web", tool="search_web", params={"query": query})
+
         # --- gaps ----------------------------------------------------------
         if re.search(r"\b(gap|gaps|open question|unresolved|limitation)\b", text):
             return Intent("find_research_gaps", tool="find_research_gaps", params={})
@@ -1688,7 +2604,18 @@ class RulePlanner:
         Runs before the design rule: "read this screenshot" is a vision request,
         not a documentation one — but both share the word "read".
         """
-        screen = re.search(r"\b(screen|screenshot|display|what'?s on my)\b", text)
+        # A screen reference is a *screen* noun -- or a "what's on my screen"
+        # question that names one. "what's on my" on its own used to count, and
+        # this rule runs before every rule below it in the chain, so "what's on my
+        # calendar", "what's on my plate" and "what's on my clipboard" all took a
+        # screenshot and answered with screen text instead of the calendar, the
+        # plan, or the clipboard. The phrase only means "look at the screen" when
+        # the sentence says which surface, so the surface has to be named.
+        screen = re.search(r"\b(screen|screenshot|display)\b", text) or re.search(
+            r"\bwhat(?:'s|\s+is)?\s+(?:on|in)\s+(?:the\s+|my\s+|this\s+)?"
+            r"(?:screen|display|monitor|desktop)\b",
+            text,
+        )
         image = re.search(r"\b(image|picture|photo|screenshot)\b", text)
         ocr = re.search(r"\b(read|ocr|extract text|what does it say|transcribe)\b", text)
         compare = re.search(r"\b(compare|diff|difference|changed|change)\b", text)
@@ -2035,12 +2962,34 @@ class RulePlanner:
         Runs before the calendar rule: "remind me at 8 PM" is a schedule, not a
         calendar read, but both share the word "remind".
         """
+        # --- weekly report --------------------------------------------------
+        # Ahead of the scheduling branch: "prepare my weekly report" was being
+        # read as a request to *schedule* something and answered "When should I
+        # do that?".
+        if re.search(r"\b(weekly|week\s+in\s+review)\s+report\b", text, re.I) or re.search(
+            r"\breport\s+(?:on\s+)?(?:my|the)\s+(?:week|progress)\b", text, re.I
+        ) or re.search(r"\bhow\s+did\s+(?:my|the)\s+week\s+go\b", text, re.I):
+            m = re.search(r"\b(\d+)\s+days?\b", text)
+            return Intent("weekly_report", tool="weekly_report",
+                          params={"days": int(m.group(1)) if m else 7})
+
         # --- the briefing itself ------------------------------------------
         # "every"/"each" makes it a schedule; "daily briefing" on its own is a
         # request to produce one now.
         if re.search(r"\b(briefing|brief me|catch me up)\b", text) and not re.search(
             r"\bevery\b|\beach\b", text
         ):
+            # "brief me on the Roadmap sync" is a meeting briefing, not the day's.
+            # This rule runs before the calendar rules, so without this check the
+            # named meeting was silently answered with the daily briefing.
+            on = re.search(r"\bbrief\s+me\s+(?:on|about|for)\s+(?:the\s+|my\s+)?(?P<what>.+?)\s*$",
+                           text, re.I)
+            if on:
+                what = self._arg(on.group("what"))
+                if re.search(r"\b(meeting|sync|call|standup|stand-up|1:1|review|interview)\b",
+                             what, re.I):
+                    return Intent("brief_meeting", tool="brief_meeting",
+                                  params={"meeting": what})
             return Intent("daily_briefing", tool="daily_briefing", params={})
 
         # --- create a schedule ---------------------------------------------
@@ -2050,12 +2999,19 @@ class RulePlanner:
         # "You have nothing scheduled", and recorded success -- measured in the
         # Phase 15 acceptance sweep, the user was shown a VERIFIED chip for a
         # block that was never created.
+        # "schedule" + a noun that is explicitly a calendar concept (meeting,
+        # event, appointment) is a calendar request, not a scheduler one. Without
+        # this, "schedule a meeting with Alice at 3pm" was caught here and
+        # turned into a schedule_task intent instead of reaching the _calendar
+        # route that actually maps it to create_event.
+        is_calendar_noun = bool(re.search(r"\b(meeting|event|appointment)\b", text))
         create_requested = bool(
             re.match(r"(?:can you |could you |please )?schedule\s+\S", text)
+            and not is_calendar_noun
         )
 
         # --- manage existing schedules -------------------------------------
-        if not create_requested and (
+        if not create_requested and not is_calendar_noun and (
             re.search(r"\b(scheduled|schedules?|recurring|repeating)\b", text)
             or re.search(r"\bwhat.*(scheduled|recurring)\b", text)
         ):
@@ -2098,7 +3054,13 @@ class RulePlanner:
 
         # --- create a schedule ---------------------------------------------
         recurring = re.search(r"\b(every|each|daily|weekly)\b", text)
-        reminder = re.search(r"\bremind me\b", text)
+        # "remind me" is not the only way people ask for one. "set a reminder",
+        # "notify me at 8 PM" and "alert me" all name the same capability and all
+        # fell through to "I understood the words but not the goal".
+        reminder = re.search(
+            r"\bremind\s+me\b|\b(?:set|create|add|make)\s+(?:me\s+)?(?:a\s+)?reminder\b|"
+            r"\b(?:notify|alert|ping)\s+me\b|\breminder\s+(?:for|to|at|about)\b",
+            text)
 
         if not (recurring or reminder or create_requested):
             return None
@@ -2117,6 +3079,12 @@ class RulePlanner:
         )
         if not schedule_text:
             schedule_text = self._match(r"\b(at\s+\d{1,2}(?::\d{2})?\s*(?:am|pm)?)", raw)
+        if not schedule_text:
+            # A one-off reminder is the commonest request there is, and "in 20
+            # minutes" was not a shape this looked for -- so a sentence that said
+            # exactly when got asked to say when.
+            schedule_text = self._match(
+                r"\b(in\s+(?:\d+|a|an|half\s+an)\s*(?:minutes?|mins?|hours?|hrs?))", raw)
 
         if not schedule_text:
             return Intent(
@@ -2129,7 +3097,13 @@ class RulePlanner:
 
         # What should it actually do?
         action, params = "reminder", {}
-        if re.search(r"\b(briefing|brief me)\b", text):
+        # "every morning at 8 check the build" schedules the *action the sentence
+        # names*, not a reminder about nothing. Only the phrase after the time is
+        # scanned, so the cadence words cannot be mistaken for the action.
+        scheduled_action = self._scheduled_action(text, raw)
+        if scheduled_action is not None:
+            action, params = scheduled_action
+        elif re.search(r"\b(briefing|brief me)\b", text):
             action = "briefing"
         elif re.search(r"\bproject (progress|status|summary)\b", text):
             action = "project_summary"
@@ -2139,7 +3113,18 @@ class RulePlanner:
         elif reminder:
             message = self._match(r"\bremind me\b.*?\bto\s+(.+)$", raw)
             if message:
-                params = {"message": message.strip()}
+                # The sentence names both what and when; `to (.*)` swallows both,
+                # so "remind me to stretch in 20 minutes" filed a reminder whose
+                # text was "stretch in 20 minutes". The time phrase is stripped
+                # from the message, not from the schedule.
+                text_part = re.sub(
+                    r"\s*\b(?:in\s+(?:\d+|a|an|half\s+an)\s*(?:minutes?|mins?|hours?|hrs?)|"
+                    r"at\s+\d{1,2}(?::\d{2})?\s*(?:am|pm)?|"
+                    r"tomorrow(?:\s+morning|\s+afternoon|\s+evening)?|"
+                    r"every\s+\w+(?:\s+\w+)?)\s*$",
+                    "", message, flags=re.I).strip()
+                if text_part:
+                    params = {"message": text_part}
 
         if create_requested and action == "reminder" and not params.get("message"):
             # This phrasing used to be answered by listing schedules, so it never
@@ -2190,6 +3175,17 @@ class RulePlanner:
             return Intent("send_email", tool="send_email", params={"draft_id": pending["draft_id"]})
 
         has_email_noun = re.search(r"\b(e-?mails?|mail|inbox|unread)\b", text)
+        # "mark that email as read" / "mark the invoice email as unread" ask to
+        # change a message's read state -- an operation the mail backend has no
+        # method for. Without this guard, "as read" is stolen by the read-
+        # referent branch (which READS the email and reports its contents, as if
+        # the mark happened) and "as unread" by the unread-search branch (which
+        # returns a search result that sounds like the mark took effect). Placed
+        # before both, and gated on an email noun so a non-email "mark ... as
+        # read" is not intercepted.
+        if has_email_noun and re.search(
+                r"\bmark\b.*\bas\b\s*(?:read|unread)\b", text, re.I):
+            return self._email_not_supported("mark as read or unread")
         # "send to Arun" names a verb and a recipient and nothing else. That is a
         # missing payload, which the plan's safety list calls Clarify -- not an
         # unrecognised sentence, and never a guess at what to send.
@@ -2207,6 +3203,43 @@ class RulePlanner:
                     ),
                     clarification=True,
                 )
+
+        # --- a reply to the message the conversation just dealt with -------
+        # "reply to that one", "answer the second one", "write back" continue
+        # the workflow with a message already identified: the recipient is the
+        # sender the selection recorded, and the result is a DRAFT. The send
+        # rule is untouched -- a reply still needs the person's explicit send
+        # and confirmation; this only names who it should go to.
+        if re.search(r"\b(?:reply|answer|respond|write back)\b", text):
+            referent = self._email_referent(text, True)
+            if referent is not None:
+                return Intent(
+                    "draft_email",
+                    note="Resolving who to reply to.",
+                    clarification=False,
+                    referent=referent,
+                    referent_body=self._email_reply_body(raw),
+                    confidence=0.6,
+                )
+
+        # --- a reference to the message the conversation just dealt with ----
+        # "read that one", "summarize it", "the second one", "what did they
+        # say in that message?" name no message and -- in most phrasings -- no
+        # email word either: the words point at the last read. The planner has
+        # no memory of the conversation, so it carries the reference and the
+        # orchestrator, which holds the per-session selection, turns it into a
+        # read of a real uid. Checked before the noun gate ("summarize it"
+        # names no medium) and before the send/draft branches (a read verb
+        # never means send, so nothing here can authorise one).
+        referent = self._email_referent(text, bool(has_email_noun))
+        if referent is not None:
+            return Intent(
+                "read_email",
+                note="Resolving the message you referred to.",
+                clarification=False,
+                referent=referent,
+                confidence=0.6,
+            )
 
         # "write a reply to x@y.com" names no medium, but a drafting verb plus
         # "reply" is a mail request in practice.
@@ -2288,7 +3321,38 @@ class RulePlanner:
         if re.search(r"\b(summar\w*|catch me up|brief me)\b", text):
             return Intent("summarize_email", tool="summarize_email", params={"limit": 5})
 
-        # --- unread / search ----------------------------------------------
+        # --- read one message by the name the person gave ------------------
+        # "read the invoice email" names *the invoice*, not a message number,
+        # and a read needs a uid. So this is a clarification that carries the
+        # name: the orchestrator's identifier lookup searches the mailbox for
+        # that name, and when exactly one message matches, the read is completed
+        # with that message's id. Several matches stay a question, and a miss is
+        # reported honestly rather than a guess being read. Reusing the identifier
+        # resolution the calendar cancel path already uses, not a second search.
+        read_named = re.search(
+            r"\bread\s+(?:my\s+|the\s+|an?\s+)?(.+?)\s+(?:email|mail|message)\b",
+            raw, re.I,
+        )
+        if read_named:
+            named = self._email_search_term(read_named.group(1))
+            if named:
+                spec = self.tools.get("read_email")
+                note = self._capability_question(spec, named) if spec else (
+                    f"Which {named!r} message should I read?"
+                )
+                return Intent(
+                    "read_email",
+                    note=note,
+                    clarification=True,
+                    missing_identifiers=("uid",),
+                    named_thing=named,
+                    confidence=0.6,
+                )
+
+        # --- unread / new / important -------------------------------------
+        # A recency filter is its own route: "what new emails did I get" names no
+        # search verb, so it must not fall through to the decline below. It lists
+        # the unread messages, exactly as before this route learned to carry a term.
         if re.search(r"\b(unread|new|important)\b", text):
             return Intent(
                 "search_email",
@@ -2298,14 +3362,26 @@ class RulePlanner:
 
         from_match = self._match(r"\bfrom\s+([A-Za-z][A-Za-z0-9 ._-]{1,40})$", raw)
         if from_match:
+            # "from the billing team" names *billing team*; the article is how
+            # the person talked, not part of the name -- and a search needle
+            # with "the" in it would miss "billing-team@example.com".
+            from_name = re.sub(r"^(?:my|our|the)\s+", "", from_match.strip(), flags=re.I)
             return Intent(
                 "search_email",
                 tool="search_email",
-                params={"query": from_match.strip(), "limit": 10},
+                params={"query": from_name, "limit": 10},
             )
 
-        if re.search(r"\b(check|read|show|any|list)\b", text):
-            return Intent("search_email", tool="search_email", params={"query": "", "limit": 10})
+        if re.search(r"\b(check|read|show|any|list|search|find|look)\b", text):
+            # The thing the sentence searches for, if it names one. Without this
+            # the mailbox was read as "recent messages" for every search phrase,
+            # so "find emails about the invoice" answered with the last few
+            # messages whatever they were about.
+            return Intent(
+                "search_email",
+                tool="search_email",
+                params={"query": self._email_search_term(raw), "limit": 10},
+            )
 
         # An email-ish request we do not understand still deserves an answer.
         return Intent(
@@ -2379,18 +3455,267 @@ class RulePlanner:
             return None
         return base.replace(hour=hour, minute=minute, second=0, microsecond=0).isoformat()
 
+    def _automation(self, text: str, raw: str) -> Optional[Intent]:
+        """n8n automation: list approved workflows, or run one by name.
+
+        Narrow on purpose. The words that trigger it are "n8n" and "workflow"
+        (plus "automation" when it is paired with "run"); everything else keeps
+        its existing behaviour, because "run" alone means "open an application"
+        elsewhere in this chain and an automation rule that claimed it would
+        break one of the most common sentences.
+
+        The workflow is resolved against Vantage's OWN registry here, and the
+        registry key -- never a name or id the model produced -- is what the tool
+        receives. A sentence naming a workflow that is not registered is answered
+        honestly with the list, rather than being passed to n8n, whose admin API
+        this integration deliberately cannot reach.
+        """
+        from ..integrations import n8n as n8n_mod
+
+        mentions_n8n = "n8n" in text
+        mentions_workflow = "workflow" in text or "automation" in text
+        if not (mentions_n8n or mentions_workflow):
+            return None
+
+        # --- list ---------------------------------------------------------
+        if re.search(r"\b(list|show|what|which|available|approved|my)\b", text) \
+                and not re.search(r"\b(run|start|execute|trigger|fire)\b", text):
+            return Intent("list_n8n_workflows", tool="list_n8n_workflows", params={})
+
+        # --- run ----------------------------------------------------------
+        # A bare workflow name is a request to run it ("n8n echo", "echo
+        # workflow"), which is how every registered tool must be reachable by
+        # its own name. The verb is optional; what is *not* optional is that a
+        # registry workflow is named, which the loop below enforces.
+        verb = re.search(r"\b(run|start|execute|trigger|fire)\b", text) is not None
+
+        # Match against the registry's keys and titles. Longest first, so
+        # "daily agenda" wins over a bare "agenda".
+        candidates = sorted(
+            ((spec.key, spec.title.lower(), spec) for spec in n8n_mod.REGISTRY),
+            key=lambda item: max(len(item[0]), len(item[1])), reverse=True)
+        for key, title, spec in candidates:
+            key_phrase = key.replace("_", " ")
+            if re.search(rf"\b{re.escape(key)}\b", text) \
+                    or re.search(rf"\b{re.escape(key_phrase)}\b", text) \
+                    or (len(title) > 3 and title in text):
+                params: Dict[str, Any] = {}
+                # Pull only the inputs the sentence actually supplies. Anything
+                # missing is the adapter's to refuse with a reason, not something
+                # to invent here.
+                if key == "echo":
+                    quoted = re.search(r"[\"“']([^\"”']{1,500})[\"”']", raw)
+                    if quoted:
+                        params["message"] = quoted.group(1)
+                    else:
+                        # "run my echo workflow saying bananas": the text after
+                        # "saying/with/containing" is the message. Without that
+                        # cue there is no message in the sentence, and the
+                        # adapter asks for one rather than echoing the
+                        # workflow's own name back at the person.
+                        said = re.search(
+                            r"\b(?:saying|with(?:\s+the\s+text)?|containing|message)\b"
+                            r"\s*[:\-]?\s*[\"“']?(.+?)[\"”']?\s*$", raw, re.I)
+                        if said and said.group(1).strip():
+                            params["message"] = said.group(1).strip(" .:;-")
+                if key == "notify":
+                    quoted = re.search(r"[\"“']([^\"”']{1,500})[\"”']", raw)
+                    if quoted:
+                        params["message"] = quoted.group(1)
+                # The tool name is written out for each registry entry, not
+                # only derived, so a reader of this file can see which
+                # capabilities an automation sentence can reach. The registry
+                # is closed (``n8n.REGISTRY``), and this list is the same set;
+                # a key that is not here falls through to the honest
+                # "no such workflow" answer below.
+                tool_name = {
+                    "echo": "n8n__echo",
+                    "daily_agenda": "n8n__daily_agenda",
+                    "notify": "n8n__notify",
+                }.get(spec.key)
+                if tool_name is None:
+                    break
+                return Intent(spec.key, tool=tool_name, params=params)
+
+        # The sentence named a workflow Vantage does not have. Answer with what
+        # it does have rather than letting the model guess an identifier — but
+        # only when it asked to run one: "what is automation" is a question,
+        # not a bad workflow name.
+        if verb and (mentions_n8n or mentions_workflow):
+            known = ", ".join(spec.title for spec in n8n_mod.REGISTRY)
+            return Intent(
+                "unknown_workflow",
+                note=f"I do not have an approved workflow by that name. "
+                     f"The approved ones are: {known}.",
+                clarification=True,
+            )
+        return None
+
+    def _planner(self, text: str, raw: str) -> Optional[Intent]:
+        """The user's own tasks and their day (Epic 1).
+
+        Runs *before* the calendar rule: "plan my day" is a question about tasks
+        and time together, not a calendar listing, and the calendar rule would
+        claim it and answer with events only.
+
+        Deliberately narrow -- it names the planner's own vocabulary ("plan my
+        day", "next task", "my tasks", "add a task", "mark ... done"). A generic
+        "schedule a meeting" still goes to the calendar.
+        """
+        # --- Google Tasks: only when the sentence says "Google" ---------------
+        #
+        # These run first because they are the most explicit thing a person can
+        # say: naming *which* task list. Without them, "add a task to Google
+        # Tasks" fell into the local ``add_task`` rule below and wrote into the
+        # Vantage database -- a duplicate of a record the person meant to keep
+        # in Google, and not visible where they look for it.
+        #
+        # The trigger is the word "google" and nothing less. A sentence that
+        # omits it keeps the local behaviour exactly as it was: two task lists
+        # that silently swap on a phrasing change would be worse than the gap
+        # this closes.
+        if "google" in text:
+            # "google" may come before OR after "task": "add a google task
+            # to buy milk" and "add a task to Google Tasks buy milk" name the
+            # same destination, and only the second used to match. The first
+            # fell through to the registry's capability fallback, which found
+            # *both* add_task and add_google_task and asked an ambiguity
+            # question the person had already answered. The same gap made
+            # "create a google task to call the dentist" reach nothing at all.
+            google_add = (
+                re.match(
+                    r"^(?:please\s+)?(?:add|create|new|remember)\b(?:\s+(?:a|an|the))?\s+"
+                    r"(?:google\s+)?task\b(?:\s+(?:to|in|for))?\s*(?:my\s+)?google\s+tasks?\b"
+                    r"(?:\s+(?:called|named|to be))?\s*[:\-]?\s*(.+)$", raw, re.I)
+                or re.match(
+                    r"^(?:please\s+)?(?:add|create|new|remember)\b(?:\s+(?:a|an|the))?\s+"
+                    r"google\s+task\b(?:\s+(?:to|in|for))?\s*[:\-]?\s*(.+)$", raw, re.I)
+            )
+            if google_add:
+                title = self._arg(google_add.group(1))
+                due = self._planner_due(raw)
+                title = re.sub(r"\b(by|before|due)\s+\S+.*$", "", title, flags=re.I).strip(" ,.-")
+                title = re.sub(r"\b(today|tomorrow|tonight)\b.*$", "", title, flags=re.I).strip(" ,.-")
+                if not title:
+                    return Intent("add_google_task", note="What should the Google task say?",
+                                  clarification=True)
+                return Intent("add_google_task", tool="add_google_task",
+                              params={"title": title, "due": due or ""})
+
+            # "find my overdue tasks", "what google tasks are overdue" --
+            # answered from Google only when Google is named, and reported as a
+            # *failed read* when the list cannot be read. The previous behaviour
+            # answered a generic "find my overdue tasks" with "which app do you
+            # keep tasks in?", which is a question rather than a failure but is
+            # equally unhelpful when the connected account is right there.
+            if re.search(r"\boverdue\b", text) \
+                    and re.search(r"\bgoogle\s+tasks?\b|\bgoogle\b", text):
+                return Intent("list_google_tasks", tool="list_google_tasks",
+                              params={"show_completed": False, "overdue_only": True})
+
+            if re.search(r"\b(list|show|what(?:'s| is| are)|my)\b.*\bgoogle\s+tasks?\b", text) \
+                    and not re.search(r"\b(add|create|new|complete|finish|done)\b", text):
+                return Intent("list_google_tasks", tool="list_google_tasks",
+                              params={"show_completed": bool(
+                                  re.search(r"\b(completed|done|all)\b", text))})
+
+            if re.search(r"\b(mark|complete|finish|did|done with)\b", text) \
+                    and re.search(r"\bgoogle\s+tasks?\b", text):
+                # The reference is the sentence less the verbs that describe the
+                # action; the task adapter matches it against the live list.
+                ref = re.sub(
+                    r"^(?:please\s+)?(?:mark|complete|finish|did|done with)\b", "",
+                    raw, flags=re.I)
+                ref = re.sub(r"\b(?:as\s+)?(?:done|complete|completed)\b", "", ref, flags=re.I)
+                ref = re.sub(r"\b(?:in|on)\s+(?:my\s+)?google\s+tasks?\b", "", ref, flags=re.I)
+                ref = ref.strip(" :-.,")
+                if not ref:
+                    return Intent("complete_google_task",
+                                  note="Which Google task should I complete?",
+                                  clarification=True)
+                return Intent("complete_google_task", tool="complete_google_task",
+                              params={"task_ref": ref})
+        # --- start my day: the combined workflow ---------------------------
+        if re.search(r"\b(start|begin)\s+(my|the)\s+day\b|\bstart the day\b", text):
+            return Intent("start_day", tool="start_day", params={})
+
+        # --- the day's plan -------------------------------------------------
+        if re.search(r"\bplan\b.*\b(my|the)\s+day\b|\bplan my day\b|"
+                     r"\bwhat should i (work on|do)\b.*\b(next|now)\b|"
+                     r"\bwhat('s| is) (next|my next task|on my plate)\b|"
+                     r"\bmy (daily )?plan\b", text):
+            date = "tomorrow" if "tomorrow" in text else ("today")
+            return Intent("plan_day", tool="plan_day", params={"date": date})
+
+        # --- list tasks -----------------------------------------------------
+        if re.search(r"\b(my|the|list|show|what are my)\s+tasks?\b|"
+                     r"\btask list\b|\bto-?do list\b|\bmy to-?dos?\b", text) \
+                and not re.search(r"\b(add|create|new|complete|finish|done)\b", text):
+            return Intent("list_tasks", tool="list_tasks",
+                          params={"include_done": bool(re.search(r"\b(completed|done|all)\b", text))})
+
+        # --- add a task -----------------------------------------------------
+        add = re.match(
+            r"^(?:please\s+)?(?:add|create|new|remember)\b(?:\s+(?:a|an|the))?\s+task\b"
+            r"(?:\s+(?:to|for|called|named))?\s*[:\-]?\s*(.+)$", raw, re.I)
+        if add:
+            title = self._arg(add.group(1))
+            when = self._planner_due(raw)
+            title = re.sub(r"\b(by|before|due)\s+\S+.*$", "", title, flags=re.I).strip(" ,.-")
+            title = re.sub(r"\b(today|tomorrow|tonight)\b.*$", "", title, flags=re.I).strip(" ,.-")
+            if not title:
+                return Intent("add_task", note="What is the task?", clarification=True)
+            return Intent("add_task", tool="add_task",
+                          params={"title": title, "due": when, "priority": self._planner_priority(text)})
+
+        # --- complete a task ------------------------------------------------
+        if re.search(r"\b(mark|complete|finish|did|done with)\b", text) and re.search(r"\btask\b", text):
+            return Intent("complete_task", tool="complete_task", params={})
+        return None
+
+    @staticmethod
+    def _planner_priority(text: str) -> str:
+        if re.search(r"\b(urgent|asap|critical)\b", text):
+            return "urgent"
+        if re.search(r"\b(high|important)\b", text):
+            return "high"
+        if re.search(r"\b(low|later|someday)\b", text):
+            return "low"
+        return "normal"
+
+    def _planner_due(self, raw: str) -> str:
+        """A due expression from the sentence, in the format the tool reads."""
+        explicit = self._match(r"\b(?:by|before|due)\s+(.+?)(?:\s+with\b|\s*$)", raw)
+        if explicit:
+            when = self._parse_when(explicit)
+            if when:
+                return when
+        if re.search(r"\btomorrow\b", raw, re.I):
+            return self._parse_when("tomorrow") or ""
+        if re.search(r"\btoday\b", raw, re.I):
+            return self._parse_when("today") or ""
+        return ""
+
     def _calendar(self, text: str, raw: str) -> Optional[Intent]:
         """Calendar actions (v0.7)."""
+        # The plural forms matter: `\bmeeting\b` does not match "meetings", so
+        # "list my meetings tomorrow" named a calendar thing and the gate did not
+        # see it. Same for events, appointments and schedules.
         calendar_words = re.search(
-            r"\b(calendar|schedule|meeting|event|appointment|free time|availability|"
-            r"plan my day|remind|book)\b",
+            r"\b(calendars?|schedules?|meetings?|events?|appointments?|"
+            r"free time|availability|plan my day|remind|book)\b",
             text,
         )
         # "what do I have tomorrow" names no calendar noun, but a time word plus
         # a question is a schedule request in practice.
         schedule_question = re.search(
             r"\b(what|anything|what's|whats)\b.*\b(have|on|scheduled|planned)\b", text
-        ) and re.search(r"\b(today|tomorrow|tonight|this week|next week|morning|afternoon)\b", text)
+        ) and re.search(
+            r"\b(today|tomorrow|tonight|this week|next week|morning|afternoon|"
+            # "what do I have on monday" names a day and no calendar noun, which is
+            # exactly the shape this second gate exists to catch.
+            r"monday|tuesday|wednesday|thursday|friday|saturday|sunday|"
+            r"mon|tue|wed|thu|fri|sat|sun)\b", text)
 
         if not calendar_words and not schedule_question:
             return None
@@ -2398,22 +3723,54 @@ class RulePlanner:
         # --- create -------------------------------------------------------
         create = re.search(r"\b(schedule|book|create|add|set up|arrange)\b", text)
         if create and not re.search(r"\b(find|when|what|show|list|do i have)\b", text):
-            title = self._match(
-                r"\b(?:schedule|book|create|add|set up|arrange)\b\s+(?:an?\s+)?(?:meeting|event|appointment)?\s*(.*)",
+            # What follows the verb, then the *request* is removed and the name
+            # kept. Order matters: the time phrases go first, because a time word
+            # can sit between the noun and the name ("project meeting tomorrow at
+            # 5 PM") and stripping the noun first would leave "tomorrow at 5 PM"
+            # as the title. `_match` returns one group, so one alternation regex
+            # cannot express "noun optional" here.
+            body = self._match(
+                r"\b(?:schedule|book|create|add|set up|arrange)\b\s+(?:an?\s+)?(.*)",
                 raw,
-            )
+            ) or ""
+            # 1. the time: from the first clock or day word to the end.
+            body = re.sub(
+                r"\s*(?:\b(?:at|on|by)\s+)?"
+                # An ISO date ("on 2026-12-05 09:00") is a time too; \d{1,2}
+                # matched the year's first two digits and then failed the colon.
+                r"(?:\b\d{4}-\d{2}-\d{2}(?:[ T]\d{1,2}:\d{2})?\b|"
+                r"\b\d{1,2}(?::\d{2})?\s*(?:am|pm)\b|\b\d{1,2}:\d{2}\b|"
+                r"\b(?:today|tomorrow|tonight|this\s+\w+|next\s+\w+)\b|"
+                r"\b(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday|"
+                r"mon|tue|wed|thu|fri|sat|sun)\b).*$",
+                "", body, flags=re.I)
+            # 2. the noun phrase, with at most a short modifier before it.
+            body = re.sub(
+                r"^\s*(?:[\w'-]+\s+){0,2}?(?:calendar\s+)?"
+                r"(?:meeting|event|appointment)\b\s*(?:called|named|titled|for)?\s*",
+                "", body, flags=re.I)
+            title = body
             when = self._parse_when(raw)
-            title = re.sub(
-                r"\b(today|tomorrow|tonight|on \d{4}-\d{2}-\d{2})\b.*$", "", title or "", flags=re.I
-            )
-            title = re.sub(r"\s+at\s+\d{1,2}(:\d{2})?\s*(am|pm)?.*$", "", title, flags=re.I)
-            title = self._arg(title) or "Meeting"
+            title = re.sub(r"^\s*with\s+", "", title or "", flags=re.I)
+            title = self._arg(title)
             if when is None:
                 return Intent(
                     "create_event",
                     note=(
                         "When should I schedule that? For example: "
                         '"schedule a project meeting tomorrow at 5 PM".'
+                    ),
+                )
+            if not title:
+                # No name was given. Inventing one -- "Meeting" -- would put an
+                # event in the calendar under a name nobody chose, and the
+                # approval prompt would show that invented name as if the
+                # person had asked for it. A missing name is a question.
+                return Intent(
+                    "create_event",
+                    note=(
+                        "What should I call it? For example: "
+                        '"schedule a project review tomorrow at 5 PM".'
                     ),
                 )
             return Intent(
@@ -2431,6 +3788,24 @@ class RulePlanner:
                 params={"date": date, "duration_minutes": 60},
             )
 
+        # --- prepare for a meeting ----------------------------------------
+        # Checked before the plain "next meeting" branch: asking to be *prepared*
+        # wants the briefing, not the start time. The same words on the planner
+        # page produced a full brief, so answering with just the time was the
+        # chat path quietly doing less than the page.
+        prep = re.search(
+            r"\b(?:prepare|prep|brief)\s+(?:me\s+)?(?:for|on)\b\s*(?:the\s+|my\s+)?"
+            r"(?P<what>.+?)\s*$", text)
+        if prep:
+            what = self._arg(prep.group("what"))
+            if re.search(r"\b(next|upcoming|coming)\b|\bmeeting\b|\b1:1\b|\bcall\b", what, re.I):
+                # "the next meeting" names no meeting; anything else does.
+                named = "" if re.search(
+                    r"^(?:next|upcoming|coming)\s+(?:meeting|event|call|appointment|1:1)$",
+                    what, re.I) else what
+                return Intent("brief_meeting", tool="brief_meeting",
+                              params={"meeting": named})
+
         # --- next meeting -------------------------------------------------
         if re.search(r"\b(next meeting|next event|next appointment|when is my next)\b", text):
             return Intent("next_event", tool="next_event", params={})
@@ -2440,9 +3815,31 @@ class RulePlanner:
             date = "tomorrow" if "tomorrow" in text else "today"
             return Intent("daily_schedule", tool="daily_schedule", params={"date": date})
 
+        # A sentence that names a specific capability -- "cancel my Browser Check
+        # event", "delete the design review" -- must defer before this rule answers
+        # with a listing. Widening the gate below made the calendar rule reach
+        # sentences it used to skip, and a listing is not an answer to a cancel.
+        if self._capability_matches(text):
+            return None
+
         # --- list / what do I have ---------------------------------------
-        if re.search(r"\b(what|anything|show|list|summarize|read)\b", text):
-            date = "tomorrow" if "tomorrow" in text else ("yesterday" if "yesterday" in text else "today")
+        # "check the calendar for Friday" and "list my meetings tomorrow" are the
+        # plainest calendar questions there are, and both fell through: the verb
+        # list had no "check", and the date was chosen only from today/tomorrow/
+        # yesterday, so a weekday name was silently dropped and the answer would
+        # have been about the wrong day.
+        if re.search(r"\b(what|anything|show|list|summarize|read|check)\b", text):
+            named_day = re.search(
+                r"\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday|"
+                r"mon|tue|wed|thu|fri|sat|sun)\b", text, re.I)
+            if named_day:
+                date = named_day.group(1).lower()
+            elif "tomorrow" in text:
+                date = "tomorrow"
+            elif "yesterday" in text:
+                date = "yesterday"
+            else:
+                date = "today"
             return Intent("list_events", tool="list_events", params={"date": date, "days": 1})
 
         # The decline below advertises cancellation and update while this rule emits
@@ -2452,8 +3849,20 @@ class RulePlanner:
         if self._capability_matches(text):
             return None
 
+        # A calendar request the rules could not turn into an action is
+        # **not a refusal** -- it is a request the model may be able to act
+        # on, and the model is the only thing that can find the event by
+        # name and resolve a relative time.
+        #
+        # So this declines with `not_understood` rather than `declined`:
+        # the orchestrator routes `not_understood` to the model, first for
+        # an answer and then for a proposal. Before this, "cancel my
+        # Design Review event" was answered with a list of examples and no
+        # action, while the model — shown only the calendar tools — picked
+        # `search_events` for it, which is the right first step.
         return Intent(
             "calendar",
+            reply_kind="not_understood",
             note=(
                 "I can read your schedule, find free time, and create or cancel "
                 'events. For example: "what do I have tomorrow" or '
@@ -2578,7 +3987,22 @@ class RulePlanner:
         "stop ... robot/amr/arm/experiment" is owned by the emergency-stop rule,
         which runs earlier.
         """
-        has_robot = bool(re.search(r"\b(amr|amrs|robot|robots|robot arm|\barm\b|gripper|joints)\b", text))
+        # "AMR" is the owner's *project* name as well as the robot class, so the
+        # bare token sent "what do I know about the AMR demo project" to robot
+        # status. A robot request needs a robotics word, or AMR next to one.
+        has_robot = bool(re.search(
+            r"\b(robots?|robot\s+arm|gripper|joints|fleet|telemetry|waypoints?)\b", text)) or bool(
+            re.search(r"\bamrs?\b", text)
+            # "status" alone is too weak: "the status of the AMR demo" is about a
+            # project. A word that is only ever a robot word qualifies.
+            # "move the amr to (1,2)" and "where is the amr" name no robot noun,
+            # so the robot-intent words count too -- motion, position, state.
+            and re.search(r"\b(robot|robots|battery|charge|pose|waypoint|navigate|"
+                          r"telemetry|fleet|dock|gripper|joints?|"
+                          r"move|moves|go|stop|where|position|location|speed|map)\b",
+                          text)
+            and not re.search(r"\b(project|demo|deck|report|task|notes?|plan|"
+                              r"proposal|client|meeting)\b", text))
         has_experiment = bool(re.search(r"\bexperiments?\b", text))
 
         # A robot's battery / charge level is telemetry, never laptop battery.
@@ -2804,8 +4228,8 @@ class RulePlanner:
         )
 
     _SMALLTALK = {
-        "hello": "Hello. I am Vantage, on your laptop and listening over your wifi.",
-        "hi": "Hi. Ask me about the battery, a file, a project, or your wifi-connected phone.",
+        "hello": "Hello! I am Vantage. Add an OpenAI or Gemini API key in AI Providers to enable a fully conversational assistant, or ask me things like \"what time is it\", \"what is my battery\", or \"find my report\".",
+        "hi": "Hi! For ChatGPT-style conversation, add an API key in AI Providers. Right now I can help with: battery, files, calendar, projects, and more — just ask.",
         "hey": "Hey. What should I do?",
         "thanks": "Anytime.",
         "thank you": "Anytime.",
@@ -2849,7 +4273,19 @@ class RulePlanner:
         The shape is narrow on purpose: *what is X*, *who is X*, *explain X*, *tell me
         about X*. Anything else stays with the specific routes, the registry fallback or
         the model, and an empty subject is never sent off to be looked up.
+
+        When a configured model is enabled, a general question is the model's job, not
+        the Wikipedia tool's: routing "what is the capital of France" to ``ask_question``
+        would make a permission-revoked lookup tool swallow a question the assistant is
+        meant to answer conversationally. So the tool is the *offline* fallback — it only
+        claims the sentence when no model is available.
         """
+        try:
+            llm_enabled = bool(get_settings().llm_enabled)
+        except Exception:
+            llm_enabled = False
+        if llm_enabled:
+            return None
         stripped = re.sub(r"^\s*(?:hey|ok|hi|hello|vantage|jarvis)[,.!\s]+", "", text,
                           flags=re.I).strip()
         for form in self._QUESTION_FORMS:
@@ -3088,15 +4524,26 @@ class RulePlanner:
         return {name: values[i] for i, name in enumerate(needed) if i < len(values)}
 
     @staticmethod
-    def _capability_question(spec) -> str:
+    def _capability_question(spec, named: str = "") -> str:
         """Ask for a missing argument in the registry's own words.
 
         The ``description`` is human language the tool already carries; the parameter
         name is not, and 29-B's lesson is that showing it to a user is showing them an
         internal field. So this never says ``uid`` or ``workspace_id``.
+
+        When the sentence **did** name the thing -- "cancel my Design Review
+        event" -- the question says so, because "your sentence does not say
+        which one" is false there, and a person who *did* name it is told
+        they did not.
         """
         what = (spec.description or "").rstrip(".").strip()
         what = f"{what[0].lower()}{what[1:]}" if what else spec.name.replace("_", " ")
+        if named:
+            return (
+                f'I can {what} — but I do not know which one you mean by '
+                f"{named!r}. Give me the name or the id, like "
+                f'"{spec.name.replace("_", " ")} <which one>"?'
+            )
         return (
             f"I can {what} — your sentence does not say which one. "
             f'Say it with the name or id, like "{spec.name.replace("_", " ")} <which one>"?'
@@ -3148,7 +4595,33 @@ class RulePlanner:
         if not self.tools.validate_params(spec.name, params):
             return Intent(spec.name, tool=spec.name, params=params, confidence=0.55)
         missing = tuple(p for p in spec.required_parameters if p not in params)
-        return Intent(spec.name, note=self._capability_question(spec),
-                      clarification=True, confidence=0.55, missing_identifiers=missing)
+        named = self._named_thing(raw, spec)
+        return Intent(spec.name, note=self._capability_question(spec, named),
+                      clarification=True, confidence=0.55, missing_identifiers=missing,
+                      named_thing=named)
+
+    def _named_thing(self, raw: str, spec) -> str:
+        """The thing the sentence named, if it named one.
+
+        "cancel my Design Review event" names *Design Review*. The words
+        that matched the capability are "cancel" and "event"; what is left
+        between them is the name the person gave, and it belongs in the
+        question -- otherwise the question says "your sentence does not say
+        which one" about a sentence that did.
+        """
+        text = re.sub(r"[^A-Za-z0-9 _'-]", " ", raw or "")
+        text = re.sub(r"\s+", " ", text).strip()
+        if not text:
+            return ""
+        # Remove the capability's own name words, and the connective words
+        # around them.
+        tokens = {self._stem(t) for t in spec.name.split("_")}
+        for token in ("my", "the", "a", "an", "our", "your", "please", "that",
+                      "this", "one", "of"):
+            tokens.add(token)
+        kept = [w for w in text.split()
+                if self._stem(w) not in tokens]
+        named = " ".join(kept).strip(" ,'-")
+        return named if 1 <= len(named) <= 80 else ""
 
 

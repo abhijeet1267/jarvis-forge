@@ -1,25 +1,25 @@
 # Phase 60 — a second vendor, without a second authority
 
-| | |
-|---|---|
-| Phase | 60 (the roadmap's provider adapters, spec §10 OpenAI / §11 Gemini / §12 the neutral contract) |
-| Date | 2026-10-05 |
-| Starting commit | `73a87cc` (Phase 59 close-out) |
-| Ending commit | `1bec583` (the work) → `b004a2b` (the close-out, whose own hash is written by the next commit to touch this file) |
-| Tests before | 2332 passed · 0 failed · 0 skipped |
-| Tests after | **2355 passed · 0 failed · 0 skipped** (94.9 s) |
-| Tools / gated | 145 / 30 → **145 / 30** — no capability added, no gate moved |
-| Planner rules | 52 → **52** |
-| Host HTTP surface | 122 route objects / 115 paths → **unchanged** (`/health` gained three fields, not a route) |
-| Vendor proof | **`PROVIDER_LIVE_VENDOR_CALL: NOT MEASURED`** — no API key exists on this machine (§9) |
-| Push status | **nothing pushed; local commits only** |
+|                   |                                                                                                                   |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------- |
+| Phase             | 60 (the roadmap's provider adapters, spec §10 OpenAI / §11 Gemini / §12 the neutral contract)                     |
+| Date              | 2026-10-05                                                                                                        |
+| Starting commit   | `73a87cc` (Phase 59 close-out)                                                                                    |
+| Ending commit     | `1bec583` (the work) → `b004a2b` (the close-out, whose own hash is written by the next commit to touch this file) |
+| Tests before      | 2332 passed · 0 failed · 0 skipped                                                                                |
+| Tests after       | **2355 passed · 0 failed · 0 skipped** (94.9 s)                                                                   |
+| Tools / gated     | 145 / 30 → **145 / 30** — no capability added, no gate moved                                                      |
+| Planner rules     | 52 → **52**                                                                                                       |
+| Host HTTP surface | 122 route objects / 115 paths → **unchanged** (`/health` gained three fields, not a route)                        |
+| Vendor proof      | **`PROVIDER_LIVE_VENDOR_CALL: NOT MEASURED`** — no API key exists on this machine (§9)                            |
+| Push status       | **nothing pushed; local commits only**                                                                            |
 
 ---
 
 ## 1. What was measured before anything was written
 
-The gap register said *"No provider adapters in use — OpenAI/Gemini adapters per §22–24 not
-built"*. That row was wrong in both directions, and the code answered it:
+The gap register said _"No provider adapters in use — OpenAI/Gemini adapters per §22–24 not
+built"_. That row was wrong in both directions, and the code answered it:
 
 ```
 jarvis/gateway/router.py            149 lines, one wire format: {llm_base_url}/chat/completions,
@@ -42,7 +42,7 @@ Stated exactly, because the first draft of this paragraph overstated it and the 
 pointing the OpenAI-shaped URL at its compatibility endpoint** —
 `https://generativelanguage.googleapis.com/v1beta/openai/`, which is what the delivery readme has
 always told a Gemini user to type, and which did work. What did not exist was any way to ask a
-vendor in its own native shape, or any way to *say which door a sentence would go out of*:
+vendor in its own native shape, or any way to _say which door a sentence would go out of_:
 `/health` reported `llm_enabled` and `llm_source` and never a vendor, and `ModelChoice.provider`
 was the constant `"openai-compatible"` whatever the settings said. That is still a status page
 being the unreliable part, which is worth fixing; it is just not the same claim as "it would have
@@ -71,7 +71,7 @@ Spec §12 asks for a provider-neutral contract of `AIPlan` / `ProposedToolCall` 
 with `source: rule | openai | gemini | local`. **The plan half was not adopted, on purpose.**
 §13 says the AI "must not replace deterministic rules", and Phase 42 decided the model may speak and
 nowhere else. Building `AIPlan` would be a request for the model to propose tool calls, which is a
-security change wearing a schema. What was taken from §12 is the *attribution* half: every answer
+security change wearing a schema. What was taken from §12 is the _attribution_ half: every answer
 now carries the vendor and model that produced it, which is the part a reader can be held to.
 Recorded as 60-B rather than left as a silent omission.
 
@@ -89,15 +89,15 @@ naming a model false, and the refusal is what makes the status page tell the tru
 
 ## 4. The two wire shapes, and the rule that produced them
 
-| | OpenAI | Gemini |
-|---|---|---|
-| chat | `POST {base}/chat/completions` | `POST {base}/v1beta/models/<model>:generateContent` |
-| auth header | `Authorization: Bearer <key>` | `x-goog-api-key: <key>` |
-| system prompt | `messages[0].role = "system"` | `systemInstruction.parts[0].text` |
-| JSON mode | `response_format: {"type":"json_object"}` | `generationConfig.responseMimeType` |
-| answer | `choices[0].message.content` | `candidates[0].content.parts[*].text` |
-| embeddings | `POST {base}/embeddings` | `POST {base}/v1beta/models/<model>:embedContent` |
-| model name | in the body | in the path |
+|               | OpenAI                                    | Gemini                                              |
+| ------------- | ----------------------------------------- | --------------------------------------------------- |
+| chat          | `POST {base}/chat/completions`            | `POST {base}/v1beta/models/<model>:generateContent` |
+| auth header   | `Authorization: Bearer <key>`             | `x-goog-api-key: <key>`                             |
+| system prompt | `messages[0].role = "system"`             | `systemInstruction.parts[0].text`                   |
+| JSON mode     | `response_format: {"type":"json_object"}` | `generationConfig.responseMimeType`                 |
+| answer        | `choices[0].message.content`              | `candidates[0].content.parts[*].text`               |
+| embeddings    | `POST {base}/embeddings`                  | `POST {base}/v1beta/models/<model>:embedContent`    |
+| model name    | in the body                               | in the path                                         |
 
 `root()` accepts the two spellings a person actually has: `…/v1` (the shape this build assumed)
 and `…/v1beta/openai/` (the one the delivered readme tells Gemini users to type). Either way exactly
@@ -109,14 +109,14 @@ check is that the wire moves when the setting does, not that a string is absent 
 
 Three rules, each with a test:
 
-* **the vendor's own words** — an HTTP error body is parsed for `error.message` and carried into
+- **the vendor's own words** — an HTTP error body is parsed for `error.message` and carried into
   `ProviderReply.error`, because "the model was unavailable" tells a person nothing while "model
   not found" tells them what to change. The key is redacted out of it (`_redact`), since a vendor
   can echo the request it rejected.
-* **a timeout is a timeout, with its number** — every read goes through `jarvis.net.http_read`, so
-  the wait is a *total* budget and not an inactivity gap. A test proves it with a server that
+- **a timeout is a timeout, with its number** — every read goes through `jarvis.net.http_read`, so
+  the wait is a _total_ budget and not an inactivity gap. A test proves it with a server that
   dribbles bytes forever, which is the exact shape Phase 34 measured as unbounded.
-* **a capability a provider does not have is refused, not returned empty** — `[]` from a failed
+- **a capability a provider does not have is refused, not returned empty** — `[]` from a failed
   embedding or `""` from a failed transcript is the offline-as-empty bug this project has already
   fixed twice, for mail and for calendar.
 
@@ -129,8 +129,8 @@ otherwise would have produced the empty answer the rule exists to prevent. State
 
 Phase 42 measured that the two outbound calls a configured key made were **both**
 `/v1/embeddings`. So the embedder was the path to fix first, and it was fixed in a way that keeps
-Phase 34's rule intact: the *shape* (URL, headers, body, parsing) now comes from the provider, while
-the *read* stays at the call site where its total budget was pinned and audited.
+Phase 34's rule intact: the _shape_ (URL, headers, body, parsing) now comes from the provider, while
+the _read_ stays at the call site where its total budget was pinned and audited.
 
 ```python
 provider = select_provider(self.settings)      # which vendor, therefore which URL and headers
@@ -152,8 +152,8 @@ model_used -> "gemini-2.5-flash"
 ```
 
 No call had been made. Nothing was sent anywhere. And the pipeline still attributed the answer to a
-model, in a machine-readable field whose whole job is that attribution, and the prose said *"I also
-asked the model you configured, and it was unavailable"* about a question nobody had asked. The
+model, in a machine-readable field whose whole job is that attribution, and the prose said _"I also
+asked the model you configured, and it was unavailable"_ about a question nobody had asked. The
 same defect was waiting in the ordinary case: a configured vendor that does not answer leaves
 `model_used` naming a model that never replied, while the words the person read were the rule
 router's.
@@ -255,19 +255,19 @@ Two of these were written after the live run, in §7.
 
 ## 12. Numbers, re-measured after the work
 
-| | before (Phase 59 close) | after (measured now) |
-|---|---|---|
-| Tests | 2332 · 0 failed · 0 skipped | **2355 · 0 failed · 0 skipped** (94.9 s) |
-| Test modules | 86 | **87** |
-| Tools / confirmation-gated | 145 / 30 | **145 / 30** |
-| Risk split (read/low/external/destructive/physical) | 77 / 38 / 15 / 12 / 3 | unchanged |
-| Planner rules | 52 | **52** |
-| Host HTTP routes / paths | 122 / 115 | **122 / 115** |
-| Providers selectable | 1 shape, no selection | **2** (`openai`, `gemini`), selected by `JARVIS_AI_PROVIDER` |
-| Versioned Python/HTML/JS/Swift | 72,227 | **74,233** lines |
-| Shipped code | 42,937 | **43,871** lines |
-| Tests | 28,689 | **29,761** lines |
-| `audit/` reports | 61 | **62** (this file) |
+|                                                     | before (Phase 59 close)     | after (measured now)                                         |
+| --------------------------------------------------- | --------------------------- | ------------------------------------------------------------ |
+| Tests                                               | 2332 · 0 failed · 0 skipped | **2355 · 0 failed · 0 skipped** (94.9 s)                     |
+| Test modules                                        | 86                          | **87**                                                       |
+| Tools / confirmation-gated                          | 145 / 30                    | **145 / 30**                                                 |
+| Risk split (read/low/external/destructive/physical) | 77 / 38 / 15 / 12 / 3       | unchanged                                                    |
+| Planner rules                                       | 52                          | **52**                                                       |
+| Host HTTP routes / paths                            | 122 / 115                   | **122 / 115**                                                |
+| Providers selectable                                | 1 shape, no selection       | **2** (`openai`, `gemini`), selected by `JARVIS_AI_PROVIDER` |
+| Versioned Python/HTML/JS/Swift                      | 72,227                      | **74,233** lines                                             |
+| Shipped code                                        | 42,937                      | **43,871** lines                                             |
+| Tests                                               | 28,689                      | **29,761** lines                                             |
+| `audit/` reports                                    | 61                          | **62** (this file)                                           |
 
 Two consecutive full-suite runs were made. The first had **5 failures in `tests/test_vision.py`**,
 all macOS-Vision OCR tests, which is the documented 27-D load flake; the machine was re-tried clean
@@ -291,7 +291,7 @@ because a ratchet that misses a conversion is a ratchet with a hole in it.
   project ever wants a model to propose tool calls, that is a permission-engine decision with a
   confirmation story attached, not a dataclass.
 - **60-C — no page names the vendor.** The dashboard's model badge still says only Basic Mode /
-  configured. Now that the server reports `ai_provider`, the panel can say *which* vendor; that
+  configured. Now that the server reports `ai_provider`, the panel can say _which_ vendor; that
   needs a browser check at 1440px.
 - **60-D — no `realtime_session`.** Spec §10/§11 ask for it. It needs a vendor websocket, a key,
   and a client that can hold the socket. A guard test fails if the word appears in
@@ -308,9 +308,9 @@ because a ratchet that misses a conversion is a ratchet with a hole in it.
 
 ## 14. Delivery
 
-Work commit `1bec583` — *Put two vendors behind one door, and take the badge's word for nothing*.
-Close-out commit `b004a2b` — *Correct what Phase 60 claimed about itself, and take the second
-base URL*: the correction in §1 and the `root()` fix that came out of it, recorded as their own
+Work commit `1bec583` — _Put two vendors behind one door, and take the badge's word for nothing_.
+Close-out commit `b004a2b` — _Correct what Phase 60 claimed about itself, and take the second
+base URL_: the correction in §1 and the `root()` fix that came out of it, recorded as their own
 commit rather than folded under the first one. The hash was filled in after that commit existed;
 an earlier phase wrote a hash into a report before the commit did, and that is a fabrication with a
 good intention behind it.
@@ -318,18 +318,18 @@ good intention behind it.
 Rebuilt from this tree, re-deployed, and re-verified with **GETs only** — no POST reached the user's
 real data directory:
 
-| check | result |
-|---|---|
-| `codesign --verify --deep --strict` on the deployed bundle | valid on disk, satisfies its Designated Requirement |
-| `jarvis/gateway/providers.py` inside the bundle, with the corrected `root()` | present (`v1beta/openai` appears twice in the staged file) |
-| same checks after extracting `Vantage.app.zip` into a temp dir | valid — the archive, not just the folder |
-| `GET /health` on the delivered app | `tools: 145`, `llm_enabled: false`, `llm_source: none`, `ai_provider: "openai"`, `provider_paths` naming vision and stt as not provider-routed |
-| `GET /tools` | 145 entries |
-| `GET /persistence` | `supported: true`, `installed: false`, `loaded: false` — the machine still left as found (57-A is a user decision) |
-| `GET /health` with no token | **401** |
-| the claim the shipped build wrote | `{"pid": 76145, "host": "0.0.0.0", "port": 8765, …}` |
-| archives | `Vantage.app.zip` 1,166,912 B and `vantage-source.zip` 2,519,732 B, both rebuilt; the source archive holds this report and scans clean for `.env`, tokens, key files and databases |
-| suite | **2355 passed · 0 failed · 0 skipped**, measured twice clean (94.9 s and 82.4 s); one earlier run showed the five documented 27-D Vision-OCR load failures, which passed on a quiet re-run and are reported as what they are |
+| check                                                                        | result                                                                                                                                                                                                                       |
+| ---------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `codesign --verify --deep --strict` on the deployed bundle                   | valid on disk, satisfies its Designated Requirement                                                                                                                                                                          |
+| `jarvis/gateway/providers.py` inside the bundle, with the corrected `root()` | present (`v1beta/openai` appears twice in the staged file)                                                                                                                                                                   |
+| same checks after extracting `Vantage.app.zip` into a temp dir               | valid — the archive, not just the folder                                                                                                                                                                                     |
+| `GET /health` on the delivered app                                           | `tools: 145`, `llm_enabled: false`, `llm_source: none`, `ai_provider: "openai"`, `provider_paths` naming vision and stt as not provider-routed                                                                               |
+| `GET /tools`                                                                 | 145 entries                                                                                                                                                                                                                  |
+| `GET /persistence`                                                           | `supported: true`, `installed: false`, `loaded: false` — the machine still left as found (57-A is a user decision)                                                                                                           |
+| `GET /health` with no token                                                  | **401**                                                                                                                                                                                                                      |
+| the claim the shipped build wrote                                            | `{"pid": 76145, "host": "0.0.0.0", "port": 8765, …}`                                                                                                                                                                         |
+| archives                                                                     | `Vantage.app.zip` 1,166,912 B and `vantage-source.zip` 2,519,732 B, both rebuilt; the source archive holds this report and scans clean for `.env`, tokens, key files and databases                                           |
+| suite                                                                        | **2355 passed · 0 failed · 0 skipped**, measured twice clean (94.9 s and 82.4 s); one earlier run showed the five documented 27-D Vision-OCR load failures, which passed on a quiet re-run and are reported as what they are |
 
 `READ ME FIRST.txt` gained a section 7, "Which vendor the key belongs to", which says what the
 choice does, that an unusable name is refused out loud, that `provider_paths` names the two shapes

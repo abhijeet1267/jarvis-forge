@@ -42,6 +42,7 @@ def _finish(ctx: ToolContext, store: DesignAssetStore, asset, extra: Dict[str, A
         asset.kind + "_created",
         f"Created {asset.kind}: {asset.title} ({asset.format}) — {asset.filename}",
         device=ctx.device_id,
+        verified=True,
         asset=asset.as_dict(),
         path=str(store.path_of(asset)),
         **extra,
@@ -184,14 +185,29 @@ async def create_presentation(
 # Manage
 # ---------------------------------------------------------------------------
 async def list_design_assets(
-    ctx: ToolContext, project_id: str = "", kind: str = ""
+    ctx: ToolContext, project_id: str = "", kind: str = "", query: str = ""
 ) -> Any:
-    """List generated assets."""
+    """List generated assets.
+
+    A ``query`` narrows the list to the assets whose title or summary
+    contains it, so a lookup that is *searched* by the name the person gave
+    answers "which one did you mean" rather than "what exists".
+    """
     store = _store(ctx.settings)
     assets = store.all(project_id=project_id or None, kind=kind or None)
+    needle = (query or "").strip().lower()
+    if needle:
+        assets = [
+            a for a in assets
+            if needle in a.title.lower()
+            or needle in (a.summary or "").lower()
+            or needle in a.filename.lower()
+        ]
     if not assets:
         return ok(
-            "list_design_assets", "No design assets yet.", device=ctx.device_id, assets=[]
+            "list_design_assets",
+            f"No design assets match {query!r}." if needle else "No design assets yet.",
+            device=ctx.device_id, assets=[]
         )
     return ok(
         "list_design_assets",
@@ -384,11 +400,11 @@ SPECS = [
             agent="design",
             risk=RiskLevel.READ,
             allowed_devices=["laptop_main"],
-            parameters={"project_id": "string", "kind": "string"},
+            parameters={"project_id": "string", "kind": "string", "query": "string"},
             tags=["design", "read"],
             provides_identifiers={"asset_id": {"items": "assets", "id": "asset_id",
-                                              "label": "title"}},
-
+                                              "label": "title",
+                                              "lookup": "query"}},
         ),
         list_design_assets,
     ),

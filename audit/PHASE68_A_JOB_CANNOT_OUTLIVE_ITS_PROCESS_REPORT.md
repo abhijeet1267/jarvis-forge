@@ -26,7 +26,7 @@ STOP_CURRENT_TASK says: Stopped "lifecycle test" -- the job is cancelled. … (0
 
 So the assistant told a person it was doing work that had been dead for ten days, and the emergency
 stop **spent itself cancelling a phantom and reported `verified: True`**. That second one is the
-serious one: `_active_job()` picks the *newest* active row, so a real job that is not the newest
+serious one: `_active_job()` picks the _newest_ active row, so a real job that is not the newest
 would keep running while the user was told it stopped. It is Phase 54's rule — a stop has to stop the
 thing it named — violated from the other side, and it is reachable without any attacker.
 
@@ -39,27 +39,27 @@ thing it named — violated from the other side, and it is reachable without any
 
 Reading every call site shows the cure was applied to writes only:
 
-| Path | Recomputes? |
-| --- | --- |
-| `orchestrator.py:373, 618, 646, 676, 734, 818`, `tasks.py:243, 284` (step outcomes, approvals, cancel, retry) | **yes** |
-| `GET /tasks` → `tasks.list()` (`app.py:867`) | no — returns the stored column |
-| `GET /tasks/{id}` → `tasks.get()` (`app.py:872`) | no |
-| `core/briefing.py:86` — `running = [j for j in jobs if j["status"] == "running"]` | no |
-| `tools/self_state.py:32 ACTIVE_STATES` → `_active_job()`, used by `get_current_task` **and** `stop_current_task` | no |
-| process start | **nothing at all** |
+| Path                                                                                                             | Recomputes?                    |
+| ---------------------------------------------------------------------------------------------------------------- | ------------------------------ |
+| `orchestrator.py:373, 618, 646, 676, 734, 818`, `tasks.py:243, 284` (step outcomes, approvals, cancel, retry)    | **yes**                        |
+| `GET /tasks` → `tasks.list()` (`app.py:867`)                                                                     | no — returns the stored column |
+| `GET /tasks/{id}` → `tasks.get()` (`app.py:872`)                                                                 | no                             |
+| `core/briefing.py:86` — `running = [j for j in jobs if j["status"] == "running"]`                                | no                             |
+| `tools/self_state.py:32 ACTIVE_STATES` → `_active_job()`, used by `get_current_task` **and** `stop_current_task` | no                             |
+| process start                                                                                                    | **nothing at all**             |
 
 A process that died between `create()` and its first step write leaves `status='running'` with every
 step `pending`, and no code path ever contradicts it again. The origin of these twelve rows is
 `tests/test_api.py:385` — `get_core().tasks.create("lifecycle test", ["step_a", "step_b"])` — run
 against the default home in the week before `tests/conftest.py` gave each session its own
-`JARVIS_HOME`. Conftest isolation means no *new* ones; it says nothing about the ones already there,
+`JARVIS_HOME`. Conftest isolation means no _new_ ones; it says nothing about the ones already there,
 and it never addressed the missing reconciliation for a genuine crash.
 
 **This is the third time this project has been bitten by a stored `running` that nothing
 reconciles** — Phase 26 found `retry()` setting a job to `running` and executing nothing ("0
 executions and a job permanently `running`, which the briefing then published as '1 job(s) in
 progress'"), Phase 14 §3 fixed orphaned step state, and now the job row itself. The pattern is worth
-naming: status is *derived* data stored in a column, and every fix so far added another call to the
+naming: status is _derived_ data stored in a column, and every fix so far added another call to the
 derivation on the write path, while the read paths and the process boundary were left to trust it.
 
 ## 3. The fix
@@ -83,17 +83,17 @@ Nothing was deleted. The twelve rows still exist, now labelled what their own st
 
 ## 4. Tests — 9, red first as 8 failures and 1 pass
 
-| Test | Pins |
-| --- | --- |
-| `..._running_row_outliving_its_process_is_reconciled` | Asserts the pre-state (`running`, steps `pending`) in the same test, so the sweep cannot pass vacuously |
-| `..._job_this_process_started_is_left_alone` | A job created after the sweep is still `running`, and reading the list does not change it |
-| `..._paused_and_cancelled_jobs_are_not_touched` | `paused` is a state a person set and expects to survive a restart, not a crash mark |
-| `..._sweep_reports_the_rows_it_moved_and_logs_nothing_it_did_not_do` | Returns the ids it moved; a second pass returns `[]` |
-| `..._current_task_answer_does_not_narrate_a_phantom` | "Nothing is running right now", `running: False` |
-| `..._stop_refuses_instead_of_cancelling_a_job_that_was_never_running` | `cancelled: False`, "nothing was stopped", and the row is not written by the refusal |
-| `without_the_sweep_the_stop_would_still_spend_itself_on_the_phantom` | **Negative control** — asserts the bug is still reachable without the fix, so the two tests above are not vacuous |
-| `a_starting_server_reconciles_the_rows_it_inherits` | Driven through the real lifespan, not grepped (Phase 58's lesson: a textual check passes on dead code) |
-| `the_reconcile_is_not_wired_into_a_read_path` | `list()` and `get()` do not reconcile — reads must not write |
+| Test                                                                  | Pins                                                                                                              |
+| --------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `..._running_row_outliving_its_process_is_reconciled`                 | Asserts the pre-state (`running`, steps `pending`) in the same test, so the sweep cannot pass vacuously           |
+| `..._job_this_process_started_is_left_alone`                          | A job created after the sweep is still `running`, and reading the list does not change it                         |
+| `..._paused_and_cancelled_jobs_are_not_touched`                       | `paused` is a state a person set and expects to survive a restart, not a crash mark                               |
+| `..._sweep_reports_the_rows_it_moved_and_logs_nothing_it_did_not_do`  | Returns the ids it moved; a second pass returns `[]`                                                              |
+| `..._current_task_answer_does_not_narrate_a_phantom`                  | "Nothing is running right now", `running: False`                                                                  |
+| `..._stop_refuses_instead_of_cancelling_a_job_that_was_never_running` | `cancelled: False`, "nothing was stopped", and the row is not written by the refusal                              |
+| `without_the_sweep_the_stop_would_still_spend_itself_on_the_phantom`  | **Negative control** — asserts the bug is still reachable without the fix, so the two tests above are not vacuous |
+| `a_starting_server_reconciles_the_rows_it_inherits`                   | Driven through the real lifespan, not grepped (Phase 58's lesson: a textual check passes on dead code)            |
+| `the_reconcile_is_not_wired_into_a_read_path`                         | `list()` and `get()` do not reconcile — reads must not write                                                      |
 
 One of my own tests was order-dependent and is on the record: the startup test first swapped
 `db_module._DB` and **passed alone, failed in a full run**, because `get_core()` is a module global
@@ -110,27 +110,27 @@ Rebuilt (`build_app.py`, ad-hoc signed, `codesign --verify --deep --strict` vali
 restarted — the launcher stopped as well as the server, which Phase 67's delivery note learned the
 hard way.
 
-| Check | Before | After |
-| --- | --- | --- |
-| `SELECT COUNT(*) FROM tasks WHERE status='running'` | **12** | **0** |
-| status distribution of those rows | 12 × `running` | **12 × `incomplete`** |
-| `jarvis.log` | — | `stale running jobs reconciled at startup {"jobs": 12, …}` |
-| `get_current_task` (against a copy of the repaired DB) | `Current task: "lifecycle test" — running, 0 of 2 step(s) done.` | **`Nothing is running right now.`** `running: False` |
-| `stop_current_task` (same copy) | `Stopped "lifecycle test" — the job is cancelled.` `verified: True` | **`Nothing was stopped: no task is running.`** `cancelled: False` |
-| panel, live DOM | (task card narrating a phantom) | no task rows claiming work; `Audit chain intact · 520 of 520 verified` |
-| `GET /health` | 200 | 200 |
+| Check                                                  | Before                                                              | After                                                                  |
+| ------------------------------------------------------ | ------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| `SELECT COUNT(*) FROM tasks WHERE status='running'`    | **12**                                                              | **0**                                                                  |
+| status distribution of those rows                      | 12 × `running`                                                      | **12 × `incomplete`**                                                  |
+| `jarvis.log`                                           | —                                                                   | `stale running jobs reconciled at startup {"jobs": 12, …}`             |
+| `get_current_task` (against a copy of the repaired DB) | `Current task: "lifecycle test" — running, 0 of 2 step(s) done.`    | **`Nothing is running right now.`** `running: False`                   |
+| `stop_current_task` (same copy)                        | `Stopped "lifecycle test" — the job is cancelled.` `verified: True` | **`Nothing was stopped: no task is running.`** `cancelled: False`      |
+| panel, live DOM                                        | (task card narrating a phantom)                                     | no task rows claiming work; `Audit chain intact · 520 of 520 verified` |
+| `GET /health`                                          | 200                                                                 | 200                                                                    |
 
 ## 6. Numbers
 
-| Measure | Before | After |
-| --- | --- | --- |
-| Tests | 2433 | **2442** (9 new) |
-| Test modules | 94 | **95** |
-| Phase reports | 69 | **70** |
-| Versioned lines | 76,467 | **76,725** (shipped 44,489 · tests 31,618) |
-| Route objects / paths / decorators | 118 / 111 / 118 | unchanged — no route added |
-| Tools / gated / planner rules / tables | 148 / 32 / 52 / 32 | unchanged |
-| Phantom `running` jobs on the delivered host | 12 | **0** |
+| Measure                                      | Before             | After                                      |
+| -------------------------------------------- | ------------------ | ------------------------------------------ |
+| Tests                                        | 2433               | **2442** (9 new)                           |
+| Test modules                                 | 94                 | **95**                                     |
+| Phase reports                                | 69                 | **70**                                     |
+| Versioned lines                              | 76,467             | **76,725** (shipped 44,489 · tests 31,618) |
+| Route objects / paths / decorators           | 118 / 111 / 118    | unchanged — no route added                 |
+| Tools / gated / planner rules / tables       | 148 / 32 / 52 / 32 | unchanged                                  |
+| Phantom `running` jobs on the delivered host | 12                 | **0**                                      |
 
 ## 7. Limits of this fix, stated
 

@@ -36,10 +36,10 @@ accident. That is why nothing was broken; only a route was missing.
 Added two narrow rules, in the existing deterministic style, after
 `_copy_move` so no earlier rule is displaced:
 
-| rule | sentence | produces |
-|---|---|---|
-| `_write_file` | `create/make/write/save` + `(a new the text empty)* file` + `called/named/as/to` **`<name>`** + `containing/with/that says` **`<content>`** | `write_file`, `mode=overwrite` |
-| `_append_file` | `append … to/into <path>` `:` **`<content>`** | `write_file`, `mode=append` |
+| rule           | sentence                                                                                                                                    | produces                       |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------ |
+| `_write_file`  | `create/make/write/save` + `(a new the text empty)* file` + `called/named/as/to` **`<name>`** + `containing/with/that says` **`<content>`** | `write_file`, `mode=overwrite` |
+| `_append_file` | `append … to/into <path>` `:` **`<content>`**                                                                                               | `write_file`, `mode=append`    |
 
 No LLM, no second planner, no second permission engine, no new execution path
 (§2). `test_planner.py` 27 passed unchanged. Anything that does not match the
@@ -55,7 +55,7 @@ two shapes stays `unknown` — this is deliberately not a general file parser.
 A relative name resolved against the **process working directory**, so a typed
 sentence would have written into the repository, and `..` escaped it into a
 location the OS guard considers unremarkable. The system path guard refuses
-*system* locations; it has never known about the CWD. Anchoring was therefore a
+_system_ locations; it has never known about the CWD. Anchoring was therefore a
 safety requirement, not polish.
 
 New setting `file_workspace` (`JARVIS_FILE_WORKSPACE`), default
@@ -72,16 +72,16 @@ Driven over HTTP on a real uvicorn server with an isolated `JARVIS_HOME`,
 through the **same sequence the dashboard page performs** — never by
 constructing a `PlannedAction` or calling the tool (§5, §6, §11).
 
-| step | measured |
-|---|---|
-| anonymous `POST /command` | `401 "Missing or invalid API token."`, **no file created** |
-| `GET /dashboard` | bootstrap present, **master token not in body** |
-| `POST /auth/session` (same-origin) | `200`, session token, `expires_in=28800` |
-| bootstrap replay | `403 "Bootstrap refused."` — single use holds |
+| step                                    | measured                                                                 |
+| --------------------------------------- | ------------------------------------------------------------------------ |
+| anonymous `POST /command`               | `401 "Missing or invalid API token."`, **no file created**               |
+| `GET /dashboard`                        | bootstrap present, **master token not in body**                          |
+| `POST /auth/session` (same-origin)      | `200`, session token, `expires_in=28800`                                 |
+| bootstrap replay                        | `403 "Bootstrap refused."` — single use holds                            |
 | `POST /command` with the typed sentence | `200`, `intent=write_file`, `tool=write_file`, `needs_confirmation=true` |
-| before confirming | **file does not exist** |
-| `POST /confirm/{id}?approve=true` | `200`, `decision=EXECUTE`, `verification="success"`, `verified=true` |
-| reply to user | `Created hello.txt (17 bytes), read it back and it matches.` |
+| before confirming                       | **file does not exist**                                                  |
+| `POST /confirm/{id}?approve=true`       | `200`, `decision=EXECUTE`, `verification="success"`, `verified=true`     |
+| reply to user                           | `Created hello.txt (17 bytes), read it back and it matches.`             |
 
 Confirmation was **not** removed or bypassed to simplify the test; the tool is
 risk 2 and stays confirm-gated, and the test asserts the route still reaches
@@ -102,12 +102,12 @@ $ ls -la   ~/JARVIS_REAL_TEST/           -> -rw-r--r-- 17 ... hello.txt
 After the append sentence: `cat` → `'JARVIS_REAL TEST\nREAL END-TO-END VERIFIED'`
 (file now 41 bytes across the two-step version).
 
-| route | status |
-|---|---|
-| create | **PASS** |
-| modify / append | **PASS** |
-| read | **NOT_IMPLEMENTED** — no `read_file` sentence exists in the planner. Not added: §9 forbids widening the parser to raise a feature count |
-| delete | route pre-exists (`_delete` → `delete_file`, risk 3); verified it demands confirmation and creates nothing before approval |
+| route           | status                                                                                                                                  |
+| --------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| create          | **PASS**                                                                                                                                |
+| modify / append | **PASS**                                                                                                                                |
+| read            | **NOT_IMPLEMENTED** — no `read_file` sentence exists in the planner. Not added: §9 forbids widening the parser to raise a feature count |
+| delete          | route pre-exists (`_delete` → `delete_file`, risk 3); verified it demands confirmation and creates nothing before approval              |
 
 ## 10. Audit
 
@@ -121,17 +121,17 @@ token came from `verification`, not `.ok`.
 
 ## 11. Negative tests through the real API (§14)
 
-| injection | result |
-|---|---|
-| `Create a file called ../escape.txt containing: X` | **BLOCKED at the route** — *"lands outside my file workspace"*; no action, nothing written |
-| `Create a file called /etc/hosts containing: X` | **BLOCKED** |
-| `Create a file called ~/.ssh/id_rsa containing: X` | **BLOCKED** |
-| `sshlink -> ~/.ssh`, then `Create a file called sshlink/id_rsa …` | **BLOCKED** — resolved through the symlink, refused; `~/.ssh` untouched |
-| `sshlink/../ssh_probe.txt` | **BLOCKED** — no stray file appeared |
-| `nested/example.txt` (legitimate) | allowed, routed inside the workspace |
-| missing confirmation, destructive | `needs_confirmation=true`, file intact; deleting without approving runs nothing |
-| invalid token | `401` |
-| `Do something completely unsupported.` / gibberish | `intent=unknown`, **no tool** — nothing dangerous reached |
+| injection                                                         | result                                                                                     |
+| ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `Create a file called ../escape.txt containing: X`                | **BLOCKED at the route** — _"lands outside my file workspace"_; no action, nothing written |
+| `Create a file called /etc/hosts containing: X`                   | **BLOCKED**                                                                                |
+| `Create a file called ~/.ssh/id_rsa containing: X`                | **BLOCKED**                                                                                |
+| `sshlink -> ~/.ssh`, then `Create a file called sshlink/id_rsa …` | **BLOCKED** — resolved through the symlink, refused; `~/.ssh` untouched                    |
+| `sshlink/../ssh_probe.txt`                                        | **BLOCKED** — no stray file appeared                                                       |
+| `nested/example.txt` (legitimate)                                 | allowed, routed inside the workspace                                                       |
+| missing confirmation, destructive                                 | `needs_confirmation=true`, file intact; deleting without approving runs nothing            |
+| invalid token                                                     | `401`                                                                                      |
+| `Do something completely unsupported.` / gibberish                | `intent=unknown`, **no tool** — nothing dangerous reached                                  |
 
 Two harness flaws found and fixed during this work, recorded because they were
 mine, not the system's: an earlier "symlink blocked" result was **invalid** —
@@ -150,7 +150,7 @@ Status vocabulary audit of `dashboard/index.html`: the words
 `PLANNED / AWAITING CONFIRMATION / EXECUTING / VERIFIED / UNKNOWN / UNAVAILABLE /
 SIMULATED` appear **zero times**; there is a single `success` occurrence. The UI
 is chat-shaped — it prints the assistant's reply, which is now truthful, so it
-does not display a *false* state. But it has **no explicit pipeline-state
+does not display a _false_ state. But it has **no explicit pipeline-state
 indicator**, so §13's required distinction is unmet. Not fixed: that is UI
 design work, and §12 says do not redesign the dashboard.
 
@@ -229,14 +229,14 @@ Phase 11, not here.
 
 ## 18. Remaining blockers
 
-| sev | item |
-|---|---|
-| **P1** | §13 dashboard state vocabulary absent — no VERIFIED/UNKNOWN/SIMULATED/UNAVAILABLE indicator anywhere in the UI |
-| **P2** | No `read_file` route (deliberate scope limit) |
-| **P2** | Live-browser dashboard run not exercised this phase; page script proven by replay only |
-| **P2** | Scheduler: the third site is fixed, but `briefing.py` still renders unreachable providers as "Nothing scheduled today." / "No unread mail." |
-| **P3** | `delete_file` "Moved to Trash" still `EXECUTED / VERIFICATION LIMITED` — no in-process proof of trash arrival |
+| sev     | item                                                                                                                                                                                                                                                                                                               |
+| ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **P1**  | §13 dashboard state vocabulary absent — no VERIFIED/UNKNOWN/SIMULATED/UNAVAILABLE indicator anywhere in the UI                                                                                                                                                                                                     |
+| **P2**  | No `read_file` route (deliberate scope limit)                                                                                                                                                                                                                                                                      |
+| **P2**  | Live-browser dashboard run not exercised this phase; page script proven by replay only                                                                                                                                                                                                                             |
+| **P2**  | Scheduler: the third site is fixed, but `briefing.py` still renders unreachable providers as "Nothing scheduled today." / "No unread mail."                                                                                                                                                                        |
+| **P3**  | `delete_file` "Moved to Trash" still `EXECUTED / VERIFICATION LIMITED` — no in-process proof of trash arrival                                                                                                                                                                                                      |
 | carried | simulated home/robotics still record `Verification.SUCCESS`; hardcoded `23.0 °C`/`84%` still presented as last-known; `POST /memory/{id}/forget`, `_remember_outcome()`, `ProjectGraph` delete API; RT-3 mutable risk tier; R-2 broad auto-retry; R-11…R-14; P0-2 bounded-session residual; desktop bundle exits 1 |
-| process | **0 commits**, so no diff or review record exists for any Phase 10–12 change |
+| process | **0 commits**, so no diff or review record exists for any Phase 10–12 change                                                                                                                                                                                                                                       |
 
 Notification remains **NOT IMPLEMENTED** (§19) — no fabricated test.

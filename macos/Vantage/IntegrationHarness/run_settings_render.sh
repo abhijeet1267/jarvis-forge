@@ -1,0 +1,84 @@
+#!/usr/bin/env bash
+# Render Settings → Connection offscreen against `fake_backend.py`, so the
+# identity rows and the stale / old-build notices are verified as pixels.
+#
+# Usage: run_settings_render.sh <mode> [out.png]
+#   mode is the fake backend's mode: up (current), stale, old (404 identity),
+#   foreign-folder, foreign-service, 401.
+#
+# `legacy` is special: it runs the fixture listener instead of fake_backend.py,
+# from inside this checkout, as `run.py serve` -- the OS evidence
+# scripts/backend_lifecycle.py needs to call a pre-identity server "provably
+# ours". That is the only way the lifecycle block can show the upgrade button
+# truthfully.
+#
+# Mirrors run_lifecycle_check.sh: a fake backend on an ephemeral port (never
+# the live :8765), the REAL app sources compiled by build_render.sh, and a
+# trap that kills the server on every exit path.
+set -euo pipefail
+DIR="$(cd "$(dirname "$0")" && pwd)"
+APP="$(cd "$DIR/.." && pwd)"
+REPO="$(cd "$APP/../.." && pwd)"
+MODE="${1:?usage}"
+OUT="${2:-$REPO/artifacts/settings-connection-$MODE.png}"
+TMP="$(mktemp -d)"
+SRV=""
+cleanup() {
+  [ -n "$SRV" ] && kill "$SRV" 2>/dev/null || true
+  rm -rf "$TMP"
+}
+trap cleanup EXIT
+
+# The fake backend shares its BASE directory with the renderer; patch both.
+cp "$DIR/fake_backend.py" "$TMP/server.py"
+sed -i.bak "s#^BASE = \"/tmp/bm_harness\"#BASE = \"$TMP\"#" "$TMP/server.py"
+cp "$DIR/render_settings.swift" "$TMP/main.swift"
+sed -i.bak "s#^let BASE = \"/tmp/bm_harness\"#let BASE = \"$TMP\"#" "$TMP/main.swift" || true
+
+# This checkout — what the app is told to expect, and what the fake backend
+# reports as its source_root (for the modes where they should match).
+ROOT="$REPO"
+printf "%s" "$ROOT" > "$TMP/source_root"
+
+PY="${PYTHON:-python3}"
+if [ "$MODE" = "legacy" ]; then
+  # Pre-identity listener from this checkout (see header). Named run.py and
+  # given the `serve` argument so the script's command-line check matches.
+  mkdir -p "$TMP/entry"
+  cp "$DIR/lifecycle_fixture_server.py" "$TMP/entry/run.py"
+  ( cd "$ROOT" && exec "$PY" "$TMP/entry/run.py" serve --port-file "$TMP/port" ) \
+    > "$TMP/server.log" 2>&1 &
+else
+  "$PY" "$TMP/server.py" > "$TMP/server.log" 2>&1 &
+fi
+SRV=$!
+for _ in $(seq 1 40); do [ -s "$TMP/port" ] && break; sleep 0.1; done
+PORT="$(cat "$TMP/port" 2>/dev/null || true)"
+if [ -z "$PORT" ]; then echo "FAIL: fake backend did not start"; cat "$TMP/server.log"; exit 1; fi
+
+# Modes where the app's expected checkout must differ from the backend's.
+if [ "$MODE" = "foreign-folder" ]; then
+  printf "%s" "/tmp/a-different-checkout/jarvis-forge" > "$TMP/source_root"
+fi
+printf "%s" "$MODE" > "$TMP/mode"
+
+"$DIR/build_render.sh" "$TMP/main.swift" "$TMP/render"
+
+mkdir -p "$TMP/home"
+# `free` shows the recovery button for an unowned port: the fake backend still
+# answers the app (so the page renders normally), while the lifecycle script is
+# pointed at a port nothing listens on.
+LIFECYCLE_PORT="$PORT"
+if [ "$MODE" = "free" ]; then
+  LIFECYCLE_PORT="$("$PY" - <<'PYEOF'
+import socket
+s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1]); s.close()
+PYEOF
+)"
+fi
+JARVIS_BACKEND_PORT="$PORT" \
+JARVIS_LIFECYCLE_PORT="$LIFECYCLE_PORT" \
+JARVIS_HOME="$TMP/home" \
+JARVIS_PROJECT_DIR="$ROOT" \
+  "$TMP/render" "$OUT"
+[ -f "$OUT" ] && echo "rendered $OUT" || { echo "FAIL: no PNG produced"; exit 1; }

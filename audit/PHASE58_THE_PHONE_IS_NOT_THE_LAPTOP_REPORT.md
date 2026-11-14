@@ -1,17 +1,17 @@
 # Phase 58 — the phone is a surface, not a second copy of the laptop
 
-| | |
-|---|---|
-| Phase | 58 (the roadmap's "native mobile shell", re-scoped by a measured blocker — see §1) |
-| Date | 2026-10-05 |
-| Starting commit | `16468e6` (Phase 57 close-out) |
-| Ending commit | `dd63bf2` (the work) → the close-out commit named in §9 |
-| Tests before | 2273 passed · 0 failed · 0 skipped |
-| Tests after | **2305 passed · 0 failed · 0 skipped** (70.2 s) |
-| Tools / gated | 145 / 30 → **145 / 30** — no capability added, one gate narrowed |
-| Planner routes | 52 → **52** |
-| HTTP surface | 119 / 113 paths → **122 / 115** (sign-out, session list, revoke-one) |
-| Push status | **nothing pushed; local commits only** |
+|                 |                                                                                    |
+| --------------- | ---------------------------------------------------------------------------------- |
+| Phase           | 58 (the roadmap's "native mobile shell", re-scoped by a measured blocker — see §1) |
+| Date            | 2026-10-05                                                                         |
+| Starting commit | `16468e6` (Phase 57 close-out)                                                     |
+| Ending commit   | `dd63bf2` (the work) → the close-out commit named in §9                            |
+| Tests before    | 2273 passed · 0 failed · 0 skipped                                                 |
+| Tests after     | **2305 passed · 0 failed · 0 skipped** (70.2 s)                                    |
+| Tools / gated   | 145 / 30 → **145 / 30** — no capability added, one gate narrowed                   |
+| Planner routes  | 52 → **52**                                                                        |
+| HTTP surface    | 119 / 113 paths → **122 / 115** (sign-out, session list, revoke-one)               |
+| Push status     | **nothing pushed; local commits only**                                             |
 
 ---
 
@@ -29,7 +29,7 @@ which adb             -> not found
 a handset to verify on -> none
 ```
 
-**`BLOCKED_EXTERNAL_DEPENDENCY`.** A store app cannot be compiled, signed or *verified* here, and
+**`BLOCKED_EXTERNAL_DEPENDENCY`.** A store app cannot be compiled, signed or _verified_ here, and
 this project's rule is that an unverified artifact is not a delivered one. The user chose the
 alternative explicitly: harden the web client, keep going, and never relabel `/phone` as native.
 A guard now enforces the naming part — `phone.html`, `sw.js` and `manifest.webmanifest` may not
@@ -50,7 +50,7 @@ authorised for eight hours with nothing anyone could press.
 **The surface is fixed when the code is minted, not when it is spent.** `/phone` mints a
 `phone`-scoped bootstrap, `/dashboard` mints a `dashboard`-scoped one, and the session inherits
 that. The redeem body's `surface` field is ignored — tested, because that is the difference between
-a gate and a suggestion. `/auth/token` re-issues into the *caller's* surface, so a phone cannot
+a gate and a suggestion. `/auth/token` re-issues into the _caller's_ surface, so a phone cannot
 launder a wider token through its own narrow one.
 
 Enforcement sits in `require_auth`, in one place, before the handler. The phone's allowlist is the
@@ -66,9 +66,9 @@ passing.
 ## 4. Three defects, all found by pressing things in a browser
 
 **4.1 The deep link landed nowhere.** `/phone?focus=approvals` scrolled at parse time, but the
-quick-actions row is rendered from `/tools` *after* that, pushing the approvals card down. In a
+quick-actions row is rendered from `/tools` _after_ that, pushing the approvals card down. In a
 320×568 viewport: `scrollY` 31, card top 590 — off screen, while the DOM insisted it had focused
-the element. Fix: apply the landing at parse *and* after the first render settles, with the
+the element. Fix: apply the landing at parse _and_ after the first render settles, with the
 one-shot flag set only by the settled call. Re-measured: `scrollY` 179 (the page's maximum), card
 on screen, focused. Negative control: the same page without the parameter stays at `scrollY` 0 and
 unfocused, which proves the parameter did the work.
@@ -120,43 +120,43 @@ panel claim is made here.
 
 ## 7. Numbers, re-measured
 
-| | before | after | how |
-|---|---|---|---|
-| Test suite | 2273 passed | **2305 passed · 0 failed · 0 skipped** (70.2 s) | `JARVIS_HOME=$(mktemp -d) .venv/bin/python -m pytest -q` |
-| Phase 58 tests | 0 | **32** | `tests/test_phase58_the_phone_is_not_the_laptop.py` |
-| Test modules | 84 | **85** | `ls tests/test_*.py \| wc -l` |
-| Phase reports | 59 | **60** (this file) | `ls audit/*.md \| wc -l` |
-| Lines | 70,190 — 41,887 · 28,303 | **70,880 — 42,191 source · 28,689 tests** | the Phase 57 `find` command, unchanged |
-| Tools / gated | 145 / 30 | **145 / 30** | registry; no capability added |
-| Planner routes | 52 | **52** | `len(planner._rules)` |
-| HTTP surface | 119 / 113 paths | **122 / 115 paths** | `len(app.routes)` |
+|                | before                   | after                                           | how                                                      |
+| -------------- | ------------------------ | ----------------------------------------------- | -------------------------------------------------------- |
+| Test suite     | 2273 passed              | **2305 passed · 0 failed · 0 skipped** (70.2 s) | `JARVIS_HOME=$(mktemp -d) .venv/bin/python -m pytest -q` |
+| Phase 58 tests | 0                        | **32**                                          | `tests/test_phase58_the_phone_is_not_the_laptop.py`      |
+| Test modules   | 84                       | **85**                                          | `ls tests/test_*.py \| wc -l`                            |
+| Phase reports  | 59                       | **60** (this file)                              | `ls audit/*.md \| wc -l`                                 |
+| Lines          | 70,190 — 41,887 · 28,303 | **70,880 — 42,191 source · 28,689 tests**       | the Phase 57 `find` command, unchanged                   |
+| Tools / gated  | 145 / 30                 | **145 / 30**                                    | registry; no capability added                            |
+| Planner routes | 52                       | **52**                                          | `len(planner._rules)`                                    |
+| HTTP surface   | 119 / 113 paths          | **122 / 115 paths**                             | `len(app.routes)`                                        |
 
 ## 8. Open items
 
-* **58-A — the asymmetry is a decision, not a setting.** Dashboard sessions still reach
+- **58-A — the asymmetry is a decision, not a setting.** Dashboard sessions still reach
   everything. Narrowing them means listing what the console legitimately calls, which is a real
   piece of work with a real chance of breaking a panel card; it should be done deliberately or not
   at all.
-* **58-B — a phone can approve its own gated actions.** The approvals list is on the phone, so a
+- **58-B — a phone can approve its own gated actions.** The approvals list is on the phone, so a
   losable handset can confirm a destructive command it just sent. The mitigation today is the
   pairing key and the eight-hour TTL; neither is a biometric. This is a governance question the
   roadmap's "biometrics" item was really about.
-* **58-C — the credential is still readable by page script.** Scoping limits what a stolen session
-  *can do*, not how it can be read. Moving to an `HttpOnly` cookie is the answer and is a separate
+- **58-C — the credential is still readable by page script.** Scoping limits what a stolen session
+  _can do_, not how it can be read. Moving to an `HttpOnly` cookie is the answer and is a separate
   change with CSRF consequences that need their own design; doing it halfway would be worse.
-* **58-D — `BLOCKED_EXTERNAL_DEPENDENCY`, the headline.** No Xcode, no iOS SDK, zero signing
+- **58-D — `BLOCKED_EXTERNAL_DEPENDENCY`, the headline.** No Xcode, no iOS SDK, zero signing
   identities, no Android SDK, no handset. A store build is not produced, not signed, and not
   verified by this phase, and nothing shipped here claims otherwise.
-* **58-E — no push, so the deep link only helps if something else tells you.** The link is the
+- **58-E — no push, so the deep link only helps if something else tells you.** The link is the
   receiving half of a notification that does not exist yet.
-* **58-F — the session list shows a reference and a countdown, not an origin.** No device id, no
+- **58-F — the session list shows a reference and a countdown, not an origin.** No device id, no
   IP, no created-at, because the session store never learned which device spent which code. Telling
   two handsets apart today means guessing from `expires_in`.
-* **58-H — the laptop can manage sessions through the API and not through the panel.** There is no
+- **58-H — the laptop can manage sessions through the API and not through the panel.** There is no
   Devices-card row for "three dashboard sessions and one phone, signed in at 09:12, ending in
   4 hours". Revoke exists; the surface to reach it calmly does not, and `READ ME FIRST.txt` now says
   so rather than implying a button.
-* **58-G — sessions are in-memory, so a server restart signs everyone out** and the page re-mints a
+- **58-G — sessions are in-memory, so a server restart signs everyone out** and the page re-mints a
   bootstrap on reload. It self-heals, but "the laptop restarted at 3am and my phone quietly lost
   its session" is a state nobody is told about.
 

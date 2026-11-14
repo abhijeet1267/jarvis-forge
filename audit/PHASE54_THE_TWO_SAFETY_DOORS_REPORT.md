@@ -1,18 +1,18 @@
 # Phase 54 — the two safety doors that had logic and no handle
 
-| | |
-|---|---|
-| Phase | 54 |
-| Date | 2026-10-04 |
-| Starting commit | `35c9abf` (Phase 53) |
-| Ending commit | `67d9530`, then `377e79f` (§11a correction) — filled in at the Phase 56 close-out; §9 promised it and did not record it |
-| Tests before | 2129 passed · 0 failed · 0 skipped |
-| Tests after | **2155 passed · 0 failed · 0 skipped** (72.6 s) |
-| Tools before / after | 141 / **141** — this phase added no capability |
-| Planner routes before / after | 51 / **51** |
-| HTTP surface | 113 objects / 107 paths → **117 / 111** (4 new paths) |
-| Confirmation-gated | **28 of 141 — unchanged** |
-| Push status | **nothing pushed; local commit only** |
+|                               |                                                                                                                         |
+| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| Phase                         | 54                                                                                                                      |
+| Date                          | 2026-10-04                                                                                                              |
+| Starting commit               | `35c9abf` (Phase 53)                                                                                                    |
+| Ending commit                 | `67d9530`, then `377e79f` (§11a correction) — filled in at the Phase 56 close-out; §9 promised it and did not record it |
+| Tests before                  | 2129 passed · 0 failed · 0 skipped                                                                                      |
+| Tests after                   | **2155 passed · 0 failed · 0 skipped** (72.6 s)                                                                         |
+| Tools before / after          | 141 / **141** — this phase added no capability                                                                          |
+| Planner routes before / after | 51 / **51**                                                                                                             |
+| HTTP surface                  | 113 objects / 107 paths → **117 / 111** (4 new paths)                                                                   |
+| Confirmation-gated            | **28 of 141 — unchanged**                                                                                               |
+| Push status                   | **nothing pushed; local commit only**                                                                                   |
 
 Gaps B and C of the operating prompt: an emergency stop reachable only by typing a sentence,
 and a revocation mechanism with no caller at all.
@@ -21,26 +21,26 @@ and a revocation mechanism with no caller at all.
 
 ## 1. Measured before editing
 
-* `emergency_stop` is a real PHYSICAL-tier tool, confirmation-free, and honest about what it
+- `emergency_stop` is a real PHYSICAL-tier tool, confirmation-free, and honest about what it
   cannot do (the robot's own safety controller is outside this process). It had **no route** —
   so the phone, which §30 of the build prompt names first for a stop, could not pull it.
-* `PermissionEngine.revoke(tool, device)` writes an explicit denial row. **No product surface
+- `PermissionEngine.revoke(tool, device)` writes an explicit denial row. **No product surface
   called it** (measured again this phase: the only `.revoke(` callers are device-level
   `PairingManager.revoke`). The permission engine had one door and no handle.
-* One detail worth having checked rather than assumed: `LifecycleReport` defines `__bool__`, so
-  `emergency_stop`'s existing `if tasks.cancel(...)` was *not* a truthiness bug. It was still
+- One detail worth having checked rather than assumed: `LifecycleReport` defines `__bool__`, so
+  `emergency_stop`'s existing `if tasks.cancel(...)` was _not_ a truthiness bug. It was still
   changed, for the reason in §3.
 
 ## 2. What was built
 
-| surface | what it does |
-|---|---|
-| `POST /emergency_stop` | calls the **registered tool** through the running core — no second stop implementation — asks for no confirmation, and writes a ledger row |
-| `GET /permissions/policy` | the explicit grants and denials the engine currently honours |
-| `POST /permissions/{tool}/revoke` | refuses an unknown tool (404), refuses `emergency_stop` itself (409), records the denial, and **re-reads the policy** to report whether the capability is now blocked |
-| `POST /permissions/{tool}/restore` | removes the denial so the tool returns to its *declared* policy |
-| `dashboard/phone.html` | an Emergency stop control |
-| `dashboard/index.html` | an Emergency stop control, and a **Policy** column in the tool list with Revoke / Restore |
+| surface                            | what it does                                                                                                                                                          |
+| ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `POST /emergency_stop`             | calls the **registered tool** through the running core — no second stop implementation — asks for no confirmation, and writes a ledger row                            |
+| `GET /permissions/policy`          | the explicit grants and denials the engine currently honours                                                                                                          |
+| `POST /permissions/{tool}/revoke`  | refuses an unknown tool (404), refuses `emergency_stop` itself (409), records the denial, and **re-reads the policy** to report whether the capability is now blocked |
+| `POST /permissions/{tool}/restore` | removes the denial so the tool returns to its _declared_ policy                                                                                                       |
+| `dashboard/phone.html`             | an Emergency stop control                                                                                                                                             |
+| `dashboard/index.html`             | an Emergency stop control, and a **Policy** column in the tool list with Revoke / Restore                                                                             |
 
 No new tool, no new planner route, no new state store.
 
@@ -58,7 +58,7 @@ else:                    still_running.append(job_id)
 ```
 
 `test_the_stop_reports_state_it_read_back_not_state_it_requested` forces the failure: the
-cancel is monkeypatched to accept *and roll the row back*, and the stop must then report
+cancel is monkeypatched to accept _and roll the row back_, and the stop must then report
 `verified: False` with the job listed as stuck. Under the old code it claimed success.
 
 ## 4. Restore is not grant
@@ -77,7 +77,7 @@ not EXECUTE, and not BLOCK — and the response carries `standing_grant: false`.
 
 `emergency_stop` cannot be revoked: 409, no row written, and a `denied` ledger entry. A door
 that can be locked from the outside is not a safety door, and this is the one place where
-"the caller is authorised" is not sufficient — the panel renders it as *safety interlock*
+"the caller is authorised" is not sufficient — the panel renders it as _safety interlock_
 rather than offering the button.
 
 ## 6. Alias safety, kept
@@ -123,11 +123,11 @@ audit rows           -> emergency.stop: success
 
 Both pages changed, so both were driven in a real browser against the isolated instance.
 
-* **Phone, 375 × 812** — Emergency stop present, `onclick` handler attached, page references
+- **Phone, 375 × 812** — Emergency stop present, `onclick` handler attached, page references
   `/emergency_stop`, **0 console errors**.
-* **Panel, 1440 × 900** — Emergency stop present and wired; the tool table now has a
+- **Panel, 1440 × 900** — Emergency stop present and wired; the tool table now has a
   **Policy** column with **140 Revoke controls** (141 tools minus the interlock) and
-  `emergency_stop` rendered as *safety interlock*; **0 console errors**. The Recent Actions
+  `emergency_stop` rendered as _safety interlock_; **0 console errors**. The Recent Actions
   card independently showed the live run's rows: `emergency_stop success`,
   `delete_file blocked`, `restore_tool success`.
 
@@ -165,36 +165,36 @@ Reported because the point is the truth of the code, not the appearance of it.
 
 ## 10. Numbers, re-measured
 
-| | before | after | how |
-|---|---|---|---|
-| Test suite | 2129 passed | **2155 passed · 0 failed · 0 skipped** (72.6 s) | `JARVIS_HOME=$(mktemp -d) .venv/bin/python -m pytest -q` |
-| Phase 54 tests | 0 | **26** | `tests/test_phase54_the_two_safety_doors.py` |
-| Test modules | 80 | **81** | `ls tests/test_*.py \| wc -l` |
-| Phase reports | 55 | **56** (this file) | `ls audit/*.md \| wc -l` |
-| Lines | 67,266 — 40,911 source · 26,355 tests | **67,882 — 41,174 source · 26,708 tests** | `wc -l` |
-| Tools | 141 | **141** | registry — this phase added routes, not capabilities |
-| Planner routes | 51 | **51** | unchanged |
-| HTTP surface | 113 / 107 paths | **117 / 111 paths** | `len(app.routes)` |
-| Confirmation-gated | 28 | **28** | unchanged; no gate was loosened |
+|                    | before                                | after                                           | how                                                      |
+| ------------------ | ------------------------------------- | ----------------------------------------------- | -------------------------------------------------------- |
+| Test suite         | 2129 passed                           | **2155 passed · 0 failed · 0 skipped** (72.6 s) | `JARVIS_HOME=$(mktemp -d) .venv/bin/python -m pytest -q` |
+| Phase 54 tests     | 0                                     | **26**                                          | `tests/test_phase54_the_two_safety_doors.py`             |
+| Test modules       | 80                                    | **81**                                          | `ls tests/test_*.py \| wc -l`                            |
+| Phase reports      | 55                                    | **56** (this file)                              | `ls audit/*.md \| wc -l`                                 |
+| Lines              | 67,266 — 40,911 source · 26,355 tests | **67,882 — 41,174 source · 26,708 tests**       | `wc -l`                                                  |
+| Tools              | 141                                   | **141**                                         | registry — this phase added routes, not capabilities     |
+| Planner routes     | 51                                    | **51**                                          | unchanged                                                |
+| HTTP surface       | 113 / 107 paths                       | **117 / 111 paths**                             | `len(app.routes)`                                        |
+| Confirmation-gated | 28                                    | **28**                                          | unchanged; no gate was loosened                          |
 
 ## 11. Open items
 
-* **54-A** The stop cancels *queued JARVIS work*. It still reaches no physical actuator, and
+- **54-A** The stop cancels _queued JARVIS work_. It still reaches no physical actuator, and
   says so. The menu-bar and lock-screen surfaces §30 names do not exist yet (no native shell —
   Phase 58).
-* **54-B** A stop is not yet interruptible *mid-step*: a tool already running is not killed,
+- **54-B** A stop is not yet interruptible _mid-step_: a tool already running is not killed,
   only the remaining steps are prevented from being dispatched. The message says "steps that
   already ran are not undone", which is accurate but easy to read as "everything halted".
-* **54-C** Revoke is per capability and per device, with no expiry. A denial stays until
+- **54-C** Revoke is per capability and per device, with no expiry. A denial stays until
   restored; there is no "revoke for 10 minutes", and no bulk revoke.
-* **54-D** The panel offers Revoke on all 140 non-interlock capabilities, including ones whose
+- **54-D** The panel offers Revoke on all 140 non-interlock capabilities, including ones whose
   revocation would break the panel itself (e.g. `get_recent_activity` empties the card that
   would show it). Deliberately not special-cased — a hidden rule about which revocations are
   "allowed" is exactly the kind of gate that later gets quietly widened — but worth revisiting
   as UX.
-* **54-E** No click-through in a browser for either new control (§8). The endpoints are proven;
+- **54-E** No click-through in a browser for either new control (§8). The endpoints are proven;
   the buttons are proven wired, not proven pressed.
-* **54-F** Phase 53's `succeeded` defect was found here, not by Phase 53's own tests, because
+- **54-F** Phase 53's `succeeded` defect was found here, not by Phase 53's own tests, because
   its live proof hand-wrote the wrong status string. Any Phase 53 surface that compares step
   statuses deserves the same re-check; `get_current_task` and `stop_current_task` were the two
   that existed and both are fixed.

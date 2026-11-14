@@ -70,7 +70,7 @@ and three layers down and a leaked budget would eventually refuse every network 
 process makes -- which is why it is reset in a `finally`, and tested.
 
 **A timeout is not an empty shelf.** The arXiv path reports the deadline in the same words it
-uses for a refusal, so `search_papers` answers *"…on local. (arXiv did not answer within 1s…)"*:
+uses for a refusal, so `search_papers` answers _"…on local. (arXiv did not answer within 1s…)"_:
 the empty result stays attributed to the shelf that really is empty, and the source that went
 quiet is named. Phase 21 spent a phase on that distinction; a timeout landing in the same
 reply as "nothing found" would have reopened it.
@@ -118,7 +118,7 @@ an empty result; nothing is invented when the clock runs out; the vision and emb
 are bounded through their public entry points; the second read of one sentence sees ≤1 s of a
 4 s budget; the budget is returned after the sentence; and two sweeps -- every `urlopen` in
 `jarvis/` goes through `http_read` (except the definition in `net.py`), and the six
-silence-bounded `httpx.Client(timeout=…)` sites are *counted*, so a seventh is a red test
+silence-bounded `httpx.Client(timeout=…)` sites are _counted_, so a seventh is a red test
 rather than a quiet addition.
 
 No existing test was changed. Full suite: **1653 passed, 0 failed, 0 xfailed** (1653
@@ -126,34 +126,34 @@ collected), up from 1642.
 
 ## 6. Re-measured
 
-| metric | before | after | how |
-| --- | --- | --- | --- |
-| one arXiv search against a server that never stops | no bound (60 s observed, still waiting) | ≤20 s, both attempts together | trickler test |
-| outbound reads in `"remember that …"` | 2 × 30 s = 60 s of wait labelled "30" | 2 reads inside a 60 s sentence ceiling | counted, then bounded |
-| `urlopen` sites with a total deadline | 0 of 3 | 3 of 3 | sweep test |
-| httpx sites still silence-bounded | 6 | 6, now pinned by a ratchet | sweep test |
-| `research this idea` on the real network | 41,247 ms (Phase 29) | 714 ms (this run; not attributed to this change) | `python benchmarks/acceptance_run.py` |
-| §45 safety matrix | 6 of 6 | **6 of 6** | `python benchmarks/safety_run.py` |
-| §59 acceptance sweep | 17 of 18 | 17 of 18, VERIFIED 7 | same |
-| suite | 1642 | 1653 | `python -m pytest -q` |
+| metric                                             | before                                  | after                                            | how                                   |
+| -------------------------------------------------- | --------------------------------------- | ------------------------------------------------ | ------------------------------------- |
+| one arXiv search against a server that never stops | no bound (60 s observed, still waiting) | ≤20 s, both attempts together                    | trickler test                         |
+| outbound reads in `"remember that …"`              | 2 × 30 s = 60 s of wait labelled "30"   | 2 reads inside a 60 s sentence ceiling           | counted, then bounded                 |
+| `urlopen` sites with a total deadline              | 0 of 3                                  | 3 of 3                                           | sweep test                            |
+| httpx sites still silence-bounded                  | 6                                       | 6, now pinned by a ratchet                       | sweep test                            |
+| `research this idea` on the real network           | 41,247 ms (Phase 29)                    | 714 ms (this run; not attributed to this change) | `python benchmarks/acceptance_run.py` |
+| §45 safety matrix                                  | 6 of 6                                  | **6 of 6**                                       | `python benchmarks/safety_run.py`     |
+| §59 acceptance sweep                               | 17 of 18                                | 17 of 18, VERIFIED 7                             | same                                  |
+| suite                                              | 1642                                    | 1653                                             | `python -m pytest -q`                 |
 
 ## 7. Carried forward
 
-* **34-A** six `httpx.Client(timeout=…)` sites (device calendar 20 s ×4, watch gateway,
+- **34-A** six `httpx.Client(timeout=…)` sites (device calendar 20 s ×4, watch gateway,
   router 30 s, STT 60 s) still bound silence, not duration, and are not behind
   `http_read`. They were left because each needs its own client-level reading and none was
   measured hanging; the ratchet test makes the number impossible to grow by accident.
-* **34-B** the abandoned read keeps its socket open until garbage collection. A `total` that
+- **34-B** the abandoned read keeps its socket open until garbage collection. A `total` that
   is much smaller than a server's dribble interval leaves more of these around than the
   defaults do; a connection pool or `httpx` with an explicit `read` + `pool` timeout would
   close it properly.
-* **34-C** `SENTENCE_BUDGET` is one number for every sentence. A voice turn wants a far
+- **34-C** `SENTENCE_BUDGET` is one number for every sentence. A voice turn wants a far
   tighter ceiling than a research brief; making it per-surface is a policy choice about
   which sentences are allowed to be slow, not a mechanism.
-* Everything already open: 33-A…C, 32-A…C, 31-A/31-B closed in 32, 30-B…D, 29-A, 29-C,
+- Everything already open: 33-A…C, 32-A…C, 31-A/31-B closed in 32, 30-B…D, 29-A, 29-C,
   29-D, 28-A narrowed, 27-A…D, 26-B, the `ToolSpec.parameters` residual, 23-E, mic/speech
   TCC, 15-F, 14-D, 16-F, hardware **BLOCKED**, LLM planner, unattended workflows.
-* Closed here: **29-B**.
+- Closed here: **29-B**.
 
 ---
 
@@ -170,10 +170,10 @@ e5c80a6  A network read gets a total deadline, and a sentence gets one budget
 
 Run `36910545352`, both jobs green:
 
-| job | result | pytest line | wall |
-| --- | --- | --- | --- |
+| job            | result  | pytest line                                    | wall                 |
+| -------------- | ------- | ---------------------------------------------- | -------------------- |
 | `suite (3.11)` | success | `1646 passed, 7 skipped, 1 warning in 107.32s` | 18:56:18 → 18:58:49Z |
-| `suite (3.12)` | success | `1646 passed, 7 skipped, 1 warning in 97.22s` | 18:56:14 → 18:58:28Z |
+| `suite (3.12)` | success | `1646 passed, 7 skipped, 1 warning in 97.22s`  | 18:56:14 → 18:58:28Z |
 
 `1646 + 7 = 1653`, so nothing was lost between the machines — but the skip count moved from
 the six accounted for in Phase 29 (five battery-gated, one `dist/`-gated) to **seven**, and
@@ -188,7 +188,7 @@ attempt that has to be waited out costs. That makes the arXiv skip the likely se
 keeps it an inference, not a fact.
 
 The distinction matters for this phase specifically, because the arXiv path is the one it
-changed: a skip on the runner means the *real-network* leg was not exercised there, so the
+changed: a skip on the runner means the _real-network_ leg was not exercised there, so the
 evidence that the deadline leaves the working path intact is the local run (0 skipped, arXiv
 answering, `research this idea` at 714 ms in `benchmarks/acceptance_latency.json`) and the
 fast-path test against a server that declares the length it actually sends — not CI.
@@ -204,7 +204,7 @@ Phase 29 accounted for.
 That settles the inference above in both directions. The seventh skip was there on one run
 and gone on the next, with the tree unchanged in any way that touches it: which is exactly
 how a network-reachability skip behaves. It also retires the caveat attached to it — on this
-run the runner *did* exercise the real arXiv path and the test passed, so the deadline is
+run the runner _did_ exercise the real arXiv path and the test passed, so the deadline is
 verified against a live upstream on a machine that did not write it, not only locally.
 
 The honest residue is the method, not the fact: `pytest -q` gives counts without reasons, so

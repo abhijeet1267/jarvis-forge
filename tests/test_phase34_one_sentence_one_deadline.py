@@ -310,15 +310,41 @@ def test_the_silence_only_sites_are_counted_not_forgotten():
     The httpx and socket readers bound silence, not duration, and were left alone because
     each needs its own reading loop and none of them was measured hanging. Listing them
     with a number keeps the gap real: if the count grows, the suite says so.
+
+    The set is re-recorded when a new site is verified and added deliberately. Current
+    set (2026-10-16): the six original sites plus the companion-gateway proxy
+    (jarvis/companion/gateway.py, timeout=30.0) — a read of the *local* backend over
+    loopback, so silence-bounding is an acceptable risk there until measured otherwise.
+
+    **2026-10-22:** the backend's own pairing-code request
+    (jarvis/api/app.py, timeout=10.0) joins the set, for the same reason and on
+    the same reasoning as the gateway's proxy: it reads the *local* companion
+    gateway over loopback, and a gateway that is not running answers by
+    refusing rather than by hanging. It is here so the count is real rather
+    than because the gap is acceptable — a read of a remote host would not
+    be.
     """
     silence_only = []
     for path in sorted((ROOT / "jarvis").rglob("*.py")):
         text = path.read_text(encoding="utf-8")
         for match in re.finditer(r"httpx\.(?:Async)?Client\(\s*timeout=([\d.]+)", text):
             silence_only.append(f"{path.relative_to(ROOT)}:{match.group(1)}")
-    assert len(silence_only) == 6, (
-        f"expected the six silence-bounded httpx reads recorded in the phase report, "
-        f"found {len(silence_only)}: {silence_only}")
+    # The exact set of silence-only sites, pinned as a multiset (calendar_provider
+    # has four distinct call sites, each 20.0). Re-record only on a deliberate change.
+    from collections import Counter
+    expected = Counter([
+        "jarvis/api/app.py:10.0",
+        "jarvis/companion/gateway.py:30.0",
+        "jarvis/integrations/calendar_provider.py:20.0",
+        "jarvis/integrations/calendar_provider.py:20.0",
+        "jarvis/integrations/calendar_provider.py:20.0",
+        "jarvis/integrations/calendar_provider.py:20.0",
+        "jarvis/transport/endpoint.py:15.0",
+        "jarvis/voice/stt.py:60.0",
+    ])
+    assert Counter(silence_only) == expected, (
+        "the silence-only set changed — add or remove a site deliberately:\n"
+        + "\n".join(sorted(set(silence_only) ^ set(expected))))
 
 
 # ---------------------------------------------------------------------------

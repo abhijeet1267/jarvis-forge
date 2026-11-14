@@ -206,6 +206,11 @@ def test_a_fabricated_bootstrap_buys_nothing(anon: TestClient) -> None:
 # 3. /command: auth is still enforced, and still works
 # ---------------------------------------------------------------------------
 def test_command_without_credentials_is_still_refused(anon: TestClient) -> None:
+    # A truly credential-less caller holds no session cookie. The module-scoped `anon`
+    # client is shared with the login tests above it, so clear whatever session a prior
+    # test left in its cookie jar: what is under test is "no credential presented", not
+    # "the shared jar happens to still hold a token".
+    anon.cookies.clear()
     response = anon.post("/command", json={"text": "what time is it"})
     assert response.status_code == 401
 

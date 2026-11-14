@@ -1,498 +1,1131 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <title>AI Connections · Vantage Settings</title>
-  <style>
-    body {
-      font-family: system-ui, sans-serif;
-      max-width: 900px;
-      margin: 40px auto;
-      padding: 20px;
-      color: #333;
-    }
-    h1 {
-      font-size: 28px;
-      margin-bottom: 8px;
-    }
-    .subtitle {
-      color: #666;
-      margin-bottom: 32px;
-    }
-    .card {
-      border: 1px solid #ddd;
-      border-radius: 8px;
-      padding: 24px;
-      margin-bottom: 24px;
-    }
-    .card-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 16px;
-    }
-    .provider-title {
-      font-size: 20px;
-      font-weight: 600;
-    }
-    .section {
-      background: #f8f9fa;
-      padding: 16px;
-      border-radius: 6px;
-      margin-top: 16px;
-    }
-    .section-title {
-      font-size: 14px;
-      font-weight: 600;
-      margin-bottom: 12px;
-      text-transform: uppercase;
-      color: #555;
-    }
-    button {
-      padding: 8px 16px;
-      border-radius: 6px;
-      border: none;
-      cursor: pointer;
-      font-size: 14px;
-      margin-right: 8px;
-      margin-bottom: 8px;
-    }
-    .btn-primary {
-      background: #007aff;
-      color: white;
-    }
-    .btn-secondary {
-      background: #e5e5ea;
-      color: #333;
-    }
-    .btn-danger {
-      background: #ff3b30;
-      color: white;
-    }
-    .status {
-      display: inline-block;
-      padding: 4px 8px;
-      border-radius: 4px;
-      font-size: 12px;
-      font-weight: 500;
-      margin-left: 8px;
-    }
-    .status-not-connected { background: #eee; color: #666; }
-    .status-configured { background: #cfe2ff; color: #084298; }
-    .status-verified { background: #d1e7dd; color: #0f5132; }
-    .status-failed { background: #f8d7da; color: #842029; }
-    .input-group {
-      margin-bottom: 16px;
-    }
-    .input-label {
-      display: block;
-      font-size: 14px;
-      margin-bottom: 6px;
-    }
-    input[type="text"], input[type="password"] {
-      width: 100%;
-      padding: 10px;
-      border: 1px solid #ccc;
-      border-radius: 6px;
-      font-size: 14px;
-    }
-    .masked {
-      font-family: monospace;
-      letter-spacing: 1px;
-    }
-    .error {
-      color: #dc3545;
-      font-size: 13px;
-      margin-top: 8px;
-    }
-    .success {
-      color: #198754;
-      font-size: 13px;
-      margin-top: 8px;
-    }
-    .note {
-      font-size: 12px;
-      color: #666;
-      font-style: italic;
-    }
-    .badge {
-      display: inline-block;
-      padding: 2px 6px;
-      border-radius: 3px;
-      font-size: 11px;
-      margin-left: 8px;
-    }
-    .badge-free { background: #c6f6d5; color: #276749; }
-    .badge-paid { background: #fed7aa; color: #9c4221; }
-    .info-box {
-      background: #ebf8ff;
-      border-left: 3px solid #3182ce;
-      padding: 12px;
-      margin-top: 12px;
-      font-size: 13px;
-    }
-  </style>
-</head>
-<body>
-  <h1>AI Connections</h1>
-  <div class="subtitle">Manage your AI provider connections and API keys</div>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="jarvis-bootstrap" content="__JARVIS_BOOTSTRAP__" />
+    <title>AI Connections · Vantage Settings</title>
+    <style>
+      :root {
+        --bg: #f2f5f9;
+        --surface: #ffffff;
+        --surface2: #f7f9fc;
+        --surface3: #eef1f6;
+        --ink: #0f172a;
+        --ink2: #475569;
+        --ink3: #94a3b8;
+        --line: #e2e8f0;
+        --line2: #cbd5e1;
+        --accent: #2563eb;
+        --ok: #15803d;
+        --ok-bg: #dcfce7;
+        --warn: #b45309;
+        --warn-bg: #fef3c7;
+        --bad: #b91c1c;
+        --bad-bg: #fee2e2;
+        --idle-bg: #e8ecf2;
+        --radius: 10px;
+        --font:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          "Helvetica Neue", sans-serif;
+        --mono: "SF Mono", "Fira Code", "Cascadia Code", monospace;
+      }
 
-  <!-- OPENAI / CHATGPT -->
-  <div class="card" id="openai-card">
-    <div class="card-header">
-      <span class="provider-title">OpenAI / ChatGPT</span>
-    </div>
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #050b14;
+          --surface: #0b1220;
+          --surface2: #111b2e;
+          --surface3: #182439;
+          --ink: #e6edf7;
+          --ink2: #9aabbe;
+          --ink3: #5c6e84;
+          --line: #1c2636;
+          --line2: #243148;
+          --accent: #5490ff;
+          --ok: #4ade80;
+          --ok-bg: #14331f;
+          --warn: #fbbf24;
+          --warn-bg: #3a2c0a;
+          --bad: #f87171;
+          --bad-bg: #3a1414;
+          --idle-bg: #182439;
+        }
+      }
 
-    <div class="section">
-      <div class="section-title">API Connection</div>
-      <div style="margin-bottom: 16px;">
-        <button class="btn-primary js-show-api-input" data-provider="openai">Connect OpenAI API Key</button>
-        <button class="btn-secondary js-hide-api-input" data-provider="openai" style="display:none;">Cancel</button>
-        <span class="status status-not-connected" id="openai-api-status">Not connected</span>
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      body {
+        background: var(--bg);
+        color: var(--ink);
+        font: 13px/1.55 var(--font);
+        padding: 32px 20px 72px;
+      }
+
+      .wrap {
+        max-width: 880px;
+        margin: 0 auto;
+      }
+
+      h1 {
+        font-size: 24px;
+        font-weight: 650;
+        letter-spacing: -0.01em;
+      }
+
+      .subtitle {
+        color: var(--ink2);
+        margin: 6px 0 28px;
+      }
+
+      .card {
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        padding: 20px;
+        margin-bottom: 18px;
+      }
+
+      .card-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 14px;
+        flex-wrap: wrap;
+      }
+
+      .provider-title {
+        font-size: 15px;
+        font-weight: 620;
+      }
+
+      .section {
+        border-top: 1px solid var(--line);
+        padding-top: 14px;
+        margin-top: 14px;
+      }
+
+      .section:first-of-type {
+        border-top: none;
+        padding-top: 0;
+        margin-top: 0;
+      }
+
+      .section-title {
+        font-size: 11px;
+        font-weight: 620;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: var(--ink3);
+        margin-bottom: 10px;
+      }
+
+      button {
+        font: inherit;
+        padding: 7px 13px;
+        border-radius: 6px;
+        border: 1px solid transparent;
+        cursor: pointer;
+      }
+
+      button:disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
+      }
+
+      .btn-primary {
+        background: var(--accent);
+        color: #fff;
+      }
+
+      .btn-secondary {
+        background: var(--surface3);
+        color: var(--ink);
+        border-color: var(--line2);
+      }
+
+      .btn-success {
+        background: var(--ok);
+        color: #fff;
+      }
+
+      .btn-danger {
+        background: transparent;
+        color: var(--bad);
+        border-color: var(--line2);
+      }
+
+      .status {
+        display: inline-block;
+        padding: 3px 9px;
+        border-radius: 999px;
+        font-size: 11px;
+        font-weight: 600;
+        white-space: nowrap;
+      }
+
+      .status-not_connected {
+        background: var(--idle-bg);
+        color: var(--ink2);
+      }
+      .status-configured {
+        background: var(--warn-bg);
+        color: var(--warn);
+      }
+      .status-verified {
+        background: var(--ok-bg);
+        color: var(--ok);
+      }
+      .status-failed {
+        background: var(--bad-bg);
+        color: var(--bad);
+      }
+
+      .input-group {
+        margin-bottom: 12px;
+      }
+
+      .input-label {
+        display: block;
+        font-size: 12px;
+        font-weight: 550;
+        margin-bottom: 5px;
+        color: var(--ink2);
+      }
+
+      input[type="text"],
+      input[type="password"],
+      select {
+        width: 100%;
+        padding: 8px 10px;
+        border: 1px solid var(--line2);
+        border-radius: 6px;
+        background: var(--surface2);
+        color: var(--ink);
+        font: inherit;
+      }
+
+      input:focus,
+      select:focus {
+        outline: 2px solid var(--accent);
+        outline-offset: -1px;
+      }
+
+      .hint {
+        font-size: 11px;
+        color: var(--ink3);
+        margin-top: 4px;
+      }
+
+      .row {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        flex-wrap: wrap;
+      }
+
+      .check {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 10px;
+        cursor: pointer;
+      }
+
+      .message {
+        margin-top: 10px;
+        font-size: 12px;
+        border-radius: 6px;
+        padding: 9px 11px;
+        border: 1px solid transparent;
+      }
+
+      .message:empty {
+        display: none;
+      }
+
+      .message-info {
+        background: var(--surface2);
+        color: var(--ink2);
+        border-color: var(--line);
+      }
+      .message-success {
+        background: var(--ok-bg);
+        color: var(--ok);
+      }
+      .message-error {
+        background: var(--bad-bg);
+        color: var(--bad);
+      }
+
+      .info-box {
+        background: var(--surface2);
+        border: 1px solid var(--line);
+        border-left: 3px solid var(--accent);
+        border-radius: 6px;
+        padding: 11px 13px;
+        font-size: 12px;
+        color: var(--ink2);
+      }
+
+      .info-box:empty {
+        display: none;
+      }
+
+      .kv {
+        display: grid;
+        grid-template-columns: 150px 1fr;
+        gap: 4px 14px;
+        font-size: 12px;
+        margin-top: 8px;
+      }
+
+      .kv dt {
+        color: var(--ink3);
+      }
+
+      .kv dd {
+        color: var(--ink);
+        font-family: var(--mono);
+        font-size: 11.5px;
+        word-break: break-all;
+      }
+
+      .mono {
+        font-family: var(--mono);
+      }
+
+      .muted {
+        color: var(--ink3);
+      }
+
+      .provider-card {
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        padding: 18px 20px;
+        margin-bottom: 12px;
+      }
+
+      .provider-card.is-active {
+        border-color: var(--accent);
+      }
+
+      .models {
+        font-size: 11px;
+        color: var(--ink3);
+        margin-top: 4px;
+      }
+
+      .model-tag {
+        display: inline-block;
+        background: var(--surface3);
+        color: var(--ink2);
+        border-radius: 4px;
+        padding: 1px 6px;
+        margin: 3px 4px 0 0;
+        font-family: var(--mono);
+        font-size: 10.5px;
+      }
+
+      .spinner {
+        display: inline-block;
+        width: 11px;
+        height: 11px;
+        border: 2px solid var(--line2);
+        border-top-color: var(--accent);
+        border-radius: 50%;
+        animation: spin 0.7s linear infinite;
+        vertical-align: -1px;
+        margin-right: 5px;
+      }
+
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+
+      .hidden {
+        display: none !important;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <h1>AI Connections</h1>
+      <div class="subtitle">
+        Which vendor answers the assistant, and the keys it authenticates with.
       </div>
 
-      <div class="js-api-input-section" data-provider="openai" style="display:none;">
-        <div class="input-group">
-          <label class="input-label">OpenAI API Key</label>
-          <input type="password" class="api-key-input" data-provider="openai" placeholder="sk-...">
+      <!-- ACTIVE PROVIDER ----------------------------------------------------
+           The control that decides what the assistant actually uses. Driven
+           entirely by /ai/selection and /ai/providers; nothing here is
+           hardcoded, because the server's registry is the truth about which
+           providers exist. -->
+      <div class="card" id="active-provider-card">
+        <div class="card-header">
+          <span class="provider-title">Assistant Provider</span>
+          <span class="status status-not_connected" id="assistant-state"
+            >…</span
+          >
         </div>
-        <button class="btn-primary js-test-api" data-provider="openai">Test Connection</button>
-        <button class="btn-success js-save-api" data-provider="openai" style="display:none;">Save Key</button>
-        <div class="message-output" data-provider="openai"></div>
+
+        <div class="section">
+          <div class="section-title">Which vendor answers the assistant</div>
+          <div class="input-group">
+            <label class="input-label" for="active-provider"
+              >Active provider</label
+            >
+            <select id="active-provider"></select>
+            <div class="hint" id="active-provider-hint"></div>
+          </div>
+          <div class="input-group">
+            <label class="input-label" for="active-model">Model</label>
+            <input
+              type="text"
+              id="active-model"
+              placeholder="the model id this provider should be asked for"
+            />
+            <div class="hint" id="active-model-hint"></div>
+          </div>
+          <div class="input-group">
+            <label class="input-label" for="active-base-url"
+              >Endpoint (optional)</label
+            >
+            <input
+              type="text"
+              id="active-base-url"
+              placeholder="leave empty to use the provider's own default"
+            />
+            <div class="hint">
+              Only for an OpenAI-compatible endpoint. 9Router, Groq, Gemini and
+              OpenAI each have their own default.
+            </div>
+          </div>
+          <label class="check">
+            <input type="checkbox" id="active-enabled" />
+            <span>Use this provider for assistant requests</span>
+          </label>
+          <div class="hint" style="margin: -4px 0 12px">
+            Assistant off = deterministic rules only; no model is called even
+            with a key stored.
+          </div>
+          <div class="row">
+            <button class="btn-primary" id="save-selection">
+              Save selection
+            </button>
+            <button class="btn-secondary" id="remove-credential">
+              Remove stored key
+            </button>
+          </div>
+          <div class="message" id="selection-message"></div>
+          <div class="info-box" id="selection-status">
+            Loading current configuration…
+          </div>
+        </div>
       </div>
 
-      <div class="section-info" data-provider="openai" style="display:none;">
+      <!-- PROVIDER KEYS -----------------------------------------------------
+           One card per provider the server knows. The list comes from
+           GET /ai/providers, so a provider added to the backend appears here
+           without a second edit that can be forgotten. -->
+      <div class="card-header" style="margin: 26px 0 10px">
+        <span class="provider-title">Provider keys</span>
+        <span class="muted" style="font-size: 12px" id="providers-count"></span>
+      </div>
+      <div id="provider-cards"></div>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="provider-title">What this page does</span>
+        </div>
         <div class="info-box">
-          ✅ Configuration verified. Model discovery successful.
+          A key is written to the macOS Keychain and is never shown again, not
+          here and not in any log. <strong>Test Connection</strong> asks the
+          vendor a real question — it does not check that a key exists.
+          <strong>Save Key</strong> appears only once that test has passed, so a
+          key that does not work is never stored.
         </div>
       </div>
     </div>
 
-    <div class="section">
-      <div class="section-title">Official Account Connection</div>
-      <div style="margin-bottom: 16px;">
-        <button class="btn-secondary js-account-btn" data-provider="chatgpt" disabled>Sign in with ChatGPT</button>
-        <span class="status status-not-connected" id="chatgpt-account-status">Not signed in</span>
-      </div>
+    <script>
+      // The page's session token, held in memory only (never localStorage) so it
+      // dies with the tab. Bought once from the single-use bootstrap the server
+      // stamped into this page -- the same exchange the dashboard makes. If it
+      // cannot be obtained (auth off, or a page load out of context), the token
+      // stays empty and the routes answer without a credential.
+      let sessionToken = "";
+      const BOOTSTRAP =
+        (document.querySelector('meta[name="jarvis-bootstrap"]') || {})
+          .content || "";
 
-      <div class="info-box">
-        Official ChatGPT account integration: awaiting OpenAI developer approval.<br>
-        Use OpenAI API connection instead for programmatic access.
-      </div>
-    </div>
-  </div>
+      async function authenticate() {
+        if (!BOOTSTRAP) return; // auth is off; every route answers without a credential
+        const res = await fetch("/auth/session", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ bootstrap: BOOTSTRAP }),
+        });
+        if (!res.ok) throw new Error(res.status + " -- reload this page");
+        const data = await res.json();
+        sessionToken = data.session_token || "";
+      }
 
-  <!-- GOOGLE GEMINI -->
-  <div class="card">
-    <div class="card-header">
-      <span class="provider-title">Google Gemini</span>
-    </div>
+      function getToken() {
+        return sessionToken || "";
+      }
 
-    <div class="section">
-      <div class="section-title">Gemini API Connection</div>
-      <div style="margin-bottom: 16px;">
-        <button class="btn-primary js-show-api-input" data-provider="gemini">Connect Gemini API Key</button>
-        <button class="btn-secondary js-hide-api-input" data-provider="gemini" style="display:none;">Cancel</button>
-        <span class="status status-not-connected" id="gemini-api-status">Not connected</span>
-      </div>
+      // The provider cards the page has built, keyed by provider id.
+      const cards = {};
 
-      <div class="js-api-input-section" data-provider="gemini" style="display:none;">
-        <div class="input-group">
-          <label class="input-label">Gemini API Key (AI Studio)</label>
-          <input type="password" class="api-key-input" data-provider="gemini" placeholder="AIza...">
-        </div>
-        <button class="btn-primary js-test-api" data-provider="gemini">Test Connection</button>
-        <button class="btn-success js-save-api" data-provider="gemini" style="display:none;">Save Key</button>
-        <div class="message-output" data-provider="gemini"></div>
-      </div>
+      // ---- small helpers ---------------------------------------------------
 
-      <div class="section-info" data-provider="gemini" style="display:none;">
-        <div class="info-box">
-          ✅ Configuration verified. Free tier models available.
-        </div>
-      </div>
-    </div>
+      function el(tag, attrs = {}, text = "") {
+        const node = document.createElement(tag);
+        for (const [k, v] of Object.entries(attrs)) {
+          if (k === "class") node.className = v;
+          else if (k === "checked") node.checked = !!v;
+          else if (k === "disabled") node.disabled = !!v;
+          else if (k === "type") node.type = v;
+          else node.setAttribute(k, v);
+        }
+        if (text) node.textContent = text;
+        return node;
+      }
 
-    <div class="section">
-      <div class="section-title">Account Connection</div>
-      <div style="margin-bottom: 16px;">
-        <button class="btn-secondary js-account-btn" data-provider="gemini" disabled>Sign in with Google</button>
-        <span class="status status-not-connected" id="google-account-status">Not signed in</span>
-      </div>
+      function setMessage(node, text, kind) {
+        node.className =
+          "message" + (text ? " message-" + (kind || "info") : "");
+        node.textContent = text || "";
+      }
 
-      <div class="info-box">
-        Google consumer-account integration unavailable as an official Vantage partner.<br>
-        Use Gemini API / AI Studio connection for programmatic access.
-      </div>
-    </div>
-  </div>
+      function statusText(status) {
+        return (
+          {
+            not_connected: "Not connected",
+            configured: "Key stored",
+            verified: "Verified",
+            failed: "Failed",
+          }[status] || status
+        );
+      }
 
-  <!-- SHREE AI -->
-  <div class="card">
-    <div class="card-header">
-      <span class="provider-title">Shree AI</span>
-    </div>
+      function statusClass(status) {
+        return "status status-" + (status || "not_connected");
+      }
 
-    <div class="section">
-      <div class="section-title">API Connection</div>
-      <div style="margin-bottom: 16px;">
-        <button class="btn-primary js-show-api-input" data-provider="shree">Connect API</button>
-        <button class="btn-secondary js-hide-api-input" data-provider="shree" style="display:none;">Cancel</button>
-        <span class="status status-not-connected" id="shree-api-status">Not connected</span>
-      </div>
+      // ---- the active selection -------------------------------------------
 
-      <div class="js-api-input-section" data-provider="shree" style="display:none;">
-        <div class="input-group">
-          <label class="input-label">Shree AI API Key</label>
-          <input type="password" class="api-key-input" data-provider="shree" placeholder="Enter API key">
-        </div>
-        <button class="btn-primary js-test-api" data-provider="shree">Test Connection</button>
-        <button class="btn-success js-save-api" data-provider="shree" style="display:none;">Save Key</button>
-        <div class="message-output" data-provider="shree"></div>
-      </div>
+      function selMsg(text, kind) {
+        setMessage(document.getElementById("selection-message"), text, kind);
+      }
 
-      <div class="section-info" data-provider="shree" style="display:none;">
-        <div class="info-box">
-          ⚠️ Configuration pending provider verification.
-        </div>
-      </div>
-    </div>
+      async function loadSelection() {
+        try {
+          const res = await fetch("/ai/selection", {
+            headers: { "X-JARVIS-Token": getToken() },
+            credentials: "include",
+          });
+          if (!res.ok) {
+            document.getElementById("selection-status").textContent =
+              `Could not read configuration (${res.status}). Reload the page.`;
+            return;
+          }
+          const data = await res.json();
 
-    <div class="section">
-      <div class="section-title">Account Connection</div>
-      <div style="margin-bottom: 16px;">
-        <button class="btn-secondary js-account-btn" data-provider="shree" disabled>Sign in with Shree</button>
-        <span class="status status-not-connected" id="shree-account-status">Not signed in</span>
-      </div>
+          const select = document.getElementById("active-provider");
+          const known = data.known_providers || [];
+          // The dropdown is rebuilt from what the server knows, and the user's
+          // choice is re-applied afterwards: the server's answer is the truth
+          // about which providers exist, but the person who just picked one has
+          // not yet saved it, and re-reading the selection must not silently
+          // undo the choice they are in the middle of making.
+          const chosen = select.value;
+          select.innerHTML = known
+            .map((p) => `<option value="${p}">${p}</option>`)
+            .join("");
+          if (chosen && known.includes(chosen) && chosen !== data.ai_provider) {
+            select.value = chosen;
+          } else {
+            select.value = data.ai_provider || "";
+          }
 
-      <div class="info-box">
-        Shree account integration unavailable: no verified official third-party authorization mechanism yet implemented.<br>
-        Contact Shree AI for developer participation opportunities.
-      </div>
-    </div>
-  </div>
+          document.getElementById("active-model").value = data.llm_model || "";
+          document.getElementById("active-base-url").value =
+            data.llm_base_url || "";
+          // The toggle is the AI on/off switch (independent of whether a key exists).
+          document.getElementById("active-enabled").checked =
+            data.ai_enabled !== false;
 
-  <!-- USAGE CONTROLS -->
-  <div class="card">
-    <div class="card-header">
-      <span class="provider-title">AI Usage Controls</span>
-    </div>
+          const status = document.getElementById("selection-status");
+          const rows = [
+            ["Provider", data.ai_provider || "none"],
+            ["Model", data.llm_model || "default"],
+            ["Endpoint", data.llm_base_url || "the provider's default"],
+            ["Key stored", data.credential_configured ? "yes" : "no"],
+            ["AI", data.ai_enabled === false ? "off (rules only)" : "on"],
+          ];
+          const dl = el("dl", { class: "kv" });
+          for (const [k, v] of rows) {
+            dl.appendChild(el("dt", {}, k));
+            dl.appendChild(el("dd", {}, String(v)));
+          }
+          status.innerHTML = "";
+          status.appendChild(dl);
 
-    <div class="section">
-      <label style="display: flex; align-items: center; margin-bottom: 12px;">
-        <input type="checkbox" id="use-free-first" checked style="margin-right: 8px;">
-        Use free/plan allowance when available
-      </label>
-      <label style="display: flex; align-items: center; margin-bottom: 12px;">
-        <input type="checkbox" id="allow-paid-fallback" style="margin-right: 8px;">
-        Allow paid API fallback (default: OFF)
-      </label>
-      <label style="display: flex; align-items: center;">
-        <input type="checkbox" id="require-paid-confirmation" checked style="margin-right: 8px;">
-        Require confirmation before paid fallback
-      </label>
-    </div>
+          const state = document.getElementById("assistant-state");
+          state.className = statusClass(
+            data.ai_enabled === false
+              ? "not_connected"
+              : data.credential_configured
+                ? "configured"
+                : "not_connected",
+          );
+          state.textContent =
+            data.ai_enabled === false
+              ? "AI off"
+              : data.credential_configured
+                ? "AI on"
+                : "No key";
 
-    <div class="note" style="margin-top: 16px;">
-      Paid API usage will be charged according to the respective provider's pricing.<br>
-      Free tiers are subject to rate limits and availability.
-    </div>
-  </div>
+          const hint = document.getElementById("active-provider-hint");
+          hint.textContent = known.length
+            ? ""
+            : "The server reports no known providers.";
+        } catch (err) {
+          document.getElementById("selection-status").textContent =
+            "Could not read configuration: " + err.message;
+        }
+      }
 
-  <script>
-    // Provider state management
-    const providers = {
-      openai: { api_connected: false, verified: false },
-      gemini: { api_connected: false, verified: false },
-      shree: { api_connected: false, verified: false }
-    };
+      async function saveSelection() {
+        const provider = document.getElementById("active-provider").value;
+        const model = document.getElementById("active-model").value.trim();
+        const baseUrl = document.getElementById("active-base-url").value.trim();
+        selMsg("Saving…", "info");
+        try {
+          const res = await fetch("/ai/selection", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-JARVIS-Token": getToken(),
+            },
+            credentials: "include",
+            body: JSON.stringify({
+              ai_provider: provider,
+              llm_model: model,
+              llm_base_url: baseUrl,
+              ai_enabled: document.getElementById("active-enabled").checked,
+            }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (res.ok && data.success) {
+            selMsg(
+              "Saved. New assistant requests will use this provider.",
+              "success",
+            );
+          } else {
+            selMsg("Could not save: " + (data.detail || res.status), "error");
+          }
+          await loadSelection();
+        } catch (err) {
+          selMsg("Could not save: " + err.message, "error");
+        }
+      }
 
-    // Show/hide API input sections
-    document.querySelectorAll('.js-show-api-input').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const provider = btn.dataset.provider;
-        document.querySelector(`.js-api-input-section[data-provider="${provider}"]`).style.display = 'block';
-        btn.style.display = 'none';
-        document.querySelector(`.js-hide-api-input[data-provider="${provider}"]`).style.display = 'inline-block';
+      async function removeCredential() {
+        const provider = document.getElementById("active-provider").value;
+        selMsg("Removing stored key…", "info");
+        try {
+          const res = await fetch(`/ai/providers/${provider}/credentials`, {
+            method: "DELETE",
+            headers: { "X-JARVIS-Token": getToken() },
+            credentials: "include",
+          });
+          const data = await res.json().catch(() => ({}));
+          if (res.ok) {
+            selMsg(
+              "Stored key removed. Requests to this provider will fail until a new key is saved.",
+              "success",
+            );
+          } else {
+            selMsg("Could not remove: " + (data.detail || res.status), "error");
+          }
+          await loadSelection();
+          await loadProviders();
+        } catch (err) {
+          selMsg("Could not remove: " + err.message, "error");
+        }
+      }
+
+      document
+        .getElementById("save-selection")
+        .addEventListener("click", saveSelection);
+      document
+        .getElementById("remove-credential")
+        .addEventListener("click", removeCredential);
+
+      // Switching provider: refresh the panel so the stored-key state matches it.
+      // The selection is NOT re-read here -- doing that used to snap the
+      // dropdown straight back to the current provider, so a person could never
+      // actually choose a different one.
+      document
+        .getElementById("active-provider")
+        .addEventListener("change", () => {
+          const id = document.getElementById("active-provider").value;
+          const card = cards[id];
+          if (card) {
+            // Show what the newly chosen provider already has, so the person
+            // can see whether a key is stored for it.
+            document.getElementById("active-model").value = card.model || "";
+            document.getElementById("active-base-url").value =
+              card.base_url || "";
+          }
+          const hint = document.getElementById("active-provider-hint");
+          hint.textContent = card
+            ? card.configured
+              ? "A key is stored for this provider."
+              : "No key is stored for this provider yet."
+            : "";
+        });
+
+      // ---- the provider cards ----------------------------------------------
+
+      function buildCard(info) {
+        const id = info.provider_id;
+
+        const card = el("div", {
+          class: "provider-card",
+          id: `provider-${id}`,
+        });
+
+        const header = el("div", { class: "card-header" });
+        const title = el(
+          "span",
+          { class: "provider-title" },
+          info.display_name || id,
+        );
+        header.appendChild(title);
+
+        const badge = el("span", {
+          class: "status status-not_connected",
+          id: `${id}-api-status`,
+        });
+        header.appendChild(badge);
+        card.appendChild(header);
+
+        if (info.models && info.models.length) {
+          const models = el("div", { class: "models" }, "Models: ");
+          for (const m of info.models.slice(0, 8)) {
+            models.appendChild(el("span", { class: "model-tag" }, m));
+          }
+          card.appendChild(models);
+        }
+
+        // -- connection state (read-only, from the server) ------------------
+        const details = el("dl", { class: "kv" });
+        const rows = [
+          ["Endpoint", info.base_url || "the provider's default"],
+          ["Model", info.model || "not set"],
+        ];
+        for (const [k, v] of rows) {
+          details.appendChild(el("dt", {}, k));
+          details.appendChild(el("dd", {}, String(v)));
+        }
+        card.appendChild(details);
+
+        // -- the key --------------------------------------------------------
+        const section = el("div", { class: "section" });
+        section.appendChild(el("div", { class: "section-title" }, "API key"));
+
+        const row = el("div", { class: "row" });
+        const connect = el(
+          "button",
+          {
+            class: "btn-primary js-show-api-input",
+            type: "button",
+          },
+          info.configured ? "Replace API key" : "Connect API key",
+        );
+        connect.dataset.provider = id;
+        const cancel = el(
+          "button",
+          {
+            class: "btn-secondary js-hide-api-input hidden",
+            type: "button",
+          },
+          "Cancel",
+        );
+        cancel.dataset.provider = id;
+        row.appendChild(connect);
+        row.appendChild(cancel);
+        section.appendChild(row);
+
+        const inputSection = el("div", {
+          class: "js-api-input-section hidden",
+        });
+        inputSection.dataset.provider = id;
+
+        const group = el("div", { class: "input-group" });
+        group.appendChild(
+          el(
+            "label",
+            { class: "input-label" },
+            `${info.display_name || id} API key`,
+          ),
+        );
+        const input = el("input", {
+          type: "password",
+          class: "api-key-input",
+          placeholder: "the key is never displayed again",
+          autocomplete: "off",
+          spellcheck: "false",
+        });
+        input.dataset.provider = id;
+        group.appendChild(input);
+        inputSection.appendChild(group);
+
+        const buttons = el("div", { class: "row" });
+        const test = el(
+          "button",
+          {
+            class: "btn-primary js-test-api",
+            type: "button",
+          },
+          "Test Connection",
+        );
+        test.dataset.provider = id;
+        // The Save button is hidden until a test has passed. A key that does not
+        // work is never offered for storage.
+        const save = el(
+          "button",
+          {
+            class: "btn-success js-save-api hidden",
+            type: "button",
+          },
+          "Save Key",
+        );
+        save.dataset.provider = id;
+        buttons.appendChild(test);
+        buttons.appendChild(save);
+        inputSection.appendChild(buttons);
+
+        const message = el("div", { class: "message js-message" });
+        message.dataset.provider = id;
+        inputSection.appendChild(message);
+        section.appendChild(inputSection);
+
+        const info2 = el("div", { class: "info-box js-section-info hidden" });
+        info2.dataset.provider = id;
+        section.appendChild(info2);
+
+        card.appendChild(section);
+
+        // The provider's own health, from the route-health ledger.
+        const health = el("div", { class: "section" });
+        health.appendChild(
+          el("div", { class: "section-title" }, "Route health"),
+        );
+        const healthBox = el("div", { class: "info-box js-health" });
+        healthBox.dataset.provider = id;
+        healthBox.textContent = "Not measured yet.";
+        health.appendChild(healthBox);
+        card.appendChild(health);
+
+        const card_ = {
+          id,
+          info,
+          model: info.model || "",
+          base_url: info.base_url || "",
+          configured: !!info.configured,
+          badge,
+          input,
+          message,
+          info2,
+          healthBox,
+        };
+        cards[id] = card_;
+        return card;
+      }
+
+      async function loadProviders() {
+        const host = document.getElementById("provider-cards");
+        try {
+          const res = await fetch("/ai/providers", {
+            headers: { "X-JARVIS-Token": getToken() },
+            credentials: "include",
+          });
+          if (!res.ok) {
+            host.innerHTML = "";
+            host.appendChild(
+              el(
+                "div",
+                { class: "message message-error" },
+                `Could not read the provider list (${res.status}). Reload the page.`,
+              ),
+            );
+            return;
+          }
+          const list = await res.json();
+          host.innerHTML = "";
+          for (const info of list) {
+            host.appendChild(buildCard(info));
+            applyProviderState(info);
+          }
+          document.getElementById("providers-count").textContent =
+            `${list.length} provider${list.length === 1 ? "" : "s"} the server knows`;
+          for (const info of list) loadHealth(info.provider_id);
+        } catch (err) {
+          host.innerHTML = "";
+          host.appendChild(
+            el(
+              "div",
+              { class: "message message-error" },
+              "Could not read the provider list: " + err.message,
+            ),
+          );
+        }
+      }
+
+      function applyProviderState(info) {
+        const card = cards[info.provider_id];
+        if (!card) return;
+        card.configured = !!info.configured;
+        card.model = info.model || "";
+        card.base_url = info.base_url || "";
+        // `configured` means a key is stored; `verified` means a test passed.
+        // Neither is invented here: both come from the server's own record.
+        const state = info.verified
+          ? "verified"
+          : info.configured
+            ? "configured"
+            : "not_connected";
+        card.badge.className = statusClass(state);
+        card.badge.textContent = statusText(state);
+        if (info.last_error) {
+          card.info2.classList.remove("hidden");
+          card.info2.textContent = "Last test failed: " + info.last_error;
+        }
+      }
+
+      async function loadHealth(id) {
+        const card = cards[id];
+        if (!card) return;
+        try {
+          const res = await fetch(`/ai/providers/${id}/health`, {
+            headers: { "X-JARVIS-Token": getToken() },
+            credentials: "include",
+          });
+          if (!res.ok) return;
+          const data = await res.json();
+          const bits = [];
+          if (data.route_health_label) bits.push(data.route_health_label);
+          // Verified capabilities come from real completions (route health),
+          // not a static profile, so this only appears once the model has
+          // actually answered -- evidence, not a claim.
+          if (
+            Array.isArray(data.capability_verified) &&
+            data.capability_verified.length
+          ) {
+            bits.push(`verified: ${data.capability_verified.join(", ")}`);
+          }
+          if (data.last_latency_ms) bits.push(`${data.last_latency_ms} ms`);
+          if (data.upstream_model)
+            bits.push(`upstream: ${data.upstream_model}`);
+          if (data.last_error_category)
+            bits.push(`last error: ${data.last_error_category}`);
+          card.healthBox.textContent = bits.length
+            ? bits.join(" · ")
+            : "Not measured yet.";
+        } catch (err) {
+          card.healthBox.textContent = "Could not read route health.";
+        }
+      }
+
+      // -- showing and hiding the key input ---------------------------------
+
+      document.addEventListener("click", (ev) => {
+        const show = ev.target.closest(".js-show-api-input");
+        if (show) {
+          const id = show.dataset.provider;
+          document
+            .querySelector(`.js-api-input-section[data-provider="${id}"]`)
+            .classList.remove("hidden");
+          show.classList.add("hidden");
+          document
+            .querySelector(`.js-hide-api-input[data-provider="${id}"]`)
+            .classList.remove("hidden");
+          return;
+        }
+        const hide = ev.target.closest(".js-hide-api-input");
+        if (hide) {
+          const id = hide.dataset.provider;
+          document
+            .querySelector(`.js-api-input-section[data-provider="${id}"]`)
+            .classList.add("hidden");
+          hide.classList.add("hidden");
+          document
+            .querySelector(`.js-show-api-input[data-provider="${id}"]`)
+            .classList.remove("hidden");
+          const card = cards[id];
+          if (card) setMessage(card.message, "", "info");
+        }
       });
-    });
 
-    document.querySelectorAll('.js-hide-api-input').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const provider = btn.dataset.provider;
-        document.querySelector(`.js-api-input-section[data-provider="${provider}"]`).style.display = 'none';
-        btn.style.display = 'none';
-        document.querySelector(`.js-show-api-input[data-provider="${provider}"]`).style.display = 'inline-block';
-        clearMessages(provider);
+      // -- test, then save ---------------------------------------------------
+
+      document.addEventListener("click", async (ev) => {
+        const test = ev.target.closest(".js-test-api");
+        if (!test) return;
+        const id = test.dataset.provider;
+        const card = cards[id];
+        if (!card) return;
+
+        const key = card.input.value.trim();
+        if (!key || key.length < 10) {
+          setMessage(
+            card.message,
+            "Enter the key first (at least 10 characters).",
+            "error",
+          );
+          return;
+        }
+
+        test.disabled = true;
+        const original = test.textContent;
+        test.innerHTML = '<span class="spinner"></span>Testing…';
+        setMessage(
+          card.message,
+          "Asking the provider a real question…",
+          "info",
+        );
+
+        try {
+          const res = await fetch(`/ai/providers/${id}/test`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-JARVIS-Token": getToken(),
+            },
+            credentials: "include",
+            body: JSON.stringify({ api_key: key }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (res.ok && data.success) {
+            setMessage(
+              card.message,
+              "The provider accepted this key. Save it to use it.",
+              "success",
+            );
+            card.info2.classList.remove("hidden");
+            card.info2.textContent =
+              "Verified: " +
+              (data.message || "the provider accepted this key.") +
+              " The key is not stored yet -- press Save Key to keep it.";
+            // The Save button appears only now: a key that has not passed a real
+            // test is never offered for storage.
+            document
+              .querySelector(`.js-save-api[data-provider="${id}"]`)
+              .classList.remove("hidden");
+          } else {
+            setMessage(
+              card.message,
+              data.message ||
+                data.detail ||
+                "The provider did not accept this key.",
+              "error",
+            );
+            card.badge.className = statusClass("failed");
+            card.badge.textContent = statusText("failed");
+            document
+              .querySelector(`.js-save-api[data-provider="${id}"]`)
+              .classList.add("hidden");
+          }
+        } catch (err) {
+          setMessage(
+            card.message,
+            "Could not reach the provider: " + err.message,
+            "error",
+          );
+        } finally {
+          test.disabled = false;
+          test.textContent = original;
+        }
       });
-    });
 
-    // Test API connection
-    async function testConnection(provider) {
-      const input = document.querySelector(`.api-key-input[data-provider="${provider}"]`);
-      const apiKey = input.value.trim();
-
-      if (!apiKey || apiKey.length < 10) {
-        showMessage(provider, 'Please enter a valid API key.', 'error');
-        return;
-      }
-
-      setMessageText(provider, 'Testing connection...', 'info');
-      
-      try {
-        const response = await fetch(`/api/ai/providers/${provider}/test`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-JARVIS-Token': getToken()
-          },
-          credentials: 'include',
-          body: JSON.stringify({ api_key: apiKey })
-        });
-
-        const result = await response.json();
-        
-        if (result.success) {
-          providers[provider].verified = true;
-          providers[provider].api_connected = true;
-          updateStatus(provider, 'verified');
-          showSectionInfo(provider);
-          showMessage(provider, `Verified: ${result.message}`, 'success');
-          
-          // Show save button
-          document.querySelector(`.js-save-api[data-provider="${provider}"]`).style.display = 'inline-block';
-          setMessageText(provider, null, '');
-        } else {
-          providers[provider].verified = false;
-          updateStatus(provider, 'failed');
-          showMessage(provider, result.message || 'Connection failed', 'error');
+      document.addEventListener("click", async (ev) => {
+        const save = ev.target.closest(".js-save-api");
+        if (!save) return;
+        const id = save.dataset.provider;
+        const card = cards[id];
+        if (!card) return;
+        const key = card.input.value.trim();
+        if (!key) {
+          setMessage(card.message, "There is no key to save.", "error");
+          return;
         }
-      } catch (err) {
-        showMessage(provider, `Error: ${err.message}`, 'error');
-        providers[provider].verified = false;
-        updateStatus(provider, 'failed');
-      }
-    }
 
-    // Save API credentials
-    async function saveCredentials(provider) {
-      const input = document.querySelector(`.api-key-input[data-provider="${provider}"]`);
-      const apiKey = input.value.trim();
-
-      setMessageText(provider, 'Storing credentials securely...', 'info');
-
-      try {
-        const response = await fetch(`/api/ai/providers/${provider}/store`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-JARVIS-Token': getToken()
-          },
-          credentials: 'include',
-          body: JSON.stringify({ api_key: apiKey })
-        });
-
-        const result = await response.json();
-
-        if (result.success) {
-          providers[provider].api_connected = true;
-          clearApiKeyInput(provider);
-          document.querySelector(`.js-save-api[data-provider="${provider}"]`).style.display = 'none';
-          setMessageText(provider, 'Credentials stored securely!', 'success');
-          refreshProviderStatus(provider);
-        } else {
-          showMessage(provider, result.detail || 'Failed to store credentials', 'error');
+        save.disabled = true;
+        setMessage(
+          card.message,
+          "Storing the key in the macOS Keychain…",
+          "info",
+        );
+        try {
+          const res = await fetch(`/ai/providers/${id}/store`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-JARVIS-Token": getToken(),
+            },
+            credentials: "include",
+            body: JSON.stringify({ api_key: key }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (res.ok && data.success) {
+            setMessage(card.message, "Key stored in the Keychain.", "success");
+            card.input.value = "";
+            card.info2.classList.remove("hidden");
+            card.info2.textContent =
+              "The key is stored. It is not shown here again.";
+            document
+              .querySelector(`.js-save-api[data-provider="${id}"]`)
+              .classList.add("hidden");
+            await loadProviders();
+            await loadSelection();
+          } else {
+            setMessage(
+              card.message,
+              data.detail || "The key could not be stored.",
+              "error",
+            );
+          }
+        } catch (err) {
+          setMessage(
+            card.message,
+            "Could not store the key: " + err.message,
+            "error",
+          );
+        } finally {
+          save.disabled = false;
         }
-      } catch (err) {
-        showMessage(provider, `Error: ${err.message}`, 'error');
-      }
-    }
+      });
 
-    // Clear API input after save
-    function clearApiKeyInput(provider) {
-      const input = document.querySelector(`.api-key-input[data-provider="${provider}"]`);
-      input.value = '';
-    }
+      // -- boot ---------------------------------------------------------------
 
-    // Update status badge
-    function updateStatus(provider, status) {
-      const statusEl = document.getElementById(`${provider}-api-status`);
-      statusEl.textContent = getStatusText(status);
-      statusEl.className = `status status-${status}`;
-    }
-
-    function getStatusText(status) {
-      const map = {
-        'not_connected': 'Not connected',
-        'configured': 'Configured',
-        'verified': 'Verified ✓',
-        'failed': 'Failed'
-      };
-      return map[status] || 'Unknown';
-    }
-
-    // Show section info
-    function showSectionInfo(provider) {
-      document.querySelector(`.section-info[data-provider="${provider}"]`).style.display = 'block';
-    }
-
-    // Clear messages
-    function clearMessages(provider) {
-      document.querySelector(`.message-output[data-provider="${provider}"]`).innerHTML = '';
-    }
-
-    function setMessageText(provider, text, type) {
-      const el = document.querySelector(`.message-output[data-provider="${provider}"]`);
-      if (!el) return;
-      el.innerHTML = text ? `<div class="${type === 'info' ? 'info-box' : type}">${text}</div>` : '';
-    }
-
-    function showMessage(provider, text, type) {
-      setMessageText(provider, text, type);
-    }
-
-    // Get token from window global set by server
-    function getToken() {
-      return window.sessionToken || '';
-    }
-
-    // Refresh provider status
-    async function refreshProviderStatus(provider) {
-      try {
-        const response = await fetch(`/api/ai/providers/${provider}`, {
-          headers: {
-            'X-JARVIS-Token': getToken()
-          },
-          credentials: 'include'
+      authenticate()
+        .then(() => Promise.all([loadSelection(), loadProviders()]))
+        .catch((e) => {
+          const status = document.getElementById("selection-status");
+          status.textContent = "Could not establish a session: " + e.message;
         });
-        const data = await response.json();
-        
-        if (data.configured && data.verified) {
-          updateStatus(provider, 'verified');
-        } else if (data.configured) {
-          updateStatus(provider, 'configured');
-        } else {
-          updateStatus(provider, 'not_connected');
-        }
-      } catch (err) {
-        console.error('Error refreshing status:', err);
-      }
-    }
-
-    // Event listeners
-    document.querySelectorAll('.js-test-api').forEach(btn => {
-      btn.addEventListener('click', () => testConnection(btn.dataset.provider));
-    });
-
-    document.querySelectorAll('.js-save-api').forEach(btn => {
-      btn.addEventListener('click', () => saveCredentials(btn.dataset.provider));
-    });
-
-    // Initialize
-    document.addEventListener('DOMContentLoaded', () => {
-      // No auto-refresh needed - user actively manages connections
-      console.log('AI Connections page loaded. Manage connections below.');
-    });
-  </script>
-</body>
+    </script>
+  </body>
 </html>

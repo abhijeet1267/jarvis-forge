@@ -71,13 +71,24 @@ async def open_workspace(ctx: ToolContext, path: str = "", name: str = "") -> An
     )
 
 
-async def list_workspaces(ctx: ToolContext) -> Any:
-    """List open workspaces."""
+async def list_workspaces(ctx: ToolContext, query: str = "") -> Any:
+    """List open workspaces.
+
+    A ``query`` narrows the list to the workspaces whose name or path
+    contains it, so a lookup that is *searched* by the name the person gave
+    answers "which one did you mean" rather than "what is open".
+    """
     workspaces = _registry().all()
+    needle = (query or "").strip().lower()
+    if needle:
+        workspaces = [
+            w for w in workspaces
+            if needle in w.display.lower() or needle in str(w.root).lower()
+        ]
     if not workspaces:
         return ok(
             "list_workspaces",
-            "No workspaces are open.",
+            f"No workspaces match {query!r}." if needle else "No workspaces are open.",
             device=ctx.device_id,
             workspaces=[],
         )
@@ -348,10 +359,11 @@ SPECS = [
             agent="coding",
             risk=RiskLevel.READ,
             allowed_devices=["laptop_main"],
-            parameters={},
+            parameters={"query": "string"},
             tags=["coding", "read"],
             provides_identifiers={"workspace_id": {"items": "workspaces", "id": "workspace_id",
-                                                 "label": "name"}},
+                                                 "label": "name",
+                                                 "lookup": "query"}},
 
         ),
         list_workspaces,

@@ -12,11 +12,11 @@ and then switches to numbered sections, finishing at `# 60. Immediate Next Step`
 The plan does, however, name the next milestone twice in a way that is directly
 testable:
 
-* `# 57. Final Build Order` — item 25 is *Autonomous workflows* (Phase 14), item 26
-  is *Advanced recovery*.
-* `# 59. First Commands to Implement` — eighteen sentences, with the instruction:
-  *"Implement these first and use them as the acceptance test."*
-* `# 58. Definition of Done` — the 26 properties those commands are meant to
+- `# 57. Final Build Order` — item 25 is _Autonomous workflows_ (Phase 14), item 26
+  is _Advanced recovery_.
+- `# 59. First Commands to Implement` — eighteen sentences, with the instruction:
+  _"Implement these first and use them as the acceptance test."_
+- `# 58. Definition of Done` — the 26 properties those commands are meant to
   exercise.
 
 Phase 15 was therefore taken to be: **stop asserting, and run the acceptance test
@@ -24,7 +24,7 @@ against the real pipeline.** That is measurement rather than feature work, which
 also the right posture while `Advanced recovery` (the literal next build-order
 item) has no brief and would otherwise be invented scope.
 
-Two things were explicitly *not* done: no new capability was added, and no
+Two things were explicitly _not_ done: no new capability was added, and no
 carried-forward item from the do-not-expand list (read route, memory-deletion
 redesign, hardware, desktop bundle, RT-3/R-2/R-11-R-14, LLM planner) was
 implemented.
@@ -50,32 +50,32 @@ Side effects were checked **outside** JARVIS: `pgrep` for the launched applicati
 
 ## 3. What the eighteen commands actually did (before the fixes)
 
-| # | Command | Routed to | verification | Reply (abridged) |
-| --- | --- | --- | --- | --- |
-| 1 | open VS Code | `open_app` | success | "Opening Visual Studio Code…" — **process confirmed running** |
-| 2 | find my latest project report | `search_files` | success | "could not find any file matching 'project report.' under /Users/…" (21.6 s) |
-| 3 | show me my laptop battery | `battery_status` | success | "100% (fully charged)" — `pmset` agrees |
-| 4 | transfer this file to my phone | — | — | refuses to guess the file (correct) |
-| 5 | what is my phone battery | — | — | "no phone is paired with this laptop yet" (correct) |
-| 6 | plan my day | `daily_schedule` | success | "Your today is clear" · `provider_status=real_empty` |
-| 7 | **schedule two hours for project work tomorrow** | **`list_schedules`** | **success** | **"You have nothing scheduled."** |
-| 8 | draft an email to my teammate | `draft_email` | failed | "I do not have a contact called 'teammate'" (correct) |
-| 9 | send it | — | — | "There is no draft waiting to send" (correct: #8 failed) |
-| 10 | remember that this is my AMR project | `remember_fact` | success | `MEM-ec646dbc4b12` retrievable via `/memory/search` |
-| 11 | what did I work on yesterday | `search_memory` | success | answered with a **same-session echo row** |
-| 12 | design this system | `unknown` | — | honest fallback prompt |
-| 13 | research this idea | `search_papers` | failed | "arXiv could not be reached: HTTP 406" |
-| 14 | check my car fuel | `get_car_telemetry` | **success** | **"I could not read those car values…"** |
-| 15 | check my car charge | `get_car_telemetry` | **success** | same |
-| 16 | give me today's location summary | `get_location_summary` | **success** | **"not available: location tracking is disabled"** |
-| 17 | turn on study mode | `run_home_routine` | **success** | **"gateway is offline… Nothing was changed."** |
-| 18 | stop all physical actions | `emergency_stop` | success | honest: physical actuators NOT stopped (Phase 10) |
+| #   | Command                                          | Routed to              | verification | Reply (abridged)                                                             |
+| --- | ------------------------------------------------ | ---------------------- | ------------ | ---------------------------------------------------------------------------- |
+| 1   | open VS Code                                     | `open_app`             | success      | "Opening Visual Studio Code…" — **process confirmed running**                |
+| 2   | find my latest project report                    | `search_files`         | success      | "could not find any file matching 'project report.' under /Users/…" (21.6 s) |
+| 3   | show me my laptop battery                        | `battery_status`       | success      | "100% (fully charged)" — `pmset` agrees                                      |
+| 4   | transfer this file to my phone                   | —                      | —            | refuses to guess the file (correct)                                          |
+| 5   | what is my phone battery                         | —                      | —            | "no phone is paired with this laptop yet" (correct)                          |
+| 6   | plan my day                                      | `daily_schedule`       | success      | "Your today is clear" · `provider_status=real_empty`                         |
+| 7   | **schedule two hours for project work tomorrow** | **`list_schedules`**   | **success**  | **"You have nothing scheduled."**                                            |
+| 8   | draft an email to my teammate                    | `draft_email`          | failed       | "I do not have a contact called 'teammate'" (correct)                        |
+| 9   | send it                                          | —                      | —            | "There is no draft waiting to send" (correct: #8 failed)                     |
+| 10  | remember that this is my AMR project             | `remember_fact`        | success      | `MEM-ec646dbc4b12` retrievable via `/memory/search`                          |
+| 11  | what did I work on yesterday                     | `search_memory`        | success      | answered with a **same-session echo row**                                    |
+| 12  | design this system                               | `unknown`              | —            | honest fallback prompt                                                       |
+| 13  | research this idea                               | `search_papers`        | failed       | "arXiv could not be reached: HTTP 406"                                       |
+| 14  | check my car fuel                                | `get_car_telemetry`    | **success**  | **"I could not read those car values…"**                                     |
+| 15  | check my car charge                              | `get_car_telemetry`    | **success**  | same                                                                         |
+| 16  | give me today's location summary                 | `get_location_summary` | **success**  | **"not available: location tracking is disabled"**                           |
+| 17  | turn on study mode                               | `run_home_routine`     | **success**  | **"gateway is offline… Nothing was changed."**                               |
+| 18  | stop all physical actions                        | `emergency_stop`       | success      | honest: physical actuators NOT stopped (Phase 10)                            |
 
 **Six commands reported success for something that did not happen.** Five are the
 same shape — a reply that refuses, negates or states "nothing was changed", sitting
 on `verification=success`, audited as `success`, and rendered by the dashboard's
 own rules as a **VERIFIED** chip. Command 7 is worse than cosmetic: a request to
-*create* was answered by *listing*, so the user was told the schedule list was empty
+_create_ was answered by _listing_, so the user was told the schedule list was empty
 and the state was VERIFIED, and no schedule exists.
 
 ---
@@ -83,6 +83,7 @@ and the state was VERIFIED, and no schedule exists.
 ## 4. Fixes
 
 ### 15-A — a read that read nothing is not verified
+
 `jarvis/tools/car.py`, `jarvis/tools/system.py`, `jarvis/tools/home.py`.
 
 Each of the three refusing branches now passes `verification=Verification.FAILED`
@@ -100,23 +101,25 @@ have made recovery retry an unreachable car on every command. That is R-2's
 territory and was not touched.
 
 ### 15-B — "schedule X" is a creation request
-`jarvis/core/planner.py`. The word *schedule* alone used to satisfy the
+
+`jarvis/core/planner.py`. The word _schedule_ alone used to satisfy the
 manage-existing-schedules guard, so any sentence beginning `schedule …` was turned
 into `list_schedules`. A `create_requested` test now routes imperative
-"schedule <something>" to the create branch, which asks *when* rather than
+"schedule <something>" to the create branch, which asks _when_ rather than
 inventing a job. Two deliberate limits:
 
-* Listing, cancelling, pausing and the existing `every …` / `remind me …`
+- Listing, cancelling, pausing and the existing `every …` / `remind me …`
   creation phrasings route exactly as before (parametrised test 15-B guards it).
-* An imperative-schedule sentence that reaches a time but has no stated content is
+- An imperative-schedule sentence that reaches a time but has no stated content is
   **not** filed as a bare reminder named `reminder` — it asks what the time is for.
   That pre-existing nameless-reminder path is left alone for sentences that always
   reached it (`every day at 9`), because this phase did not measure it.
 
 ### 15-C — an honest refusal is not UNKNOWN either
+
 `dashboard/index.html`. Five of the eighteen commands produced a correct, explicit
 answer and rendered **UNKNOWN**, which told the user the system was unsure when it
-had actually said *no*. `pipelineState()` now reads two fields the backend already
+had actually said _no_. `pipelineState()` now reads two fields the backend already
 sends — `plan.needs_clarification` → **NEEDS DETAIL**, `plan.direct_reply` →
 **NOTHING EXECUTED**. No new backend field, no inference from reply wording: a
 refusal and a clarifying question both arrive as `direct_reply`, so both get the
@@ -156,7 +159,7 @@ Audit ledger, measured per command afterwards: the car read now writes
 
 The sweep table's `aud=` column for commands with a **zero** audit delta was wrong.
 The script did `after[: delta or 1]`, so for the five no-action commands
-(4, 5, 9, 12, and 7 after the fix) it printed the *previous* command's audit row.
+(4, 5, 9, 12, and 7 after the fix) it printed the _previous_ command's audit row.
 Verified separately: a planner-level refusal or clarification adds **0** rows.
 The JSON files still carry the artifact; the numbers in §5 and the ledger claim in
 §7 come from the direct re-measurement, not from that column.
@@ -179,47 +182,47 @@ adding an audit line to those returns is a one-line change with a real consequen
 
 ## 8. Other findings
 
-| ID | Finding | Evidence | Action |
-| --- | --- | --- | --- |
-| 15-E | `_remember_outcome()` writes an `"User asked: … Result: …"` echo per command, and `search_memory` can surface an echo as memory. Answering *"what did I work on yesterday"* with an undated same-session echo is a wrong answer to a dated question. | 13 echo rows in the sweep home; run 1's #11 reply | **not fixed** — on the do-not-expand list |
-| 15-F | `search_papers` gets HTTP 406 from arXiv, so the *web research* half of DoD #15 does not work. Likely a request-header issue, not an outage. | reply text, twice | not fixed — outside this phase's truth-state scope, recorded |
-| 15-G | `search_files` keeps the sentence's terminal period in the query (`'project report.'`). Tested both spellings against a directory containing `project report.txt`: **both match**, so this is cosmetic reply wording, not a defect. | in-process probe | nothing to fix |
-| 15-H | `daily_schedule` reads JARVIS's local calendar when no account is configured, and the reply ("Your today is clear") does not say which store it read. `real_empty` is accurate *of that store*. | `provider_status=real_empty`, `calendar_provider.py:779` | recorded, Phase 11's decision stands |
-| 15-I | "open VS Code" executed with no confirmation. It is a risk-tier choice, not a truth defect, and Phase 11 opened that door deliberately. | ledger row | recorded |
-| 15-J | A full-filesystem `search_files` took 21.6 s of the sweep's 22.6 s total. | `ms` column | recorded |
+| ID   | Finding                                                                                                                                                                                                                                              | Evidence                                                 | Action                                                       |
+| ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- | ------------------------------------------------------------ |
+| 15-E | `_remember_outcome()` writes an `"User asked: … Result: …"` echo per command, and `search_memory` can surface an echo as memory. Answering _"what did I work on yesterday"_ with an undated same-session echo is a wrong answer to a dated question. | 13 echo rows in the sweep home; run 1's #11 reply        | **not fixed** — on the do-not-expand list                    |
+| 15-F | `search_papers` gets HTTP 406 from arXiv, so the _web research_ half of DoD #15 does not work. Likely a request-header issue, not an outage.                                                                                                         | reply text, twice                                        | not fixed — outside this phase's truth-state scope, recorded |
+| 15-G | `search_files` keeps the sentence's terminal period in the query (`'project report.'`). Tested both spellings against a directory containing `project report.txt`: **both match**, so this is cosmetic reply wording, not a defect.                  | in-process probe                                         | nothing to fix                                               |
+| 15-H | `daily_schedule` reads JARVIS's local calendar when no account is configured, and the reply ("Your today is clear") does not say which store it read. `real_empty` is accurate _of that store_.                                                      | `provider_status=real_empty`, `calendar_provider.py:779` | recorded, Phase 11's decision stands                         |
+| 15-I | "open VS Code" executed with no confirmation. It is a risk-tier choice, not a truth defect, and Phase 11 opened that door deliberately.                                                                                                              | ledger row                                               | recorded                                                     |
+| 15-J | A full-filesystem `search_files` took 21.6 s of the sweep's 22.6 s total.                                                                                                                                                                            | `ms` column                                              | recorded                                                     |
 
 ---
 
 ## 9. Definition of Done (§58), by evidence
 
-| DoD item | State | Basis |
-| --- | --- | --- |
-| natural voice commands | NOT TESTED this phase | no microphone in this environment; not fabricated |
-| conversational context | PARTIAL | one session used; referential commands ("this file", "send it") resolve by *policy*, not from prior turns |
-| select correct agent | WORKS | 18/18 routed to a real owner |
-| select correct device | WORKS (narrow) | everything ran on `laptop_main`; other devices reported unreachable honestly |
-| structured tools | WORKS | 1207 collected tests |
-| confirmation when appropriate | WORKS | Phase 12/14 proof; none of the 18 needed it |
-| execute laptop tasks | **WORKS, verified outside JARVIS** | VS Code process running; battery 100% matches `pmset` |
-| communicate with a phone | UNAVAILABLE | no device paired |
-| smartwatch as interface | NOT TESTED this phase | Phase 10 authority work |
-| control approved home devices | UNAVAILABLE (now recorded truthfully) | gateway offline → `failure` |
-| read car telemetry | UNAVAILABLE (now recorded truthfully) | no adapter → `failure` |
-| access calendar | PARTIAL | local store only, no account configured |
-| draft/send email with confirmation | PARTIAL | no contact/credentials configured; both refused honestly |
-| location summaries | **NOT IMPLEMENTED** | no location subsystem exists; the tool is a stub, now reporting unavailable |
-| search web and project files | PARTIAL | files yes; arXiv 406 (15-F) |
-| design engineering projects | NOT ROUTED | "design this system" → `unknown` |
-| maintain project memory | WORKS | stored fact retrieved over HTTP |
-| schedule future tasks | PARTIAL (was falsely succeeding) | asks *when* now; cadence-only support |
-| run multi-step workflows | WORKS | Phase 14 |
-| recover from failures | PASS (prior phase) | Phase 10 |
-| verify action completion | **WORKS for these five sites after 15-A** | ledger `failure` re-measured |
-| log every important action | PARTIAL | route-level refusals unaudited (15-D) |
-| work partially offline | WORKS | 12 of 18 commands answered with no network |
-| stop physical operations safely | WORKS WITH LIMITS | honest: physical stop unavailable (Phase 10) |
-| protect private data | PASS (prior phase) | 401s observed again in this run's server log |
-| revoke permissions | PASS (prior phase) | Phase 10 |
+| DoD item                           | State                                     | Basis                                                                                                     |
+| ---------------------------------- | ----------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| natural voice commands             | NOT TESTED this phase                     | no microphone in this environment; not fabricated                                                         |
+| conversational context             | PARTIAL                                   | one session used; referential commands ("this file", "send it") resolve by _policy_, not from prior turns |
+| select correct agent               | WORKS                                     | 18/18 routed to a real owner                                                                              |
+| select correct device              | WORKS (narrow)                            | everything ran on `laptop_main`; other devices reported unreachable honestly                              |
+| structured tools                   | WORKS                                     | 1207 collected tests                                                                                      |
+| confirmation when appropriate      | WORKS                                     | Phase 12/14 proof; none of the 18 needed it                                                               |
+| execute laptop tasks               | **WORKS, verified outside JARVIS**        | VS Code process running; battery 100% matches `pmset`                                                     |
+| communicate with a phone           | UNAVAILABLE                               | no device paired                                                                                          |
+| smartwatch as interface            | NOT TESTED this phase                     | Phase 10 authority work                                                                                   |
+| control approved home devices      | UNAVAILABLE (now recorded truthfully)     | gateway offline → `failure`                                                                               |
+| read car telemetry                 | UNAVAILABLE (now recorded truthfully)     | no adapter → `failure`                                                                                    |
+| access calendar                    | PARTIAL                                   | local store only, no account configured                                                                   |
+| draft/send email with confirmation | PARTIAL                                   | no contact/credentials configured; both refused honestly                                                  |
+| location summaries                 | **NOT IMPLEMENTED**                       | no location subsystem exists; the tool is a stub, now reporting unavailable                               |
+| search web and project files       | PARTIAL                                   | files yes; arXiv 406 (15-F)                                                                               |
+| design engineering projects        | NOT ROUTED                                | "design this system" → `unknown`                                                                          |
+| maintain project memory            | WORKS                                     | stored fact retrieved over HTTP                                                                           |
+| schedule future tasks              | PARTIAL (was falsely succeeding)          | asks _when_ now; cadence-only support                                                                     |
+| run multi-step workflows           | WORKS                                     | Phase 14                                                                                                  |
+| recover from failures              | PASS (prior phase)                        | Phase 10                                                                                                  |
+| verify action completion           | **WORKS for these five sites after 15-A** | ledger `failure` re-measured                                                                              |
+| log every important action         | PARTIAL                                   | route-level refusals unaudited (15-D)                                                                     |
+| work partially offline             | WORKS                                     | 12 of 18 commands answered with no network                                                                |
+| stop physical operations safely    | WORKS WITH LIMITS                         | honest: physical stop unavailable (Phase 10)                                                              |
+| protect private data               | PASS (prior phase)                        | 401s observed again in this run's server log                                                              |
+| revoke permissions                 | PASS (prior phase)                        | Phase 10                                                                                                  |
 
 ---
 
@@ -232,7 +235,7 @@ shipped renderer proving **not VERIFIED** and specifically **UNAVAILABLE**, the
 audit ledger no longer recording `success` for them, command 7's routing and its
 "nothing filed" consequence (counted as a **delta** — the session-scoped `core`
 fixture means an absolute count is somebody else's job), the four schedule
-readings that must *not* move, the nameless-reminder guard, four refusal/clarification
+readings that must _not_ move, the nameless-reminder guard, four refusal/clarification
 renderings, the deliberate refusal to guess between question and refusal, the
 Phase 13 invariants re-checked, and the shipped page containing the new states.
 
@@ -258,14 +261,14 @@ result changed, and **no pre-existing test edited**.
 
 ## 11. Files modified
 
-| File | Change |
-| --- | --- |
-| `jarvis/tools/car.py` | `Verification` import; offline no-readings branch now FAILED + `provider_status` |
-| `jarvis/tools/system.py` | `Verification` import; `get_location_summary` now FAILED + `provider_status` |
-| `jarvis/tools/home.py` | `Verification` import; offline routine now FAILED + `provider_status` |
-| `jarvis/core/planner.py` | `create_requested` guard on the manage-schedules branch, gate widened, nameless-reminder refusal |
-| `dashboard/index.html` | `NEEDS DETAIL` / `NOTHING EXECUTED` states and their tones, read from `plan.needs_clarification` / `plan.direct_reply` |
-| `tests/test_phase15_acceptance.py` | new, 22 tests |
+| File                               | Change                                                                                                                 |
+| ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `jarvis/tools/car.py`              | `Verification` import; offline no-readings branch now FAILED + `provider_status`                                       |
+| `jarvis/tools/system.py`           | `Verification` import; `get_location_summary` now FAILED + `provider_status`                                           |
+| `jarvis/tools/home.py`             | `Verification` import; offline routine now FAILED + `provider_status`                                                  |
+| `jarvis/core/planner.py`           | `create_requested` guard on the manage-schedules branch, gate widened, nameless-reminder refusal                       |
+| `dashboard/index.html`             | `NEEDS DETAIL` / `NOTHING EXECUTED` states and their tones, read from `plan.needs_clarification` / `plan.direct_reply` |
+| `tests/test_phase15_acceptance.py` | new, 22 tests                                                                                                          |
 
 `audit/PHASE14_*.md` and earlier reports were not edited.
 
@@ -278,7 +281,7 @@ answer dated questions · **15-F** arXiv 406 · **15-H** which calendar store wa
 **15-J** 21.6 s full-filesystem search.
 
 Unchanged from earlier phases: simulated actuations recorded as `verification=success`
-(14-E; the *UI* still masks it, and this phase did not fix the ledger) · route
+(14-E; the _UI_ still masks it, and this phase did not fix the ledger) · route
 refusals rendering without a distinct BLOCKED state · no `read_file` route · no
 notification tool · `POST /memory/{id}/forget` overclaims · `ProjectGraph` delete API ·
 RT-3 mutable risk tier · R-2 broad auto-retry · R-11-R-14 · desktop bundle exits 1 ·
@@ -300,7 +303,7 @@ remains blocked by the runtime's policy classifier, as recorded in Phase 14.
 branch `main` with **no commits**. Nothing in Phases 10-15 is a diff or a
 reviewable object.
 
-* staged: no · committed: no · pushed: no — no git write operation was performed.
+- staged: no · committed: no · pushed: no — no git write operation was performed.
 
 ## 15. Cleanup
 
@@ -321,7 +324,7 @@ rather than in a rewrite:
    for `plan.needs_clarification`, and the mapping itself is correct, but measured
    over ten no-tool sentences (`compress this`, `delete`, `copy`, `transfer`,
    `design this system`, `what is my car`, `remember`, `schedule`, `find`, `move
-   this`) **every** route that produces no tool also produces a note, and
+this`) **every** route that produces no tool also produces a note, and
    `_to_plan` turns a note into `plan.direct_reply`. So `needs_clarification` is
    `False` for all of them and every real no-execution answer renders
    `NOTHING EXECUTED`. `NEEDS DETAIL` is a correct mapping for a branch that the
@@ -336,16 +339,16 @@ rather than in a rewrite:
    commands, measured against `action_logs` directly, and every command leaves a
    hash-chained, predecessor-linked record.
 
-   While re-measuring it, the same *class* of error surfaced twice more, both in
+   While re-measuring it, the same _class_ of error surfaced twice more, both in
    test/harness code rather than in JARVIS:
-   * `tests/test_pipeline.py::test_car_reports_disconnected_honestly` left the
+   - `tests/test_pipeline.py::test_car_reports_disconnected_honestly` left the
      process-wide car gateway built and probed, which broke
      `test_api.py::test_health_reports_each_peripheral_honestly` ("health must not
      probe the car") whenever that order occurred. **Pre-existing**, invisible only
      because alphabetical order runs `test_api` first. Now reset in `finally`.
-   * My own Phase 15 `test_car_telemetry_offline_is_not_verified` had the same
+   - My own Phase 15 `test_car_telemetry_offline_is_not_verified` had the same
      leak. Now wrapped in a `car_offline` fixture that resets both ways.
-   * The Phase 16 proof script initially reported one command as unaudited because
+   - The Phase 16 proof script initially reported one command as unaudited because
      `MAX(rowid)` is `NULL` on an empty table and `rowid > NULL` matches nothing —
      the ledger's first entry always looked like no entry. Corrected to
      `COALESCE(MAX(rowid), 0)`.

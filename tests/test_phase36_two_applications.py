@@ -254,7 +254,13 @@ def test_the_offline_shell_caches_the_app_not_the_laptops_answers(client):
     script = response.text
     assert "javascript" in response.headers["content-type"], response.headers["content-type"]
     body = script.split("const PRECACHE", 1)[1].split("[", 1)[1].split("]")[0]
-    precached = json.loads("[" + body + "]")
+    # The real `sw.js` is valid JavaScript: individual entries are quoted strings and
+    # the last may carry a trailing comma. `json.loads` rejects that trailing comma, so
+    # strip it before treating the list as a JSON array. The assertion below — that no
+    # entry is an API *answer* path — is the contract; how the shell spells its list is
+    # not.
+    body_clean = body.rstrip().rstrip(",")
+    precached = json.loads("[" + body_clean + "]")
     for path in precached:
         assert not path.startswith(("/command", "/devices", "/confirmations", "/confirm")), (
             f"the shell cache would serve a stored answer from {path}")
@@ -386,7 +392,14 @@ def test_the_page_does_not_break_where_the_browser_has_no_worker(client, tmp_pat
     startup down with it."""
     body = client.get("/phone").text
     start = body.index('if ("serviceWorker" in navigator)')
-    block = body[start:body.index("\n}", start) + 2]
+    # Extract the `if (...) { ... }` block. The register line itself contains
+    # `.catch(() => {})` (an inner `}` on the same line), so the block's own closing
+    # brace is the first *line* that, stripped, is exactly `}` — which also tolerates
+    # the page's real indentation (an earlier `body.index("\n}", start)` assumed a
+    # column-0 brace and broke when the page was legitimately re-indented).
+    lines = body[start:].split("\n")
+    closing = next(i for i, ln in enumerate(lines) if ln.strip() == "}")
+    block = "\n".join(lines[: closing + 1])
     script = ("var navigator = {};\n" + block +
               "\nconsole.log('survived');\n")
     proc = subprocess.run(["node", "-e", script], capture_output=True, text=True, timeout=60)

@@ -350,6 +350,7 @@ async def read_file(ctx: ToolContext, path: str = "") -> Any:
         "read_file",
         f"Read {target.name}{shown}",
         device=ctx.device_id,
+        verified=True,
         path=str(target),
         content=content,
     )

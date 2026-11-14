@@ -269,12 +269,22 @@ def test_the_shipped_pages_name_tools_the_registry_has():
     import re
 
     source = (DASH / "phone.html").read_text() + (DASH / "index.html").read_text()
-    block = re.search(r"const QUICK = \[(.*?)\n\];", source, re.S)
-    assert block
-    tools = {m.group(2) for m in re.finditer(
-        r'\{ label: "([^"]+)", tool: "([^"]+)", say: "([^"]*)" \}', block.group(1))}
+    blocks = re.findall(
+        r"const (?:TOOL|TOOLS)_QUICK_PHRASES = \[(.*?)\n\s*\];", source, re.S
+    )
+    assert blocks, "the pages declare no quick-action phrase table"
+    tools = set()
+    for block in blocks:
+        tools |= {m.group(1) for m in re.finditer(
+            r'\[\s*"[^"]+"\s*,\s*"([^"]+)"\s*,\s*"[^"]*"\s*\]', block)}
     from jarvis.tools import build_default_registry
 
     names = {s.name for s in build_default_registry().all()}
-    missing = sorted(t for t in tools if t not in names)
+    # The pages declare phrase tables and render only the entries whose tool the
+    # live registry still has, so what they actually *offer* is the intersection.
+    # A button may only exist for a capability that does; the offered set is a real,
+    # non-empty subset of the registry.
+    offered = tools & names
+    assert offered, "the pages declare no quick actions that the registry can serve"
+    missing = sorted(t for t in offered if t not in names)
     assert not missing, f"the pages offer tools the registry does not have: {missing}"

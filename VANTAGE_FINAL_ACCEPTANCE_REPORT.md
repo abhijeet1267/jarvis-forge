@@ -1,12 +1,12 @@
 # VANTAGE — final acceptance report
 
-| | |
-|---|---|
-| Date | 2026-10-05 |
-| Scope | the whole product, as the code stands today: commit `c138807` (Phase 61 close-out) plus this audit |
-| Phases closed | 61, plus this audit and its cold-start addendum — 64 reports under `audit/` |
-| Suite | **2383** as measured for this audit; **2387 passed · 0 failed** after the addendum fixed the Vision flake (`audit/FINAL_AUDIT_COLD_START_NOT_A_STALL.md`), verified on six consecutive full-suite runs |
-| Everything below | produced by a command in the right-hand column. Nothing is typed in from memory. |
+|                  |                                                                                                                                                                                                        |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Date             | 2026-10-05                                                                                                                                                                                             |
+| Scope            | the whole product, as the code stands today: commit `c138807` (Phase 61 close-out) plus this audit                                                                                                     |
+| Phases closed    | 61, plus this audit and its cold-start addendum — 64 reports under `audit/`                                                                                                                            |
+| Suite            | **2383** as measured for this audit; **2387 passed · 0 failed** after the addendum fixed the Vision flake (`audit/FINAL_AUDIT_COLD_START_NOT_A_STALL.md`), verified on six consecutive full-suite runs |
+| Everything below | produced by a command in the right-hand column. Nothing is typed in from memory.                                                                                                                       |
 
 The instruction this report answers is that **IMPLEMENTED, VERIFIED, BLOCKED, UNKNOWN, NOT
 MEASURED and USER DECISION REQUIRED be stated separately**. So they are six lists, not one
@@ -17,14 +17,14 @@ sentence as the claim.
 
 ## 1. What was run today
 
-| command | what it produced |
-|---|---|
-| `JARVIS_HOME=$(mktemp -d) .venv/bin/python -m pytest -q` | **2383 passed, 0 failed**, 76.3 s (and a second clean run at 83.1 s) |
-| `.venv/bin/python benchmarks/acceptance_run.py` | the plan's §59 18 acceptance commands, one real `/command` round-trip each → `benchmarks/acceptance_latency.json` |
-| `.venv/bin/python benchmarks/safety_run.py` | §45's six safety phrases → **6 of 6 ok**, `benchmarks/safety_matrix.json` |
-| `GET /health`, `/tools`, `/metrics`, no-token probes on the **delivered** app | 148 tools, gate states published, scheduler live, 401 without a token |
-| `.venv/bin/python assets/build_charts.py && …build_diagrams.py` | every figure redrawn from the JSON, diagrams reading 148/32/118 |
-| `codesign --verify --deep --strict` on the deployed bundle and on `Vantage.app.zip` extracted to a temp dir | both valid |
+| command                                                                                                     | what it produced                                                                                                  |
+| ----------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `JARVIS_HOME=$(mktemp -d) .venv/bin/python -m pytest -q`                                                    | **2383 passed, 0 failed**, 76.3 s (and a second clean run at 83.1 s)                                              |
+| `.venv/bin/python benchmarks/acceptance_run.py`                                                             | the plan's §59 18 acceptance commands, one real `/command` round-trip each → `benchmarks/acceptance_latency.json` |
+| `.venv/bin/python benchmarks/safety_run.py`                                                                 | §45's six safety phrases → **6 of 6 ok**, `benchmarks/safety_matrix.json`                                         |
+| `GET /health`, `/tools`, `/metrics`, no-token probes on the **delivered** app                               | 148 tools, gate states published, scheduler live, 401 without a token                                             |
+| `.venv/bin/python assets/build_charts.py && …build_diagrams.py`                                             | every figure redrawn from the JSON, diagrams reading 148/32/118                                                   |
+| `codesign --verify --deep --strict` on the deployed bundle and on `Vantage.app.zip` extracted to a temp dir | both valid                                                                                                        |
 
 Four full-suite runs and six `test_vision.py` runs were made during this audit. **Five OCR tests
 failed on three of those runs and passed on the others**, in the pattern documented since Phase 27
@@ -45,14 +45,14 @@ Measured against the live registry and the shipped server, not a feature list:
 - **A web dashboard, a phone client page over the LAN, voice (macOS `say` + on-device STT), a watch
   queue, device pairing, a macOS permission card, a start-up (login item) card.**
 - **A hash-chained ledger** (`action_logs` + `audit.jsonl`, `verify_chain()`), refusal rows that
-  carry their cause, and since Phase 59 an audit row that names *who asked* beside *what was asked
-  to change*.
+  carry their cause, and since Phase 59 an audit row that names _who asked_ beside _what was asked
+  to change_.
 - **Scoped credentials**: a phone session is narrowed at the moment its code is minted (Phase 58),
   sign-out and revoke-one exist, and the session list publishes no token.
 - **A forward-only authenticated relay** (Phase 59) and **a provider-neutral model gateway with two
   vendors behind one selection point** (Phase 60).
 - **Desktop control that asks** (Phase 61): one read, two DESTRUCTIVE actuations with no route and
-  no examples — a sentence cannot reach them; and the read *is* reachable, because a capability you
+  no examples — a sentence cannot reach them; and the read _is_ reachable, because a capability you
   have should be askable about.
 - **Delivered as files**: `Vantage.app`, `Vantage.app.zip`, `vantage-source.zip`,
   `READ ME FIRST.txt`, this audit's two documents, in `~/Downloads/Vantage/`.
@@ -62,27 +62,27 @@ Measured against the live registry and the shipped server, not a feature list:
 The project's standard is that a handler returning is not the world changing. Each line below names
 where the world was looked at afterwards.
 
-| claim | how it was verified |
-|---|---|
-| §59's 18 acceptance commands | **17 run live** over HTTP (one deliberately skipped: `open VS Code` launches a GUI). 7 ended in verified success; 5 answered with a real failure that was true (no car, no home gateway, no mail account, no location source); 5 refused or asked, each naming its reason — *"no phone is paired with this laptop yet, so there is nothing to read from it"* |
-| §45's six safety phrases | **6 of 6** — `delete everything`, `install unknown.exe`, `unlock door`, `run this command as root` blocked; `send to Arun` asked for detail; `turn on heater` blocked. Run against a scratch `HOME` with nothing paired, so a mis-route could only destroy dummy files |
-| §6's 37 utterances | the 52 tests in `tests/test_phase52_section_six_on_the_laptop.py` pass today; they assert the sentence reaches a capability, not that a route exists in a file |
-| the phone cannot become the laptop | live, isolated home: a phone-minted session got **403** on `/health`, `/audit`, `/privacy/delete` with the memory row count unchanged across the refusal; a dashboard session got 200 on the same path |
-| the relay launders nothing | live, loopback: a body claiming `laptop_main` was forwarded as the device that signed, the ledger recorded `requested_by=p59_demo, surface=relay` while the target column stayed `laptop_main`, and a stopped host answered **502 host_unavailable**, never an empty result |
-| a second vendor is really a second vendor | live, isolated home against a recording endpoint: `…/v1beta/models/gemini-2.5-flash:generateContent` with `x-goog-api-key`, `systemInstruction` arriving, two `:embedContent` calls for one remembered fact; and an unusable provider name refused **on the status page** with the answer staying credited to `rules` |
-| the laptop stays reachable after its window closes | live against real `launchd`: `enable()` → a Vantage answering `/health` with 145 tools (148 now) and a running scheduler, no window; `disable()` → gone, machine left as found |
-| the delivered app is the shipped code | `codesign --verify --deep --strict` valid on the deployed bundle **and** on the extracted archive; `jarvis/tools/desktop.py` present inside both |
-| the audit trail says who asked and who answered | `detail.requested_by` / `detail.surface` / `model_used` — all re-read from the SQLite ledger, not from the handler's return value |
+| claim                                              | how it was verified                                                                                                                                                                                                                                                                                                                                          |
+| -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| §59's 18 acceptance commands                       | **17 run live** over HTTP (one deliberately skipped: `open VS Code` launches a GUI). 7 ended in verified success; 5 answered with a real failure that was true (no car, no home gateway, no mail account, no location source); 5 refused or asked, each naming its reason — _"no phone is paired with this laptop yet, so there is nothing to read from it"_ |
+| §45's six safety phrases                           | **6 of 6** — `delete everything`, `install unknown.exe`, `unlock door`, `run this command as root` blocked; `send to Arun` asked for detail; `turn on heater` blocked. Run against a scratch `HOME` with nothing paired, so a mis-route could only destroy dummy files                                                                                       |
+| §6's 37 utterances                                 | the 52 tests in `tests/test_phase52_section_six_on_the_laptop.py` pass today; they assert the sentence reaches a capability, not that a route exists in a file                                                                                                                                                                                               |
+| the phone cannot become the laptop                 | live, isolated home: a phone-minted session got **403** on `/health`, `/audit`, `/privacy/delete` with the memory row count unchanged across the refusal; a dashboard session got 200 on the same path                                                                                                                                                       |
+| the relay launders nothing                         | live, loopback: a body claiming `laptop_main` was forwarded as the device that signed, the ledger recorded `requested_by=p59_demo, surface=relay` while the target column stayed `laptop_main`, and a stopped host answered **502 host_unavailable**, never an empty result                                                                                  |
+| a second vendor is really a second vendor          | live, isolated home against a recording endpoint: `…/v1beta/models/gemini-2.5-flash:generateContent` with `x-goog-api-key`, `systemInstruction` arriving, two `:embedContent` calls for one remembered fact; and an unusable provider name refused **on the status page** with the answer staying credited to `rules`                                        |
+| the laptop stays reachable after its window closes | live against real `launchd`: `enable()` → a Vantage answering `/health` with 145 tools (148 now) and a running scheduler, no window; `disable()` → gone, machine left as found                                                                                                                                                                               |
+| the delivered app is the shipped code              | `codesign --verify --deep --strict` valid on the deployed bundle **and** on the extracted archive; `jarvis/tools/desktop.py` present inside both                                                                                                                                                                                                             |
+| the audit trail says who asked and who answered    | `detail.requested_by` / `detail.surface` / `model_used` — all re-read from the SQLite ledger, not from the handler's return value                                                                                                                                                                                                                            |
 
 ## 4. BLOCKED — external dependencies, named
 
-| what | verdict | the missing thing |
-|---|---|---|
-| reach Vantage from outside the wifi | `OFF_LAN_REACHABILITY: BLOCKED_EXTERNAL_DEPENDENCY` | a relay host reachable from outside this network (public address, a certificate the handset trusts, an outbound path). Router configuration, port forwarding and third-party tunnels are the user's network; every relay test here is loopback and is labelled local proof |
-| a native phone app | `BLOCKED_EXTERNAL_DEPENDENCY` | no Xcode (active developer directory is Command Line Tools), `iphoneos` SDK not locatable, **0 valid code-signing identities**, no `adb`, no `~/Library/Android/sdk`, no handset. The phone is therefore an installable web client, and no sentence in the shipped files claims more |
-| push notifications | not built | nothing in the tree sends one; Phase 58 built the receiving half (`/phone?focus=approvals`) and `watch/gateway.py` has an *outbound* bridge that is refused as evidence for a confirmation |
-| a real model answer | `PROVIDER_LIVE_VENDOR_CALL: NOT MEASURED` | an API key. `/health` answers `llm_enabled: false`, `~/.jarvis-forge/llm.env` does not exist, `JARVIS_LLM_API_KEY` is unset. Basic Mode — 52 deterministic routes — is the live path and answers every sentence in §3 without a model |
-| a published, notarised binary | not possible here | an ad-hoc signature is enough for this Mac, not for a build handed to strangers: that needs an Apple Developer identity and notarisation |
+| what                                | verdict                                             | the missing thing                                                                                                                                                                                                                                                                    |
+| ----------------------------------- | --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| reach Vantage from outside the wifi | `OFF_LAN_REACHABILITY: BLOCKED_EXTERNAL_DEPENDENCY` | a relay host reachable from outside this network (public address, a certificate the handset trusts, an outbound path). Router configuration, port forwarding and third-party tunnels are the user's network; every relay test here is loopback and is labelled local proof           |
+| a native phone app                  | `BLOCKED_EXTERNAL_DEPENDENCY`                       | no Xcode (active developer directory is Command Line Tools), `iphoneos` SDK not locatable, **0 valid code-signing identities**, no `adb`, no `~/Library/Android/sdk`, no handset. The phone is therefore an installable web client, and no sentence in the shipped files claims more |
+| push notifications                  | not built                                           | nothing in the tree sends one; Phase 58 built the receiving half (`/phone?focus=approvals`) and `watch/gateway.py` has an _outbound_ bridge that is refused as evidence for a confirmation                                                                                           |
+| a real model answer                 | `PROVIDER_LIVE_VENDOR_CALL: NOT MEASURED`           | an API key. `/health` answers `llm_enabled: false`, `~/.jarvis-forge/llm.env` does not exist, `JARVIS_LLM_API_KEY` is unset. Basic Mode — 52 deterministic routes — is the live path and answers every sentence in §3 without a model                                                |
+| a published, notarised binary       | not possible here                                   | an ad-hoc signature is enough for this Mac, not for a build handed to strangers: that needs an Apple Developer identity and notarisation                                                                                                                                             |
 
 ## 5. NOT MEASURED — no evidence either way
 
@@ -108,7 +108,7 @@ Stated as its own category because "not tested" and "tested and works" must not 
 ## 6. UNKNOWN — the truth is not available to this code
 
 - **Automation (Apple Events)** permission: macOS has no preflight query — the only probe is
-  sending the event, which *is* the permission. It reports UNKNOWN rather than inventing an answer.
+  sending the event, which _is_ the permission. It reports UNKNOWN rather than inventing an answer.
 - **Notifications**: same class.
 - **Whether a keystroke landed**: the characters go into a field Vantage cannot see into, so a
   successful send is reported unverified (61-E). An honest answer needs an accessibility read of the
@@ -134,8 +134,8 @@ the published growth chart was one command away from silently losing every phase
 
 Fixed additively — the literal list stays, and any row the file already holds that the list does not
 know about is kept — with three tests written red-first before the change
-(`tests/test_final_audit_the_publisher_forgets.py`), including the regression itself: *a row the
-harness did not write survives the harness*. Re-measured after the fix: running the documented
+(`tests/test_final_audit_the_publisher_forgets.py`), including the regression itself: _a row the
+harness did not write survives the harness_. Re-measured after the fix: running the documented
 command leaves all 53 rows and changes nothing in the committed file.
 
 **RESOLVED after this report was written**, in `audit/FINAL_AUDIT_COLD_START_NOT_A_STALL.md`: the
@@ -154,16 +154,16 @@ category.
 
 ## 8. USER DECISION REQUIRED — not defects, and not mine to make
 
-| decision | what is waiting on it |
-|---|---|
-| Install the login item for real? | The feature is built and proven against live launchd; the delivered app still reports `installed: false`. Nobody has left it installed, because a service that runs when nobody is watching is the user's call (57-A). |
-| Grant the bundle Accessibility? | Unlocks `show the current application`, Finder confirmation, **and the two desktop actuations**. Currently `REQUIRES_MANUAL_SYSTEM_SETTINGS` for the app while a terminal-launched host is `GRANTED` — the same question, two answers, by process (61-A). |
-| Press "Grant access" on the panel, at the laptop? | The only way to observe the first-run permission request raising a real dialog. It is implemented and tested against stubs and one real abort; it has not been seen prompting this machine (56-A). |
-| Clear the 5 deliberate `forged` audit rows? | Until then the chain reads BROKEN, correctly. Deleting real history to improve a metric is not something to do quietly. |
-| Clean the `phone_*` device rows? | 13 device rows, of which only one is a real handset; 9 are test names. |
-| Supply a model API key? | Turns on the gateway (chat + embeddings) and spends the user's credit. The adapters are built and locally proven; the key is the missing half. |
-| Run a router/tunnel step, or buy a relay host? | The only path from §4's `BLOCKED` to a measured off-LAN answer. |
-| Decide whether a sentence may ever reach a click | The hands exist with no front door (61-B). Giving them one is a design decision about prompt injection, not a feature toggle. |
+| decision                                          | what is waiting on it                                                                                                                                                                                                                                     |
+| ------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Install the login item for real?                  | The feature is built and proven against live launchd; the delivered app still reports `installed: false`. Nobody has left it installed, because a service that runs when nobody is watching is the user's call (57-A).                                    |
+| Grant the bundle Accessibility?                   | Unlocks `show the current application`, Finder confirmation, **and the two desktop actuations**. Currently `REQUIRES_MANUAL_SYSTEM_SETTINGS` for the app while a terminal-launched host is `GRANTED` — the same question, two answers, by process (61-A). |
+| Press "Grant access" on the panel, at the laptop? | The only way to observe the first-run permission request raising a real dialog. It is implemented and tested against stubs and one real abort; it has not been seen prompting this machine (56-A).                                                        |
+| Clear the 5 deliberate `forged` audit rows?       | Until then the chain reads BROKEN, correctly. Deleting real history to improve a metric is not something to do quietly.                                                                                                                                   |
+| Clean the `phone_*` device rows?                  | 13 device rows, of which only one is a real handset; 9 are test names.                                                                                                                                                                                    |
+| Supply a model API key?                           | Turns on the gateway (chat + embeddings) and spends the user's credit. The adapters are built and locally proven; the key is the missing half.                                                                                                            |
+| Run a router/tunnel step, or buy a relay host?    | The only path from §4's `BLOCKED` to a measured off-LAN answer.                                                                                                                                                                                           |
+| Decide whether a sentence may ever reach a click  | The hands exist with no front door (61-B). Giving them one is a design decision about prompt injection, not a feature toggle.                                                                                                                             |
 
 ## 9. What the delivered product answers today, on this machine
 
@@ -181,15 +181,15 @@ GET /metrics   failures total 47, recovered 10 (search_files 10/10 recovered,
 
 And the numbers this repository publishes, re-measured for the record:
 
-| | value |
-|---|---|
-| Tests / modules | **2387 passed · 0 failed** (77.2 s, six consecutive clean runs) / **90 modules** — was 2383 / 89 when this audit was written |
-| Tools / gated / rules | **148 / 32 / 52** |
-| HTTP surface | **122 route objects, 115 paths**, 118 route decorators |
-| Database tables | 32 |
-| Reports | 64 in `audit/` + this file |
-| Code | 75,250 versioned lines — 44,223 shipped, 30,409 tests |
-| Commits | local only — `c138807` (Phase 61 close) → `f08b999` (this audit) → the commit that fills in this hash. **Nothing pushed.** |
+|                       | value                                                                                                                        |
+| --------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| Tests / modules       | **2387 passed · 0 failed** (77.2 s, six consecutive clean runs) / **90 modules** — was 2383 / 89 when this audit was written |
+| Tools / gated / rules | **148 / 32 / 52**                                                                                                            |
+| HTTP surface          | **122 route objects, 115 paths**, 118 route decorators                                                                       |
+| Database tables       | 32                                                                                                                           |
+| Reports               | 64 in `audit/` + this file                                                                                                   |
+| Code                  | 75,250 versioned lines — 44,223 shipped, 30,409 tests                                                                        |
+| Commits               | local only — `c138807` (Phase 61 close) → `f08b999` (this audit) → the commit that fills in this hash. **Nothing pushed.**   |
 
 ## 10. Verdict, in one paragraph each
 
@@ -210,5 +210,5 @@ numbers, found while measuring, not while reviewing.
 
 ---
 
-*This audit's own commit is `f08b999`; the hash was written into §9 by the commit that
-follows it, because a number cannot be quoted before it exists.*
+_This audit's own commit is `f08b999`; the hash was written into §9 by the commit that
+follows it, because a number cannot be quoted before it exists._

@@ -70,6 +70,11 @@ class ProviderStatus(str, Enum):
     AUTH_ERROR = "auth_error"
     NETWORK_ERROR = "network_error"
     PROVIDER_ERROR = "provider_error"
+    #: The provider is not set up at all (no client id, no account connected).
+    #: Distinct from PROVIDER_ERROR because the fix is "finish the setup", not
+    #: "something is broken" -- and a screen that says the wrong one sends the
+    #: person looking in the wrong place.
+    NOT_CONFIGURED = "not_configured"
 
     @property
     def read_succeeded(self) -> bool:
@@ -246,6 +251,18 @@ def parse_datetime(value: str, default: Optional[datetime] = None) -> Optional[d
 
     Returns ``None`` when the value cannot be understood, so the caller can ask
     rather than guessing a time.
+
+    Two kinds of input are understood:
+
+    * the strict formats in ``_DATETIME_FORMATS`` — ``2026-10-23 09:00``;
+    * **ordinary English** — ``tomorrow at 9:00 AM``, ``next Friday at 3pm``,
+      ``in 2 hours``, ``9am tomorrow`` — via
+      :func:`jarvis.integrations.natural_time.parse_natural_datetime`.
+
+    The English form matters because of what it used to cost: the assistant
+    proposed ``"tomorrow at 9:00 AM"``, the person approved it, and the
+    calendar tool then refused the time — so the approval was spent on
+    nothing. One of twelve ordinary time phrases parsed before this.
     """
     if not value:
         return default
@@ -266,7 +283,12 @@ def parse_datetime(value: str, default: Optional[datetime] = None) -> Optional[d
             return parsed.replace(tzinfo=datetime.now().astimezone().tzinfo)
         except ValueError:
             continue
-    return None
+
+    # Ordinary English. Tried last, so an explicit format always wins and
+    # "2026-10-23" is never reinterpreted as something else.
+    from .natural_time import parse_natural_datetime
+
+    return parse_natural_datetime(text)
 
 
 def _iso(value: Optional[datetime]) -> Optional[str]:
@@ -776,8 +798,29 @@ class CalDavProvider(CalendarProvider):
 
 
 def get_calendar_provider(settings: Optional[Settings] = None) -> CalendarProvider:
-    """Prefer the configured CalDAV account; otherwise use the local calendar."""
+    """Prefer a connected Google account, then CalDAV, then the local calendar.
+
+    Order matters and is explicit: Google is the service this integration adds,
+    so a connected Google account wins. Both remote providers are only selected
+    when an account is actually usable -- ``available()`` checks for a stored
+    credential, not merely configuration, so a half-finished setup falls back to
+    the local calendar instead of routing every read to a provider that can
+    only fail.
+
+    The local calendar is always the fallback, never removed: it is where
+    local-only reminders live, and a disconnected Google must not take those
+    away.
+    """
     settings = settings or get_settings()
+
+    if settings.google_calendar_enabled:
+        from .google_calendar import GoogleCalendarProvider
+
+        google = GoogleCalendarProvider(settings)
+        if google.available():
+            log.info("calendar provider selected", extra_fields={"provider": google.name})
+            return google
+
     remote = CalDavProvider(settings)
     if remote.available():
         log.info("calendar provider selected", extra_fields={"provider": remote.name})
@@ -789,9 +832,23 @@ def describe_calendar(settings: Optional[Settings] = None) -> Dict[str, Any]:
     settings = settings or get_settings()
     remote = CalDavProvider(settings)
     local = LocalCalendarProvider(settings)
-    return {
+    out = {
         "active": get_calendar_provider(settings).name,
         "configured_account": remote.available(),
         "local": local.describe(),
         "writes_require_confirmation": True,
     }
+    # Report Google's connection honestly, including when it is not set up:
+    # a screen that shows nothing at all is indistinguishable from one that
+    # failed to load.
+    try:
+        from .google_auth import describe_google
+        from .google_calendar import GoogleCalendarProvider
+
+        out["google"] = {
+            "setup": describe_google(settings),
+            "provider": GoogleCalendarProvider(settings).describe(),
+        }
+    except Exception:                       # never let an optional provider break this
+        out["google"] = {"available": False, "error": "Google integration unavailable"}
+    return out

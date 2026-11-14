@@ -1,445 +1,452 @@
 {
- "phases": [
-  {
-   "phase": "9 audit",
-   "collected": 1002,
-   "passed": 875,
-   "failed": 126,
-   "note": "baseline as found"
-  },
-  {
-   "phase": "10 truth/authority",
-   "collected": 1002,
-   "passed": 998,
-   "failed": 3,
-   "note": "P0 verification authority fixed"
-  },
-  {
-   "phase": "11 real world",
-   "collected": 1132,
-   "passed": 1128,
-   "failed": 0,
-   "note": "first fully green run"
-  },
-  {
-   "phase": "12 command path",
-   "collected": 1147,
-   "passed": 1143,
-   "failed": 0,
-   "note": "typed sentence proven"
-  },
-  {
-   "phase": "13 dashboard truth",
-   "collected": 1160,
-   "passed": 1156,
-   "failed": 0,
-   "note": "state rendered from server fields"
-  },
-  {
-   "phase": "14 workflows",
-   "collected": 1185,
-   "passed": 1181,
-   "failed": 0,
-   "note": "multi-step plan reachable"
-  },
-  {
-   "phase": "15 acceptance",
-   "collected": 1207,
-   "passed": 1203,
-   "failed": 0,
-   "note": "18 commands run live; 6 false successes found"
-  },
-  {
-   "phase": "16 accountability",
-   "collected": 1222,
-   "passed": 1218,
-   "failed": 0,
-   "note": "route-level refusals audited"
-  },
-  {
-   "phase": "17 coherence",
-   "collected": 1251,
-   "passed": 1247,
-   "failed": 0,
-   "note": "response agrees with its ledger row"
-  },
-  {
-   "phase": "18 simulation",
-   "collected": 1263,
-   "passed": 1259,
-   "failed": 0,
-   "note": "simulated actuation no longer audited success"
-  },
-  {
-   "phase": "19 refusals",
-   "collected": 1280,
-   "passed": 1276,
-   "failed": 0,
-   "note": "dropped clauses named; VERIFIED IN PART"
-  },
-  {
-   "phase": "20 dated recall",
-   "collected": 1290,
-   "passed": 1286,
-   "failed": 0,
-   "note": "recalling by day, echoes labelled"
-  },
-  {
-   "phase": "21 speed",
-   "collected": 1304,
-   "passed": 1300,
-   "failed": 0,
-   "note": "bounded search, graceful source fallback"
-  },
-  {
-   "phase": "22 safety matrix",
-   "collected": 1321,
-   "passed": 1317,
-   "failed": 0,
-   "note": "ambiguous actuation refused; outages disclosed"
-  },
-  {
-   "phase": "23 deletion completeness",
-   "collected": 1331,
-   "passed": 1330,
-   "failed": 0,
-   "note": "three parked xfails fixed at their source"
-  },
-  {
-   "phase": "24 refusal vs detail",
-   "collected": 1343,
-   "passed": 1342,
-   "failed": 0,
-   "note": "a question stopped being labelled a refusal"
-  },
-  {
-   "phase": "25 desktop truth",
-   "collected": 1360,
-   "passed": 1359,
-   "failed": 0,
-   "note": "the self-test runs on a broken install"
-  },
-  {
-   "phase": "26 recovery trust",
-   "collected": 1417,
-   "passed": 1417,
-   "failed": 0,
-   "note": "retry keyed on re-running, frozen risk tiers"
-  },
-  {
-   "phase": "27 job re-run",
-   "collected": 1433,
-   "passed": 1433,
-   "failed": 0,
-   "note": "a failed step re-runs through the gate"
-  },
-  {
-   "phase": "28 reading is not writing",
-   "collected": 1466,
-   "passed": 1466,
-   "failed": 0,
-   "note": "a read request can no longer author a file"
-  },
-  {
-   "phase": "29 routes fill themselves",
-   "collected": 1487,
-   "passed": 1487,
-   "failed": 0,
-   "note": "a route asks instead of quoting a schema field"
-  },
-  {
-   "phase": "30 capabilities reachable",
-   "collected": 1555,
-   "passed": 1555,
-   "failed": 0,
-   "note": "a named capability is reached, or asked about"
-  },
-  {
-   "phase": "31 the device you named",
-   "collected": 1582,
-   "passed": 1582,
-   "failed": 0,
-   "note": "the plan's safety matrix holds 6 of 6 for the first time"
-  },
-  {
-   "phase": "32 one vocabulary one approval",
-   "collected": 1621,
-   "passed": 1621,
-   "failed": 0,
-   "note": "the router speaks the gateway's words; the approval names the device"
-  },
-  {
-   "phase": "33 questions carry their answers",
-   "collected": 1642,
-   "passed": 1642,
-   "failed": 0,
-   "note": "a question offers the ids it holds rather than demanding them"
-  },
-  {
-   "phase": "34 one deadline per sentence",
-   "collected": 1653,
-   "passed": 1653,
-   "failed": 0,
-   "note": "a network read that never stops being silent can no longer run forever"
-  },
-  {
-   "phase": "35 reach the laptop",
-   "collected": 1683,
-   "passed": 1683,
-   "failed": 0,
-   "note": "a phone drives the laptop over the LAN; the client page was tested in a browser and found three bugs"
-  },
-  {
-   "phase": "36 two applications",
-   "collected": 1710,
-   "passed": 1710,
-   "failed": 0,
-   "note": "the .app carries its own source; the phone gets a manifest, icons and a worker"
-  },
-  {
-   "phase": "37 vantage",
-   "collected": 1718,
-   "passed": 1718,
-   "failed": 0,
-   "note": "renamed where a person reads it; the wiring names counted identical before and after"
-  },
-  {
-   "phase": "38 scan to connect",
-   "collected": 1724,
-   "passed": 1724,
-   "failed": 0,
-   "note": "the laptop shows the address and a code; the dead URL was a server nobody had started"
-  },
-  {
-   "phase": "39 the folder and the agent",
-   "collected": 1775,
-   "passed": 1775,
-   "failed": 0,
-   "note": "launching a GUI was waiting for it to quit; the editor's own record, not my word, proves the folder opened"
-  },
-  {
-   "phase": "40 the copy still launches",
-   "collected": 1786,
-   "passed": 1786,
-   "failed": 0,
-   "note": "a copied app broke its own seal by being used, and outlived its window as a listening server"
-  },
-  {
-   "phase": "41 the sentences you say",
-   "collected": 1820,
-   "passed": 1820,
-   "failed": 0,
-   "note": "one refusal was a false claim about the build, and a hostname was being read as a filename"
-  },
-  {
-   "phase": "42 what a key buys",
-   "collected": 1827,
-   "passed": 1827,
-   "failed": 0,
-   "note": "a configured model had no caller: zero chat calls, two embedding calls"
-  },
-  {
-   "phase": "43 not a microphone",
-   "collected": 1833,
-   "passed": 1833,
-   "failed": 0,
-   "note": "a test passthrough answered a real audio clip with ok and confidence 1.0"
-  },
-  {
-   "phase": "44 answers, not command lists",
-   "collected": 1846,
-   "passed": 1846,
-   "failed": 0,
-   "note": "a question containing the word run was parsed as a command to execute"
-  },
-  {
-   "phase": "45a a key outside the bundle",
-   "collected": 1856,
-   "passed": 1856,
-   "failed": 0,
-   "note": "the natural place to put a key was inside the signed bundle, where it breaks the seal"
-  },
-  {
-   "phase": "46 buttons not typing",
-   "collected": 1884,
-   "passed": 1884,
-   "failed": 0,
-   "note": "the phone had three controls and hard-coded colours; the host was revocable over its own HTTP API"
-  },
-  {
-   "phase": "47 the mic was never blocked",
-   "collected": 1896,
-   "passed": 1896,
-   "failed": 0,
-   "note": "a main-thread deadlock and an x86_64 build had been reported for four phases as Apple refusing"
-  },
-  {
-   "phase": "48 a name that stays the same",
-   "collected": 1915,
-   "passed": 1915,
-   "failed": 0,
-   "note": "the lease changed mid-phase and broke seven tests; the address is now a .local name, resolved to prove ownership"
-  },
-  {
-   "phase": "49a the spec's names",
-   "collected": 1940,
-   "passed": 1939,
-   "failed": 0,
-   "note": "renames became aliases because a tool name is stored state; a device-less revoke revoked nothing"
-  },
-  {
-   "phase": "50 who answered",
-   "collected": 1961,
-   "passed": 1961,
-   "failed": 0,
-   "note": "the same permission helper gave four different answers from two callers, so the card now names its subject"
-  },
-  {
-   "phase": "51 two routes answered wrong",
-   "collected": 2013,
-   "passed": 2013,
-   "failed": 0,
-   "note": "open Mail was declined and open Calendar opened a website; the launch probe this phase wrote was satisfied by a widget extension"
-  },
-  {
-   "phase": "52 section six on the laptop",
-   "collected": 2065,
-   "passed": 2065,
-   "failed": 0,
-   "note": "Finder answered no AppleScript, a detached launch hid 'not installed', and the installed check denied Apple's own apps existed"
-  },
-  {
-   "phase": "53 vantage talks about itself",
-   "collected": 2129,
-   "passed": 2129,
-   "failed": 0,
-   "note": "\"are you running\" was probing for an installed app named \"You\"; self-state now comes from the policy engine, the audit and the task table"
-  },
-  {
-   "phase": "54 the two safety doors",
-   "collected": 2155,
-   "passed": 2155,
-   "failed": 0,
-   "note": "the stop trusted a cancel report until a test rolled the row back; restore deletes the denial instead of granting standing authority"
-  },
-  {
-   "phase": "55 a search that searches",
-   "collected": 2190,
-   "passed": 2190,
-   "failed": 0,
-   "note": "\"search Google for X\" was one route away from being answered by opening a home page; the outage path is 5.01s and says network"
-  },
-  {
-   "phase": "56 asking on purpose",
-   "collected": 2218,
-   "passed": 2218,
-   "failed": 0,
-   "note": "the request mode aborts in a non-bundle helper, so the answer is UNKNOWN with the reason carried -- never DENIED"
-  },
-  {
-   "phase": "57 the laptop stays reachable",
-   "collected": 2273,
-   "passed": 2273,
-   "failed": 0,
-   "note": "a user LaunchAgent with no secret and no inherited watchdog; uvicorn starts the app before it notices the port is taken, so the port is probed first"
-  },
-  {
-   "phase": "58 the phone is not the laptop",
-   "collected": 2305,
-   "passed": 2305,
-   "failed": 0,
-   "note": "phone sessions scoped at the moment the bootstrap is minted; the stop-polling guard was dead code until the browser proved it"
-  },
-  {
-   "phase": "59 a door with a bouncer",
-   "collected": 2332,
-   "passed": 2332,
-   "failed": 0,
-   "note": "relay proven on loopback only; a dead host answers 502, never an empty list -- and off-LAN reachability stays BLOCKED_EXTERNAL_DEPENDENCY"
-  },
-  {
-   "phase": "60 a second vendor",
-   "collected": 2355,
-   "passed": 2355,
-   "failed": 0,
-   "note": "the badge was the bug: one OpenAI-shaped POST at four call sites and no selection, so a second vendor would configure and then be called at the wrong address -- and a refused provider name still credited `model_used` with a model that never answered -- and reading the shipped readme corrected this phase's own claim about itself"
-  },
-  {
-   "phase": "61 hands behind a card",
-   "collected": 2380,
-   "passed": 2380,
-   "failed": 0,
-   "note": "Computer Use built and never demonstrated: accessibility is granted to a terminal-launched process while the app is not, so the gate that matters is the confirmation card -- and the recorder that kept the user's cursor still exposed the after-read trusting any string as an application name"
-  },
-  {
-   "phase": "final acceptance audit",
-   "collected": 2383,
-   "passed": 2383,
-   "failed": 0,
-   "note": "the harness that publishes every score deleted 16 phases of this history when it ran -- found while measuring, fixed additively, and guarded by a test that a row it did not write survives it"
-  },
-  {
-   "phase": "final audit addendum: the cold start",
-   "collected": 2387,
-   "passed": 2387,
-   "failed": 0,
-   "note": "the flake was a cold Vision initialisation measured against a steady-state budget; its cooldown turned one slow call into five failures -- traced inside a real run, fixed, then verified on six consecutive full suites"
-  },
-  {
-   "phase": "63 a surface names its subject",
-   "collected": 2396,
-   "passed": 2396,
-   "failed": 0,
-   "note": "the panel stopped saying 'cloud' when there are two vendors, the desktop read started saying which process it describes -- and the flake fix that had already been reported as done was fixed properly, after my own test poisoned the shared backend it meant to protect"
-  },
-  {
-   "phase": "64 the api shape is not for passersby",
-   "collected": 2408,
-   "passed": 2408,
-   "failed": 0,
-   "note": "phase 9 found the unauthenticated openapi.json and filed it P2; phase 59 closed the same three routes on the relay; the host was measured again today at 82,556 bytes readable from its own Wi-Fi address with no token, and is off by default behind JARVIS_API_DOCS"
-  },
-  {
-   "phase": "65 one stall five failures",
-   "collected": 2408,
-   "passed": 2408,
-   "failed": 0,
-   "note": "four causes of the Vision cluster measured and falsified; the blast radius reproduced on demand (5 failed -> 1 failed at the same injected stall); the trigger is still NOT ESTABLISHED and two published figures were re-measured because they had been copied from tool output that did not match the disk"
-  },
-  {
-   "phase": "66 the ledger read in two halves",
-   "collected": 2419,
-   "passed": 2419,
-   "failed": 0,
-   "note": "/metrics counted the newest 500 rows while verify_chain walked the oldest 500 of the same 525-row ledger; both now cover everything and say what they covered, the panel names the break, and the rebuilt bundle finally shipped Phase 64 after a 200/82,556-byte measurement proved the staged copy wins"
-  },
-  {
-   "phase": "67 the phone says who answers",
-   "collected": 2433,
-   "passed": 2433,
-   "failed": 0,
-   "note": "63-A and 63-B closed without widening the phone surface: the model line rides the HTML the phone already loads, PHONE_ALLOWED pinned by equality at 8 paths, and the provider refusal path now describes all four tasks; browser verified at 375x812 mobile emulation with 0 console messages"
-  },
-  {
-   "phase": "68 a job cannot outlive its process",
-   "collected": 2442,
-   "passed": 2442,
-   "failed": 0,
-   "note": "twelve phantom `running` jobs made get_current_task narrate dead work and made the emergency stop cancel a phantom with verified=True; refresh_status was called on eight write paths and at no process boundary, so startup now reconciles them -- 12 running rows -> 0, nothing deleted"
-  },
-  {
-   "phase": "69 the sentences were counted",
-   "collected": 2484,
-   "passed": 2484,
-   "failed": 0,
-   "note": "spec 19 measured for the first time: 101 labelled cases, false action rate 0.0% over 22 guard sentences once `empty the trash and wipe free space` was stopped from answering as a disk report; the harness itself was wrong twice (a sync stub and a dict return) before its numbers meant anything, and `run.py serve --port N` was found binding 8765, which is now refused rather than ignored"
-  },
-  {
-   "phase": "70 a typo is not a missing capability",
-   "collected": 2510,
-   "passed": 2510,
-   "failed": 0,
-   "note": "outcome accuracy 75.2% -> 89.1% and typo deviations 12 -> 0 for ten sentences naming registered capabilities; repair is accepted only on READ/LOW ungated tools after it first turned `root` into `robot`, and the one-word route kept Phase 30's decision that `the gizmo` is not a command"
-  }
- ]
+  "phases": [
+    {
+      "phase": "9 audit",
+      "collected": 1002,
+      "passed": 875,
+      "failed": 126,
+      "note": "baseline as found"
+    },
+    {
+      "phase": "10 truth/authority",
+      "collected": 1002,
+      "passed": 998,
+      "failed": 3,
+      "note": "P0 verification authority fixed"
+    },
+    {
+      "phase": "11 real world",
+      "collected": 1132,
+      "passed": 1128,
+      "failed": 0,
+      "note": "first fully green run"
+    },
+    {
+      "phase": "12 command path",
+      "collected": 1147,
+      "passed": 1143,
+      "failed": 0,
+      "note": "typed sentence proven"
+    },
+    {
+      "phase": "13 dashboard truth",
+      "collected": 1160,
+      "passed": 1156,
+      "failed": 0,
+      "note": "state rendered from server fields"
+    },
+    {
+      "phase": "14 workflows",
+      "collected": 1185,
+      "passed": 1181,
+      "failed": 0,
+      "note": "multi-step plan reachable"
+    },
+    {
+      "phase": "15 acceptance",
+      "collected": 1207,
+      "passed": 1203,
+      "failed": 0,
+      "note": "18 commands run live; 6 false successes found"
+    },
+    {
+      "phase": "16 accountability",
+      "collected": 1222,
+      "passed": 1218,
+      "failed": 0,
+      "note": "route-level refusals audited"
+    },
+    {
+      "phase": "17 coherence",
+      "collected": 1251,
+      "passed": 1247,
+      "failed": 0,
+      "note": "response agrees with its ledger row"
+    },
+    {
+      "phase": "18 simulation",
+      "collected": 1263,
+      "passed": 1259,
+      "failed": 0,
+      "note": "simulated actuation no longer audited success"
+    },
+    {
+      "phase": "19 refusals",
+      "collected": 1280,
+      "passed": 1276,
+      "failed": 0,
+      "note": "dropped clauses named; VERIFIED IN PART"
+    },
+    {
+      "phase": "20 dated recall",
+      "collected": 1290,
+      "passed": 1286,
+      "failed": 0,
+      "note": "recalling by day, echoes labelled"
+    },
+    {
+      "phase": "21 speed",
+      "collected": 1304,
+      "passed": 1300,
+      "failed": 0,
+      "note": "bounded search, graceful source fallback"
+    },
+    {
+      "phase": "22 safety matrix",
+      "collected": 1321,
+      "passed": 1317,
+      "failed": 0,
+      "note": "ambiguous actuation refused; outages disclosed"
+    },
+    {
+      "phase": "23 deletion completeness",
+      "collected": 1331,
+      "passed": 1330,
+      "failed": 0,
+      "note": "three parked xfails fixed at their source"
+    },
+    {
+      "phase": "24 refusal vs detail",
+      "collected": 1343,
+      "passed": 1342,
+      "failed": 0,
+      "note": "a question stopped being labelled a refusal"
+    },
+    {
+      "phase": "25 desktop truth",
+      "collected": 1360,
+      "passed": 1359,
+      "failed": 0,
+      "note": "the self-test runs on a broken install"
+    },
+    {
+      "phase": "26 recovery trust",
+      "collected": 1417,
+      "passed": 1417,
+      "failed": 0,
+      "note": "retry keyed on re-running, frozen risk tiers"
+    },
+    {
+      "phase": "27 job re-run",
+      "collected": 1433,
+      "passed": 1433,
+      "failed": 0,
+      "note": "a failed step re-runs through the gate"
+    },
+    {
+      "phase": "28 reading is not writing",
+      "collected": 1466,
+      "passed": 1466,
+      "failed": 0,
+      "note": "a read request can no longer author a file"
+    },
+    {
+      "phase": "29 routes fill themselves",
+      "collected": 1487,
+      "passed": 1487,
+      "failed": 0,
+      "note": "a route asks instead of quoting a schema field"
+    },
+    {
+      "phase": "30 capabilities reachable",
+      "collected": 1555,
+      "passed": 1555,
+      "failed": 0,
+      "note": "a named capability is reached, or asked about"
+    },
+    {
+      "phase": "31 the device you named",
+      "collected": 1582,
+      "passed": 1582,
+      "failed": 0,
+      "note": "the plan's safety matrix holds 6 of 6 for the first time"
+    },
+    {
+      "phase": "32 one vocabulary one approval",
+      "collected": 1621,
+      "passed": 1621,
+      "failed": 0,
+      "note": "the router speaks the gateway's words; the approval names the device"
+    },
+    {
+      "phase": "33 questions carry their answers",
+      "collected": 1642,
+      "passed": 1642,
+      "failed": 0,
+      "note": "a question offers the ids it holds rather than demanding them"
+    },
+    {
+      "phase": "34 one deadline per sentence",
+      "collected": 1653,
+      "passed": 1653,
+      "failed": 0,
+      "note": "a network read that never stops being silent can no longer run forever"
+    },
+    {
+      "phase": "35 reach the laptop",
+      "collected": 1683,
+      "passed": 1683,
+      "failed": 0,
+      "note": "a phone drives the laptop over the LAN; the client page was tested in a browser and found three bugs"
+    },
+    {
+      "phase": "36 two applications",
+      "collected": 1710,
+      "passed": 1710,
+      "failed": 0,
+      "note": "the .app carries its own source; the phone gets a manifest, icons and a worker"
+    },
+    {
+      "phase": "37 vantage",
+      "collected": 1718,
+      "passed": 1718,
+      "failed": 0,
+      "note": "renamed where a person reads it; the wiring names counted identical before and after"
+    },
+    {
+      "phase": "38 scan to connect",
+      "collected": 1724,
+      "passed": 1724,
+      "failed": 0,
+      "note": "the laptop shows the address and a code; the dead URL was a server nobody had started"
+    },
+    {
+      "phase": "39 the folder and the agent",
+      "collected": 1775,
+      "passed": 1775,
+      "failed": 0,
+      "note": "launching a GUI was waiting for it to quit; the editor's own record, not my word, proves the folder opened"
+    },
+    {
+      "phase": "40 the copy still launches",
+      "collected": 1786,
+      "passed": 1786,
+      "failed": 0,
+      "note": "a copied app broke its own seal by being used, and outlived its window as a listening server"
+    },
+    {
+      "phase": "41 the sentences you say",
+      "collected": 1820,
+      "passed": 1820,
+      "failed": 0,
+      "note": "one refusal was a false claim about the build, and a hostname was being read as a filename"
+    },
+    {
+      "phase": "42 what a key buys",
+      "collected": 1827,
+      "passed": 1827,
+      "failed": 0,
+      "note": "a configured model had no caller: zero chat calls, two embedding calls"
+    },
+    {
+      "phase": "43 not a microphone",
+      "collected": 1833,
+      "passed": 1833,
+      "failed": 0,
+      "note": "a test passthrough answered a real audio clip with ok and confidence 1.0"
+    },
+    {
+      "phase": "44 answers, not command lists",
+      "collected": 1846,
+      "passed": 1846,
+      "failed": 0,
+      "note": "a question containing the word run was parsed as a command to execute"
+    },
+    {
+      "phase": "45a a key outside the bundle",
+      "collected": 1856,
+      "passed": 1856,
+      "failed": 0,
+      "note": "the natural place to put a key was inside the signed bundle, where it breaks the seal"
+    },
+    {
+      "phase": "46 buttons not typing",
+      "collected": 1884,
+      "passed": 1884,
+      "failed": 0,
+      "note": "the phone had three controls and hard-coded colours; the host was revocable over its own HTTP API"
+    },
+    {
+      "phase": "47 the mic was never blocked",
+      "collected": 1896,
+      "passed": 1896,
+      "failed": 0,
+      "note": "a main-thread deadlock and an x86_64 build had been reported for four phases as Apple refusing"
+    },
+    {
+      "phase": "48 a name that stays the same",
+      "collected": 1915,
+      "passed": 1915,
+      "failed": 0,
+      "note": "the lease changed mid-phase and broke seven tests; the address is now a .local name, resolved to prove ownership"
+    },
+    {
+      "phase": "49a the spec's names",
+      "collected": 1940,
+      "passed": 1939,
+      "failed": 0,
+      "note": "renames became aliases because a tool name is stored state; a device-less revoke revoked nothing"
+    },
+    {
+      "phase": "50 who answered",
+      "collected": 1961,
+      "passed": 1961,
+      "failed": 0,
+      "note": "the same permission helper gave four different answers from two callers, so the card now names its subject"
+    },
+    {
+      "phase": "51 two routes answered wrong",
+      "collected": 2013,
+      "passed": 2013,
+      "failed": 0,
+      "note": "open Mail was declined and open Calendar opened a website; the launch probe this phase wrote was satisfied by a widget extension"
+    },
+    {
+      "phase": "52 section six on the laptop",
+      "collected": 2065,
+      "passed": 2065,
+      "failed": 0,
+      "note": "Finder answered no AppleScript, a detached launch hid 'not installed', and the installed check denied Apple's own apps existed"
+    },
+    {
+      "phase": "53 vantage talks about itself",
+      "collected": 2129,
+      "passed": 2129,
+      "failed": 0,
+      "note": "\"are you running\" was probing for an installed app named \"You\"; self-state now comes from the policy engine, the audit and the task table"
+    },
+    {
+      "phase": "54 the two safety doors",
+      "collected": 2155,
+      "passed": 2155,
+      "failed": 0,
+      "note": "the stop trusted a cancel report until a test rolled the row back; restore deletes the denial instead of granting standing authority"
+    },
+    {
+      "phase": "55 a search that searches",
+      "collected": 2190,
+      "passed": 2190,
+      "failed": 0,
+      "note": "\"search Google for X\" was one route away from being answered by opening a home page; the outage path is 5.01s and says network"
+    },
+    {
+      "phase": "56 asking on purpose",
+      "collected": 2218,
+      "passed": 2218,
+      "failed": 0,
+      "note": "the request mode aborts in a non-bundle helper, so the answer is UNKNOWN with the reason carried -- never DENIED"
+    },
+    {
+      "phase": "57 the laptop stays reachable",
+      "collected": 2273,
+      "passed": 2273,
+      "failed": 0,
+      "note": "a user LaunchAgent with no secret and no inherited watchdog; uvicorn starts the app before it notices the port is taken, so the port is probed first"
+    },
+    {
+      "phase": "58 the phone is not the laptop",
+      "collected": 2305,
+      "passed": 2305,
+      "failed": 0,
+      "note": "phone sessions scoped at the moment the bootstrap is minted; the stop-polling guard was dead code until the browser proved it"
+    },
+    {
+      "phase": "59 a door with a bouncer",
+      "collected": 2332,
+      "passed": 2332,
+      "failed": 0,
+      "note": "relay proven on loopback only; a dead host answers 502, never an empty list -- and off-LAN reachability stays BLOCKED_EXTERNAL_DEPENDENCY"
+    },
+    {
+      "phase": "60 a second vendor",
+      "collected": 2355,
+      "passed": 2355,
+      "failed": 0,
+      "note": "the badge was the bug: one OpenAI-shaped POST at four call sites and no selection, so a second vendor would configure and then be called at the wrong address -- and a refused provider name still credited `model_used` with a model that never answered -- and reading the shipped readme corrected this phase's own claim about itself"
+    },
+    {
+      "phase": "61 hands behind a card",
+      "collected": 2380,
+      "passed": 2380,
+      "failed": 0,
+      "note": "Computer Use built and never demonstrated: accessibility is granted to a terminal-launched process while the app is not, so the gate that matters is the confirmation card -- and the recorder that kept the user's cursor still exposed the after-read trusting any string as an application name"
+    },
+    {
+      "phase": "final acceptance audit",
+      "collected": 2383,
+      "passed": 2383,
+      "failed": 0,
+      "note": "the harness that publishes every score deleted 16 phases of this history when it ran -- found while measuring, fixed additively, and guarded by a test that a row it did not write survives it"
+    },
+    {
+      "phase": "final audit addendum: the cold start",
+      "collected": 2387,
+      "passed": 2387,
+      "failed": 0,
+      "note": "the flake was a cold Vision initialisation measured against a steady-state budget; its cooldown turned one slow call into five failures -- traced inside a real run, fixed, then verified on six consecutive full suites"
+    },
+    {
+      "phase": "63 a surface names its subject",
+      "collected": 2396,
+      "passed": 2396,
+      "failed": 0,
+      "note": "the panel stopped saying 'cloud' when there are two vendors, the desktop read started saying which process it describes -- and the flake fix that had already been reported as done was fixed properly, after my own test poisoned the shared backend it meant to protect"
+    },
+    {
+      "phase": "64 the api shape is not for passersby",
+      "collected": 2408,
+      "passed": 2408,
+      "failed": 0,
+      "note": "phase 9 found the unauthenticated openapi.json and filed it P2; phase 59 closed the same three routes on the relay; the host was measured again today at 82,556 bytes readable from its own Wi-Fi address with no token, and is off by default behind JARVIS_API_DOCS"
+    },
+    {
+      "phase": "65 one stall five failures",
+      "collected": 2408,
+      "passed": 2408,
+      "failed": 0,
+      "note": "four causes of the Vision cluster measured and falsified; the blast radius reproduced on demand (5 failed -> 1 failed at the same injected stall); the trigger is still NOT ESTABLISHED and two published figures were re-measured because they had been copied from tool output that did not match the disk"
+    },
+    {
+      "phase": "66 the ledger read in two halves",
+      "collected": 2419,
+      "passed": 2419,
+      "failed": 0,
+      "note": "/metrics counted the newest 500 rows while verify_chain walked the oldest 500 of the same 525-row ledger; both now cover everything and say what they covered, the panel names the break, and the rebuilt bundle finally shipped Phase 64 after a 200/82,556-byte measurement proved the staged copy wins"
+    },
+    {
+      "phase": "67 the phone says who answers",
+      "collected": 2433,
+      "passed": 2433,
+      "failed": 0,
+      "note": "63-A and 63-B closed without widening the phone surface: the model line rides the HTML the phone already loads, PHONE_ALLOWED pinned by equality at 8 paths, and the provider refusal path now describes all four tasks; browser verified at 375x812 mobile emulation with 0 console messages"
+    },
+    {
+      "phase": "68 a job cannot outlive its process",
+      "collected": 2442,
+      "passed": 2442,
+      "failed": 0,
+      "note": "twelve phantom `running` jobs made get_current_task narrate dead work and made the emergency stop cancel a phantom with verified=True; refresh_status was called on eight write paths and at no process boundary, so startup now reconciles them -- 12 running rows -> 0, nothing deleted"
+    },
+    {
+      "phase": "69 the sentences were counted",
+      "collected": 2484,
+      "passed": 2484,
+      "failed": 0,
+      "note": "spec 19 measured for the first time: 101 labelled cases, false action rate 0.0% over 22 guard sentences once `empty the trash and wipe free space` was stopped from answering as a disk report; the harness itself was wrong twice (a sync stub and a dict return) before its numbers meant anything, and `run.py serve --port N` was found binding 8765, which is now refused rather than ignored"
+    },
+    {
+      "phase": "70 a typo is not a missing capability",
+      "collected": 2510,
+      "passed": 2510,
+      "failed": 0,
+      "note": "outcome accuracy 75.2% -> 89.1% and typo deviations 12 -> 0 for ten sentences naming registered capabilities; repair is accepted only on READ/LOW ungated tools after it first turned `root` into `robot`, and the one-word route kept Phase 30's decision that `the gizmo` is not a command"
+    },
+    {
+      "phase": "71 the phone says who answers and who approves",
+      "collected": 2510,
+      "passed": 2510,
+      "failed": 0,
+      "note": "phone authority + credential security: session credential moved out of a JS-readable global into an HttpOnly cookie, and a same-surface session can no longer approve its own gated action (a phone cannot approve itself, a dashboard still can). Transcribed from PHASE71_PHONE_AUTHORITY_AND_CREDENTIAL_SECURITY.md (\"Suite 2510 passed, 0 failed\"); 72's full run timed out, so 71 is the newest phase with a measured number."
+    }
+  ]
 }

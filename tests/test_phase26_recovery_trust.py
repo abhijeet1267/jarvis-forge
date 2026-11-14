@@ -546,7 +546,8 @@ def test_the_confirmed_path_does_not_re_execute_an_approved_action(core, tmp_are
         verdict = core.policy.evaluate(PlannedAction(
             step_id=1, tool="delete_file", params={"path": str(victim)},
             device="laptop_main"))
-        asyncio.run(core.resolve_confirmation(verdict.confirmation_id, True))
+        asyncio.run(core.resolve_confirmation(
+            verdict.confirmation_id, True, session_id="laptop"))
     finally:
         core.tools._handlers["delete_file"] = original
 

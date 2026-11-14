@@ -26,25 +26,25 @@ to a real Vantage and see what macOS actually does.
 Fixture: `/tmp/p43.aiff` — 22 kHz mono AIFF, `say -o … "what is my battery"`, the same clip
 Phase 43 used.
 
-| # | Setup | Result |
-|---|---|---|
-| 1 | Isolated instance, fresh home, `.tcc_blocked` absent | `/voice/status` → **`can_listen: true`** — before anything had ever been tried |
-| 2 | POST the clip to it | `ok: false`, `error: macOS Speech blocked this process… Run JARVIS from a bundled host`, **and `can_listen: true` in the same response** |
-| 3 | Read the crash report | `namespace: TCC`, `__TCC_CRASHING_DUE_TO_PRIVACY_VIOLATION__`, "attempted to access privacy-sensitive data without a usage description" |
-| 4 | Build the helper inside its **own** signed `.app` with `NSSpeechRecognitionUsageDescription` present | still SIGABRT — so "be a bundled host" is not the variable |
-| 5 | Clear the stale marker, launch the **delivered** app with `open`, POST the clip | SIGABRT gone. New failure: `speech authorisation request timed out` after 20 s |
-| 6 | User confirms a prompt appeared and clicks **Allow**; retry | `speech authorisation request timed out` → then `transcription timed out` after 60 s |
-| 7 | Read the helper | both waits block the **main thread** on a `DispatchSemaphore`, while `SFSpeechRecognitionTask` delivers on the **main queue** |
-| 8 | Fix the waits; build the helper for the machine's own architecture; retry | **`ok: true, text: "What is my battery", confidence: 0.94, duration_ms: 637`** |
+| #   | Setup                                                                                                | Result                                                                                                                                   |
+| --- | ---------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Isolated instance, fresh home, `.tcc_blocked` absent                                                 | `/voice/status` → **`can_listen: true`** — before anything had ever been tried                                                           |
+| 2   | POST the clip to it                                                                                  | `ok: false`, `error: macOS Speech blocked this process… Run JARVIS from a bundled host`, **and `can_listen: true` in the same response** |
+| 3   | Read the crash report                                                                                | `namespace: TCC`, `__TCC_CRASHING_DUE_TO_PRIVACY_VIOLATION__`, "attempted to access privacy-sensitive data without a usage description"  |
+| 4   | Build the helper inside its **own** signed `.app` with `NSSpeechRecognitionUsageDescription` present | still SIGABRT — so "be a bundled host" is not the variable                                                                               |
+| 5   | Clear the stale marker, launch the **delivered** app with `open`, POST the clip                      | SIGABRT gone. New failure: `speech authorisation request timed out` after 20 s                                                           |
+| 6   | User confirms a prompt appeared and clicks **Allow**; retry                                          | `speech authorisation request timed out` → then `transcription timed out` after 60 s                                                     |
+| 7   | Read the helper                                                                                      | both waits block the **main thread** on a `DispatchSemaphore`, while `SFSpeechRecognitionTask` delivers on the **main queue**            |
+| 8   | Fix the waits; build the helper for the machine's own architecture; retry                            | **`ok: true, text: "What is my battery", confidence: 0.94, duration_ms: 637`**                                                           |
 
 ### The two real causes, both ours
 
-* **A self-deadlock.** `jarvis/voice/native/macos_speech.swift` waited on a semaphore on the
-  main thread for callbacks that Apple delivers *on the main queue*. The answer could never
+- **A self-deadlock.** `jarvis/voice/native/macos_speech.swift` waited on a semaphore on the
+  main thread for callbacks that Apple delivers _on the main queue_. The answer could never
   arrive on the thread that was blocking it, so every call ran to its deadline — and a timeout
   is indistinguishable from a refusal in the error text. This is why the failure survived
   twelve phases: it looked exactly like the thing it was blamed on.
-* **An inherited architecture.** The helper the app built was `x86_64` on an `arm64` machine
+- **An inherited architecture.** The helper the app built was `x86_64` on an `arm64` machine
   (`file` on both, measured), taking **4m08s** to compile; the same source built natively takes
   **2.2 s**. The target was inherited from the parent, never chosen. `swiftc` is now pinned to
   `-target <platform.machine()>-apple-macosx11.0`.
@@ -58,12 +58,12 @@ seconds: click Allow.
 backend, persisted in the data home (`.proven_<backend>` written only by a transcription that
 returned non-empty text; the existing `.tcc_blocked` stays the refusal record, so no migration).
 
-| field | meaning | fresh install | after this phase, on this machine |
-|---|---|---|---|
-| `available()` | may be tried | true | true |
-| `state` | what trying it last revealed | `untested` | `proven` |
-| `can_listen` | **has** transcribed here | **false** | true |
-| `may_try` | a client should still offer its mic | true | true |
+| field         | meaning                             | fresh install | after this phase, on this machine |
+| ------------- | ----------------------------------- | ------------- | --------------------------------- |
+| `available()` | may be tried                        | true          | true                              |
+| `state`       | what trying it last revealed        | `untested`    | `proven`                          |
+| `can_listen`  | **has** transcribed here            | **false**     | true                              |
+| `may_try`     | a client should still offer its mic | true          | true                              |
 
 `can_listen` becoming "proven only" would have made the first transcription impossible — the
 attempt is the only thing that produces the proof — so the phone client now gates on `may_try`
@@ -107,7 +107,7 @@ test_voice_status_exposes_the_state_not_only_a_boolean
 ```
 
 Honest note on order: the two Swift fixes were made and proven live **before** this file
-existed, because the measurement *was* the experiment — steps 7 and 8 are the fix and its
+existed, because the measurement _was_ the experiment — steps 7 and 8 are the fix and its
 proof, not a red/green cycle. Everything in §3 and §4 was written red-first (6 failed, 4
 passed on the first run, then 3 failures from my own test bugs: patching read-only
 properties, a fake process with no `communicate()`, and a missing import).
@@ -149,39 +149,39 @@ tool → verification → reply → spoken.**
 
 ## 7. Numbers, re-measured
 
-| | before | after | how |
-|---|---|---|---|
-| Test suite | 1884 passed · 0 failed | **1896 passed · 0 failed · 0 skipped** (70.9 s) | `JARVIS_HOME=$(mktemp -d) .venv/bin/python -m pytest -q` |
-| Phase 47 tests | 0 | **12** | one new module |
-| Test modules | 73 | **74** | `ls tests/test_*.py | wc -l` |
-| Phase reports | 48 | **49** | `ls audit/*.md | wc -l` |
-| Voice input on this machine | "environment-blocked" since Phase 43 | **working, on-device, 637 ms, 0.94 confidence** | live, above |
-| Helper build time | 4m08s (x86_64, inherited) | **~2 s (arm64, pinned)** | measured both ways |
-| First-call cost after a fresh install | unbounded (blocked the request) | 17.5 s including the rebuild | live, above |
+|                                       | before                               | after                                           | how                                                      |
+| ------------------------------------- | ------------------------------------ | ----------------------------------------------- | -------------------------------------------------------- |
+| Test suite                            | 1884 passed · 0 failed               | **1896 passed · 0 failed · 0 skipped** (70.9 s) | `JARVIS_HOME=$(mktemp -d) .venv/bin/python -m pytest -q` |
+| Phase 47 tests                        | 0                                    | **12**                                          | one new module                                           |
+| Test modules                          | 73                                   | **74**                                          | `ls tests/test_*.py                                      | wc -l` |
+| Phase reports                         | 48                                   | **49**                                          | `ls audit/*.md                                           | wc -l` |
+| Voice input on this machine           | "environment-blocked" since Phase 43 | **working, on-device, 637 ms, 0.94 confidence** | live, above                                              |
+| Helper build time                     | 4m08s (x86_64, inherited)            | **~2 s (arm64, pinned)**                        | measured both ways                                       |
+| First-call cost after a fresh install | unbounded (blocked the request)      | 17.5 s including the rebuild                    | live, above                                              |
 
 ## 8. Open items
 
-* **47-A — the app exited cleanly during the first experiment and the cause is not
+- **47-A — the app exited cleanly during the first experiment and the cause is not
   established.** `~/.jarvis-forge/app.log` ends with uvicorn's `Shutting down` / `Waiting for
-  connections to close`, which is the SIGTERM path — a deliberate stop, not a crash, and no
+connections to close`, which is the SIGTERM path — a deliberate stop, not a crash, and no
   crash report exists for either process. The user was asked and it may simply have been them
   quitting the panel; it happened while a 90-second request was in flight and while `swiftc`
   children were running, so an unattributed coincidence is the honest description. If it
   recurs, the place to look is the launcher's quit path against a long-running child.
-* **47-B — `proven` is per-home, and it is a cache, not a promise.** Delete the data directory
+- **47-B — `proven` is per-home, and it is a cache, not a promise.** Delete the data directory
   and the machine is `untested` again; grant the permission and then revoke it in System
   Settings and the marker still says `proven` until an attempt fails. A state that is only
   written by success can go stale in exactly that direction.
-* **47-C — the first attempt still costs a helper build.** 17.5 s on a cold home, inside the
+- **47-C — the first attempt still costs a helper build.** 17.5 s on a cold home, inside the
   request. The arch pin made it seconds rather than minutes; shipping the compiled helper in
   the bundle (or building it at first launch instead of first utterance) would remove it.
-* **47-D — a spoken command cannot yet reach a *risky* action from the phone in one gesture.**
+- **47-D — a spoken command cannot yet reach a _risky_ action from the phone in one gesture.**
   The mic path is transcribe → `/command`, and an action needing confirmation raises a card the
   phone then approves — two round trips, which is correct for safety and slower than speaking.
-* **47-E — `whisper_cpp` and `openai_whisper` remain `untested`**, so the three-state machine is
+- **47-E — `whisper_cpp` and `openai_whisper` remain `untested`**, so the three-state machine is
   proven end to end on one backend only; the other two share the code but have never earned
   their own `proven` marker here.
-* **47-F — the plan's literal acceptance sentence was not used.** The loop was proven with
+- **47-F — the plan's literal acceptance sentence was not used.** The loop was proven with
   "what is my battery" because it is read-only. `"Vantage, open VS Code."` is reachable by the
   same path and was deliberately not fired without asking, since it opens an editor on the
   user's screen.

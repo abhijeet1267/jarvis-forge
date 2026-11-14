@@ -20,15 +20,15 @@ Configuration in force, read back from `/health`:
 
 ## 9.1 Authentication and authorization — engine PASSes, but see **API-0**
 
-| probe | expectation | observed | verdict |
-|---|---|---|---|
-| `GET /health` no token | 401 | `401 {"detail":"Missing or invalid API token."}` | **PASS** |
-| `GET /health` wrong token | 401 | `401 {"detail":"Missing or invalid API token."}` | **PASS** |
-| `GET /health` `X-JARVIS-Token` | 200 | `200` | **PASS** |
-| `GET /health` `Authorization: Bearer …` | 200 | `200` | **PASS** |
-| `POST /confirm/{id}` unauthenticated | 401 | `401` | **PASS** |
-| `POST /command` unauthenticated | 401 | `401` | **PASS** |
-| `POST /privacy/delete` (`confirm:true`) unauthenticated | 401 | `401` | **PASS** |
+| probe                                                   | expectation | observed                                         | verdict  |
+| ------------------------------------------------------- | ----------- | ------------------------------------------------ | -------- |
+| `GET /health` no token                                  | 401         | `401 {"detail":"Missing or invalid API token."}` | **PASS** |
+| `GET /health` wrong token                               | 401         | `401 {"detail":"Missing or invalid API token."}` | **PASS** |
+| `GET /health` `X-JARVIS-Token`                          | 200         | `200`                                            | **PASS** |
+| `GET /health` `Authorization: Bearer …`                 | 200         | `200`                                            | **PASS** |
+| `POST /confirm/{id}` unauthenticated                    | 401         | `401`                                            | **PASS** |
+| `POST /command` unauthenticated                         | 401         | `401`                                            | **PASS** |
+| `POST /privacy/delete` (`confirm:true`) unauthenticated | 401         | `401`                                            | **PASS** |
 
 Every destructive route sits behind the same `Protected` dependency
 (`jarvis/api/app.py:357-366` for `/confirm/{confirmation_id}`). Token comparison is
@@ -62,14 +62,14 @@ async def auth_token(request: Request) -> Dict[str, Any]:
 Measured against a live server configured with a known fixture token, server freshly
 started with `JARVIS_HOME` under `/tmp`:
 
-| probe | result |
-|---|---|
-| `GET /auth/token`, **no `Origin`, no token** | `HTTP 200` → `{"auth_enabled":true,"token":"<the live token>"}` |
-| same with `Host: localhost:8765` | `HTTP 200` → live token |
-| with `Origin: http://evil.test` | `HTTP 403 {"detail":"Origin not allowed."}` |
-| with `Origin: http://127.0.0.1:8765` | `HTTP 200` → live token |
-| leaked token compared to configured token | **identical, length 31, `matches: YES`** |
-| `POST /command` using only the leaked token | **`HTTP 200`**, real answer returned: `"It is 21:00 on Friday, 25 September 2026."` |
+| probe                                        | result                                                                              |
+| -------------------------------------------- | ----------------------------------------------------------------------------------- |
+| `GET /auth/token`, **no `Origin`, no token** | `HTTP 200` → `{"auth_enabled":true,"token":"<the live token>"}`                     |
+| same with `Host: localhost:8765`             | `HTTP 200` → live token                                                             |
+| with `Origin: http://evil.test`              | `HTTP 403 {"detail":"Origin not allowed."}`                                         |
+| with `Origin: http://127.0.0.1:8765`         | `HTTP 200` → live token                                                             |
+| leaked token compared to configured token    | **identical, length 31, `matches: YES`**                                            |
+| `POST /command` using only the leaked token  | **`HTTP 200`**, real answer returned: `"It is 21:00 on Friday, 25 September 2026."` |
 
 The token is **not reproduced in this report**; the fixture value was invented by the audit.
 The server was terminated afterwards.
@@ -79,13 +79,13 @@ The server was terminated afterwards.
 The same secret is also embedded in the **unauthenticated** dashboard HTML, so `/auth/token`
 is not the only leak. Plain `curl`, no `Origin`, no token, measured:
 
-| route | status | bytes | occurrences of the live token in body |
-|---|---|---|---|
-| `GET /auth/token` | **200** | 41 | **1** |
-| `GET /dashboard` | **200** | 22,775 | **1** |
-| `GET /openapi.json` | **200** | 71,047 | 0 — but see below |
-| `GET /docs` | **200** | 1,016 | 0 |
-| `GET /redoc` | **200** | 898 | 0 |
+| route               | status  | bytes  | occurrences of the live token in body |
+| ------------------- | ------- | ------ | ------------------------------------- |
+| `GET /auth/token`   | **200** | 41     | **1**                                 |
+| `GET /dashboard`    | **200** | 22,775 | **1**                                 |
+| `GET /openapi.json` | **200** | 71,047 | 0 — but see below                     |
+| `GET /docs`         | **200** | 1,016  | 0                                     |
+| `GET /redoc`        | **200** | 898    | 0                                     |
 
 `/dashboard` has no `Origin` guard at all, because it is written to be opened by direct
 navigation — so the bootstrap token is handed to any local process that asks for the page.
@@ -96,31 +96,31 @@ the audit records that the intended behaviour discloses the master credential.
 96 paths, including `/command`, `/confirm/{confirmation_id}`, `/privacy/delete`, `/memory`,
 `/memory/export`, `/memory/overview`, `/voice/command` and `/command/stream`, with their
 parameter schemas. An unauthenticated local process therefore learns both the full attack
-surface *and* the credential to use it, in two requests.
+surface _and_ the credential to use it, in two requests.
 
 This resolves the earlier "is `/docs` mounted?" open question in §9.10: **yes, and
 unauthenticated** — API-6 is closed as FALSE-by-measurement rather than UNVERIFIED.
 
 ### Why the stated defence does not hold
 
-The docstring's argument is a *browser* argument, and it is correct for browsers: CORS is
+The docstring's argument is a _browser_ argument, and it is correct for browsers: CORS is
 default-deny (9.3) and the `Host` allowlist stops DNS rebinding, so a foreign page cannot
 read the response. But the threat model for a bearer token is not "a foreign webpage" — it
 is **any other process on the machine**, and:
 
-* `curl`, `wget`, python, node, a native-messaging peer, or any local binary sends **no
+- `curl`, `wget`, python, node, a native-messaging peer, or any local binary sends **no
   `Origin` header**, so the `if origin and ...` test short-circuits and the token is handed
   over at `HTTP 200`.
-* The server binds `127.0.0.1` and every loopback `Host` spelling is allowed
+- The server binds `127.0.0.1` and every loopback `Host` spelling is allowed
   (`localhost:8765`, `127.0.0.1:8765`, `[::1]:8765`), so the reachability bar is "can open a
   TCP socket to loopback".
-* No rate limiting applied to this route in the probe run, so it is not even slow to hit.
+- No rate limiting applied to this route in the probe run, so it is not even slow to hit.
 
 This makes the 0600 protection on `$JARVIS_HOME/api_token`
 (`jarvis/security/auth.py:89-100`, deliberately `O_CREAT, 0o600` + `os.chmod` so the secret
 "is never briefly world-readable") moot: the same secret is served over unauthenticated
 HTTP. It also inverts the design claim in the module docstring —
-*"Token auth on every endpoint"* — into: every endpoint is protected by a secret that one
+_"Token auth on every endpoint"_ — into: every endpoint is protected by a secret that one
 endpoint gives away.
 
 ### Blast radius
@@ -163,13 +163,13 @@ static assets and any mounted docs. Every other route examined carries `Protecte
 
 ## 9.2 Host-header validation and DNS rebinding — PASS, one soft edge
 
-| `Host:` header | expected | observed |
-|---|---|---|
-| `evil.example.com` | refuse | `400 {"detail":"Host header must be a loopback address."}` |
-| `10.0.0.5:8765` | refuse | `400` same |
-| `localhost:8765` | accept | `401` (host accepted, auth then applied) |
-| `[::1]:8765` | accept | `401` |
-| `0.0.0.0:8765` | **refuse?** | **`401` — accepted** |
+| `Host:` header     | expected    | observed                                                   |
+| ------------------ | ----------- | ---------------------------------------------------------- |
+| `evil.example.com` | refuse      | `400 {"detail":"Host header must be a loopback address."}` |
+| `10.0.0.5:8765`    | refuse      | `400` same                                                 |
+| `localhost:8765`   | accept      | `401` (host accepted, auth then applied)                   |
+| `[::1]:8765`       | accept      | `401`                                                      |
+| `0.0.0.0:8765`     | **refuse?** | **`401` — accepted**                                       |
 
 Rebinding defence is real and enforced before authentication, so a page that resolves a
 hostile name to `127.0.0.1` is stopped by the `Host` check. The allowlist is
@@ -184,10 +184,10 @@ Recommend removing it; no change made.
 
 ## 9.3 CORS — PASS
 
-| probe | observed |
-|---|---|
+| probe                                         | observed                                                                    |
+| --------------------------------------------- | --------------------------------------------------------------------------- |
 | `GET /health` with `Origin: http://evil.test` | `401`, **no `access-control-allow-origin` header on any response examined** |
-| header inventory across 12 responses | `access-control-allow-origin` present on **0 of 12** |
+| header inventory across 12 responses          | `access-control-allow-origin` present on **0 of 12**                        |
 
 `cors_origins` defaults to an empty list (`jarvis/config.py:53`), so no cross-origin grant
 is emitted. `settings.cors_origins` was reported by `/health` as exactly
@@ -215,15 +215,15 @@ Cosmetic. **P4.**
 
 ## 9.5 Input robustness — mostly PASS, one real gap
 
-| probe | expected | observed | verdict |
-|---|---|---|---|
-| truncated JSON `{"text": "hi"` | 4xx structured | `422 [{"type":"json_invalid","loc":["body",13],"msg":"JSON decode error"}]` | **PASS** |
-| empty body | 422 | `422 [{"type":"missing","loc":["body"],"msg":"Field required"}]` | **PASS** |
-| `{"text":""}` | 422 with reason | `422 [{"type":"value_error","loc":["body","text"],"msg":"Value error, command text must not be empty"}]` | **PASS** |
-| 10 KB / 200 KB body | handled | handled (rate-limited in that run) | — |
-| **2 MB body** | reject cleanly with `413` | **`200`, processed in 4071 ms** | **FAIL — P2** |
-| 2 MB body (repeat, saturated limiter) | — | connection closed: `[Errno 32] Broken pipe` | inconsistent |
-| 20 MB body | `413` | `[Errno 32] Broken pipe` | no clean status |
+| probe                                 | expected                  | observed                                                                                                 | verdict         |
+| ------------------------------------- | ------------------------- | -------------------------------------------------------------------------------------------------------- | --------------- |
+| truncated JSON `{"text": "hi"`        | 4xx structured            | `422 [{"type":"json_invalid","loc":["body",13],"msg":"JSON decode error"}]`                              | **PASS**        |
+| empty body                            | 422                       | `422 [{"type":"missing","loc":["body"],"msg":"Field required"}]`                                         | **PASS**        |
+| `{"text":""}`                         | 422 with reason           | `422 [{"type":"value_error","loc":["body","text"],"msg":"Value error, command text must not be empty"}]` | **PASS**        |
+| 10 KB / 200 KB body                   | handled                   | handled (rate-limited in that run)                                                                       | —               |
+| **2 MB body**                         | reject cleanly with `413` | **`200`, processed in 4071 ms**                                                                          | **FAIL — P2**   |
+| 2 MB body (repeat, saturated limiter) | —                         | connection closed: `[Errno 32] Broken pipe`                                                              | inconsistent    |
+| 20 MB body                            | `413`                     | `[Errno 32] Broken pipe`                                                                                 | no clean status |
 
 **Finding:** there is **no request body size limit**. A 2 MB `/command` payload was
 accepted and pushed through the full planner pipeline, costing **4.07 s** of server time for
@@ -241,7 +241,7 @@ body ceiling → `413`). **P2.** No change made.
 150 sequential `GET /health` requests issued as fast as the client could make them:
 
 ```json
-{ "200": 118, "429": 32 }     // elapsed 0.2 s
+{ "200": 118, "429": 32 } // elapsed 0.2 s
 ```
 
 The bucket admits a burst of 120 (configured `rate_limit_burst = 120`) then returns
@@ -271,20 +271,20 @@ deletable.
 
 ## 9.8 Endpoint inventory and exposure
 
-| endpoint | status | observed |
-|---|---|---|
-| `GET /` | 200 | `{"name":"JARVIS Forge Core","version":"0.1.0","tools":126}` — **public metadata, no auth needed to read the version** |
-| `GET /health` | 200 | full security/privacy/device posture — authenticated |
-| `GET /tools` | 200 | 126 tools with `risk`, `risk_label`, `requires_confirmation`, `reversible`, `parameters` — authenticated |
-| `GET /devices` | 200 | 5 devices with capabilities and `auth_state` |
-| `GET /audit` | 200 | hashed chain records |
-| `GET /metrics` | 200 | `{"failures":{"total_failures":0,...},"audit":{"sampled":2,...}}` |
-| `GET /failures` | 200 | `[]` |
-| `GET /confirmations` | 200 | `[]` |
-| `GET /voice/status` | 200 | mic permission state, devices, TTS/STT backends |
-| `GET /watch/status` | 200 | `mode: simulate`, `paired: false`, `online: false`, outbox counts |
-| `GET /docs`, `/redoc`, `/openapi.json` | **404/429** | not reachable in these probes once the limiter engaged; **UNVERIFIED whether they are mounted** — see 9.10 |
-| `GET /home/status`, `/robotics/status`, `/car/status`, `/vision/status` | **404** | these routes do not exist; hardware state is only reachable via tools and `/health` (see Phase 11) |
+| endpoint                                                                | status      | observed                                                                                                               |
+| ----------------------------------------------------------------------- | ----------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `GET /`                                                                 | 200         | `{"name":"JARVIS Forge Core","version":"0.1.0","tools":126}` — **public metadata, no auth needed to read the version** |
+| `GET /health`                                                           | 200         | full security/privacy/device posture — authenticated                                                                   |
+| `GET /tools`                                                            | 200         | 126 tools with `risk`, `risk_label`, `requires_confirmation`, `reversible`, `parameters` — authenticated               |
+| `GET /devices`                                                          | 200         | 5 devices with capabilities and `auth_state`                                                                           |
+| `GET /audit`                                                            | 200         | hashed chain records                                                                                                   |
+| `GET /metrics`                                                          | 200         | `{"failures":{"total_failures":0,...},"audit":{"sampled":2,...}}`                                                      |
+| `GET /failures`                                                         | 200         | `[]`                                                                                                                   |
+| `GET /confirmations`                                                    | 200         | `[]`                                                                                                                   |
+| `GET /voice/status`                                                     | 200         | mic permission state, devices, TTS/STT backends                                                                        |
+| `GET /watch/status`                                                     | 200         | `mode: simulate`, `paired: false`, `online: false`, outbox counts                                                      |
+| `GET /docs`, `/redoc`, `/openapi.json`                                  | **404/429** | not reachable in these probes once the limiter engaged; **UNVERIFIED whether they are mounted** — see 9.10             |
+| `GET /home/status`, `/robotics/status`, `/car/status`, `/vision/status` | **404**     | these routes do not exist; hardware state is only reachable via tools and `/health` (see Phase 11)                     |
 
 `GET /tools` disclosing the full risk/confirmation matrix to any token holder is fine for a
 local control plane, and is what the dashboard renders.
@@ -294,9 +294,13 @@ local control plane, and is what the dashboard renders.
 `POST /command {"text":"delete the file /tmp/p9_api_victim.txt"}` returned:
 
 ```json
-{ "status": 200, "needs_confirmation": true, "decision": "CONFIRM",
+{
+  "status": 200,
+  "needs_confirmation": true,
+  "decision": "CONFIRM",
   "confirmation_id": "CONF-4dfbe7d6b63192f844f172306fc3b12f",
-  "reply": "This needs your confirmation before I run it.\n  Action: delete_file\n  Device: laptop_main\n  Details: path=…" }
+  "reply": "This needs your confirmation before I run it.\n  Action: delete_file\n  Device: laptop_main\n  Details: path=…"
+}
 ```
 
 Destructive intent over HTTP is refused without a confirmation, and the confirmation id is
@@ -311,16 +315,16 @@ is not double-counted here.
 
 ## 9.10 Findings and gaps
 
-| ID | finding | severity |
-|---|---|---|
-| **API-0** | **`GET /auth/token` returns the live master token to any unauthenticated, header-less local request; the leaked token then authorises `POST /command`. Defeats the entire token-auth model and the 0600 token file.** | **P0** |
-| API-1 | No request body size limit; 2 MB `/command` accepted and burned 4.07 s, larger bodies break the pipe instead of returning 413 | **P2** |
-| API-2 | `Host: 0.0.0.0:8765` is allowlisted, weakening the rebinding list's "loopback only" claim — and it is also a `Host` that `/auth/token` will answer | **P3** |
-| API-3 | No CSP / referrer-policy; inline script on `/dashboard`; rejection responses skip the security-header layer | **P4** |
-| API-4 | `/` exposes name+version unauthenticated | **P4** |
-| API-5 | No status endpoints for home / robotics / car / vision; peripheral truth is only reachable through tool calls or by parsing `/health`, so the dashboard and any monitor must re-implement probing | **P3** (product, not security) |
-| API-6 | Whether `/docs`, `/redoc`, `/openapi.json` are mounted is **UNVERIFIED** — the limiter returned 429 before they could be read. Command to verify: restart with a fresh `JARVIS_HOME`, then `curl -H "X-JARVIS-Token: …" -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8765/openapi.json` one request at a time | **P4** |
-| — | Token *verification* itself is sound: constant-time compare, correct precedence, 0600 file, no token in logs. CORS default-deny, host enforcement, rate limiting, malformed/empty input handling, and `Protected` on every destructive route all behaved correctly | **PASS** |
+| ID        | finding                                                                                                                                                                                                                                                                                                            | severity                       |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------ |
+| **API-0** | **`GET /auth/token` returns the live master token to any unauthenticated, header-less local request; the leaked token then authorises `POST /command`. Defeats the entire token-auth model and the 0600 token file.**                                                                                              | **P0**                         |
+| API-1     | No request body size limit; 2 MB `/command` accepted and burned 4.07 s, larger bodies break the pipe instead of returning 413                                                                                                                                                                                      | **P2**                         |
+| API-2     | `Host: 0.0.0.0:8765` is allowlisted, weakening the rebinding list's "loopback only" claim — and it is also a `Host` that `/auth/token` will answer                                                                                                                                                                 | **P3**                         |
+| API-3     | No CSP / referrer-policy; inline script on `/dashboard`; rejection responses skip the security-header layer                                                                                                                                                                                                        | **P4**                         |
+| API-4     | `/` exposes name+version unauthenticated                                                                                                                                                                                                                                                                           | **P4**                         |
+| API-5     | No status endpoints for home / robotics / car / vision; peripheral truth is only reachable through tool calls or by parsing `/health`, so the dashboard and any monitor must re-implement probing                                                                                                                  | **P3** (product, not security) |
+| API-6     | Whether `/docs`, `/redoc`, `/openapi.json` are mounted is **UNVERIFIED** — the limiter returned 429 before they could be read. Command to verify: restart with a fresh `JARVIS_HOME`, then `curl -H "X-JARVIS-Token: …" -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8765/openapi.json` one request at a time | **P4**                         |
+| —         | Token _verification_ itself is sound: constant-time compare, correct precedence, 0600 file, no token in logs. CORS default-deny, host enforcement, rate limiting, malformed/empty input handling, and `Protected` on every destructive route all behaved correctly                                                 | **PASS**                       |
 
 **Priority note.** API-0 dominates this phase. The mitigations that make it survivable today
 are that the socket is loopback-bound and no remote attacker can reach it without first

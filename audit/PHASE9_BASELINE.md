@@ -5,11 +5,11 @@ Every number below was measured in this session. No value was copied from `STATU
 
 ## 1.1 Repository identity
 
-| Item | Claim under test (brief) | Measured | Verdict |
-|---|---|---|---|
-| Repository path | `/Users/abhijeetmiskin/AppData/aisys/jarvis-forge` | `/Users/abhijeetmiskin/AppData/jarv/jarvis-forge` | **WRONG PATH** |
-| Git repository | implied (asks for branch/HEAD/status) | **not a git repository** | **FALSE** |
-| Server on `127.0.0.1:8765` | running | **not listening** | **FALSE (not running)** |
+| Item                       | Claim under test (brief)                           | Measured                                          | Verdict                 |
+| -------------------------- | -------------------------------------------------- | ------------------------------------------------- | ----------------------- |
+| Repository path            | `/Users/abhijeetmiskin/AppData/aisys/jarvis-forge` | `/Users/abhijeetmiskin/AppData/jarv/jarvis-forge` | **WRONG PATH**          |
+| Git repository             | implied (asks for branch/HEAD/status)              | **not a git repository**                          | **FALSE**               |
+| Server on `127.0.0.1:8765` | running                                            | **not listening**                                 | **FALSE (not running)** |
 
 Commands and literal output:
 
@@ -86,13 +86,13 @@ $ find . -name '*.py' -not -path './.venv/*' -not -path '*__pycache__*' -exec ca
    41442
 ```
 
-| Metric | Measured | Brief's stated figure | Delta |
-|---|---|---|---|
-| `jarvis/` Python LOC | **29,975** | ~29,700 | +275 (+0.9%) — claim approximately correct |
-| `tests/` Python LOC | 9,395 | not stated | — |
-| root scripts LOC | 304 | not stated | — |
+| Metric               | Measured   | Brief's stated figure     | Delta                                                     |
+| -------------------- | ---------- | ------------------------- | --------------------------------------------------------- |
+| `jarvis/` Python LOC | **29,975** | ~29,700                   | +275 (+0.9%) — claim approximately correct                |
+| `tests/` Python LOC  | 9,395      | not stated                | —                                                         |
+| root scripts LOC     | 304        | not stated                | —                                                         |
 | **total Python LOC** | **41,442** | ~29,700 (ambiguous scope) | if the claim meant "all Python", it understates by 11,742 |
-| Python files | 158 | not stated | — |
+| Python files         | 158        | not stated                | —                                                         |
 
 Note the coincidence that must not be confused: **126 Python files** in `jarvis/` and
 **126 tools** and **126 failing tests** are three unrelated quantities that happen to be equal.
@@ -156,11 +156,11 @@ $ PYTHONPATH=. JARVIS_HOME=$(mktemp -d) .venv/bin/python -c \
 126 126
 ```
 
-| Metric | Measured | Claim | Verdict |
-|---|---|---|---|
-| tool specs | **126** | 126 | **TRUE** |
-| registry entries | **126** | — | consistent, no shadowing |
-| duplicate tool names | **0** | — | clean |
+| Metric               | Measured | Claim | Verdict                  |
+| -------------------- | -------- | ----- | ------------------------ |
+| tool specs           | **126**  | 126   | **TRUE**                 |
+| registry entries     | **126**  | —     | consistent, no shadowing |
+| duplicate tool names | **0**    | —     | clean                    |
 
 Distribution by owning agent (sums to 126):
 
@@ -172,9 +172,9 @@ laptop_center 4
 
 Risk tiers (declared on `ToolSpec`, enum `RiskLevel` 0..4):
 
-| risk | 0 | 1 | 2 | 3 | 4 |
-|---|---|---|---|---|---|
-| tools | 68 | 33 | 11 | 11 | 3 |
+| risk  | 0   | 1   | 2   | 3   | 4   |
+| ----- | --- | --- | --- | --- | --- |
+| tools | 68  | 33  | 11  | 11  | 3   |
 
 `requires_confirmation=True` on **24 of 126** tools. `reversible=False` on **11**.
 
@@ -197,11 +197,11 @@ $ PYTHONPATH=. JARVIS_HOME=$(mktemp -d) .venv/bin/python -c \
 106 100
 ```
 
-| Metric | Measured | Claim | Verdict |
-|---|---|---|---|
-| route objects | 106 | — | — |
-| **unique paths** | **100** | 100 | **TRUE** |
-| method-level routes | 110 | — | GET 58, POST 48, HEAD 4 |
+| Metric              | Measured | Claim | Verdict                 |
+| ------------------- | -------- | ----- | ----------------------- |
+| route objects       | 106      | —     | —                       |
+| **unique paths**    | **100**  | 100   | **TRUE**                |
+| method-level routes | 110      | —     | GET 58, POST 48, HEAD 4 |
 
 ## 1.8 Database (measured from a freshly migrated throwaway DB)
 
@@ -260,17 +260,17 @@ Full drift analysis in `PHASE9_DESKTOP_AUDIT.md`.
 
 ## 1.11 Baseline summary
 
-| Dimension | Measured | Claimed | Status |
-|---|---|---|---|
-| Agents | 15 | 15 | TRUE |
-| Tools | 126 | 126 | TRUE |
-| API paths | 100 | 100 | TRUE |
-| DB tables | 32 | not claimed | measured |
-| Source LOC | 29,975 (`jarvis/`) | ~29,700 | TRUE within 1% |
-| Tests passing | **875** (+126 failed, +1 skipped) | 975 passing, 1 skipped | **FALSE** |
-| Version | `pyproject` says `0.1.0` | v1.8 | **CONTRADICTION** (see Phase 13) |
-| Git | absent | implied present | **FALSE** |
-| Server running | no | yes | **FALSE** |
+| Dimension      | Measured                          | Claimed                | Status                           |
+| -------------- | --------------------------------- | ---------------------- | -------------------------------- |
+| Agents         | 15                                | 15                     | TRUE                             |
+| Tools          | 126                               | 126                    | TRUE                             |
+| API paths      | 100                               | 100                    | TRUE                             |
+| DB tables      | 32                                | not claimed            | measured                         |
+| Source LOC     | 29,975 (`jarvis/`)                | ~29,700                | TRUE within 1%                   |
+| Tests passing  | **875** (+126 failed, +1 skipped) | 975 passing, 1 skipped | **FALSE**                        |
+| Version        | `pyproject` says `0.1.0`          | v1.8                   | **CONTRADICTION** (see Phase 13) |
+| Git            | absent                            | implied present        | **FALSE**                        |
+| Server running | no                                | yes                    | **FALSE**                        |
 
 The counts (agents/tools/paths/LOC) are honest and independently confirmed.
 The two things the brief took on faith that are wrong are **the test result** and

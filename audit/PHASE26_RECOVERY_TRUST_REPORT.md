@@ -6,7 +6,7 @@ No brief. The scope came from the oldest carried line in the backlog. Every repo
 Phase 11 onwards ends with the same list of things not touched, and in it: **"RT-3 mutable
 risk tier · R-2 broad auto-retry · R-11…R-14"**. Those ids were written in Phase 9 and
 re-inherited for seventeen phases without being re-measured, which is the exact failure
-this program exists to catch -- Phase 25 found a stale *claim* about the desktop bundle;
+this program exists to catch -- Phase 25 found a stale _claim_ about the desktop bundle;
 this one found that the stale claims were about recovery.
 
 Re-measured before anything was edited. All four were real, and two were worse than their
@@ -23,15 +23,15 @@ state of the tree rather than a verdict:
 JARVIS_HOME=$(mktemp -d) HOME=$(mktemp -d) PYTHONPATH=. python <sweep>   # M1-M7 below
 ```
 
-| Probe | Question | Result before |
-|---|---|---|
-| M1 | Which registered tools does the retry policy let run twice, and *on what grounds*? | **45 of 127** -- every tool between read tier and risk 3 whose failure text matched a regex |
-| M2 | What does `TaskManager.retry()` actually do to a failed job? | `failed → running`, both steps `pending`, `detail` **erased**, 0 executions; the briefing then said **"1 job(s) in progress."** |
-| M3 | Is `resume()` the same family? | Yes: `paused → running` with nothing to dispatch it |
-| M4 | Can a tool rewrite the fields the gates read? | Yes, three ways: gate `CONFIRM → EXECUTE`, `is_retryable False → True`, planner catalogue `risk=read confirm=False` |
-| M5 | Symmetry of the failure ledger | write: exception swallowed at `log.info`, 0 rows, normal reply; read: `failure_stats()` and `recent_failures()` both **raised** through `/metrics`, `/failures` and the briefing |
-| M6 | What does a successful fallback leave behind? | `outcome.result.tool == 'list_directory'` sitting on the step planned as `search_files`, attributed nowhere |
-| M7 | Does the confirmed-action path record its failures? | A failed approved `delete_file`: `failures 1 → 1`. Nothing. `recovery_notes: []` |
+| Probe | Question                                                                           | Result before                                                                                                                                                                    |
+| ----- | ---------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| M1    | Which registered tools does the retry policy let run twice, and _on what grounds_? | **45 of 127** -- every tool between read tier and risk 3 whose failure text matched a regex                                                                                      |
+| M2    | What does `TaskManager.retry()` actually do to a failed job?                       | `failed → running`, both steps `pending`, `detail` **erased**, 0 executions; the briefing then said **"1 job(s) in progress."**                                                  |
+| M3    | Is `resume()` the same family?                                                     | Yes: `paused → running` with nothing to dispatch it                                                                                                                              |
+| M4    | Can a tool rewrite the fields the gates read?                                      | Yes, three ways: gate `CONFIRM → EXECUTE`, `is_retryable False → True`, planner catalogue `risk=read confirm=False`                                                              |
+| M5    | Symmetry of the failure ledger                                                     | write: exception swallowed at `log.info`, 0 rows, normal reply; read: `failure_stats()` and `recent_failures()` both **raised** through `/metrics`, `/failures` and the briefing |
+| M6    | What does a successful fallback leave behind?                                      | `outcome.result.tool == 'list_directory'` sitting on the step planned as `search_files`, attributed nowhere                                                                      |
+| M7    | Does the confirmed-action path record its failures?                                | A failed approved `delete_file`: `failures 1 → 1`. Nothing. `recovery_notes: []`                                                                                                 |
 
 The scheduler half of M7 was measured separately, because `PHASE9_RECOVERY_AUDIT.md` R-12
 names it alongside the confirmation path:
@@ -43,11 +43,11 @@ schedule_runs: {'schedule_id': 'SCH-p26', 'outcome': 'failed', 'detail': 'File n
 ```
 
 So that half was **half right**: an unattended failure was not invisible, it had its own
-ledger (`schedule_runs`, correctly `failed`) -- but the *recovery* ledger, which is what
+ledger (`schedule_runs`, correctly `failed`) -- but the _recovery_ ledger, which is what
 `/metrics` and `explain_failures` read, had never heard of it.
 
 Note also that Phase 9's two reports number these differently: `PHASE9_FINAL_REPORT.md`
-R-11…R-14 are *not* the same four findings as `PHASE9_RECOVERY_AUDIT.md` R-11…R-14. This
+R-11…R-14 are _not_ the same four findings as `PHASE9_RECOVERY_AUDIT.md` R-11…R-14. This
 report uses the **recovery audit's** numbering, which is the one the backlog copied.
 
 ---
@@ -66,7 +66,7 @@ return looks_transient(result)              # "did the error text sound transien
 
 The question that matters is **"is running this twice safe?"** Everything below risk 3 fell
 through to a regex over the error string, so the safety of a re-run was decided by what the
-failure *happened to say*. M1's 45 offenders included `move_file`, `copy_file`,
+failure _happened to say_. M1's 45 offenders included `move_file`, `copy_file`,
 `write_file`, `create_event`, `update_event`, `schedule_task`, `run_schedule_now`,
 `send_to_device`, `register_phone`, `apply_code_change`, `run_allowlisted_command`,
 `run_workspace_tests`, `control_home_device`, `run_home_routine`, `vibrate_watch`,
@@ -74,7 +74,7 @@ failure *happened to say*. M1's 45 offenders included `move_file`, `copy_file`,
 
 The case that makes this concrete is the one the audit already named: a killed subprocess
 reports `command timed out after 30.0s`, which matches `timed?\s*out` -- and a timeout is
-precisely the state in which the effect is *unknown*. The tool that answered "it looked
+precisely the state in which the effect is _unknown_. The tool that answered "it looked
 transient" was the one tool that could not know whether the first attempt had already
 moved the file.
 
@@ -99,8 +99,8 @@ Deriving the reason from the same call that makes the decision also closed a def
 report did not set out to fix. `recover()` used to re-construct a `skip_reason` after the
 fact with its own `if spec.risk >= DESTRUCTIVE … else "the error is not transient"` chain,
 which was wrong twice over: it misattributed every non-destructive refusal to the error
-text, and it said **"not retried"** after retries had run (Phase 9's R-12 in the *final
-report's* numbering, asserted as a known-open item in `test_phase10_verification_authority`
+text, and it said **"not retried"** after retries had run (Phase 9's R-12 in the _final
+report's_ numbering, asserted as a known-open item in `test_phase10_verification_authority`
 since Phase 10). The note now counts its own attempts:
 
 ```
@@ -140,7 +140,7 @@ parameters mutated in place: True
 ```
 
 Three consequences from two assignments, because `PermissionEngine.evaluate()` does its own
-`self.tools.get(action.tool)` and the registry hands out the *same object* a tool module
+`self.tools.get(action.tool)` and the registry hands out the _same object_ a tool module
 already holds. `spec.risk = RiskLevel.READ` on a destructive tool is a confirmation bypass;
 the same line makes the action automatically retryable; and `describe_for_prompt()` starts
 advertising `confirm=False` to whatever planner reads it. Phase 9's red team called this P1
@@ -177,7 +177,7 @@ parameters mutated in place: True
 because the alternative -- `Mapping[str, str]` validated into a `MappingProxyType` -- breaks
 serialisation: pydantic 2.13 raises `Unable to serialize unknown type: mappingproxy` on
 `model_dump_json()`, and `/tools` serves that field. What it would buy is nothing: no gate
-authorises from `parameters`. It is read by `validate_params()`, which uses it to *reject*
+authorises from `parameters`. It is read by `validate_params()`, which uses it to _reject_
 unexpected parameters, so widening it removes a strictness rather than granting a
 permission. Recorded under Known open items with that reasoning.
 
@@ -194,7 +194,7 @@ return True
 ```
 
 Nothing in the build re-dispatches a job row -- `briefing.py:86` and `tools/system.py:259`
-*read* `status == "running"`, they do not act on it -- so the measured result was a job
+_read_ `status == "running"`, they do not act on it -- so the measured result was a job
 permanently `running` with 0 executions, and its failure text deleted. The user-visible
 version, from the briefing in the same process:
 
@@ -213,13 +213,13 @@ class LifecycleReport:      # __bool__ -> accepted, so every old call site still
     job_id, action, accepted, status, executed = 0, steps_touched, reason, message
 ```
 
-* `retry()` leaves the failed step `failed`, appends `| re-attempt requested <iso>` to its
+- `retry()` leaves the failed step `failed`, appends `| re-attempt requested <iso>` to its
   `detail` instead of erasing it, recomputes the job status from the steps, and says
   `executed: 0`.
-* `resume()` calls `refresh_status()`, so a job whose step is still waiting on an approval
+- `resume()` calls `refresh_status()`, so a job whose step is still waiting on an approval
   reports `awaiting_confirmation` -- measured M3 now returns exactly that, with the message
   "an approval is still waiting on it".
-* A verb that cannot apply answers `accepted=False` with a reason, and the endpoint maps
+- A verb that cannot apply answers `accepted=False` with a reason, and the endpoint maps
   `no such job` to 404 and everything else to 409 instead of flattening both into 404.
 
 Live against a launched server (`run.py serve`, port 8899, real screenshot failure as the
@@ -265,18 +265,18 @@ sides, and the operator got either nothing or a 500 -- never both facts at once.
 
 Now:
 
-* `record_failure()` returns whether the row landed, logs at `warning`, and moves a counter
+- `record_failure()` returns whether the row landed, logs at `warning`, and moves a counter
   (`written`, `unwritten`, `last_error`) exposed by `recording_status()`.
-* `failure_stats()` always returns its full key set and adds `ledger_error` when it could
-  not read, so `/metrics` degrades into a payload that *contains the reason* rather than
+- `failure_stats()` always returns its full key set and adds `ledger_error` when it could
+  not read, so `/metrics` degrades into a payload that _contains the reason_ rather than
   failing: measured `/metrics` now answers 200 with
   `{'total_failures': 2, 'total_recovered': 0, 'recovery_rate': 0.0, 'ledger_error': None,
-  'written': 2, 'unwritten': 0}`, and with `ledger_error: 'no such table: failures'` when
+'written': 2, 'unwritten': 0}`, and with `ledger_error: 'no such table: failures'` when
   the read is broken.
-* `/failures` answers **503 with the reason** instead of an unhandled 500 -- and
+- `/failures` answers **503 with the reason** instead of an unhandled 500 -- and
   deliberately not an empty list, because an empty list is what a system that has never
   failed looks like.
-* The briefing says `failure ledger unavailable: <reason>` in that case, and additionally
+- The briefing says `failure ledger unavailable: <reason>` in that case, and additionally
   reports `N failure record(s) could not be written` whenever `unwritten` is non-zero.
 
 That last pair is the actual fix: the silent-loss failure mode and the endpoint-breaking
@@ -301,7 +301,7 @@ $ curl -H "$TOKEN" localhost:8899/failures?limit=1
           one approval authorises one attempt
 ```
 
-It does *not* gain an automatic retry, and adding one would contradict everything in §2: the
+It does _not_ gain an automatic retry, and adding one would contradict everything in §2: the
 tier the confirmation path serves is exactly the tier whose re-runs are unsafe, and the
 approval the user gave covered one attempt. The scheduler branch is fixed the same way
 (`strategy="none"`, `attempts=0`, note naming the missing recovery chain), because its
@@ -323,7 +323,7 @@ The remaining half is a wording gap, not a false claim, and is carried as **26-B
 session memory sentence still reads `list_directory: listed 41 entries` for a request that
 asked to search. The reply already says the pair out loud (`search_files: recovered using
 list_directory`), so nothing asserts something untrue; one stored sentence is just phrased
-from the fallback's side. End-to-end attempt, recorded because it *didn't* recover:
+from the fallback's side. End-to-end attempt, recorded because it _didn't_ recover:
 
 ```
 REPLY: 1. That did not work: Spotlight is indexing
@@ -345,10 +345,10 @@ sweep that pins the 45 → 0 number itself.
 Three existing tests encoded the old behaviour and were rewritten rather than relaxed. Each
 kept its substantive claim:
 
-| Test | It asserted | Now |
-|---|---|---|
-| `test_recovery.py::test_external_tool_retries_only_on_transient_errors` | `run_allowlisted_command` **is** retryable on "connection refused" | renamed `test_an_external_tool_is_not_retried_on_its_error_text`; asserts the opposite, and that the *reason* comes from the policy |
-| `test_api.py::test_task_lifecycle_roundtrip` | `resume` leaves the job `running` | asserts `incomplete`, `executed == 0`, both steps still `pending`, and "nothing ran" in the note |
+| Test                                                                                              | It asserted                                                                                                                                 | Now                                                                                                                                                                                                                                                                                               |
+| ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `test_recovery.py::test_external_tool_retries_only_on_transient_errors`                           | `run_allowlisted_command` **is** retryable on "connection refused"                                                                          | renamed `test_an_external_tool_is_not_retried_on_its_error_text`; asserts the opposite, and that the _reason_ comes from the policy                                                                                                                                                               |
+| `test_api.py::test_task_lifecycle_roundtrip`                                                      | `resume` leaves the job `running`                                                                                                           | asserts `incomplete`, `executed == 0`, both steps still `pending`, and "nothing ran" in the note                                                                                                                                                                                                  |
 | `test_phase10_verification_authority.py::test_recovery_does_not_call_a_no_op_a_recovered_success` | two invocations (one failure + one retry), and `attempts == 1` **with** a note claiming "not retried" -- a known defect asserted on purpose | one invocation (that home command is no longer re-run), and `attempts == 0` with "not retried" now true. The unverified-retry-is-not-a-recovery claim it was built to hold moved to `test_an_unverified_retry_is_not_reported_as_a_recovery`, under a read-only tool the new policy still retries |
 
 The module docstrings of `test_recovery.py` and `recovery.py` were rewritten to state the
@@ -358,26 +358,26 @@ new property, so the next reader does not "fix" the guard back.
 
 ## 8. Everything re-measured after the change
 
-| | |
-|---|---|
-| Suite | **1417 passed · 0 failed · 0 skipped · 0 xfailed** (1417 collected), 50 modules |
-| R-2 sweep | tools retried on error text alone: **45 → 0**; registry unchanged at 127 tools, tiers read 68 · low 33 · external 12 · destructive 11 · physical 3 |
-| Acceptance | `python benchmarks/acceptance_run.py`: 17 of 18 measured, `open VS Code` skipped as a GUI launch; median **4 ms**, sum **1,464 ms**. **No command changed state or audit token** against the previous artifact -- this phase touched recovery and lifecycle, not routing |
-| Acceptance caveat | the 81 ms search row is a sandboxed-`$HOME` artifact: the previous published run walked a real home (346–1,217 ms). The root is inside the row's recorded reply, so the two runs stay distinguishable |
-| Safety matrix | `python benchmarks/safety_run.py`: **5 of 6 ok**, `turn on heater` still FAIL -- unchanged, still 22-G, and still the owner's permission-policy call |
-| Gated failure | live HTTP `failures 1 → 2` with `strategy='none'`, `attempts=0` |
-| Figures | `assets/build_charts.py` + `build_diagrams.py` regenerate; `chart-suite-growth.svg` ends at the Phase 26 point |
+|                   |                                                                                                                                                                                                                                                                          |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Suite             | **1417 passed · 0 failed · 0 skipped · 0 xfailed** (1417 collected), 50 modules                                                                                                                                                                                          |
+| R-2 sweep         | tools retried on error text alone: **45 → 0**; registry unchanged at 127 tools, tiers read 68 · low 33 · external 12 · destructive 11 · physical 3                                                                                                                       |
+| Acceptance        | `python benchmarks/acceptance_run.py`: 17 of 18 measured, `open VS Code` skipped as a GUI launch; median **4 ms**, sum **1,464 ms**. **No command changed state or audit token** against the previous artifact -- this phase touched recovery and lifecycle, not routing |
+| Acceptance caveat | the 81 ms search row is a sandboxed-`$HOME` artifact: the previous published run walked a real home (346–1,217 ms). The root is inside the row's recorded reply, so the two runs stay distinguishable                                                                    |
+| Safety matrix     | `python benchmarks/safety_run.py`: **5 of 6 ok**, `turn on heater` still FAIL -- unchanged, still 22-G, and still the owner's permission-policy call                                                                                                                     |
+| Gated failure     | live HTTP `failures 1 → 2` with `strategy='none'`, `attempts=0`                                                                                                                                                                                                          |
+| Figures           | `assets/build_charts.py` + `build_diagrams.py` regenerate; `chart-suite-growth.svg` ends at the Phase 26 point                                                                                                                                                           |
 
 ---
 
 ## 9. Carried forward
 
-* **26-A** No job re-dispatcher. `retry()` records the request and says nothing ran;
+- **26-A** No job re-dispatcher. `retry()` records the request and says nothing ran;
   a real re-run needs step parameters persisted and re-entry through `policy.evaluate()`.
-* **26-B** A fallback's summary is remembered under the fallback tool's name (§6).
-* **`ToolSpec.parameters`** is still an in-place-mutable dict; no gate reads it for
+- **26-B** A fallback's summary is remembered under the fallback tool's name (§6).
+- **`ToolSpec.parameters`** is still an in-place-mutable dict; no gate reads it for
   authority, and a `MappingProxyType` fix breaks `/tools` serialisation (§3).
-* Everything already open: **22-G** (heater/HVAC executes unconfirmed when uniquely
+- Everything already open: **22-G** (heater/HVAC executes unconfirmed when uniquely
   resolved -- permission policy), **23-E** (planner's `or "amr_main"` default -- safety
   semantics), microphone/speech TCC not granted (7/9 in the app's self-test), publishing a
   signed binary, **15-F** (arXiv 406), **14-D** (partly-routable sentences), **16-F**
@@ -411,4 +411,3 @@ Two steps report `skipped` on 3.12 by design (`Build the desktop bundle`,
 complaints about this phase's changes: no test moved because of a laptop/runner difference
 this time -- the three tests that had to change are the ones listed in §7, and they changed
 because they encoded the behaviour being replaced, not because of the environment.
-

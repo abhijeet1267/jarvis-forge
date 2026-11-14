@@ -19,7 +19,7 @@ planner.py:1003           (continue|resume|open).*project      -> claims any sen
 ```
 
 So the editor opened exactly what macOS hands a bare `open -a` — whatever was focused last —
-and a folder named `my-project` was *declined* rather than dropped. That third line is the one
+and a folder named `my-project` was _declined_ rather than dropped. That third line is the one
 the user would have hit constantly: their own directories are named like `agent-test-project`.
 
 **Fixed:** `AppSpec` gained a `cli` map resolved against the installed bundle (the PATH shim is
@@ -33,7 +33,7 @@ tool polls, and when it does not appear the result is `unverified` with a reply 
 
 **Then the live check caught what 17 unit tests could not:** every one of them faked
 `run_command`, and the real bundled CLI holds its inherited stdout open for as long as VS Code
-runs — so the capturing caller waited 20 seconds for the editor to *quit* and reported
+runs — so the capturing caller waited 20 seconds for the editor to _quit_ and reported
 "Could not open Visual Studio Code: command timed out" on a launch that had worked.
 `run_command` gained `detach` for launching applications; `open_app` uses it.
 
@@ -59,8 +59,8 @@ The tool reports the agent's own answer: `is_error` is a failure, unparsable out
 `unverified`, a non-zero exit carries the agent's words, and a missing CLI is a capability
 statement, not a crash.
 
-Live: *"Reply with exactly VANTAGE-LIVE-OK"* → `Verification.SUCCESS`, 1 turn, **$0.14033**.
-From the phone side: *"ask claude to add a README to /tmp"* → planned `run_coding_agent`, held
+Live: _"Reply with exactly VANTAGE-LIVE-OK"_ → `Verification.SUCCESS`, 1 turn, **$0.14033**.
+From the phone side: _"ask claude to add a README to /tmp"_ → planned `run_coding_agent`, held
 for confirmation, nothing executed. Its preview read
 `run_coding_agent on laptop_main | prompt=... | path=...`, which is open item 32-B arriving on a
 6-inch screen, so it now says `ask the coding agent "add a README to the project" in <folder>`.
@@ -81,7 +81,7 @@ Audited before restyling, because "better" without a baseline is a palette swap:
 
 No keyboard focus ring anywhere. Nothing adapted below desktop width. Light only, while the
 phone client is dark. A finished command was silent to a screen reader. The devices panel
-rendered *literally nothing* when no device was paired, and confirmations said "none".
+rendered _literally nothing_ when no device was paired, and confirmations said "none".
 
 **Changed:** every hard-coded colour promoted to a token, so the dark block restates the same
 set — a dark mode that forgets a variable is invisible text, and a test compares the two token
@@ -90,6 +90,7 @@ controls, three breakpoints, a reduced-motion guard, `aria-live`/`role="status"`
 and reply, a labelled command input, and empty states that name the next action.
 
 **Two mistakes I made here, both caught by checking rather than assuming:**
+
 - An edit duplicated `async function loadDevices() {` — a syntax error that looked fine in a
   diff and would have left the whole dashboard dead. It is now guarded twice: the page's script
   is run through `node --check`, and a test rejects any redeclared function name.
@@ -135,22 +136,22 @@ before being allowed to say 42.
 
 ## 6. Carried forward
 
-* **39-A** `detach` returns as soon as the process starts, so a launch that dies immediately
+- **39-A** `detach` returns as soon as the process starts, so a launch that dies immediately
   after exec is still reported by the observation loop, not the exit code — but an editor that
   records nothing within 5 s is reported as unverified even when it did open. The observation
   window is a guess about a third-party app's timing.
-* **39-B** only VS Code and Cursor have a storage path this tool can read. Opening a folder in
+- **39-B** only VS Code and Cursor have a storage path this tool can read. Opening a folder in
   any other app is unverifiable by design and will say so.
-* **39-C** the coding agent's own permission mode is left at its default, so a first file edit
+- **39-C** the coding agent's own permission mode is left at its default, so a first file edit
   prompts inside the CLI — which nobody sees in a non-interactive run. What that means in
   practice is untested beyond the one read-only prompt.
-* **39-D** the dashboard's dark palette was chosen to match the phone client, not audited for
+- **39-D** the dashboard's dark palette was chosen to match the phone client, not audited for
   WCAG contrast ratios. The token test proves completeness, not legibility.
-* **39-E** the IP changed mid-phase (172.20.169.34 → 172.20.169.185) and the URL previously
+- **39-E** the IP changed mid-phase (172.20.169.34 → 172.20.169.185) and the URL previously
   handed to the user went dead on its own — 38-B arriving within a day. The QR and the panel
   address absorb this; mDNS would remove it.
-* Unchanged: 38-A…D, 37-A…E, 36-A…E, 35-A…C, 34-A…C, and the `-rs` CI change.
-* **39-F** (raised by §7) the runner cannot be used as evidence at all until the account is
+- Unchanged: 38-A…D, 37-A…E, 36-A…E, 35-A…C, 34-A…C, and the `-rs` CI change.
+- **39-F** (raised by §7) the runner cannot be used as evidence at all until the account is
   settled: the jobs for `e1fcf7a` were never started. Nothing in this repository's CI can be
   claimed green, and nothing can be claimed red either, while that holds.
 
@@ -181,7 +182,7 @@ this project is load-bearing rather than decorative: it is the only place the su
 machine with no battery, no ffmpeg and no Spotlight index, and the bundle build step exists to
 catch exactly the drift that killed Phase 37's guard.
 
-What *was* executed is this machine, on the pushed commit with a clean tree:
+What _was_ executed is this machine, on the pushed commit with a clean tree:
 
 ```
 git rev-parse HEAD   e1fcf7abf25cb40bfc18568c3bfb9695c2fb96e8
@@ -196,5 +197,4 @@ JARVIS_HOME=$(mktemp -d) .venv/bin/python benchmarks/acceptance_run.py 17 of 18 
 The last commit a runner actually executed is `40c5c89` (Phase 38's addendum): both suites
 **success** in 12m44s. Until the spending limit is raised or the payment cleared, every push
 will report `failure` without having tested anything, and that verdict should be read as
-*unmeasured*, never as *broken*.
-
+_unmeasured_, never as _broken_.

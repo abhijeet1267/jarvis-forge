@@ -257,13 +257,64 @@ def test_the_sweep_is_measured_not_improvised(core):
     half, `get_desktop_control_state`, *is* routed, because "can you control my computer" is a
     question that deserves an answer. The ledger is therefore the old 28 plus those two, and the
     assertion names them so a future reader cannot mistake the additions for the same hole.
+
+    **2026-10-21 (R4.3) moved it again, on purpose, for the same reason.** The browser
+    controller got a *read* -- `browser_open` opens a page in a session Vantage controls and
+    returns its text -- and that read is routed, because "what does this page say" is a
+    question that deserves an answer. The other browser tools stay unrouted by design, for
+    the same reason `click_desktop` does: `browser_click` and `browser_type` are actuations,
+    and a sentence must not be able to make the machine act on a page. They are reachable
+    only as a *proposed* action (R2.3) behind a confirmation card. `browser_close` and
+    `browser_read` take a session id, which a sentence cannot know.
+
+    So the ledger is 30 plus four browser tools, and the assertion names the ones that are
+    unrouted on purpose so a future reader cannot mistake them for the same hole.
+
+    **2026-10-21 (R4.4) moved it once more, on purpose, for the same reason.** `browser_save`
+    -- read a page and put it in a file -- is a new capability, and it carries no route: it
+    needs a destination path, and a sentence must not be able to put something from the
+    internet on the user's disk without a person naming the place. It is reachable as a
+    *proposed* action behind a confirmation card, exactly like the other browser
+    actuations. The ledger is therefore 34 plus one, and the README's published tool count
+    moved 153 -> 154.
+
+    **2026-10-26 moved it down by one, for the same reason.** `browser_close` --
+    Vantage could open its own browser session from a sentence and had no way to
+    close it; "close the page you opened" was unhandled while "close the browser"
+    reached `close_app` and tried to *quit Chrome*. Closing a session Vantage
+    opened is not an actuation on a page: it acts on Vantage's own resource, which
+    is why it leaves this ledger while `browser_click`, `browser_type` and
+    `browser_save` stay in it.
+
+    **2026-10-25 moved it down by one, on purpose, for the same reason.** `browser_read` --
+    the page Vantage opened was readable only through an automation; a person could
+    open a page and then had no way to ask what was on it. Reading is a *question*
+    ("reading a page is a question that deserves an answer", the same sentence this
+    ledger was written around), so it now has a route. The actuations moved not at
+    all: `browser_click` and `browser_type` still carry no route, and the assertions
+    below still name them -- that is the line, and it held.
+
+    **2026-10-23 moved it down by one, on purpose, for the same reason.** `read_email` --
+    read one message in full -- now has a route: "read the invoice email" names the message,
+    the identifier lookup resolves it to a uid, and the read runs. That is a *read*, the same
+    category the ledger keeps reachable by design ("reading a page is a question that
+    deserves an answer"), so it left the unreachable set and the count moved 35 -> 34.
     """
     unreachable = _unreachable_tools(core)
     assert {"click_desktop", "type_desktop_text"} <= set(unreachable), \
         "the actuations are unreachable on purpose; if they stopped being so, that is a design change"
     assert "get_desktop_control_state" not in unreachable, \
         "the read must be reachable by a sentence -- that is the part Phase 28 was about"
-    assert len(unreachable) == 30, unreachable
+    # The browser read is routed; the browser actuations are not, for the same reason.
+    assert "browser_open" not in unreachable, \
+        "reading a page is a question that deserves an answer"
+    assert {"browser_click", "browser_type"} <= set(unreachable), \
+        "a sentence must not be able to act on a page; these are reachable only as a proposal"
+    assert "browser_save" in unreachable, \
+        "a sentence must not be able to put something from the internet on the disk"
+    assert "read_email" not in unreachable, \
+        "reading a message the person named is a question that deserves an answer"
+    assert len(unreachable) == 32, unreachable
     assert "read_file" not in unreachable
 
 

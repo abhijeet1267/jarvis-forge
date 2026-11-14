@@ -111,6 +111,37 @@ def test_null_tts_records_utterances() -> None:
     assert backend.spoken == ["hello there", "second line"]
 
 
+def test_null_tts_never_claims_to_have_played() -> None:
+    """The recording stand-in is not a voice; ``played`` must not say it spoke."""
+    backend = NullTTS()
+    result = asyncio.run(backend.speak("hello there"))
+    assert result.ok, "it did what it promises: recorded the text"
+    assert result.played is False
+    assert backend.real is False
+
+
+def test_describe_tts_says_when_it_cannot_speak() -> None:
+    """``available`` is "installed"; a caller needs "will actually speak"."""
+    from jarvis.config import Settings
+
+    disabled = describe_tts(Settings(tts_enabled=False))
+    assert disabled["can_speak"] is False
+    assert "JARVIS_TTS_ENABLED" in disabled["reason"]
+
+    recorded = describe_tts(Settings(tts_backend="null"))
+    assert recorded["can_speak"] is False
+    assert recorded["backend"] == "null"
+    assert "plays nothing" in recorded["reason"]
+
+
+def test_describe_tts_names_the_backend_a_request_would_use() -> None:
+    from jarvis.config import Settings
+
+    info = describe_tts(Settings())  # auto on this machine
+    assert info["backend"] in {"macos_say", "pyttsx3", "null"}
+    assert info["can_speak"] == (info["backend"] != "null")
+
+
 def test_tts_empty_text_is_rejected() -> None:
     result = asyncio.run(NullTTS().synthesize("   "))
     assert not result.ok or result.meta.get("silent")
@@ -654,6 +685,53 @@ def test_session_speaks_when_asked(session: VoiceSession) -> None:
     assert session.tts.spoken, "the reply should have been spoken"
 
 
+class _ExplodingTTS(NullTTS):
+    """A speaker that cannot start -- ``say`` removed, audio device busy."""
+
+    name = "exploding"
+
+    async def speak(self, text: str, destination=None) -> TTSResult:
+        raise OSError("audio device is busy")
+
+
+def test_a_speaker_that_raises_does_not_destroy_the_answer(core) -> None:
+    """Speech is an extra channel; its fault must not turn a good turn into a crash.
+
+    Before this, ``_maybe_speak`` awaited the backend unguarded: a backend that
+    raised made ``process_text`` raise after the command had already run and
+    succeeded, which crashed `run.py voice` and turned ``/voice/command`` into a 500.
+    """
+    session = VoiceSession(core, tts=_ExplodingTTS(), stt=TranscriptSTT())
+    turn = asyncio.run(session.process_text("Jarvis, what time is it", speak=True))
+
+    assert not turn.rejected
+    assert turn.response is not None and turn.response.reply
+    assert turn.speech is not None and not turn.speech.ok
+    assert "audio device is busy" in turn.speech.error
+    payload = turn.as_dict()
+    assert payload["spoken"] is False
+    assert "audio device is busy" in payload["speech_error"]
+
+
+def test_speak_failure_is_reported_not_raised(core) -> None:
+    session = VoiceSession(core, tts=_ExplodingTTS(), stt=TranscriptSTT())
+    result = asyncio.run(session.speak("anything"))
+    assert not result.ok
+    assert "audio device is busy" in result.error
+
+
+def test_silent_backend_is_not_reported_as_spoken(core) -> None:
+    """A recorded-but-not-played reply must answer ``spoken: false`` and say why not."""
+    session = VoiceSession(core, tts=NullTTS(), stt=TranscriptSTT())
+    turn = asyncio.run(session.process_text("Jarvis, what time is it", speak=True))
+
+    assert turn.speech is not None and turn.speech.ok
+    payload = turn.as_dict()
+    assert payload["spoken"] is False
+    # Nothing failed -- the silence was a choice, and it is not a rejection.
+    assert payload["rejected"] is False
+
+
 def test_session_blocks_dangerous_commands(core) -> None:
     session = VoiceSession(core, tts=NullTTS(), stt=TranscriptSTT())
     turn = asyncio.run(session.process_text("Jarvis, delete everything", speak=False))
@@ -706,6 +784,8 @@ def test_status_reports_all_subsystems(session: VoiceSession) -> None:
     status = session.status()
     assert {"enabled", "wake", "tts", "stt", "audio", "conversation"} <= set(status)
     assert "ready_for_microphone" in status
+    # The status must answer "will it speak", not only "is a backend installed".
+    assert "can_speak" in status["tts"]
 
 
 def test_reset_clears_conversation(session: VoiceSession) -> None:

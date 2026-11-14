@@ -46,6 +46,8 @@ from .models import (
     Verification,
     new_id,
 )
+from .conversation import ConversationService
+from .model_planner import ModelPlanner
 from .planner import RulePlanner
 from .recovery import RecoveryEngine, RecoveryOutcome
 from .tasks import LifecycleReport, TaskManager
@@ -119,6 +121,25 @@ class JarvisCore:
         self.policy = PermissionEngine(self.tools, self.devices, self.classifier)
         self.agents: Dict[str, Agent] = build_agents(self.tools)
         self.planner = RulePlanner(self.tools, self.apps)
+        # R2.3: the model may *propose* an action the rules could not route. The
+        # proposal is validated here and then runs through the same permission
+        # gate as any rule-planned action -- a model is not a grant.
+        self.model_planner = ModelPlanner(self.tools)
+        # R2.2: the one place a conversation is read and written. The pipeline
+        # and the chat surfaces share it, so a follow-up resolves the same way
+        # on either.
+        self.conversations = ConversationService(self.db)
+        # The message a conversation has just been about, per session. A
+        # demonstrative follow-up ("read that one", "summarize the second one")
+        # resolves against this instead of a fresh search of nothing.
+        from .email_context import EmailContext
+
+        self.email_context = EmailContext(self.db)
+        # The user's own task list and the daily plan derived from it. Distinct
+        # from TaskManager (workflow runs): this is what the *person* wrote down.
+        from .planner_service import PlannerService
+
+        self.planner_service = PlannerService(self.db)
         self.router = ModelRouter()
         self.capability_registry = CapabilityRegistry()
         
@@ -150,16 +171,36 @@ class JarvisCore:
         )
 
     def _log_message(self, session_id: str, role: str, content: str, intent: str = "") -> None:
-        self.db.execute(
-            """
-            INSERT INTO messages (message_id, session_id, role, content, intent)
-            VALUES (?, ?, ?, ?, ?)
-            """,
-            (new_id("MSG"), session_id, role, content, intent),
-        )
+        # R2.2: the conversation service is the one place a turn is written, so
+        # the pipeline and the chat surfaces share one history model. The
+        # `messages` table stays the pipeline's own ledger -- it carries the
+        # intent and the session index -- and the service writes it.
+        self.conversations.append(role, content, session_id=session_id, intent=intent)
         self.db.execute(
             "INSERT OR IGNORE INTO sessions (session_id, user_id) VALUES (?, 'user')",
             (session_id,),
+        )
+
+    #: How many recent turns a multi-turn follow-up may see. Bounded so a long
+    #: session never inflates the prompt toward the context window.
+    CONVERSATION_HISTORY_LIMIT = 8
+
+    def _recent_history(self, session_id: str, current_text: str) -> List[Dict[str, str]]:
+        """The session's recent ``{"role","content"}`` turns, oldest first.
+
+        Excludes the in-flight user message (this call's own text) so it is not fed
+        twice. Returns ``[]`` when there is no session id or the table is empty —
+        single-turn behaviour then applies unchanged.
+
+        R2.2: the read goes through the shared conversation service, so this
+        surface and the chat surface see the same turns. The bound used to be
+        this class's own ``CONVERSATION_HISTORY_LIMIT``; it is now the
+        service's, so one limit governs both.
+        """
+        return self.conversations.history(
+            session_id=session_id,
+            current_text=current_text,
+            limit=self.CONVERSATION_HISTORY_LIMIT,
         )
 
     @staticmethod
@@ -213,16 +254,17 @@ class JarvisCore:
     #: remembered -- the same reason ``MAX_READ_EXCERPT`` exists for file reads.
     IDENTIFIER_OFFER_LIMIT = 4
 
-    async def _advise_from_model(self, request: CommandRequest, rules_reply: str):
+    async def _advise_from_model(self, request: CommandRequest, rules_reply: str,
+                                  conversational: bool = False):
         """Ask the configured model about a sentence the rules did not recognise.
 
         The model may speak and may name one thing it would suggest. It cannot plan,
         cannot execute, and cannot raise a confirmation card -- those stay behind the gate
         a typed sentence goes through, and a suggestion is only ever reported as one.
 
-        Its words are appended to the rule router's own sentence rather than replacing it:
-        the rules did not recognise the sentence, and a reply that merely read as fluent
-        would be a claim about the pipeline that is not true.
+        When ``conversational`` is true the model's answer stands on its own rather than
+        being appended to the rule router's sentence: smalltalk greetings, open questions,
+        and clarifications are natural conversation, not pipeline failures to annotate.
         """
         model = self.settings.llm_model or "the configured model"
         # Named because "the model answered" is not the same fact as "gemini answered", and
@@ -247,6 +289,13 @@ class JarvisCore:
             return (f"{rules_reply}\n\nI did not ask a model about that: {refusal}. So that "
                     "answer is the rule router's own.", note)
         system = (
+            "You are Vantage, an AI assistant running inside a macOS desktop app. "
+            "Answer naturally and conversationally. Keep responses concise but helpful. "
+            "You can discuss any topic — the user wants a ChatGPT-like conversational experience. "
+            "If the user asks you to perform an action (check files, run commands, control "
+            "devices), name the tool you would use and explain what you'd do — the app handles "
+            "execution. Be warm and direct, not robotic."
+        ) if conversational else (
             "You are advising a local assistant on the user's own Mac. Its rule router did "
             "not recognise the sentence, so answer in at most two short sentences of plain "
             "words. You have no ability to run anything and must never say that a thing was "
@@ -257,14 +306,30 @@ class JarvisCore:
             + ", ".join(sorted(self.tools.names()))
         )
         try:
+            # 30s — the same documented chat budget as `/ai/chat/send` and the
+            # provider Test route. This used to be 20s, which fired before a slow
+            # but legitimate cold-route completion (measured 20.1s on 9Router) and
+            # silently dropped to the rule planner. The provider adapter's total
+            # deadline now ends the call only when the model truly stalls; the
+            # sentence budget (SENTENCE_BUDGET) still caps the turn as a whole.
+            #
+            # Multi-turn context: thread the session's recent turns so a follow-up
+            # ("and the second one?") resolves against what was just said. Bounded
+            # to the last few messages and scoped to this session, so a different
+            # session or user never leaks another's conversation.
+            history = self._recent_history(request.session_id, request.text)
             answer = await self.router.complete(system, request.text,
-                                                task_type="conversation", timeout=20.0)
+                                                task_type="conversation", timeout=30.0,
+                                                history=history)
         except Exception as exc:  # a transport failure is itself an answer about transport
             answer = None
             note["error"] = str(exc)[:120]
 
         if not answer:
             note["stage"] = "model_unavailable"
+            if conversational:
+                return (f"{rules_reply}\n\n(The AI model is currently unavailable — "
+                        "check your network or provider configuration.)", note)
             return (f"{rules_reply}\n\nI also asked the model you configured ({label}), and "
                     "it was unavailable, so that answer is the rule router's own.", note)
 
@@ -272,6 +337,18 @@ class JarvisCore:
         suggested = next((name for name in sorted(self.tools.names())
                           if re.search(rf"\b{re.escape(name)}\b", text)), "")
         note["stage"] = "model"
+        if conversational:
+            # The model's answer stands on its own — natural conversation, not
+            # a pipeline annotation. But if the model suggested running a tool
+            # in its response, the user must know it was NOT executed.
+            if suggested:
+                return (
+                    f"{text}\n\n(I did not run {suggested}. Ask me to do it "
+                    f"directly and it will go through the usual approval.)",
+                    note,
+                )
+            return text, note
+
         if suggested:
             note["suggested_tool"] = suggested
             closer = (f"It suggested {suggested}. I did not run anything on that -- ask me "
@@ -279,6 +356,374 @@ class JarvisCore:
         else:
             closer = "I did not run anything on its answer."
         return f"{rules_reply}\n\n{label} said: {text}\n\n{closer}", note
+
+    @staticmethod
+    def _request_surface(request: CommandRequest) -> str:
+        """Which surface raised this request.
+
+        The source is the surface the request came from -- "mobile" for the
+        phone, "native" for the desktop app, "dashboard" for the web. A
+        request that arrived through the companion gateway is a phone request
+        however it was written, and the gateway is what forwards it.
+        """
+        source = (request.source or "").strip().lower()
+        if source in ("mobile", "phone", "android"):
+            return "phone"
+        if source in ("native", "macos", "app"):
+            return "native"
+        if source in ("dashboard", "web", "browser"):
+            return "dashboard"
+        return source or "unknown"
+
+    async def _propose_action(self, request: CommandRequest) -> Optional[Plan]:
+        """Ask the configured model to propose an action for this sentence.
+
+        Returns the validated plan, or ``None`` when the model had nothing to
+        propose, was unavailable, or proposed something this build will not
+        originate. A refusal is reported to the user by the caller; here it is
+        only a reason not to act.
+
+        The model's own answer to the sentence is not repeated here: the
+        conversational reply has already been given, and a proposal that adds
+        "I could also run X" on top of an answer is noise.
+        """
+        try:
+            history = self._recent_history(request.session_id, request.text)
+            return await self.model_planner.propose(
+                request.text,
+                complete_json=self.router.complete_json,
+                history=history,
+            )
+        except Exception as exc:  # a planner failure must not take the turn down
+            log.info("model proposal failed", extra_fields={"error": str(exc)[:120]})
+            return None
+
+    async def propose_and_execute(self, request: CommandRequest) -> CommandResponse:
+        """Ask the model to propose an action for this sentence, and run it.
+
+        R2.2: this is how the chat surface gains the ability to *do* something
+        rather than only answer. The proposal is validated by the model
+        planner, then goes through exactly the same gate -> execute -> verify
+        path as a pipeline action, so a chat proposal is never a grant and a
+        risky one still waits for the person's approval.
+
+        The response is the ordinary :class:`CommandResponse`, so the chat
+        surface reads the same fields the pipeline surfaces read: what was
+        proposed, whether it ran, whether it is waiting for approval, and what
+        the verified result was.
+        """
+        started = time.perf_counter()
+        response = CommandResponse(session_id=request.session_id,
+                                   request_id=new_id("REQ"))
+
+        # A demonstrative ("read that one") is not something to ask the model
+        # to guess: the per-session selection is a local fact the pipeline
+        # holds, and resolving it here keeps this surface on the same
+        # behaviour as /command. The model still proposes everything else.
+        plan = self.planner.parse(request.text, request.context)
+        if plan.referent is not None:
+            self._resolve_email_referent(request, plan)
+            if plan.direct_reply:
+                response.reply = plan.direct_reply
+                response.intent = plan.intent
+                response.plan = plan
+                self._log_message(request.session_id, "user", request.text)
+                self._log_message(request.session_id, "assistant", plan.direct_reply,
+                                  plan.intent)
+                return response
+            if plan.actions:
+                proposal = plan
+            else:
+                proposal = None
+        else:
+            proposal = None
+
+        if proposal is None or not proposal.actions:
+            proposal = await self._propose_action(request)
+        if proposal is None or not proposal.actions:
+            return response
+
+        response.plan = proposal
+        response.intent = proposal.intent
+        response.model_used = "llm"
+        planned = proposal.actions[0]
+        response.reply = (
+            f"I can {planned.tool.replace('_', ' ')} — let me do that."
+        )
+        self._log_message(request.session_id, "user", request.text)
+        return await self._execute_plan(request, proposal, response, started)
+
+    #: Ordinal words a person uses to pick from a list, by position.
+    _REFERENT_ORDINALS = {
+        "first": 1, "second": 2, "third": 3, "fourth": 4, "fifth": 5,
+        "sixth": 6, "seventh": 7, "eighth": 8, "ninth": 9, "tenth": 10,
+    }
+
+    def _resolve_email_referent(self, request: CommandRequest, plan: Plan) -> None:
+        """Turn a demonstrative into a read of the message it points at.
+
+        The planner saw "that one" but has no memory of the conversation; the
+        selection does. Two shapes: a bare referent reads the message the
+        session selected; an ordinal ("the second one") picks from the list of
+        candidates the reply just showed, in the order it showed them.
+
+        The rules that keep an answer honest:
+
+        * the lookup is by the session's own row -- a fresh session has none,
+          so a brand-new conversation cannot inherit another one's message,
+          and neither can a session that never dealt with an email;
+        * a referent with no selection behind it is a clarification naming
+          what is missing, never a search of the whole inbox and never a read
+          of a message the person did not point at;
+        * a bare referent whose last search matched several messages is asked
+          which one, with that list -- the same rule as a named search that
+          matched several: several matches identify none of them on their own;
+        * an ordinal that runs past the candidate list is reported as such --
+          "that list had three messages" -- rather than silently wrapping or
+          picking the first;
+        * a selection recorded against one provider is not spent against
+          another: a uid is only meaningful in the mailbox that minted it;
+        * the read is rebuilt with the registry's own tool, risk and
+          confirmation (``read_email`` is READ-tier, so it runs through the
+          normal gate), which is what keeps the result verified and audited
+          like any other action.
+        """
+        if plan.referent is None:
+            return
+
+        def _clarify(message: str) -> None:
+            plan.direct_reply = message
+            plan.actions = []
+            plan.reply_kind = "clarification"
+            plan.needs_clarification = False
+            plan.referent = None
+
+        selection = self.email_context.get(request.session_id)
+        if selection is None or (not selection.uid and not selection.candidates):
+            _clarify(
+                "There is no email in this conversation for me to point at. "
+                'Find one first -- for example: "find my email about the report".'
+            )
+            return
+
+        provider = self._current_email_provider_name()
+        if selection.provider and provider and selection.provider != provider:
+            _clarify(
+                f"That selection was made against the {selection.provider} mailbox, "
+                f"and the email backend is now {provider}. I will not read one "
+                "mailbox's message id against another; find it again here."
+            )
+            return
+
+        # Which message the referent names. The shared outcome is the row the
+        # selection holds for it -- a uid plus whatever display labels were
+        # recorded with it -- and the finish depends on what the person asked
+        # for: a read wants the uid, a reply wants the sender's address.
+        row = self._referent_row(plan, selection, plan.referent)
+        if row is None:
+            return  # the clarifying reply was already set
+
+        if plan.intent == "draft_email":
+            self._finish_reply_draft(plan, row)
+        elif plan.intent == "task_from_email":
+            self._finish_task_from_email(plan, row)
+        else:
+            self._finish_referent_read(plan, row)
+
+    def _clarify_referent(self, plan: Plan, message: str) -> None:
+        """Answer a referent that cannot be resolved, honestly, and run nothing."""
+        plan.direct_reply = message
+        plan.actions = []
+        plan.reply_kind = "clarification"
+        plan.needs_clarification = False
+        plan.referent = None
+
+    def _clear_referent_clarification(self, plan: Plan) -> None:
+        plan.direct_reply = None
+        plan.clarification_question = None
+        plan.needs_clarification = False
+        plan.reply_kind = ""
+        plan.referent = None
+
+    def _referent_row(self, plan: Plan, selection, referent: str):
+        """The selection row a referent names, or ``None`` after clarifying.
+
+        Shared by the read and the reply finish, so both resolve "the second
+        one" and "that one" against the same list, in the same order, and
+        both refuse out-of-range and missing references the same way.
+        """
+        if referent == "":
+            if selection.uid:
+                return {"uid": selection.uid,
+                        "subject": selection.subject,
+                        "sender": selection.sender}
+            if not selection.candidates:
+                self._clarify_referent(
+                    plan,
+                    "I do not have a message to point that at. Find one first, or "
+                    "name it: for example, \"read the invoice email\".")
+                return None
+            shown = "; ".join(
+                f"{i + 1}. {c.get('subject') or '(no subject)'} from "
+                f"{c.get('from') or 'unknown sender'}"
+                for i, c in enumerate(selection.candidates[:5])
+            )
+            more = (f" (+{len(selection.candidates) - 5} more)"
+                    if len(selection.candidates) > 5 else "")
+            self._clarify_referent(
+                plan,
+                "That search matched more than one message, so I did not pick "
+                f"on my own. Here is what I have: {shown}{more}. Tell me the "
+                "number, or say it by name.")
+            return None
+
+        index = self._REFERENT_ORDINALS.get(referent)
+        if index is None:
+            try:
+                index = int(referent)
+            except ValueError:
+                index = None
+        if index is None:
+            self._clarify_referent(
+                plan,
+                "I could not work out which message you meant. Say it by "
+                "name or by number from the list I showed you.")
+            return None
+        if not selection.candidates:
+            self._clarify_referent(
+                plan,
+                "I no longer have the list of messages in hand, so I cannot "
+                f"pick the {referent} one from it. Search again -- for "
+                'example: "find my email about that" -- and I will number them.')
+            return None
+        if not 1 <= index <= len(selection.candidates):
+            self._clarify_referent(
+                plan,
+                f"That list had {len(selection.candidates)} message(s); there is "
+                f"no {referent} one to read.")
+            return None
+        candidate = selection.candidates[index - 1]
+        return {"uid": str(candidate.get("uid") or ""),
+                "subject": str(candidate.get("subject") or ""),
+                "sender": str(candidate.get("from") or "")}
+
+    def _finish_referent_read(self, plan: Plan, row: Dict[str, str]) -> None:
+        """A referent that asks to see the message: read it by its real uid."""
+        uid = row["uid"]
+        if not uid:
+            self._clarify_referent(
+                plan,
+                "I do not have a message to point that at. Find one first, or "
+                "name it: for example, \"read the invoice email\".")
+            return
+        # Rebuild the plan as a read of the real uid. The tool, its risk tier
+        # and its confirmation come from the registry, so the read goes
+        # through the same gate and leaves the same audit trail as one the
+        # rules planned directly.
+        spec = self.tools.get("read_email")
+        problems = self.tools.validate_params("read_email", {"uid": uid})
+        if spec is None or problems:
+            self._clarify_referent(plan, "I could not look that message up; try naming it.")
+            return
+        plan.actions = [
+            PlannedAction(
+                step_id=1,
+                tool="read_email",
+                params={"uid": uid},
+                reason="the person referred to the message the conversation "
+                       "selected",
+            )
+        ]
+        plan.intent = "read_email"
+        self._clear_referent_clarification(plan)
+        plan.identifier_sources_used.append("email_selection")
+
+    def _finish_task_from_email(self, plan: Plan, row: Dict[str, str]) -> None:
+        """A referent that asks for a task: file one linked to the message."""
+        uid = row["uid"]
+        if not uid:
+            self._clarify_referent(
+                plan,
+                "I do not have a message to build a task from. Find one first, or "
+                "name it: for example, \"task from the email about the invoice\".")
+            return
+        spec = self.tools.get("task_from_email")
+        problems = self.tools.validate_params("task_from_email", {"uid": uid})
+        if spec is None or problems:
+            self._clarify_referent(plan, "I could not link that message; try naming it.")
+            return
+        plan.actions = [
+            PlannedAction(
+                step_id=1,
+                tool="task_from_email",
+                params={"uid": uid},
+                reason="the person asked for a task from the message the "
+                       "conversation selected",
+            )
+        ]
+        plan.intent = "task_from_email"
+        self._clear_referent_clarification(plan)
+        plan.identifier_sources_used.append("email_selection")
+
+    def _finish_reply_draft(self, plan: Plan, row: Dict[str, str]) -> None:
+        """A referent that asks for a reply: draft to the sender, never send.
+
+        The recipient is the address recorded with the selected message. A
+        sender that carries no address cannot be drafted to -- guessing one
+        would turn a reply into a message to the wrong person -- so the reply
+        is asked for rather than invented. Drafting is the LOW, reversible
+        step; the send rule (explicit verb + confirmation) is untouched.
+        """
+        address = self._address_from(row["sender"] or "")
+        if not address:
+            subject = row.get("subject") or "the message"
+            self._clarify_referent(
+                plan,
+                f"That message ({subject}) did not carry an email address I "
+                "could reply to. Tell me the address, or draft to someone: "
+                f'"reply to that one to someone@example.com".')
+            return
+        plan.actions = [
+            PlannedAction(
+                step_id=1,
+                tool="draft_email",
+                params={"to": address, "subject": "", "body": plan.referent_body},
+                reason="a reply to the message the conversation selected; "
+                       "drafted, not sent",
+            )
+        ]
+        plan.intent = "draft_email"
+        self._clear_referent_clarification(plan)
+        plan.identifier_sources_used.append("email_selection")
+
+    @staticmethod
+    def _address_from(value: str) -> str:
+        """The address inside a display name ("Billing <a@b.c>"), or the bare
+        address, or ``""`` when there is none."""
+        from ..integrations.email_provider import looks_like_address
+
+        value = (value or "").strip()
+        if not value:
+            return ""
+        match = re.search(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+", value)
+        candidate = (match.group(0) if match else value).strip()
+        return candidate if looks_like_address(candidate) else ""
+
+    def _current_email_provider_name(self) -> str:
+        """The name of the email backend in use now, without forcing a connection.
+
+        The selection records which mailbox it came from; a uid is only
+        meaningful in the mailbox that minted it, so a referent must not be
+        resolved after the backend changed. ``describe`` is the provider's own
+        answer and does not open an IMAP session.
+        """
+        try:
+            from ..integrations.email_provider import get_email_provider
+            return str(get_email_provider(self.settings).name or "")
+        except Exception as exc:
+            log.info("could not name the email provider",
+                     extra_fields={"error": str(exc)[:120]})
+            return ""
 
     async def _offer_identifiers(self, request: CommandRequest, plan: Plan) -> None:
         """Fill in the identifiers a question asks for, from the registry's own reads.
@@ -288,6 +733,11 @@ class JarvisCore:
         offered, never chosen: this emits no action, and the sentence still ends in a
         question. A lookup that fails or finds nothing says so, rather than leaving the
         bare request for an id or inventing a row to fill the space.
+
+        The one exception is a lookup that found exactly one row matching the name
+        the person gave. Then their own words identify it, and the plan is completed
+        rather than asked about -- but the completion is still a *proposal*, and it
+        still goes through the permission gate like any other action.
         """
         if not plan.missing_identifiers:
             return
@@ -301,7 +751,9 @@ class JarvisCore:
                 continue
             plan.identifier_sources_used.append(spec.name)
             shape = (spec.provides_identifiers or {}).get(param, {})
-            result = await self._run_identifier(spec, request)
+            result = await self._run_identifier(
+                spec, request, lookup=plan.named_thing,
+                lookup_param=str(shape.get("lookup") or ""))
             if result is None or not getattr(result, "ok", False):
                 reason = getattr(result, "error", None) or "the check did not answer"
                 notes.append(f"I asked {spec.name} and it could not tell me: {reason}.")
@@ -309,6 +761,10 @@ class JarvisCore:
             rows = list((getattr(result, "output", None) or {}).get(shape.get("items", "")) or [])
             if not rows:
                 notes.append("I checked, and there is nothing of that kind right now.")
+                continue
+            if self._resolve_from_lookup(plan, param, shape, rows):
+                # Exactly one row matched what they said. Their words identified
+                # it; the question is answered, so it is not asked.
                 continue
             shown = rows[: self.IDENTIFIER_OFFER_LIMIT]
             listed = ", ".join(
@@ -327,22 +783,102 @@ class JarvisCore:
         if plan.direct_reply:
             plan.direct_reply = f"{plan.direct_reply} {addition}"
 
-    async def _run_identifier(self, spec, request: CommandRequest):
+    def _resolve_from_lookup(self, plan: Plan, param: str, shape: Dict[str, Any],
+                             rows: List[Dict[str, Any]]) -> bool:
+        """Fill one identifier from the lookup, when their own words named it.
+
+        Two conditions, both required. The lookup must have been *searched* by
+        name -- a source that lists a window and was not given a lookup
+        parameter has not answered "which one did you mean", only "what is on
+        the calendar". And exactly one row must have come back: two events
+        called "Review" are still ambiguous, and picking the first would be a
+        coin toss presented as an answer.
+        """
+        if not plan.named_thing or not shape.get("lookup"):
+            return False
+        if len(rows) != 1:
+            return False
+        row = rows[0]
+        identifier = row.get(shape.get("id", ""), "")
+        if not identifier:
+            return False
+        plan.resolved_identifier[param] = str(identifier)
+        return True
+
+    def _complete_from_resolved(self, plan: Plan) -> bool:
+        """Turn a plan that asked for an id into the action that id names.
+
+        The planner built a question, not an action, because the sentence did
+        not carry the identifier. The lookup found it. The action is rebuilt
+        here, with the identifier filled in and nothing else changed -- the
+        tool, the risk and the confirmation are the ones the registry declares,
+        so this completes the plan rather than substituting a different one.
+
+        Returns ``False`` when the plan cannot be completed (no tool, or the
+        filled-in parameters do not validate), and the plan then stays a
+        question.
+        """
+        spec = self.tools.get(plan.intent)
+        if spec is None:
+            return False
+        params: Dict[str, Any] = {}
+        for param, value in plan.resolved_identifier.items():
+            params[param] = value
+        problems = self.tools.validate_params(spec.name, params)
+        if problems:
+            log.info("identifier did not complete the plan",
+                     extra_fields={"tool": spec.name, "problems": problems})
+            return False
+        plan.actions = [
+            PlannedAction(
+                step_id=1,
+                tool=spec.name,
+                params=params,
+                reason=f"{plan.intent} with the {', '.join(sorted(plan.resolved_identifier))} "
+                       "the person named",
+            )
+        ]
+        return True
+
+    async def _run_identifier(self, spec, request: CommandRequest,
+                              lookup: str = "", lookup_param: str = ""):
         """Run one enumerator for the purpose of phrasing a question.
 
         Failures come back rather than raising: a lookup that cannot answer should leave
         the question standing, not replace it with an error nobody asked about.
+
+        ``lookup`` is the name the person gave and ``lookup_param`` is the
+        parameter of this source that takes it. A source that lists "today" by
+        default must not be run that way: "cancel my Design Review event" asked
+        for an event six days out, and a lookup that only looked at today
+        reported that nothing of that kind existed.
         """
         handler = self.tools.handler(spec.name)
         if handler is None:
             return None
+        kwargs = self._lookup_params(spec, lookup, lookup_param)
         try:
-            return await handler(self._context(request))
+            return await handler(self._context(request), **kwargs)
         except Exception as exc:  # a read that throws must not become the user's problem
             log.warning("identifier lookup raised",
                         extra_fields={"tool": spec.name,
                                       "error": f"{type(exc).__name__}: {exc}"})
             return None
+
+    @staticmethod
+    def _lookup_params(spec, lookup: str, lookup_param: str) -> Dict[str, Any]:
+        """The arguments an identifier source is called with.
+
+        The source declares, per identifier, which of its parameters takes the
+        name to search for (``provides_identifiers[...]["lookup"]``). Without
+        that declaration the source is run with no arguments, which for a
+        windowed enumerator means its default window.
+        """
+        if not lookup or not lookup_param:
+            return {}
+        if lookup_param not in (spec.parameters or {}):
+            return {}
+        return {lookup_param: lookup}
 
     @staticmethod
     def _note_unhandled(response: CommandResponse, plan: Plan) -> None:
@@ -501,6 +1037,14 @@ class JarvisCore:
         response.plan = plan
         response.model_used = plan.planner
 
+        # A demonstrative ("read that one", "summarize the second one") names no
+        # message: it points at what this conversation just dealt with. Resolve
+        # it against the per-session selection before anything else -- a
+        # referent that resolves becomes a real read of a real uid, and one
+        # that does not is answered with an honest "there is nothing to point
+        # at", never a guess and never another session's selection.
+        self._resolve_email_referent(request, plan)
+
         # A question that asks for an identifier the system already holds is asking the
         # user to do a lookup the product has already done (Phase 33). Answering that
         # part is done before either reply branch, because a route's question arrives as
@@ -509,16 +1053,61 @@ class JarvisCore:
         # help.
         await self._offer_identifiers(request, plan)
 
+        # The lookup may have answered the question the planner asked. When the
+        # person's own words named exactly one thing, the plan can be completed
+        # instead of asked about -- and the completed plan goes to the gate
+        # like every other action, so "cancel my Design Review event" now asks
+        # for approval to cancel that event instead of asking which event.
+        if plan.resolved_identifier and self._complete_from_resolved(plan):
+            plan.direct_reply = None
+            plan.clarification_question = None
+            plan.needs_clarification = False
+            plan.reply_kind = ""
+
         if plan.direct_reply:
             response.reply = plan.direct_reply
             stage = "planner"
             model_note: Dict[str, Any] = {}
-            if plan.reply_kind == "not_understood" and self.settings.llm_enabled:
+            if plan.reply_kind in ("not_understood", "smalltalk", "clarification_question",
+                                     "question", "info_request") \
+                    and self.settings.llm_enabled:
                 response.reply, model_note = await self._advise_from_model(
-                    request, plan.direct_reply)
+                    request, plan.direct_reply, conversational=True)
                 response.model_used = (model_note.get("label") or "rules") \
                     if model_note.get("stage") == "model" else "rules"
                 stage = model_note.get("stage", "planner")
+                # R2.3: the model may know how to *act* on a sentence the rules
+                # could not route at all. Ask it to propose, and if the proposal
+                # validates, run it through the same gate a rule-planned action
+                # goes through. The model proposes; the permission engine
+                # decides.
+                #
+                # Only for `not_understood`: that is the one reply_kind that
+                # says the rules found nothing. A greeting or a recognised
+                # question is a question, and asking the model to plan an
+                # action for it would double the latency of every "hello" to
+                # catch a case the rules already classified.
+                if model_note.get("stage") == "model" and plan.reply_kind == "not_understood":
+                    proposal = await self._propose_action(request)
+                    if proposal is not None and proposal.actions:
+                        response.reply = ""
+                        response.plan = proposal
+                        response.intent = proposal.intent
+                        response.model_used = model_note.get("label") or "llm"
+                        self._note_unhandled(response, proposal)
+                        self.audit.record(
+                            intent=request.text,
+                            result="no_action",
+                            risk="none",
+                            device=request.device_id,
+                            session_id=request.session_id,
+                            request_id=response.request_id,
+                            detail={"stage": "model_proposal",
+                                    "tool": proposal.actions[0].tool,
+                                    "reply_kind": proposal.reply_kind,
+                                    "model": model_note},
+                        )
+                        return await self._execute_plan(request, proposal, response, started)
             # ``decision`` is the permission outcome. Nothing was permitted to run
             # here -- the ledger row written just below says ``no_action`` -- so it
             # is left unset rather than claiming EXECUTE. It was EXECUTE for as
@@ -605,7 +1194,15 @@ class JarvisCore:
         step_seqs = list(seqs) if seqs is not None else list(range(len(plan.actions)))
 
         for index, action in enumerate(plan.actions):
-            verdict = self.policy.evaluate(action, session_id=request.session_id)
+            # The surface that raised the request goes to the gate, so a
+            # confirmation records who asked for it. The self-approval rule
+            # needs that: a narrow surface approving its own request is
+            # refused, and "whose request was this" is the question.
+            verdict = self.policy.evaluate(
+                action,
+                session_id=request.session_id,
+                requested_surface=self._request_surface(request),
+            )
             risk_label = self.classifier.risk_label(self.tools.get(action.tool).risk)  # type: ignore[union-attr]
 
             if verdict.decision is PolicyDecision.BLOCK:
@@ -739,6 +1336,14 @@ class JarvisCore:
             # be reported as finished work.
             self.tasks.refresh_status(job_id)
 
+        # --- Stage: selection ---------------------------------------------
+        # A mailbox read just happened: record what it actually returned so a
+        # follow-up ("read that one", "the second one") can point at it. Only
+        # real results set anything -- a failed read, a draft or a send never
+        # touches the selection, and an empty search clears it rather than
+        # leaving an earlier pointer standing.
+        self._record_email_selection(request, response)
+
         # --- Stage: memory update -------------------------------------------
         self._remember_outcome(request, response)
 
@@ -861,13 +1466,67 @@ class JarvisCore:
             response.decision = PolicyDecision.BLOCK
             return response
         
-        # Get approver surface from session for provenance tracking
-        from jarvis.api.app import _surface_of
-        approver_surface = _surface_of(session_id) or "unknown"
+        # Get approver surface from session for provenance tracking — but respect a
+        # surface the caller already supplied. A local phone self-approval test passes
+        # approver_surface="phone" directly; overwriting it with the session-derived
+        # "unknown" would silently disarm the guard.
+        if not approver_surface:
+            from jarvis.api.app import _surface_of
+            approver_surface = _surface_of(session_id) or "unknown"
         
-        # Reject self-approval at server side
+        # Reject self-approval at server side. Three conditions keep this honest:
+        # (1) `approve` -- a *denial* can never be a self-approval, so "no"/"cancel"
+        #     must never be swallowed by this guard;
+        # (2) `session_id` -- an empty approver session (a cross-device approval that
+        #     carries no session identity, e.g. a wrist CONFIRM) has no "who" to
+        #     compare, so comparing "" == "" would deny a legitimate approval;
+        # (3) narrow-surface -- the Phase 71 rule is about a *remote* device approving
+        #     itself. A phone session must not approve its own request; a local
+        #     (CLI/voice) session and the dashboard are the operator, not a narrow
+        #     handset. The surface that minted the session is the authority here.
         requested_session = record.get("requested_by_session", record.get("session_id", ""))
-        if requested_session == session_id and approver_surface != "dashboard":
+        # Only a narrowed surface (the phone) is forbidden from approving its own
+        # request. A local CLI/voice session and the dashboard are the operator, not a
+        # narrow handset, so their surface is NOT in NARROW_SURFACES and they approve
+        # their own requests legitimately. The previous `!= "dashboard"` test wrongly
+        # blocked local voice too (its surface is "unknown" because a voice session is a
+        # local JarvisCore session, not a gateway session) — voice "yes" was rejected
+        # as self-approval and the pending delete never ran.
+        from jarvis.api.app import NARROW_SURFACES
+        # Two independent facts say "this is a phone": the surface the
+        # *approver* is on, and the surface the *request* was raised on.
+        # Either one being narrow is enough to refuse a self-approval --
+        # they are separate facts, and either being wrong must not be enough
+        # to let the approval through.
+        requested_surface = record.get("requested_surface", "")
+        # The invariant is "a device may not approve its own risky request".
+        #
+        # The previous condition required `requested_session == session_id`, and
+        # those two values are never the same kind of thing: the confirmation
+        # stores the *conversation* id (SESS-...), while the approver presents
+        # the *HTTP session token*. Measured on a live server: a phone raised a
+        # Google task write and approved it itself; the guard never fired.
+        #
+        # Two rules now, and the first needs no matching identifier at all:
+        #
+        # (a) A request raised on a narrow surface must be answered from a
+        #     non-narrow one. The phone is the only narrow surface, so this
+        #     says "approve it on the laptop" -- which is exactly what the
+        #     refusal text has always told people to do. It is deliberately
+        #     conservative: it does not try to tell two handsets apart, because
+        #     doing that would mean storing session tokens in the database.
+        # (b) The session-identity rule stays for callers whose ids *are*
+        #     comparable (a raw API caller that passes both the same way).
+        raised_on_narrow = requested_surface in NARROW_SURFACES
+        approver_is_narrow = approver_surface in NARROW_SURFACES
+        identity_match = bool(session_id) and requested_session == session_id
+
+        # (a) needs no identifier: a narrow surface may never answer a request
+        #     that a narrow surface raised.
+        # (b) preserves the original rule for callers with comparable ids.
+        self_approval = (raised_on_narrow and approver_is_narrow) or \
+                        (identity_match and (approver_is_narrow or raised_on_narrow))
+        if approve and self_approval:
             log.warning(
                 "self-approval rejected",
                 extra_fields={
@@ -876,12 +1535,18 @@ class JarvisCore:
                     "approver_surface": approver_surface,
                 },
             )
-            response.reply = "You cannot approve your own requests. Approve this on the laptop instead."
-            response.needs_confirmation = False
+            # Refuse the *attempt*, not the request.
+            #
+            # This used to resolve the confirmation as denied, which destroyed
+            # the very thing the message points at: the phone was told "approve
+            # this on the laptop" while the record had just been marked denied,
+            # so the laptop could not approve it either. Measured. A
+            # self-approval attempt leaves the request pending and answerable by
+            # a wider surface; otherwise the refusal is a silent cancellation.
+            response.reply = ("You cannot approve your own requests. This is still "
+                              "waiting — approve it on the laptop instead.")
+            response.needs_confirmation = True
             response.decision = PolicyDecision.BLOCK
-            # Record denial with provenance
-            self.policy.resolve(confirmation_id, approve=False, 
-                              approver_session=session_id, approver_surface=approver_surface)
             self.audit.record(
                 intent=record["tool"],
                 tool=record["tool"],
@@ -893,7 +1558,43 @@ class JarvisCore:
                 detail={"reason": "self-approval prohibited"},
             )
             return response
-        
+
+        # A confirmation can only be approved while its requester is still a live session.
+        # If the session that raised it was explicitly ended (the device signed out, or the
+        # laptop revoked it), the approval would be acting on a request nobody is standing
+        # behind -- so it is refused. This is checked by the requester's session id, not the
+        # approver's: a live dashboard approving a *live* phone's request is legitimate; a
+        # dashboard approving a *signed-out* phone's stale request is not.
+        if approve and requested_session:
+            from jarvis.api.app import _is_session_revoked
+            if _is_session_revoked(requested_session):
+                log.warning(
+                    "approval refused: requesting session was revoked",
+                    extra_fields={
+                        "confirmation_id": confirmation_id,
+                        "requester_session": requested_session,
+                    },
+                )
+                response.reply = (
+                    "That request was raised by a session that has since signed out, so it "
+                    "can no longer be approved. Ask again from a live session."
+                )
+                response.needs_confirmation = False
+                response.decision = PolicyDecision.BLOCK
+                self.policy.resolve(confirmation_id, approve=False,
+                                    approver_session=session_id, approver_surface=approver_surface)
+                self.audit.record(
+                    intent=record["tool"],
+                    tool=record["tool"],
+                    result="denied",
+                    risk="denied_revoked_requester",
+                    confirmation=True,
+                    session_id=session_id,
+                    request_id=request_id or response.request_id,
+                    detail={"reason": "requesting session was revoked"},
+                )
+                return response
+
         # Resolve with provenance tracking
         self.policy.resolve(confirmation_id, approve, 
                           approver_session=session_id, approver_surface=approver_surface)
@@ -1104,6 +1805,79 @@ class JarvisCore:
     #: copy of the fact that was just forgotten -- and the next check writes one more.
     _MEMORY_READ_TOOLS = {"search_memory", "memory_overview"}
 
+    def _record_email_selection(self, request: CommandRequest, response: CommandResponse) -> None:
+        """Point the session at the message a mailbox read just returned.
+
+        This is the only place the per-session selection moves, and it moves
+        only from **real results**: an ``ActionResult`` that the agent actually
+        ran and reported. The rules, matched to how the person talks:
+
+        * a search that found exactly one message selects it, so "read that
+          one" / "summarize it" has something to point at;
+        * a search that found several keeps the **list** (in the order the
+          reply showed it) but selects none of them -- "the second one" can
+          then be answered from the list the person saw, without ever
+          silently reading the first;
+        * a search that found nothing clears the selection rather than
+          leaving an earlier pointer standing and answering a stale one;
+        * a successful ``read_email`` makes the message it actually read the
+          current selection, and leaves the list in place so an ordinal
+          still resolves against it;
+        * a failed read/search (an unreadable mailbox, a bad uid) touches
+          nothing -- the last real result stays the selection.
+
+        Only ``uid`` plus a subject and sender are stored; the body is always
+        re-fetched through the read path. The row is keyed by ``session_id``,
+        so a selection made here cannot be reached from another session.
+        """
+        from .email_context import EmailSelection
+
+        for result in response.actions or []:
+            if not getattr(result, "ok", False):
+                continue
+            output = getattr(result, "output", None) or {}
+            if not isinstance(output, dict):
+                continue
+            provider = str(output.get("provider") or "")
+
+            if result.tool == "read_email":
+                message = output.get("email") or {}
+                if not isinstance(message, dict):
+                    continue
+                uid = str(message.get("uid") or "")
+                if not uid:
+                    continue
+                prior = self.email_context.get(request.session_id)
+                self.email_context.set(request.session_id, EmailSelection(
+                    uid=uid,
+                    subject=str(message.get("subject") or ""),
+                    sender=str(message.get("from") or ""),
+                    provider=provider,
+                    candidates=prior.candidates if prior else [],
+                ))
+
+            elif result.tool == "search_email":
+                rows = [r for r in (output.get("results") or []) if isinstance(r, dict)]
+                if len(rows) == 1:
+                    row = rows[0]
+                    self.email_context.set(request.session_id, EmailSelection(
+                        uid=str(row.get("uid") or ""),
+                        subject=str(row.get("subject") or ""),
+                        sender=str(row.get("from") or ""),
+                        provider=provider,
+                        candidates=rows,
+                    ))
+                elif rows:
+                    # A list, not a choice: several matches identify none of
+                    # them on their own, so only the list is kept.
+                    self.email_context.set(request.session_id, EmailSelection(
+                        provider=provider, candidates=rows,
+                    ))
+                else:
+                    # Nothing matched: clear, so a stale pointer cannot answer
+                    # a follow-up about a message this search just ruled out.
+                    self.email_context.clear(request.session_id)
+
     def _remember_outcome(self, request: CommandRequest, response: CommandResponse) -> None:
         """Record a session-scoped memory of what happened."""
         if not response.actions:
@@ -1125,9 +1899,25 @@ class JarvisCore:
         lines: List[str] = []
         for result in response.actions:
             if result.ok:
-                lines.append(result.message or f"{result.tool} completed.")
+                # Check verification state for truthful reporting
+                if result.verification == Verification.SUCCESS:
+                    lines.append(result.message or f"{result.tool} completed.")
+                elif result.verification == Verification.UNKNOWN:
+                    # Executed but couldn't observe outcome - be explicit
+                    base_msg = (result.message or f"{result.tool} executed").rstrip(". ")
+                    lines.append(f"{base_msg}, but I could not verify it happened.")
+                else:
+                    # Should not happen when ok=True, but handle gracefully
+                    lines.append(result.message or f"{result.tool} completed.")
             else:
-                lines.append(f"That did not work: {result.summary}")
+                # A tool's own summary is usually a sentence written for a
+                # person -- "I would need an AI provider for that one" says
+                # more than "That did not work:" does. The prefix is only
+                # added when the tool said nothing useful.
+                summary = str(result.summary or "").strip()
+                if summary and not summary.endswith((".", "!", "?")):
+                    summary += "."
+                lines.append(summary or f"That did not work: {result.summary}")
 
         if len(lines) == 1:
             reply = lines[0]

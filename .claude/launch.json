@@ -1,0 +1,16 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "vantage",
+      "runtimeExecutable": ".venv/bin/python",
+      "runtimeArgs": ["run.py", "serve", "--port", "8777"],
+      "port": 8777
+    },
+    {
+      "name": "vantage-live",
+      "url": "http://localhost:8765",
+      "port": 8765
+    }
+  ]
+}

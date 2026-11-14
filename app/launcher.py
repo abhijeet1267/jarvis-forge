@@ -607,13 +607,14 @@ def build_ui(controller: ServerController, on_quit) -> None:
 
     dot = tk.Label(status_row, text="\u25cf", bg=PANEL, fg=MUTED, font=("Helvetica", 13))
     dot.pack(side="left")
-    
+    status = tk.Label(status_row, text="OFFLINE", bg=PANEL, fg=MUTED, font=("Helvetica Neue", 11))
+
     def update_status():
         """Update status display from runtime supervisor."""
         if hasattr(controller, 'runtime') and controller.runtime:
             try:
-                status = controller.runtime.get_status()
-                overall_state = status.get('overall_state', 'unavailable')
+                rt_status = controller.runtime.get_status()
+                overall_state = rt_status.get('overall_state', 'unavailable')
                 
                 # Update dot color and status text based on actual state
                 if overall_state == 'ready':

@@ -271,9 +271,16 @@ def get_embedder(settings=None) -> Embedder:
 
 
 def reset_embedder() -> None:
-    """Drop the cached embedder (used by tests)."""
+    """Drop the cached embedder and its shared vector cache (used by tests).
+
+    ``_SHARED_CACHE`` is keyed by raw text, so one test embedding ``"the heater
+    coil arrived"`` poisons a later test that embeds the same sentence and expects
+    a fresh network read. Clearing both restores the isolation the conftest's
+    per-test fixtures promise.
+    """
     global _embedder
     _embedder = None
+    _SHARED_CACHE.clear()
 
 
 def describe_embeddings(settings=None) -> Dict[str, object]:

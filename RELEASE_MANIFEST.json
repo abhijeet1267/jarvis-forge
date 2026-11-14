@@ -1,0 +1,8 @@
+{
+  "version": "0.2.0",
+  "build": "2",
+  "bundle_id": "com.jarvisforge.app",
+  "git_commit": "PLACEHOLDER",
+  "signing_status": "ad-hoc signed",
+  "notarization_status": "local_only_testing"
+}
