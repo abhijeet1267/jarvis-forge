@@ -253,3 +253,68 @@ def test_applying_to_a_directory_is_refused_without_raising(tmp_path):
     assert result["applied"] is False
     assert any("directory" in r["detail"] for r in result["results"])
     assert directory.is_dir()
+
+
+# -- undo ------------------------------------------------------------------
+
+def test_undo_restores_the_previous_contents(tmp_path):
+    target = tmp_path / "doc.txt"
+    target.write_text("original\n", encoding="utf-8")
+
+    world = ParallelWorld()
+    plan = world.plan([{"op": "replace", "path": str(target), "content": "changed\n"}])
+    applied = world.apply(plan, approved=True)
+    assert target.read_text(encoding="utf-8") == "changed\n"
+
+    undone = world.undo(applied["journal"], approved=True)
+    assert undone["undone"] is True
+    assert target.read_text(encoding="utf-8") == "original\n"
+
+
+def test_undo_removes_a_file_the_apply_created(tmp_path):
+    target = tmp_path / "new.txt"
+
+    world = ParallelWorld()
+    plan = world.plan([{"op": "create", "path": str(target), "content": "new\n"}])
+    applied = world.apply(plan, approved=True)
+    assert target.exists()
+
+    world.undo(applied["journal"], approved=True)
+    assert not target.exists(), "undo must remove a file the apply created"
+
+
+def test_undo_refuses_when_the_file_changed_after_the_apply(tmp_path):
+    """The newer work wins; undo says so instead of overwriting it."""
+    target = tmp_path / "doc.txt"
+    target.write_text("original\n", encoding="utf-8")
+
+    world = ParallelWorld()
+    plan = world.plan([{"op": "replace", "path": str(target), "content": "ours\n"}])
+    applied = world.apply(plan, approved=True)
+
+    target.write_text("the person edited this afterwards\n", encoding="utf-8")
+
+    undone = world.undo(applied["journal"], approved=True)
+    assert undone["undone"] is False
+    assert target.read_text(encoding="utf-8") == "the person edited this afterwards\n"
+    assert "newer work" in undone["results"][0]["detail"]
+
+
+def test_undo_requires_approval(tmp_path):
+    target = tmp_path / "doc.txt"
+    target.write_text("original\n", encoding="utf-8")
+    world = ParallelWorld()
+    applied = world.apply(
+        world.plan([{"op": "replace", "path": str(target), "content": "x\n"}]),
+        approved=True)
+
+    refused = world.undo(applied["journal"], approved=False)
+    assert refused["undone"] is False
+    assert target.read_text(encoding="utf-8") == "x\n"
+
+
+def test_an_empty_journal_undoes_nothing_and_says_so(tmp_path):
+    world = ParallelWorld()
+    result = world.undo({"entries": []}, approved=True)
+    assert result["undone"] is False
+    assert "records nothing" in result["refused"]

@@ -42,6 +42,27 @@ def build_router(require_auth) -> APIRouter:
                                 detail="applying file changes requires approved=true")
         return _apply(body)
 
+    @router.post("/undo")
+    async def undo_file_changes(body: Dict[str, Any] = Body(None)) -> Dict[str, Any]:
+        """Restore what an apply wrote, refusing where newer work exists.
+
+        The caller supplies the `journal` that `apply` returned. Undo does not
+        keep hidden state: what would be restored is inspectable before it runs.
+        A file edited after the apply is refused, not overwritten.
+        """
+        from ..core.parallelworld import ParallelWorld
+        from ..tools.files import _guard as file_guard
+
+        body = body or {}
+        journal = body.get("journal")
+        if not isinstance(journal, dict):
+            raise HTTPException(status_code=422,
+                                detail="the apply journal is required")
+        if body.get("approved") is not True:
+            raise HTTPException(status_code=409,
+                                detail="undo requires approved=true")
+        return ParallelWorld(guard=file_guard).undo(journal, approved=True)
+
     return router
 
 

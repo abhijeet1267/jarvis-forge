@@ -123,3 +123,43 @@ def test_the_graph_exposes_nodes_and_edges_for_the_view(service):
     relations = {e["relation"] for e in payload["edges"]}
     assert relations, "the graph must express how nodes relate"
     assert all(n["node_id"] for n in payload["nodes"])
+
+# -- outcome receipts ------------------------------------------------------
+
+def test_a_receipt_records_the_verdict_and_resolvable_evidence(service):
+    from jarvis.core.proofgraph import outcome_receipt
+
+    mission = service.create("document the flag", conditions=[
+        {"statement": "README mentions --fast", "verifier": "file content"}])
+    service.record_condition(mission.mission_id, "C1",
+                             status=ConditionStatus.VERIFIED,
+                             observation="README.md contains '--fast'")
+
+    rows = [_audit_row(mission.mission_id, "C1", "README.md contains '--fast'",
+                       log_id="LOG-real")]
+    receipt = outcome_receipt(service.get(mission.mission_id), rows,
+                              chain={"ok": True, "verified_of": 1})
+
+    assert receipt["receipt_version"] == 1
+    assert receipt["mission_id"] == mission.mission_id
+    assert receipt["evidence_references"], receipt
+    assert receipt["unresolvable_evidence"] == []
+    assert "independent observer" in receipt["honesty"]
+
+
+def test_a_receipt_names_evidence_it_cannot_resolve(service):
+    """A citation nobody can follow must be visible, not dropped."""
+    from jarvis.core.proofgraph import outcome_receipt
+
+    mission = service.create("m", conditions=[{"statement": "x"}])
+    receipt = outcome_receipt(service.get(mission.mission_id),
+                              [_audit_row(mission.mission_id, "C1", "observed",
+                                          log_id="LOG-a")])
+
+    # Force a reference to an id that is not in the rows the receipt was given.
+    mission.conditions[0].evidence = ["LOG-missing"]
+    service._persist_conditions(mission, actor="test")
+    receipt = outcome_receipt(service.get(mission.mission_id),
+                              [_audit_row(mission.mission_id, "C1", "observed",
+                                          log_id="LOG-a")])
+    assert "unresolvable_evidence" in receipt

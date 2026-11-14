@@ -435,3 +435,136 @@ async def test_a_supplied_approval_lets_the_mission_continue(service, workspace)
     assert resumed.state in (MissionState.COMPLETED.value,
                              MissionState.PARTIALLY_COMPLETED.value)
     assert target.exists()
+
+
+# -- lease enforcement -----------------------------------------------------
+
+@pytest.fixture()
+def leases():
+    from jarvis.security.leases import LeaseService
+    from jarvis.db.database import get_db
+
+    return LeaseService(get_db())
+
+
+def _lease_for(leases, mission, *, scope, capability="write_file", uses=1):
+    return leases.issue(mission_id=mission.mission_id, session_id="S1",
+                        capability=capability, scope=scope, ttl_seconds=60,
+                        max_uses=uses)
+
+
+@pytest.mark.asyncio
+async def test_a_step_without_a_lease_is_refused_under_lease_enforcement(
+        service, leases, workspace):
+    """An unleased step has no authorization to point at."""
+    target = workspace / "f.txt"
+
+    def work(step, mission):
+        target.write_text("ran", encoding="utf-8")
+
+        class _Ok:
+            ok = True
+            message = "wrote"
+        return _Ok()
+
+    mission = _mission(service,
+                       conditions=[{"statement": "x", "verifier": "y"}],
+                       steps=[{"title": "write", "tool": "write_file",
+                               "params": {"path": str(target)}}])
+
+    runner = MissionRunner(service, execute_step=work, permission=_allow_all,
+                           leases=leases)
+    result = await runner.run(mission.mission_id)
+
+    assert result.state == MissionState.BLOCKED.value
+    assert "no lease to spend" in result.reason
+    assert not target.exists()
+
+
+@pytest.mark.asyncio
+async def test_a_valid_lease_lets_the_step_run_and_is_spent(service, leases, workspace):
+    target = workspace / "f.txt"
+
+    def work(step, mission):
+        target.write_text("--ok", encoding="utf-8")
+
+        class _Ok:
+            ok = True
+            message = "wrote"
+        return _Ok()
+
+    mission = _mission(service,
+                       conditions=[{"statement": "the file says --ok",
+                                    "verifier": "file content"}],
+                       steps=[{"title": "write", "tool": "write_file",
+                               "params": {"path": str(target)}}])
+    lease = _lease_for(leases, mission, scope=[str(workspace)])
+
+    runner = MissionRunner(service, execute_step=work, permission=_allow_all,
+                           leases=leases)
+    result = await runner.run(
+        mission.mission_id,
+        verifiers={"C1": Verifiers.file_contains(str(target), "--ok", "C1")},
+        approval={"lease_id": lease.lease_id, "session_id": "S1"})
+
+    assert result.state == MissionState.COMPLETED.value
+    assert leases.get(lease.lease_id).uses == 1
+
+
+@pytest.mark.asyncio
+async def test_a_revoked_lease_blocks_the_step(service, leases, workspace):
+    """Demo C's shape: approval existed, permission was withdrawn before commit."""
+    target = workspace / "f.txt"
+
+    def work(step, mission):
+        target.write_text("should not run", encoding="utf-8")
+
+        class _Ok:
+            ok = True
+            message = "wrote"
+        return _Ok()
+
+    mission = _mission(service,
+                       conditions=[{"statement": "x", "verifier": "y"}],
+                       steps=[{"title": "write", "tool": "write_file",
+                               "params": {"path": str(target)}}])
+    lease = _lease_for(leases, mission, scope=[str(workspace)])
+    leases.revoke(lease.lease_id, reason="the operator withdrew it")
+
+    runner = MissionRunner(service, execute_step=work, permission=_allow_all,
+                           leases=leases)
+    result = await runner.run(mission.mission_id,
+                              approval={"lease_id": lease.lease_id, "session_id": "S1"})
+
+    assert result.state == MissionState.BLOCKED.value
+    assert "revoked" in result.reason
+    assert not target.exists()
+
+
+@pytest.mark.asyncio
+async def test_a_lease_for_another_directory_blocks_the_step(service, leases, workspace):
+    target = workspace / "f.txt"
+    other = workspace.parent / "elsewhere"
+
+    def work(step, mission):
+        target.write_text("nope", encoding="utf-8")
+
+        class _Ok:
+            ok = True
+            message = "wrote"
+        return _Ok()
+
+    mission = _mission(service,
+                       conditions=[{"statement": "x", "verifier": "y"}],
+                       steps=[{"title": "write", "tool": "write_file",
+                               "params": {"path": str(target)}}])
+    lease = _lease_for(leases, mission, scope=[str(other)])
+
+    runner = MissionRunner(service, execute_step=work, permission=_allow_all,
+                           leases=leases)
+    result = await runner.run(mission.mission_id,
+                              approval={"lease_id": lease.lease_id, "session_id": "S1"})
+
+    assert result.state == MissionState.BLOCKED.value
+    assert "outside the lease's scope" in result.reason
+    assert not target.exists()

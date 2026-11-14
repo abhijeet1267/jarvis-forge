@@ -210,6 +210,7 @@ class ParallelWorld:
 
         results = []
         backups: Dict[str, Optional[bytes]] = {}
+        journal_entries: List[Dict[str, Any]] = []
 
         for item in planned:
             target = Path(item.path)
@@ -258,6 +259,18 @@ class ParallelWorld:
             ok = _matches_expectation(item, after)
             if not ok:
                 self._restore(target, backups[item.path])
+            if ok:
+                import base64
+
+                original = backups.get(item.path)
+                journal_entries.append({
+                    "path": item.path,
+                    "op": item.op,
+                    "original_b64": (base64.b64encode(original).decode("ascii")
+                                     if original is not None else None),
+                    "after_sha256": after.sha256,
+                })
+
             results.append({
                 "path": item.path, "ok": ok,
                 "detail": ("verified after the write" if ok else
@@ -269,6 +282,79 @@ class ParallelWorld:
             "applied": all(r["ok"] for r in results) if results else False,
             "results": results,
             "rolled_back": [r["path"] for r in results if not r["ok"]],
+            # The record an undo needs: what each file held before, and what our
+            # write produced. Returned to the caller rather than hidden in the
+            # module, so "what would undo do" is inspectable before it is done.
+            "journal": {"entries": journal_entries},
+        }
+
+    # -- undo ---------------------------------------------------------------
+    def undo(self, journal: Dict[str, Any], *, approved: bool = False) -> Dict[str, Any]:
+        """Restore the pre-apply bytes, but only where nothing newer exists.
+
+        The rule that makes undo safe is the same one that makes apply safe: the
+        file must still be the one *we* wrote. If a person edited it after the
+        apply, restoring the old bytes would destroy their work, so that entry is
+        refused and reported rather than forced.
+
+        `journal` is the `journal` entry returned by `apply`. It is caller-held
+        because this module keeps no hidden state: the record of what was written
+        is data the caller can store, inspect and pass back.
+        """
+        if not approved:
+            return {"undone": False, "refused": "approval was not given", "results": []}
+
+        entries = list((journal or {}).get("entries") or [])
+        if not entries:
+            return {"undone": False, "refused": "the journal records nothing to undo",
+                    "results": []}
+
+        results = []
+        for entry in entries:
+            target = Path(str(entry.get("path") or ""))
+            original_b64 = entry.get("original_b64")
+            expected_after = str(entry.get("after_sha256") or "")
+
+            refusal = self._guard(str(target)) if self._guard else None
+            if refusal:
+                results.append({"path": str(target), "ok": False, "detail": refusal})
+                continue
+
+            # Is the file still what our apply wrote? If not, someone else has
+            # touched it and undo would clobber their work.
+            current = snapshot(target)
+            if expected_after and current.exists and current.sha256 != expected_after:
+                results.append({
+                    "path": str(target), "ok": False,
+                    "detail": ("the file changed after it was written, so restoring "
+                               "the earlier version would overwrite newer work")})
+                continue
+            if expected_after and not current.exists:
+                results.append({"path": str(target), "ok": False,
+                                "detail": "the file is gone; nothing to restore"})
+                continue
+
+            try:
+                if original_b64 is None:
+                    target.unlink(missing_ok=True)
+                    detail = "removed a file that did not exist before the apply"
+                else:
+                    import base64
+
+                    target.write_bytes(base64.b64decode(original_b64))
+                    detail = "restored the earlier contents"
+            except Exception as exc:
+                results.append({"path": str(target), "ok": False,
+                                "detail": f"restore failed: {exc}"})
+                continue
+
+            after = snapshot(target)
+            ok = (not after.exists) if original_b64 is None else after.exists
+            results.append({"path": str(target), "ok": ok, "detail": detail})
+
+        return {
+            "undone": all(r["ok"] for r in results) if results else False,
+            "results": results,
         }
 
     @staticmethod

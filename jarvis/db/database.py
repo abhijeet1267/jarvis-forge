@@ -469,6 +469,32 @@ CREATE TABLE IF NOT EXISTS missions (
     last_actor         TEXT NOT NULL DEFAULT 'system'
 );
 CREATE INDEX IF NOT EXISTS idx_missions_state ON missions(state, updated_at DESC);
+
+-- Permission leases (D1). A standing grant in `permissions` answers "may this
+-- subject use this tool at all"; a lease answers the narrower question a mission
+-- needs -- this session, this mission, this capability, this resource prefix,
+-- now, this many times. Expiry is an absolute time so a caller's clock skew
+-- cannot extend it, and `uses` is spent with a conditional UPDATE.
+CREATE TABLE IF NOT EXISTS permission_leases (
+    lease_id       TEXT PRIMARY KEY,
+    mission_id     TEXT NOT NULL,
+    session_id     TEXT NOT NULL DEFAULT '',
+    actor          TEXT NOT NULL DEFAULT 'user',
+    capability     TEXT NOT NULL DEFAULT '',
+    scope          TEXT NOT NULL DEFAULT '[]',
+    risk           INTEGER NOT NULL DEFAULT 0,
+    issued_at      REAL NOT NULL,
+    expires_at     REAL NOT NULL,
+    max_uses       INTEGER NOT NULL DEFAULT 1,
+    uses           INTEGER NOT NULL DEFAULT 0,
+    approval_ref   TEXT NOT NULL DEFAULT '',
+    revoked        INTEGER NOT NULL DEFAULT 0,
+    revoked_at     REAL,
+    revoked_reason TEXT NOT NULL DEFAULT '',
+    revoked_by     TEXT NOT NULL DEFAULT '',
+    plan_revision  INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_leases_mission ON permission_leases(mission_id, revoked);
 """
 
 

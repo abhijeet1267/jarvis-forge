@@ -147,7 +147,7 @@ class MissionRunner:
     """Drives one mission through gating, execution and independent verification."""
 
     def __init__(self, service: MissionService, *, execute_step=None,
-                 permission=None, audit=None) -> None:
+                 permission=None, audit=None, leases=None) -> None:
         self.service = service
         #: `execute_step(action, ctx)` -> ActionResult-shaped object. Injected so
         #: a test can drive the runner without a live agent registry, and so the
@@ -155,6 +155,10 @@ class MissionRunner:
         self._execute_step = execute_step
         self._permission = permission
         self._audit = audit
+        #: A `LeaseService`, when the caller wants per-step authorization spent
+        #: against a scoped grant. It is checked *in addition to* the permission
+        #: engine, never instead of it.
+        self._leases = leases
 
     # -- public -------------------------------------------------------------
     async def run(self, mission_id: str, *, verifiers: Optional[Dict[str, Verifier]] = None,
@@ -238,6 +242,20 @@ class MissionRunner:
                         mission_id, MissionState.BLOCKED, actor=actor,
                         reason=f"step {step.step_id} was refused: {reason}")
 
+            # A lease, when the caller supplied one for this step, is spent *immediately
+            # before* the step runs and *after* it passed the permission engine.
+            # Both checks are required: the engine says the tool is allowed at
+            # all, the lease says this mission may use it on this resource now.
+            # A revoked, expired or out-of-scope lease stops the step here.
+            lease_refusal = self._spend_lease(step, mission, approval)
+            if lease_refusal is not None:
+                self.service.mark_step(mission_id, step.step_id, status="failed",
+                                       detail=f"not executed: {lease_refusal}",
+                                       actor=actor)
+                return self.service.transition(
+                    mission_id, MissionState.BLOCKED, actor=actor,
+                    reason=f"step {step.step_id} was refused: {lease_refusal}")
+
             mission = self.service.mark_step(mission_id, step.step_id,
                                              status="running", actor=actor)
             outcome = await self._run_one(step, mission)
@@ -281,6 +299,36 @@ class MissionRunner:
             return {"allowed": False,
                     "reason": "no permission engine is attached to this runner"}
         return self._permission(step, mission)
+
+    def _spend_lease(self, step, mission: Mission,
+                     approval: Optional[Dict[str, Any]]) -> Optional[str]:
+        """Spend this step's lease, returning a refusal reason or None.
+
+        `approval` names the lease to spend (`{"lease_id": ...}`), so the
+        authorization a person granted is the one actually used. A runner with a
+        lease service but no lease for the step refuses: an unleased step under a
+        lease-enforcing runner has no authorization to point at.
+        """
+        if self._leases is None:
+            return None
+
+        lease_id = str((approval or {}).get("lease_id") or "").strip()
+        if not lease_id:
+            return ("this mission is running under lease enforcement, and this "
+                    "step has no lease to spend")
+
+        resource = str((step.params or {}).get("path") or "")
+        try:
+            self._leases.consume(
+                lease_id,
+                capability=step.tool or "",
+                resource=resource,
+                plan_revision=mission.version,
+                session_id=str((approval or {}).get("session_id") or ""),
+            )
+        except Exception as exc:      # LeaseRefusal and anything it wraps
+            return f"the lease does not authorize this step: {exc}"
+        return None
 
     async def _run_one(self, step, mission: Mission) -> StepOutcome:
         if self._execute_step is None:

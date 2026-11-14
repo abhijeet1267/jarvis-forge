@@ -216,6 +216,60 @@ class ProofGraph:
         return payload
 
 
+def outcome_receipt(mission: Any, audit_rows: Optional[List[Dict[str, Any]]] = None,
+                    *, chain: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """A portable record of what a mission did and what proves it.
+
+    Every evidence reference it emits is checked against the audit rows it was
+    given. A reference that resolves to no record is listed under
+    ``unresolvable_evidence`` rather than quietly dropped: a receipt whose
+    citations cannot be followed is worse than one that admits it.
+    """
+    rows = list(audit_rows or [])
+    known_ids = {str(r.get("log_id") or "") for r in rows}
+    graph = ProofGraph(mission, rows)
+    report = graph.report(chain=chain)
+
+    references: List[Dict[str, Any]] = []
+    unresolvable: List[str] = []
+    for claim in report["claims"]:
+        for observation in claim["observations"]:
+            evidence_id = str(observation.get("evidence_id") or "")
+            references.append({"condition_id": claim["condition_id"],
+                               "evidence_id": evidence_id,
+                               "observation": observation["observation"]})
+            if evidence_id and evidence_id not in known_ids:
+                unresolvable.append(evidence_id)
+
+    return {
+        "receipt_version": 1,
+        "mission_id": mission.mission_id,
+        "objective": mission.outcome or mission.request,
+        "request": mission.request,
+        "state": mission.state,
+        "verdict": mission.verdict(),
+        "plan_revision": mission.version,
+        "conditions": [
+            {"condition_id": c.condition_id, "statement": c.statement,
+             "status": c.status, "observation": c.observation,
+             "evidence": list(c.evidence)}
+            for c in mission.conditions],
+        "steps": [
+            {"step_id": s.step_id, "title": s.title, "tool": s.tool,
+             "status": s.status, "detail": s.detail}
+            for s in mission.steps],
+        "recovery_attempts": mission.recovery_attempts,
+        "evidence_references": references,
+        "unresolvable_evidence": unresolvable,
+        "evidence_integrity": report["evidence_integrity"],
+        "honesty": (
+            "A verified receipt means an independent observer checked each stated "
+            "condition. It does not mean every possible problem was checked, and "
+            "the hash chain it cites detects editing inside the log rather than "
+            "proving the log to a third party."),
+    }
+
+
 def _integrity_sentence(chain: Optional[Dict[str, Any]]) -> str:
     """What the hash chain does and does not establish, in one honest sentence."""
     if not chain:

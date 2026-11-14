@@ -110,6 +110,77 @@ def build_router(require_auth) -> APIRouter:
             raise HTTPException(status_code=409, detail=str(exc))
         return _dump(mission)
 
+    @router.get("/{mission_id}/receipt")
+    async def mission_receipt(mission_id: str) -> Dict[str, Any]:
+        """An exportable Outcome Receipt: what was done, and what proves it.
+
+        Evidence references are resolved against the audit log before the
+        receipt is returned; anything that does not resolve is listed rather than
+        silently omitted.
+        """
+        from ..core.proofgraph import outcome_receipt
+
+        mission = _service().get(mission_id)
+        if mission is None:
+            raise HTTPException(status_code=404, detail=f"no mission {mission_id!r}")
+
+        audit = _audit()
+        rows: List[Dict[str, Any]] = []
+        chain = None
+        if audit is not None:
+            try:
+                rows = audit.recent(limit=500)
+                chain = audit.verify_chain()
+            except Exception:
+                rows, chain = [], None
+        return outcome_receipt(mission, rows, chain=chain)
+
+    @router.post("/{mission_id}/leases")
+    async def issue_lease(mission_id: str,
+                          body: Dict[str, Any] = Body(None)) -> Dict[str, Any]:
+        """Issue a scoped, expiring lease for this mission.
+
+        Every bound is required: a lease with no resource scope authorizes
+        nothing, and that is enforced at use time, not only here.
+        """
+        from ..security.leases import LeaseService
+        from ..db.database import get_db
+
+        body = body or {}
+        service = LeaseService(get_db())
+        try:
+            lease = service.issue(
+                mission_id=mission_id,
+                session_id=str(body.get("session_id") or ""),
+                capability=str(body.get("capability") or ""),
+                scope=list(body.get("scope") or []),
+                ttl_seconds=float(body.get("ttl_seconds") or 600),
+                max_uses=int(body.get("max_uses") or 1),
+                approval_ref=str(body.get("approval_ref") or ""),
+                plan_revision=int(body.get("plan_revision") or 0))
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc))
+        return lease.to_dict()
+
+    @router.get("/leases/active")
+    async def active_leases(limit: int = 50) -> Dict[str, Any]:
+        """The leases currently usable -- what the Safety Center shows."""
+        from ..security.leases import LeaseService
+        from ..db.database import get_db
+
+        return {"leases": [l.to_dict() for l in LeaseService(get_db()).active(limit=limit)]}
+
+    @router.post("/leases/{lease_id}/revoke")
+    async def revoke_lease(lease_id: str,
+                           body: Dict[str, Any] = Body(None)) -> Dict[str, Any]:
+        """Revoke a lease. Takes effect at the next use, durably."""
+        from ..security.leases import LeaseService
+        from ..db.database import get_db
+
+        LeaseService(get_db()).revoke(
+            lease_id, reason=str((body or {}).get("reason") or ""), actor="user")
+        return {"revoked": True, "lease_id": lease_id}
+
     @router.post("/{mission_id}/run")
     async def run_mission(mission_id: str,
                           body: Dict[str, Any] = Body(None)) -> Dict[str, Any]:
