@@ -151,6 +151,10 @@ class MissionStep:
     satisfies: str = ""
     #: An idempotency key so a resumed mission does not repeat a side effect.
     idempotency_key: str = ""
+    #: Steps that must finish before this one may start. An empty list means the
+    #: step is immediately eligible, which is what lets independent work run at
+    #: the same time.
+    depends_on: List[str] = field(default_factory=list)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -162,6 +166,7 @@ class MissionStep:
             "detail": self.detail,
             "satisfies": self.satisfies,
             "idempotency_key": self.idempotency_key,
+            "depends_on": list(self.depends_on),
         }
 
 
@@ -295,6 +300,7 @@ class MissionService:
                 params=dict(raw.get("params") or {}),
                 satisfies=str(raw.get("satisfies") or ""),
                 idempotency_key=str(raw.get("idempotency_key") or ""),
+                depends_on=[str(d) for d in (raw.get("depends_on") or [])],
             ))
 
         if not mission.request:
@@ -512,6 +518,7 @@ def _from_row(row: Any) -> Mission:
             detail=str(s.get("detail") or ""),
             satisfies=str(s.get("satisfies") or ""),
             idempotency_key=str(s.get("idempotency_key") or ""),
+            depends_on=[str(d) for d in (s.get("depends_on") or [])],
         )
         for s in _load(row["steps"], [])
     ]

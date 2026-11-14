@@ -78,6 +78,21 @@ def build_router(require_auth) -> APIRouter:
             revoked += 1
         return {"revoked": revoked}
 
+    @router.get("/missions/{mission_id}/schedule")
+    async def mission_schedule(mission_id: str) -> Dict[str, Any]:
+        """Which steps may run now, and why the others are waiting.
+
+        Read-only: it reports the scheduler's decision without starting anything.
+        """
+        from ..core.missions import MissionService
+        from ..core.scheduler import schedule_summary
+        from ..db.database import get_db
+
+        mission = MissionService(get_db()).get(mission_id)
+        if mission is None:
+            raise HTTPException(status_code=404, detail=f"no mission {mission_id!r}")
+        return schedule_summary(mission.steps)
+
     @router.get("/goals")
     async def list_goals() -> Dict[str, Any]:
         """Opt-in monitored goals and when each was last observed."""
@@ -172,6 +187,9 @@ def build_router(require_auth) -> APIRouter:
         journal = FileTransactionJournal()
         try:
             reports = journal.reconcile(sha256_of_file)
+            # Bound the stored history so the file cannot grow without limit.
+            # Unfinished transactions are never pruned.
+            journal.prune(keep=50)
         except Exception as exc:
             raise HTTPException(
                 status_code=500,

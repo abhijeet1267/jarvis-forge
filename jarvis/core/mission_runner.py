@@ -300,6 +300,106 @@ class MissionRunner:
                     "reason": "no permission engine is attached to this runner"}
         return self._permission(step, mission)
 
+    async def run_parallel(self, mission_id: str, *,
+                           verifiers: Optional[Dict[str, Verifier]] = None,
+                           actor: str = "mission_runner",
+                           approval: Optional[Dict[str, Any]] = None,
+                           max_concurrent: int = 4) -> Mission:
+        """Run eligible steps concurrently, honouring dependencies and resources.
+
+        The difference from `run` is ordering, not authority: every step still
+        passes the permission engine and spends its lease, and any refusal
+        stops the mission exactly as it does in the sequential path. What can
+        happen at the same time is decided by `scheduler.ready_steps`, which
+        refuses to run two steps that name the same file.
+
+        Concurrency is bounded by `max_concurrent` so a mission with many
+        independent writes cannot open an unbounded number of them.
+        """
+        import asyncio
+
+        mission = self.service.get(mission_id)
+        if mission is None:
+            raise ValueError(f"no mission {mission_id!r}")
+        verifiers = dict(verifiers or {})
+
+        if MissionState(mission.state) is MissionState.DRAFT:
+            mission = self.service.transition(mission_id, MissionState.PLANNED,
+                                              actor=actor, reason="plan accepted")
+        if MissionState(mission.state) is MissionState.AWAITING_APPROVAL:
+            if not approval or not str(approval.get("confirmation_id") or "").strip():
+                return mission
+        if MissionState(mission.state) in (MissionState.PLANNED,
+                                           MissionState.AWAITING_APPROVAL):
+            mission = self.service.transition(
+                mission_id, MissionState.RUNNING, actor=actor,
+                reason="eligible steps may run concurrently")
+
+        from .scheduler import ready_steps
+
+        semaphore = asyncio.Semaphore(max(1, int(max_concurrent)))
+
+        async def run_one(step):
+            async with semaphore:
+                return await self._run_step_guarded(step, mission, approval, actor)
+
+        # A batch is one wave of eligible steps. Each wave waits for the whole
+        # wave to finish before the next is chosen: a step whose dependency
+        # completed inside the wave becomes eligible on the next pass, and the
+        # resource reservations in `ready_steps` stay valid for the wave.
+        while True:
+            current = self.service.get(mission_id)
+            if current is None or MissionState(current.state).value != "running":
+                return current
+            batch = ready_steps(current.steps)
+            if not batch:
+                break
+            outcomes = await asyncio.gather(
+                *[run_one(step) for step in batch], return_exceptions=False)
+            for step, blocked_reason in outcomes:
+                if blocked_reason:
+                    return self.service.transition(
+                        mission_id, MissionState.BLOCKED, actor=actor,
+                        reason=f"step {step.step_id} was refused: {blocked_reason}")
+
+        mission = self.service.transition(
+            mission_id, MissionState.VERIFYING, actor=actor,
+            reason="every eligible step ran; verifying the acceptance conditions")
+        mission = self._verify_all(mission, verifiers, actor=actor)
+        verdict = mission.verdict()
+        if verdict == "verified":
+            return self.service.transition(
+                mission_id, MissionState.COMPLETED, actor=actor,
+                reason="every acceptance condition was independently verified")
+        return self.service.transition(
+            mission_id, MissionState.PARTIALLY_COMPLETED, actor=actor,
+            reason=f"steps ran, but the outcome is {verdict}")
+
+    async def _run_step_guarded(self, step, mission: Mission,
+                                approval: Optional[Dict[str, Any]],
+                                actor: str):
+        """Gate, lease, execute and record one step. Returns (step, refusal)."""
+        gate = self._gate(step, mission)
+        if gate is not None and not gate.get("allowed", False):
+            reason = str(gate.get("reason") or "refused by policy")
+            self.service.mark_step(mission.mission_id, step.step_id, status="failed",
+                                   detail=f"not executed: {reason}", actor=actor)
+            return step, reason
+
+        refusal = self._spend_lease(step, mission, approval)
+        if refusal is not None:
+            self.service.mark_step(mission.mission_id, step.step_id, status="failed",
+                                   detail=f"not executed: {refusal}", actor=actor)
+            return step, refusal
+
+        self.service.mark_step(mission.mission_id, step.step_id,
+                               status="running", actor=actor)
+        outcome = await self._run_one(step, mission)
+        self.service.mark_step(mission.mission_id, step.step_id,
+                               status="done" if outcome.ok else "failed",
+                               detail=outcome.detail, actor=actor)
+        return step, "" if outcome.ok else outcome.detail
+
     def _spend_lease(self, step, mission: Mission,
                      approval: Optional[Dict[str, Any]]) -> Optional[str]:
         """Spend this step's lease, returning a refusal reason or None.

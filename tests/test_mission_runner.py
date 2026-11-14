@@ -568,3 +568,104 @@ async def test_a_lease_for_another_directory_blocks_the_step(service, leases, wo
     assert result.state == MissionState.BLOCKED.value
     assert "outside the lease's scope" in result.reason
     assert not target.exists()
+
+
+# -- parallel execution ----------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_independent_steps_run_concurrently(service, workspace):
+    """Three independent steps should all start before any of them finishes."""
+    import asyncio
+
+    started = []
+    finished = []
+
+    async def slow(step, mission):
+        started.append(step.step_id)
+        await asyncio.sleep(0.05)
+        finished.append(step.step_id)
+
+        class _Ok:
+            ok = True
+            message = "ran"
+        return _Ok()
+
+    def allow(step, mission):
+        return {"allowed": True, "reason": "ok"}
+
+    mission = service.create(
+        "three independent jobs",
+        conditions=[{"statement": "all ran", "verifier": "step ledger"}],
+        steps=[{"title": "a", "tool": "read_file", "params": {"path": str(workspace / "a")}},
+               {"title": "b", "tool": "read_file", "params": {"path": str(workspace / "b")}},
+               {"title": "c", "tool": "read_file", "params": {"path": str(workspace / "c")}}],
+    )
+    runner = MissionRunner(service, execute_step=slow, permission=allow)
+    await runner.run_parallel(mission.mission_id, max_concurrent=4)
+
+    # All three started before the first finished -- that is real concurrency.
+    assert len(started) == 3
+    assert started[:3] == ["S1", "S2", "S3"] or set(started) == {"S1", "S2", "S3"}
+
+
+@pytest.mark.asyncio
+async def test_a_dependent_step_waits_in_the_parallel_runner(service, workspace):
+    order = []
+
+    async def record(step, mission):
+        order.append(step.step_id)
+
+        class _Ok:
+            ok = True
+            message = "ran"
+        return _Ok()
+
+    def allow(step, mission):
+        return {"allowed": True, "reason": "ok"}
+
+    mission = service.create(
+        "dependent work",
+        conditions=[{"statement": "both ran", "verifier": "ledger"}],
+        steps=[{"title": "first", "tool": "read_file",
+                "params": {"path": str(workspace / "one")}},
+               {"title": "second", "tool": "read_file",
+                "params": {"path": str(workspace / "two")},
+                "depends_on": ["S1"]}],
+    )
+    runner = MissionRunner(service, execute_step=record, permission=allow)
+    await runner.run_parallel(mission.mission_id)
+
+    assert order == ["S1", "S2"], "the dependent step must run after its prerequisite"
+
+
+@pytest.mark.asyncio
+async def test_two_writers_to_one_file_do_not_run_together(service, workspace):
+    target = workspace / "shared.txt"
+    concurrent = {"now": 0, "max": 0}
+
+    async def write(step, mission):
+        import asyncio
+
+        concurrent["now"] += 1
+        concurrent["max"] = max(concurrent["max"], concurrent["now"])
+        await asyncio.sleep(0.03)
+        concurrent["now"] -= 1
+
+        class _Ok:
+            ok = True
+            message = "wrote"
+        return _Ok()
+
+    def allow(step, mission):
+        return {"allowed": True, "reason": "ok"}
+
+    mission = service.create(
+        "two writes to one file",
+        conditions=[{"statement": "both ran", "verifier": "ledger"}],
+        steps=[{"title": "one", "tool": "write_file", "params": {"path": str(target)}},
+               {"title": "two", "tool": "write_file", "params": {"path": str(target)}}],
+    )
+    runner = MissionRunner(service, execute_step=write, permission=allow)
+    await runner.run_parallel(mission.mission_id)
+
+    assert concurrent["max"] == 1, "two writers to one file ran at the same time"

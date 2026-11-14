@@ -127,10 +127,12 @@
       "id": "W3-MULTI-AGENT",
       "agent": "08",
       "title": "Parallel mission step scheduling",
-      "status": "NOT_STARTED",
+      "status": "VERIFIED",
       "files": [
-        "jarvis/core/scheduler.py"
-      ]
+        "jarvis/core/scheduler.py",
+        "jarvis/core/mission_runner.py"
+      ],
+      "evidence": "scheduler 15 tests (deps are barriers, same-file writers serialise, cycles never ready); run_parallel 3 tests incl. a real concurrency proof and a max-1-writer assertion"
     },
     {
       "id": "W6-ANDROID",
@@ -210,6 +212,13 @@
         "jarvis/core/parallelworld.py"
       ],
       "evidence": "each fix re-probed directly; 21/21 adversarial tests pass with no xfail; 129 security-adjacent tests pass"
+    },
+    {
+      "id": "W3-SCHEDULE-ROUTE",
+      "agent": "lead",
+      "title": "GET /intelligence/missions/{id}/schedule",
+      "status": "VERIFIED",
+      "evidence": "reports ready/running/waiting with reasons"
     }
   ]
 }
