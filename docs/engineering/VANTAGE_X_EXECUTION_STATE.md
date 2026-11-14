@@ -2,8 +2,8 @@
 
 > Operational tracker. One file, updated on meaningful state changes only.
 
-**Revision:** working tree on top of `c49237a`
-**Python suite (last frozen run):** 3911 passed / 30 skipped / 0 failed (at `c49237a`)
+**Revision:** `e77f34c` (clean tree)
+**Python suite (frozen run at `e77f34c`):** 3939 passed / 30 skipped / 0 failed (492 s)
 
 ## Completed
 
@@ -25,7 +25,7 @@
 
 ## Current work
 
-- Full suite running after lease + undo + receipt additions.
+- None in flight. Tree clean at `e77f34c`.
 
 ## Known gaps (unchanged this pass)
 
