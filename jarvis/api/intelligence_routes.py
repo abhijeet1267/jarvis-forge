@@ -1,0 +1,145 @@
+"""Routes for IntentShield, the skills library, and the file journal.
+
+Kept in one router because they are all read-mostly inspection surfaces whose
+job is to make the system's own state legible: what a mission is authorized to
+do, what skills exist, and whether an interrupted file commit needs attention.
+None of them executes anything -- execution stays in the mission path.
+"""
+
+from __future__ import annotations
+
+from typing import Any, Dict
+
+from fastapi import APIRouter, Body, Depends, HTTPException
+
+
+def build_router(require_auth) -> APIRouter:
+    router = APIRouter(prefix="/intelligence", tags=["intelligence"],
+                       dependencies=[Depends(require_auth)])
+
+    @router.post("/intent/check")
+    async def check_intent(body: Dict[str, Any] = Body(None)) -> Dict[str, Any]:
+        """Ask whether a proposed step stays inside an authorized intent.
+
+        The caller supplies the intent and the step; the answer names the
+        violated constraint so the client can explain the refusal rather than
+        just greying out a button.
+        """
+        from ..security.intentshield import IntentScope
+
+        body = body or {}
+        try:
+            scope = IntentScope.from_dict(body.get("intent") or {})
+        except (ValueError, TypeError) as exc:
+            raise HTTPException(status_code=422, detail=str(exc))
+
+        decision = scope.check_step(
+            str(body.get("tool") or ""),
+            dict(body.get("params") or {}),
+            plan_revision=int(body.get("plan_revision") or scope.plan_revision))
+        return decision.to_dict()
+
+    @router.get("/leases/active")
+    async def active_leases(limit: int = 50) -> Dict[str, Any]:
+        """Every lease currently usable. What Safety Center shows."""
+        from ..security.leases import LeaseService
+        from ..db.database import get_db
+
+        return {"leases": [l.to_dict()
+                           for l in LeaseService(get_db()).active(limit=limit)]}
+
+    @router.post("/leases/{lease_id}/revoke")
+    async def revoke_lease(lease_id: str,
+                           body: Dict[str, Any] = Body(None)) -> Dict[str, Any]:
+        """Revoke one lease. Effective at the next use, durably."""
+        from ..security.leases import LeaseService
+        from ..db.database import get_db
+
+        LeaseService(get_db()).revoke(
+            lease_id, reason=str((body or {}).get("reason") or "revoked by the operator"),
+            actor="user")
+        return {"revoked": True, "lease_id": lease_id}
+
+    @router.post("/leases/revoke-all")
+    async def revoke_all_leases() -> Dict[str, Any]:
+        """Emergency stop: revoke every active lease at once.
+
+        Work that needed one stops rather than continuing on a stale grant. The
+        count is what was actually revoked, so the caller can say how much
+        stopped rather than implying everything did.
+        """
+        from ..security.leases import LeaseService
+        from ..db.database import get_db
+
+        service = LeaseService(get_db())
+        revoked = 0
+        for lease in service.active(limit=200):
+            service.revoke(lease.lease_id, reason="emergency stop", actor="user")
+            revoked += 1
+        return {"revoked": revoked}
+
+    @router.get("/skills")
+    async def list_skills() -> Dict[str, Any]:
+        """Installed skills with their measured reliability."""
+        from ..core.skills import SkillStore
+
+        store = SkillStore()
+        out = []
+        for manifest in store.list():
+            entry = manifest.to_dict()
+            entry["reliability"] = store.reliability(manifest.skill_id)
+            out.append(entry)
+        return {"skills": out}
+
+    @router.post("/skills")
+    async def save_skill(body: Dict[str, Any] = Body(None)) -> Dict[str, Any]:
+        """Validate and store a skill manifest.
+
+        A manifest is untrusted input until validated: unknown fields, a bad
+        risk class or an empty step list are refused here rather than failing
+        later at execution time.
+        """
+        from ..core.skills import SkillManifest, SkillStore, validate_skill
+
+        body = body or {}
+        try:
+            manifest = SkillManifest.from_dict(body.get("skill") or body)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc))
+
+        problems = validate_skill(
+            manifest,
+            available_capabilities=set(body.get("available_capabilities") or []),
+            allowed_scope=list(body.get("allowed_scope") or []))
+        if problems:
+            raise HTTPException(status_code=422, detail="; ".join(problems))
+
+        stored = SkillStore().save(manifest)
+        return stored.to_dict()
+
+    @router.post("/skills/{skill_id}/disable")
+    async def disable_skill(skill_id: str) -> Dict[str, Any]:
+        from ..core.skills import SkillStore
+
+        return {"disabled": SkillStore().disable(skill_id), "skill_id": skill_id}
+
+    @router.get("/journal")
+    async def journal_report() -> Dict[str, Any]:
+        """Reconcile any file transaction a crash left unfinished.
+
+        Read-only with respect to the user's files: it compares recorded hashes
+        with what is on disk now and classifies each entry. Nothing is replayed.
+        """
+        from ..core.journal import FileTransactionJournal, sha256_of_file
+
+        journal = FileTransactionJournal()
+        try:
+            reports = journal.reconcile(sha256_of_file)
+        except Exception as exc:
+            raise HTTPException(
+                status_code=500,
+                detail=f"the file journal could not be read: {exc}")
+        return {"transactions": reports, "unfinished_before_reconcile":
+                len(journal.unfinished())}
+
+    return router

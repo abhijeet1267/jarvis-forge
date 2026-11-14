@@ -212,6 +212,12 @@ class ParallelWorld:
         backups: Dict[str, Optional[bytes]] = {}
         journal_entries: List[Dict[str, Any]] = []
 
+        # A durable record so a crash mid-apply can be reconciled on restart
+        # rather than guessed at. The journal is best-effort: a failure to write
+        # it must not stop a plan the person already approved, but it does mean
+        # there will be no crash report for this transaction.
+        transaction = self._open_transaction(planned)
+
         for item in planned:
             target = Path(item.path)
 
@@ -260,6 +266,7 @@ class ParallelWorld:
             if not ok:
                 self._restore(target, backups[item.path])
             if ok:
+                self._mark_transaction(transaction, item.path, after.sha256)
                 import base64
 
                 original = backups.get(item.path)
@@ -278,6 +285,9 @@ class ParallelWorld:
                 "sha256": after.sha256,
             })
 
+        self._close_transaction(transaction, all(r["ok"] for r in results)
+                                if results else False)
+
         return {
             "applied": all(r["ok"] for r in results) if results else False,
             "results": results,
@@ -287,6 +297,54 @@ class ParallelWorld:
             # module, so "what would undo do" is inspectable before it is done.
             "journal": {"entries": journal_entries},
         }
+
+    # -- crash journal ------------------------------------------------------
+    def _open_transaction(self, planned: List[PlannedOperation]) -> Optional[str]:
+        """Open a durable transaction, or None when the journal is unavailable."""
+        try:
+            from .journal import FileTransactionJournal
+
+            entries = [{"path": item.path, "op": item.op,
+                        "before_sha256": (item.snapshot.sha256 if item.snapshot
+                                          and item.snapshot.exists else None),
+                        "after_sha256": None}
+                       for item in planned]
+            journal = FileTransactionJournal()
+            tid = journal.begin(entries)
+            journal.mark_committing(tid)
+            return tid
+        except Exception as exc:
+            log.info("could not open a file journal",
+                     extra_fields={"error": str(exc)[:120]})
+            return None
+
+    def _mark_transaction(self, transaction: Optional[str], path: str,
+                          after_sha256: str) -> None:
+        if not transaction:
+            return
+        try:
+            from .journal import FileTransactionJournal
+
+            FileTransactionJournal().mark_entry(transaction, path, "verified",
+                                                after_sha256=after_sha256)
+        except Exception as exc:
+            log.info("could not record a journal entry",
+                     extra_fields={"error": str(exc)[:120]})
+
+    def _close_transaction(self, transaction: Optional[str], ok: bool) -> None:
+        if not transaction:
+            return
+        try:
+            from .journal import FileTransactionJournal
+
+            journal = FileTransactionJournal()
+            if ok:
+                journal.mark_committed(transaction)
+            else:
+                journal.mark_failed(transaction, note="one or more operations failed")
+        except Exception as exc:
+            log.info("could not close the file journal",
+                     extra_fields={"error": str(exc)[:120]})
 
     # -- undo ---------------------------------------------------------------
     def undo(self, journal: Dict[str, Any], *, approved: bool = False) -> Dict[str, Any]:

@@ -639,6 +639,11 @@ from .files_routes import build_router as _build_files_router  # noqa: E402
 
 app.include_router(_build_files_router(require_auth))
 
+# IntentShield / skills / journal: read-mostly inspection surfaces.
+from .intelligence_routes import build_router as _build_intelligence_router  # noqa: E402
+
+app.include_router(_build_intelligence_router(require_auth))
+
 _core: Optional[JarvisCore] = None
 _voice = None
 

@@ -75,6 +75,27 @@ final class APIClient: ObservableObject {
         return try await perform(req, as: type)
     }
 
+    /// A POST whose response the caller does not read.
+    ///
+    /// Several endpoints (revoke, cancel, disable) answer with a small object
+    /// the UI genuinely ignores. Decoding it into a throwaway type would make
+    /// a shape change look like a failure of the action itself, so this returns
+    /// the raw body and lets the status code be the verdict.
+    @discardableResult
+    func postEmpty(_ path: String) async throws -> Data {
+        let req = try makeRequest(path: path, method: "POST", body: Optional<String>.none)
+        return try await getRawForRequest(req)
+    }
+
+    private func getRawForRequest(_ request: URLRequest) async throws -> Data {
+        let (data, response) = try await session.data(for: request)
+        if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
+            throw APIError.httpError(http.statusCode,
+                                String(data: data, encoding: .utf8) ?? "")
+        }
+        return data
+    }
+
     func patch<T: Decodable>(_ path: String, body: Encodable? = nil,
                              as type: T.Type = T.self) async throws -> T {
         let req = try makeRequest(path: path, method: "PATCH", body: body)

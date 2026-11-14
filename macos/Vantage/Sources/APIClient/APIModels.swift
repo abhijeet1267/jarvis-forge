@@ -1604,4 +1604,28 @@ extension APIModels {
         let detail: String
         let sha256: String?
     }
+
+    // MARK: - Safety Center
+
+    struct PermissionLease: Codable, Identifiable {
+        let lease_id: String
+        let mission_id: String
+        let session_id: String?
+        let capability: String
+        let scope: [String]
+        let risk: Int?
+        let issued_at: Double?
+        let expires_at: Double
+        let max_uses: Int
+        let uses: Int
+        let revoked: Bool?
+        let plan_revision: Int?
+
+        var id: String { lease_id }
+        var remaining_uses: Int { max(0, max_uses - uses) }
+    }
+
+    struct LeaseList: Codable {
+        let leases: [PermissionLease]
+    }
 }

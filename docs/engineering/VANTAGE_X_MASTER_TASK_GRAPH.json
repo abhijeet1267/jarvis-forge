@@ -1,0 +1,191 @@
+{
+  "campaign": "Vantage X",
+  "baseline_commit": "161c4a5",
+  "updated": "2026-11-14",
+  "status_values": [
+    "NOT_STARTED",
+    "READY",
+    "RUNNING",
+    "IMPLEMENTED",
+    "INTEGRATING",
+    "VERIFYING",
+    "VERIFIED",
+    "BLOCKED",
+    "FAILED"
+  ],
+  "concurrency": {
+    "specialist_roles_defined": 18,
+    "max_actual_concurrent_workers": 3,
+    "note": "3 launched concurrently on disjoint files; the coordinator (me) integrates shared files serially to prevent conflicts."
+  },
+  "tasks": [
+    {
+      "id": "W1-LEASES",
+      "agent": "05",
+      "title": "PermissionLease + atomic spend",
+      "status": "VERIFIED",
+      "files": [
+        "jarvis/security/leases.py"
+      ],
+      "evidence": "tests/test_permission_leases.py (17)"
+    },
+    {
+      "id": "W1-LEASE-ENFORCE",
+      "agent": "05",
+      "title": "Lease spent per mission step",
+      "status": "VERIFIED",
+      "files": [
+        "jarvis/core/mission_runner.py"
+      ],
+      "evidence": "runner lease tests"
+    },
+    {
+      "id": "W1-PW-UNDO",
+      "agent": "04",
+      "title": "ParallelWorld undo refuses newer work",
+      "status": "VERIFIED",
+      "files": [
+        "jarvis/core/parallelworld.py"
+      ],
+      "evidence": "tests/test_parallelworld.py (22)"
+    },
+    {
+      "id": "W1-RECEIPT",
+      "agent": "07",
+      "title": "Outcome Receipt export",
+      "status": "VERIFIED",
+      "files": [
+        "jarvis/core/proofgraph.py"
+      ],
+      "evidence": "tests/test_proofgraph.py (8)"
+    },
+    {
+      "id": "W2-INTENTSHIELD",
+      "agent": "06",
+      "title": "IntentShield: scope + prompt-injection boundary",
+      "status": "VERIFIED",
+      "files": [
+        "jarvis/security/intentshield.py"
+      ],
+      "owner": "specialist",
+      "evidence": "48 tests; injection boundary probed live (web text yields 0 actionable)"
+    },
+    {
+      "id": "W5-SKILLS",
+      "agent": "10",
+      "title": "Verified skills store + reliability counters",
+      "status": "VERIFIED",
+      "files": [
+        "jarvis/core/skills.py"
+      ],
+      "owner": "specialist",
+      "evidence": "29 tests; reliability counters, no fake success rate"
+    },
+    {
+      "id": "W2-CRASH-JOURNAL",
+      "agent": "04",
+      "title": "Crash-recovery journal + reconcile",
+      "status": "VERIFIED",
+      "files": [
+        "jarvis/core/journal.py"
+      ],
+      "owner": "specialist",
+      "evidence": "19 tests; reconcile never promotes unknown to completed"
+    },
+    {
+      "id": "W2-INTEGRATE-ROUTES",
+      "agent": "lead",
+      "title": "Wire intentshield/skills/journal into routers",
+      "status": "VERIFIED",
+      "files": [
+        "jarvis/api/intentshield_routes.py",
+        "jarvis/api/skills_routes.py"
+      ],
+      "evidence": "4 live endpoints: intent check in/out of scope, journal, skills, leases"
+    },
+    {
+      "id": "W8-SAFETY-CENTER",
+      "agent": "11",
+      "title": "Safety Center native screen (leases view)",
+      "status": "IMPLEMENTED",
+      "files": [
+        "macos/Vantage/Sources/Views/SafetyCenterView.swift"
+      ],
+      "evidence": "swift build ok; emergency stop verified live (1->0)"
+    },
+    {
+      "id": "W12-SHOWCASE",
+      "agent": "lead",
+      "title": "Flagship end-to-end demo",
+      "status": "VERIFIED",
+      "files": [
+        "tests/test_flagship_showcase.py"
+      ],
+      "evidence": "tests/test_flagship_showcase.py (2): real write+gated lease+verify+run+recover"
+    },
+    {
+      "id": "W3-MULTI-AGENT",
+      "agent": "08",
+      "title": "Parallel mission step scheduling",
+      "status": "NOT_STARTED",
+      "files": [
+        "jarvis/core/scheduler.py"
+      ]
+    },
+    {
+      "id": "W6-ANDROID",
+      "agent": "12",
+      "title": "Android continuity capsules",
+      "status": "BLOCKED",
+      "blocker": "no physical Android device; emulator package not installed"
+    },
+    {
+      "id": "W7-GOALGUARD",
+      "agent": "03",
+      "title": "Opt-in recurring goal monitoring",
+      "status": "NOT_STARTED",
+      "files": [
+        "jarvis/core/goalguard.py"
+      ]
+    },
+    {
+      "id": "W9-VOICE",
+      "agent": "13",
+      "title": "Voice mission control",
+      "status": "NOT_STARTED"
+    },
+    {
+      "id": "W11-SECURITY-SUITE",
+      "agent": "16",
+      "title": "Adversarial security regression suite",
+      "status": "NOT_STARTED",
+      "files": [
+        "tests/test_security_adversarial.py"
+      ]
+    },
+    {
+      "id": "W0-CI-PUSH",
+      "agent": "17",
+      "title": "Public CI verification",
+      "status": "BLOCKED",
+      "blocker": "requires owner authorization to push to a public remote"
+    },
+    {
+      "id": "W0-SWIFT-TESTS",
+      "agent": "01",
+      "title": "Swift test target verification",
+      "status": "BLOCKED",
+      "blocker": "XCTest unavailable locally; needs CI runner"
+    },
+    {
+      "id": "W2-JOURNAL-WIRED",
+      "agent": "lead",
+      "title": "ParallelWorld apply records a durable transaction",
+      "status": "VERIFIED",
+      "files": [
+        "jarvis/core/parallelworld.py"
+      ],
+      "evidence": "a clean apply recorded as 'committed' (628-byte journal)"
+    }
+  ]
+}
