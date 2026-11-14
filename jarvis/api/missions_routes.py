@@ -136,10 +136,59 @@ def build_router(require_auth) -> APIRouter:
         )
         verifiers = _verifiers_from(body.get("verifiers") or {})
         try:
-            mission = await runner.run(mission_id, verifiers=verifiers)
+            approval = body.get("approval")
+            if approval is not None and not isinstance(approval, dict):
+                raise HTTPException(status_code=422, detail="approval must be an object")
+            mission = await runner.run(mission_id, verifiers=verifiers,
+                                       approval=approval)
         except ValueError as exc:
             raise HTTPException(status_code=404, detail=str(exc))
         return _dump(mission)
+
+    @router.post("/observe")
+    async def observe_goal(body: Dict[str, Any] = Body(None)) -> Dict[str, Any]:
+        """Observe a goal and propose (never perform) a bounded recovery.
+
+        Returns the observation and what may be done about it. `allowed: false`
+        carries the reason -- an unowned resource, an unobservable state, or the
+        attempt bound -- so the client never has to infer why nothing happened.
+        """
+        from ..core.selfhealing import (
+            RecoveryAttempt, RecoveryController, observe_file, observe_http,
+        )
+
+        body = body or {}
+        kind = str(body.get("kind") or "").strip()
+        goal_id = str(body.get("goal_id") or "G1")
+
+        if kind == "http":
+            observation = observe_http(
+                str(body.get("url") or ""), expect_body=str(body.get("expect_body") or ""),
+                goal_id=goal_id)
+        elif kind == "file":
+            expect = body.get("expect_text")
+            observation = observe_file(
+                str(body.get("path") or ""),
+                expect_text=None if expect is None else str(expect),
+                goal_id=goal_id)
+        else:
+            raise HTTPException(
+                status_code=422,
+                detail="kind must be 'http' or 'file'; this route does not run "
+                       "arbitrary observers")
+
+        proposal = RecoveryController().propose(
+            observation,
+            attempts=[RecoveryAttempt(str(a.get("goal_id") or goal_id),
+                                      str(a.get("action") or ""),
+                                      at=float(a.get("at") or 0.0),
+                                      ok=bool(a.get("ok")))
+                      for a in (body.get("attempts") or [])
+                      if isinstance(a, dict)],
+            can_restart=body.get("can_restart") is True,
+            restart_target=str(body.get("restart_target") or ""))
+
+        return {"observation": observation.to_dict(), "recovery": proposal}
 
     @router.get("/{mission_id}/proof")
     async def mission_proof(mission_id: str) -> Dict[str, Any]:

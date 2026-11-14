@@ -98,6 +98,7 @@ struct ContentView: View {
             case .today:        TodayView()
             case .home:         HomeView()
             case .missions:     MissionControlView()
+            case .parallelworld: ParallelWorldView()
             case .planner:      PlannerView()
             case .operator_:    OperatorView()
             case .control:      MacControlView()
@@ -359,7 +360,7 @@ private struct StatusFooter: View {
 // MARK: - Navigation model
 
 enum NavItem: String, Identifiable, CaseIterable {
-    case today, home, missions, planner, operator_, control, flows, work, people, connections,
+    case today, home, missions, parallelworld, planner, operator_, control, flows, work, people, connections,
          google, mcp, automation, command, providers, capabilities, devices, approvals,
          activity, memory, settings
     // Phase 3
@@ -372,6 +373,7 @@ enum NavItem: String, Identifiable, CaseIterable {
         case .today: return "Today"
         case .home: return "Home"
         case .missions: return "Mission Control"
+        case .parallelworld: return "ParallelWorld"
         case .planner: return "Planner"
         case .operator_: return "Operator"
         case .control: return "Control Mac"
@@ -402,6 +404,7 @@ enum NavItem: String, Identifiable, CaseIterable {
         case .today: return "sun.horizon.fill"
         case .home: return "house.fill"
         case .missions: return "target"
+        case .parallelworld: return "rectangle.split.3x1"
         case .planner: return "calendar.day.timeline.left"
         case .operator_: return "rectangle.on.rectangle"
         case .control: return "slider.horizontal.3"

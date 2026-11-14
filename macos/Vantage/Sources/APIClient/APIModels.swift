@@ -1542,4 +1542,66 @@ extension APIModels {
         let observation: String
         let evidence_id: String?
     }
+
+    // MARK: - ParallelWorld
+
+    struct FileOperation: Codable, Hashable {
+        let op: String
+        let path: String
+        let content: String
+    }
+
+    struct FilePlan: Codable {
+        let operations: [FileOperation]
+    }
+
+    struct FileApplyRequest: Codable {
+        let operations: [FileOperation]
+        let approved: Bool
+    }
+
+    struct FilePreview: Codable {
+        let changes: [FileChange]
+        let conflicts: [FileConflict]
+        let summary: FileSummary
+        let applicable: Bool
+        let note: String
+    }
+
+    struct FileChange: Codable, Identifiable {
+        let path: String
+        let op: String
+        let exists: Bool
+        let before: String
+        let after: String
+        let truncated: Bool
+        let reason: String
+
+        var id: String { path + "|" + op }
+    }
+
+    struct FileConflict: Codable {
+        let path: String
+        let reason: String
+    }
+
+    struct FileSummary: Codable {
+        let created: Int
+        let modified: Int
+        let deleted: Int
+        let conflicts: Int
+    }
+
+    struct FileApplyResult: Codable {
+        let applied: Bool
+        let results: [FileApplyEntry]
+        let rolled_back: [String]?
+    }
+
+    struct FileApplyEntry: Codable {
+        let path: String
+        let ok: Bool
+        let detail: String
+        let sha256: String?
+    }
 }

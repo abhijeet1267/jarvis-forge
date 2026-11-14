@@ -90,3 +90,35 @@ def test_cancel_moves_a_draft_to_cancelled():
     cancelled = client.post(f"/missions/{mission_id}/cancel", headers=HEADERS)
     assert cancelled.status_code == 200, cancelled.text
     assert cancelled.json()["state"] == "cancelled"
+
+# -- ParallelWorld over the wire -------------------------------------------
+
+def test_preview_does_not_write_and_apply_requires_approval(tmp_path):
+    """The two promises, checked through HTTP rather than the class."""
+    target = tmp_path / "doc.txt"
+    target.write_text("before\n", encoding="utf-8")
+    client = _client()
+    ops = [{"op": "replace", "path": str(target), "content": "after\n"}]
+
+    preview = client.post("/files/preview", headers=HEADERS, json={"operations": ops})
+    assert preview.status_code == 200, preview.text
+    assert preview.json()["applicable"] is True
+    assert target.read_text(encoding="utf-8") == "before\n", "preview wrote to the file"
+
+    refused = client.post("/files/apply", headers=HEADERS, json={"operations": ops})
+    assert refused.status_code == 409
+    assert target.read_text(encoding="utf-8") == "before\n"
+
+    applied = client.post("/files/apply", headers=HEADERS,
+                          json={"operations": ops, "approved": True})
+    assert applied.status_code == 200, applied.text
+    assert applied.json()["applied"] is True
+    assert target.read_text(encoding="utf-8") == "after\n"
+
+
+def test_the_file_routes_require_authentication(tmp_path):
+    client = _client()
+    response = client.post("/files/preview", headers={"Host": "127.0.0.1"},
+                           json={"operations": [{"op": "delete",
+                                                 "path": str(tmp_path / "x")}]})
+    assert response.status_code in (401, 403)

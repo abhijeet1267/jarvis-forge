@@ -122,6 +122,85 @@ A fourth, found by the gate working correctly: the real `PermissionEngine` refus
 step whose plan omitted a required `path` parameter. That is the system behaving as
 designed — it declined to invent a parameter rather than guessing one.
 
+### P3 — ParallelWorld (`jarvis/core/parallelworld.py`, `jarvis/api/files_routes.py`)
+
+Preview-before-apply for local file operations, scoped honestly to **create,
+replace, append, delete** — the operations that are genuinely reversible. The note
+in every preview says applying is not atomic across a crash and that no external
+service action is reversible, so the capability cannot be mistaken for more.
+
+- **A preview never writes.** The proposed text is computed and diffed against the
+  snapshot; the target is untouched. Pinned by a test that hashes the file before and
+  after a preview.
+- **Apply needs explicit approval** (`approved: true`, nothing inferred), and it
+  **re-hashes the source immediately before each write**. A file edited after the
+  preview is refused with "changed after the preview, so applying this would overwrite
+  work nobody saw" rather than silently overwritten.
+- **The tools' own path guard is reused** (`tools/files._guard`), so a preview and an
+  apply both refuse protected system locations — enforced at both points, not just
+  where the plan is built.
+- A failed apply restores that file from the bytes read moments earlier.
+
+**Live, over HTTP:** a preview reported `modified: 1` and left the file unchanged; an
+apply without approval returned **409** with the file unchanged; an approved apply
+returned `applied: true` and the file held the new text; `delete /etc/hosts` was
+refused at preview time with "/private is a protected system location."
+
+**Test helper bug found here:** `flat_routes()` returned zero routes because FastAPI
+0.162 keeps an included router's children on `original_router`; the helper now reads
+that, and the two tests that iterate routes were updated to use it (they had been
+sniffing `[r.path for r in app.routes]`, which raises on any app with an included
+router).
+
+### P4 — Self-healing missions (`jarvis/core/selfhealing.py`)
+
+Observers (`observe_http`, `observe_file`, `observe_owned_process`) report
+VERIFIED / FAILED / UNKNOWN from what they actually see, and a `RecoveryController`
+proposes at most one bounded repair. The refusals carry most of the value:
+
+- **An unowned resource is never restarted** — "the failing resource is not one
+  Vantage owns, so it will not be restarted".
+- **An UNKNOWN observation escalates rather than acting** — acting on silence is how
+  a broken observer becomes a restart loop.
+- **Attempts are bounded** (3 by default) with a minimum interval between them, and
+  the tenth call says how many remain.
+- Process identity is a durable `{pid, started_at, command}` record checked against
+  the OS start time, so a recycled pid never reads as "our process is alive".
+
+**Live, over HTTP (`POST /missions/observe`):** a healthy service → `verified`,
+`needed: false`; after the port closed → `unknown`, escalated, **not** restarted even
+with `can_restart: true`; a reachable service returning the wrong body → `failed`,
+`allowed: true`, action `restart`; the same failure with `can_restart: false` →
+refused as unowned.
+
+### Phase 1 fix — CONFIRM is an approval, not a permission
+
+The runner treated a `CONFIRM` decision as a refusal. It now parks the mission in
+`AWAITING_APPROVAL` with the gate's confirmation id, and resuming requires an
+approval whose confirmation id **matches** the one the gate issued. A mission parked
+there stays parked across a restart and never resumes itself. `RUNNING →
+AWAITING_APPROVAL` was added to the transition table, since an approval discovered
+mid-execution is legitimate and must not unwind completed steps.
+
+### Phase 3 — ParallelWorld native UI (`macos/.../Views/ParallelWorldView.swift`)
+
+Plan editor, preview summary, change browser, before/after diff, conflict inspector
+and result panel, wired into `NavItem`. Apply is disabled while the plan conflicts,
+while nothing is previewed, and while busy — and the reason is always shown in words.
+Nothing in the view invents progress or success: every value comes from the backend.
+
+### V2 evidence
+
+- `test_mission_runner.py` now 19 (audit-write failure ⇒ no verified claim; CONFIRM
+  parks; resume without approval stays parked; matching approval resumes).
+- `test_parallelworld.py` 15 (partial failure identifies applied vs refused; stale
+  preview refused).
+- `test_selfhealing.py` 12, `test_demo_a_file_mission.py` 5 (restart-and-resume,
+  interrupted missions listed).
+- `swift build` succeeds with the new screen; the UI's exact API payloads verified
+  live (preview reports before/after without writing; apply verified per file;
+  `/etc/hosts` refused as protected).
+
 ## Iteration 89 — 9router configured per section (2026-11-14)
 
 9Router is running on this machine (`node`, `127.0.0.1:20128`) and its catalog

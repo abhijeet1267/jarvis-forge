@@ -633,6 +633,12 @@ from .missions_routes import build_router as _build_missions_router  # noqa: E40
 
 app.include_router(_build_missions_router(require_auth))
 
+# ParallelWorld's preview/apply surface is not mission-scoped: it is the general
+# "show me the change before you make it" capability, so it has its own router.
+from .files_routes import build_router as _build_files_router  # noqa: E402
+
+app.include_router(_build_files_router(require_auth))
+
 _core: Optional[JarvisCore] = None
 _voice = None
 

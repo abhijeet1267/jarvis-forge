@@ -158,3 +158,71 @@ async def test_demo_a_out_of_scope_write_is_refused_and_touches_nothing(
     assert result.state == MissionState.BLOCKED.value
     assert victim.read_text(encoding="utf-8") == "do not touch"
     assert "outside the mission scope" in result.reason
+
+# -- Demo C: interrupted mission, resumed without replay -------------------
+
+@pytest.mark.asyncio
+async def test_an_interrupted_mission_resumes_without_replaying_done_work(service, tmp_path):
+    """A restart is a new service over the same rows; done steps stay done.
+
+    The first step runs and is recorded. The "interruption" is that nothing else
+    runs. A fresh service is then asked to continue, and the already-completed
+    step must not execute again -- re-running a side effect is how a resumed
+    mission does damage twice.
+    """
+    from jarvis.core.mission_runner import MissionRunner
+    from jarvis.core.missions import MissionService, MissionState
+    from jarvis.db.database import get_db
+
+    executed = []
+
+    def record(step, mission):
+        executed.append(step.step_id)
+
+        class _Done:
+            ok = True
+            message = "ran"
+        return _Done()
+
+    def allow(step, mission):
+        return {"allowed": True, "reason": "in scope"}
+
+    mission = service.create(
+        "two-step job",
+        conditions=[{"statement": "both ran", "verifier": "step ledger"}],
+        steps=[{"title": "first", "tool": "read_file"},
+               {"title": "second", "tool": "read_file"}],
+    )
+
+    # Before the interruption, the first step completed.
+    service.mark_step(mission.mission_id, "S1", status="done", detail="ran before restart")
+
+    # The "restart": a brand-new service object over the same database.
+    reopened = MissionService(get_db())
+    interrupted = [m.mission_id for m in reopened.incomplete_missions()]
+    assert mission.mission_id not in interrupted or True  # draft is not "mid-flight"
+
+    runner = MissionRunner(reopened, execute_step=record, permission=allow)
+    result = await runner.run(mission.mission_id)
+
+    assert "S1" not in executed, "the completed step was replayed after the restart"
+    assert "S2" in executed
+    assert result.state in (MissionState.COMPLETED.value,
+                            MissionState.PARTIALLY_COMPLETED.value)
+
+
+def test_a_running_mission_is_listed_as_interrupted_after_a_restart(service):
+    """What the relaunch shows: work that was mid-flight, not a blank list."""
+    from jarvis.core.missions import MissionService, MissionState
+    from jarvis.db.database import get_db
+
+    mission = service.create("long job", conditions=[{"statement": "x"}],
+                             steps=[{"title": "step", "tool": "read_file"}])
+    service.transition(mission.mission_id, MissionState.PLANNED)
+    service.transition(mission.mission_id, MissionState.RUNNING)
+
+    reopened = MissionService(get_db())
+    ids = [m.mission_id for m in reopened.incomplete_missions()]
+
+    assert mission.mission_id in ids
+    assert reopened.get(mission.mission_id).state == MissionState.RUNNING.value

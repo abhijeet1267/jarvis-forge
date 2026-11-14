@@ -310,3 +310,128 @@ async def test_a_failed_step_reports_the_tool_reason_not_a_bare_failed(service):
     assert result.state == MissionState.FAILED.value
     assert "too large" in result.reason, (
         "the tool's own explanation must reach the mission, not the word 'failed'")
+
+
+def test_a_failed_audit_write_does_not_produce_a_verified_claim(service, workspace):
+    """Evidence is what `verified` rests on; no evidence means no verified claim.
+
+    A verifier can succeed and the audit write still fail (a full disk, a locked
+    database). Recording the condition as verified then would leave a claim whose
+    evidence reference points at nothing -- exactly the "looks like proof" state
+    the contract exists to prevent.
+    """
+    import asyncio
+
+    target = workspace / "f.txt"
+    target.write_text("--fast\n", encoding="utf-8")
+
+    class _BrokenAudit:
+        def record(self, **kwargs):
+            raise RuntimeError("the audit database is unavailable")
+
+    def work(step, mission):
+        class _Ok:
+            ok = True
+            message = "done"
+        return _Ok()
+
+    mission = _mission(
+        service,
+        conditions=[{"statement": "the file mentions --fast", "verifier": "file content"}],
+        steps=[{"title": "touch", "tool": "read_file"}],
+    )
+
+    runner = MissionRunner(service, execute_step=work, permission=_allow_all,
+                           audit=_BrokenAudit())
+    result = asyncio.run(runner.run(
+        mission.mission_id,
+        verifiers={"C1": Verifiers.file_contains(str(target), "--fast", "C1")},
+    ))
+
+    assert result.conditions[0].status == ConditionStatus.UNKNOWN.value
+    assert result.verdict() != "verified"
+    assert "could not be recorded" in result.conditions[0].observation
+
+
+# -- CONFIRM is an approval, not a permission ------------------------------
+
+def _confirm_gate(step, mission):
+    return {"allowed": False, "decision": "CONFIRM",
+            "reason": "writing a file needs a person to approve it",
+            "confirmation_id": "CONF-123"}
+
+
+@pytest.mark.asyncio
+async def test_confirm_parks_the_mission_awaiting_approval(service, workspace):
+    """The runner must not treat CONFIRM as if it were allowed."""
+    target = workspace / "f.txt"
+    calls = []
+
+    def work(step, mission):
+        calls.append(step.step_id)
+        target.write_text("written", encoding="utf-8")
+
+        class _Ok:
+            ok = True
+            message = "wrote"
+        return _Ok()
+
+    mission = _mission(
+        service,
+        conditions=[{"statement": "the file exists", "verifier": "file"}],
+        steps=[{"title": "write it", "tool": "write_file"}],
+    )
+
+    runner = MissionRunner(service, execute_step=work, permission=_confirm_gate)
+    result = await runner.run(mission.mission_id)
+
+    assert result.state == MissionState.AWAITING_APPROVAL.value
+    assert calls == [], "a step awaiting approval must not have executed"
+    assert not target.exists()
+    assert "CONF-123" in result.reason
+
+
+@pytest.mark.asyncio
+async def test_re_running_without_approval_leaves_it_parked(service, workspace):
+    """Nothing resumes itself; an approval has to be supplied."""
+    mission = _mission(
+        service,
+        conditions=[{"statement": "x", "verifier": "y"}],
+        steps=[{"title": "write it", "tool": "write_file"}],
+    )
+    runner = MissionRunner(service, execute_step=lambda s, m: None,
+                           permission=_confirm_gate)
+    await runner.run(mission.mission_id)
+
+    again = await runner.run(mission.mission_id)          # no approval
+    assert again.state == MissionState.AWAITING_APPROVAL.value
+
+
+@pytest.mark.asyncio
+async def test_a_supplied_approval_lets_the_mission_continue(service, workspace):
+    target = workspace / "f.txt"
+
+    def work(step, mission):
+        target.write_text("--yes", encoding="utf-8")
+
+        class _Ok:
+            ok = True
+            message = "wrote"
+        return _Ok()
+
+    mission = _mission(
+        service,
+        conditions=[{"statement": "the file mentions --yes", "verifier": "file content"}],
+        steps=[{"title": "write it", "tool": "write_file"}],
+    )
+    runner = MissionRunner(service, execute_step=work, permission=_confirm_gate)
+    parked = await runner.run(mission.mission_id)
+    assert parked.state == MissionState.AWAITING_APPROVAL.value
+
+    resumed = await runner.run(
+        mission.mission_id,
+        verifiers={"C1": Verifiers.file_contains(str(target), "--yes", "C1")},
+        approval={"confirmation_id": "CONF-123"})
+    assert resumed.state in (MissionState.COMPLETED.value,
+                             MissionState.PARTIALLY_COMPLETED.value)
+    assert target.exists()

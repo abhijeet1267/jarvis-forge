@@ -295,19 +295,21 @@ def make_request():
 def flat_routes(app):
     """Every route object on the app, flattening included routers.
 
-    FastAPI 0.162 (on this Starlette) no longer splices an included router's
-    routes into ``app.routes``: it appends one ``_IncludedRouter`` container, so
-    ``[r.path for r in app.routes]`` raises ``AttributeError`` as soon as the app
-    includes any router at all. Tests that need paths call this instead of
-    assuming a flat list.
+    FastAPI 0.162 no longer splices an included router's routes into
+    ``app.routes``: it appends one ``_IncludedRouter`` container whose children
+    live on ``original_router``. Tests that need paths call this instead of
+    assuming a flat list; the container's internals are not part of any contract,
+    so the one place that knows about them is here.
     """
     out = []
     for route in getattr(app, "routes", []):
         children = getattr(route, "routes", None)
-        if children is not None and not hasattr(route, "path"):
-            out.extend(children)
-        elif hasattr(route, "path"):
+        if hasattr(route, "path"):
             out.append(route)
         elif children is not None:
             out.extend(children)
+        else:
+            inner = getattr(route, "original_router", None)
+            if inner is not None:
+                out.extend(getattr(inner, "routes", []))
     return out

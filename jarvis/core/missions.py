@@ -74,9 +74,13 @@ TRANSITIONS: Dict[MissionState, frozenset] = {
         MissionState.CANCELLED, MissionState.BLOCKED}),
     MissionState.AWAITING_APPROVAL: frozenset({
         MissionState.RUNNING, MissionState.CANCELLED, MissionState.BLOCKED}),
+    # An approval discovered *during* execution (a step the gate marks CONFIRM)
+    # parks the mission without unwinding it; the steps that already ran keep
+    # their results and resume after the person answers.
     MissionState.RUNNING: frozenset({
         MissionState.VERIFYING, MissionState.RECOVERING, MissionState.PAUSED,
-        MissionState.BLOCKED, MissionState.FAILED, MissionState.CANCELLED,
+        MissionState.AWAITING_APPROVAL, MissionState.BLOCKED,
+        MissionState.FAILED, MissionState.CANCELLED,
         MissionState.PARTIALLY_COMPLETED}),
     MissionState.VERIFYING: frozenset({
         MissionState.COMPLETED, MissionState.PARTIALLY_COMPLETED,

@@ -158,7 +158,8 @@ class MissionRunner:
 
     # -- public -------------------------------------------------------------
     async def run(self, mission_id: str, *, verifiers: Optional[Dict[str, Verifier]] = None,
-                  actor: str = "mission_runner") -> Mission:
+                  actor: str = "mission_runner",
+                  approval: Optional[Dict[str, Any]] = None) -> Mission:
         """Plan -> gate -> execute -> verify, one step at a time.
 
         Stops at the first blocked step or failed execution. It does not guess
@@ -175,10 +176,20 @@ class MissionRunner:
                 mission_id, MissionState.PLANNED, actor=actor,
                 reason="plan reviewed and accepted")
 
-        if MissionState(mission.state) is MissionState.PLANNED:
+        if MissionState(mission.state) is MissionState.AWAITING_APPROVAL:
+            # Resuming from a parked approval is only legal when the caller
+            # supplies one. Without it the mission stays parked -- this is the
+            # difference between "the person approved" and "the runner decided".
+            if not approval or not str(approval.get("confirmation_id") or "").strip():
+                return mission
+
+        if MissionState(mission.state) in (MissionState.PLANNED,
+                                           MissionState.AWAITING_APPROVAL):
             mission = self.service.transition(
                 mission_id, MissionState.RUNNING, actor=actor,
-                reason="no step requires approval before execution")
+                reason=("approval supplied; continuing"
+                        if approval else
+                        "no step requires approval before execution"))
 
         # A step that already finished is not repeated: resuming a mission must
         # not re-run a side effect that already happened.
@@ -189,11 +200,43 @@ class MissionRunner:
             gate = self._gate(step, mission)
             if gate is not None and not gate.get("allowed", False):
                 reason = str(gate.get("reason") or "refused by policy")
-                self.service.mark_step(mission_id, step.step_id, status="failed",
-                                       detail=f"not executed: {reason}", actor=actor)
-                return self.service.transition(
-                    mission_id, MissionState.BLOCKED, actor=actor,
-                    reason=f"step {step.step_id} was refused: {reason}")
+
+                # A CONFIRM matched by an approval the caller supplied is the
+                # person answering. The confirmation id must match the one the
+                # gate issued for this step: an approval for something else is
+                # not an approval for this.
+                approved_here = (
+                    str(gate.get("decision") or "").upper() == "CONFIRM"
+                    and approval is not None
+                    and str(approval.get("confirmation_id") or "").strip()
+                    == str(gate.get("confirmation_id") or "").strip()
+                    and bool(str(gate.get("confirmation_id") or "").strip()))
+
+                if approved_here:
+                    self.service.mark_step(
+                        mission_id, step.step_id, status="pending",
+                        detail=f"approved ({gate.get('confirmation_id')}); running",
+                        actor=actor)
+                else:
+                    # CONFIRM is neither a refusal nor a permission: the engine
+                    # is asking a person. Park in AWAITING_APPROVAL with the
+                    # confirmation id, so resuming is explicit and checkable. A
+                    # mission parked here stays parked across a restart.
+                    if str(gate.get("decision") or "").upper() == "CONFIRM":
+                        self.service.mark_step(
+                            mission_id, step.step_id, status="pending",
+                            detail=f"awaiting approval: {reason}", actor=actor)
+                        return self.service.transition(
+                            mission_id, MissionState.AWAITING_APPROVAL, actor=actor,
+                            reason=(f"step {step.step_id} needs approval "
+                                    f"({reason}); confirmation "
+                                    f"{gate.get('confirmation_id') or 'unspecified'}"))
+
+                    self.service.mark_step(mission_id, step.step_id, status="failed",
+                                           detail=f"not executed: {reason}", actor=actor)
+                    return self.service.transition(
+                        mission_id, MissionState.BLOCKED, actor=actor,
+                        reason=f"step {step.step_id} was refused: {reason}")
 
             mission = self.service.mark_step(mission_id, step.step_id,
                                              status="running", actor=actor)
@@ -286,6 +329,20 @@ class MissionRunner:
                         f"the verifier raised: {exc}")
 
             evidence_id = self._record_evidence(mission, condition, result)
+
+            # Evidence is what a VERIFIED verdict rests on. If an audit log is
+            # attached and the write failed, the observation exists only in
+            # memory -- so the condition is downgraded to UNKNOWN rather than
+            # recorded as verified with a reference pointing at nothing. The
+            # mission then reports partial/unknown instead of claiming proof it
+            # cannot produce.
+            if self._audit is not None and not evidence_id and \
+                    result.status is ConditionStatus.VERIFIED:
+                result = Verification(
+                    condition.condition_id, ConditionStatus.UNKNOWN,
+                    "the observation could not be recorded as evidence "
+                    f"({result.observation}), so it cannot be checked later")
+
             mission = self.service.record_condition(
                 mission.mission_id, condition.condition_id,
                 status=result.status, observation=result.observation,
@@ -293,7 +350,11 @@ class MissionRunner:
         return mission
 
     def _record_evidence(self, mission: Mission, condition, result: Verification) -> str:
-        """Write the observation to the hash-chained audit log and return its id."""
+        """Write the observation to the hash-chained audit log and return its id.
+
+        Returns "" when no audit log is attached or the write failed; the caller
+        treats that as "this claim has no citable evidence".
+        """
         if self._audit is None:
             return ""
         try:
