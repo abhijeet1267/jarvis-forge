@@ -227,7 +227,16 @@ class LeaseService:
             if not lease.scope:
                 raise LeaseRefusal(
                     "the lease declares no resource scope, so it authorizes nothing")
-            if resource and not _in_scope(resource, lease.scope):
+            # A scoped lease must be spent *against a resource*. Calling
+            # `consume(lease_id)` with no resource skipped the scope comparison
+            # entirely and spent a fully-scoped lease, which is the opposite of
+            # what the scope means: the caller omitted the argument and got
+            # unrestricted authority. Found by the adversarial suite.
+            if not str(resource or "").strip():
+                raise LeaseRefusal(
+                    "the lease covers specific resources, so a use must name the "
+                    "resource it is for")
+            if not _in_scope(resource, lease.scope):
                 raise LeaseRefusal(
                     f"{resource!r} is outside the lease's scope "
                     f"({', '.join(lease.scope)})")
@@ -264,16 +273,29 @@ class LeaseService:
 
 
 def _in_scope(resource: str, scope: List[str]) -> bool:
-    """Literal prefix containment, with a path boundary.
+    """Literal prefix containment, with a path boundary and `..` resolved first.
 
-    `/a/bc` must not satisfy a lease for `/a/b`, so the prefix has to end at a
-    separator or be the whole resource.
+    Two escapes have to be closed here, and both were found by the adversarial
+    suite rather than by the happy-path tests:
+
+    * `/a/bc` must not satisfy a lease for `/a/b` -- so the prefix has to end at
+      a separator or be the whole resource.
+    * `/a/b/../outside` must not satisfy it either. A raw string comparison sees
+      the `/a/b/` prefix and allows it, but the OS resolves the `..` and writes
+      to `/a/outside`. The resource is therefore normalised before comparison.
+
+    Normalisation is lexical (`posixpath.normpath`), which is the right tool
+    here: it does not touch the filesystem, so a lease check cannot be affected
+    by symlinks or by what happens to exist.
     """
-    candidate = str(resource).rstrip("/") or "/"
+    import posixpath
+
+    candidate = posixpath.normpath(str(resource).rstrip("/") or "/")
     for prefix in scope:
-        if candidate == prefix:
+        root = posixpath.normpath(str(prefix).rstrip("/") or "/")
+        if candidate == root:
             return True
-        if candidate.startswith(prefix + "/"):
+        if candidate.startswith(root.rstrip("/") + "/"):
             return True
     return False
 

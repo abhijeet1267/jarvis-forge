@@ -78,6 +78,43 @@ def build_router(require_auth) -> APIRouter:
             revoked += 1
         return {"revoked": revoked}
 
+    @router.get("/goals")
+    async def list_goals() -> Dict[str, Any]:
+        """Opt-in monitored goals and when each was last observed."""
+        from ..core.goalguard import GoalStore
+
+        return {"goals": [g.public() if hasattr(g, "public") else g.to_dict()
+                          for g in GoalStore().list()]}
+
+    @router.post("/goals")
+    async def add_goal(body: Dict[str, Any] = Body(None)) -> Dict[str, Any]:
+        """Register a goal. Monitoring is opt-in, and a short interval is refused."""
+        from ..core.goalguard import GoalStore
+
+        try:
+            goal = GoalStore().add(body or {})
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc))
+        return goal.public() if hasattr(goal, "public") else goal.to_dict()
+
+    @router.post("/goals/{goal_id}/disable")
+    async def disable_goal(goal_id: str) -> Dict[str, Any]:
+        from ..core.goalguard import GoalStore
+
+        GoalStore().disable(goal_id)
+        return {"disabled": True, "goal_id": goal_id}
+
+    @router.post("/goals/tick")
+    async def tick_goals() -> Dict[str, Any]:
+        """Observe every goal that is due, right now.
+
+        The caller owns the cadence; `due()` guarantees a goal is returned at
+        most once per interval, so repeated ticks cannot form duplicate loops.
+        """
+        from ..core.goalguard import GoalStore, run_due_observations
+
+        return {"observations": run_due_observations(GoalStore())}
+
     @router.get("/skills")
     async def list_skills() -> Dict[str, Any]:
         """Installed skills with their measured reliability."""

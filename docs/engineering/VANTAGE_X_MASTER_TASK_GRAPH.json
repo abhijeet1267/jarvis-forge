@@ -143,10 +143,11 @@
       "id": "W7-GOALGUARD",
       "agent": "03",
       "title": "Opt-in recurring goal monitoring",
-      "status": "NOT_STARTED",
+      "status": "VERIFIED",
       "files": [
         "jarvis/core/goalguard.py"
-      ]
+      ],
+      "evidence": "18 tests; live: goal observed verified (213 bytes), immediate re-tick returned nothing (duplicate-loop guard)"
     },
     {
       "id": "W9-VOICE",
@@ -158,10 +159,11 @@
       "id": "W11-SECURITY-SUITE",
       "agent": "16",
       "title": "Adversarial security regression suite",
-      "status": "NOT_STARTED",
+      "status": "VERIFIED",
       "files": [
         "tests/test_security_adversarial.py"
-      ]
+      ],
+      "evidence": "21 tests (all passing, no xfail). Found and fixed 4 real defects: (1) lease scope escaped by a .. segment, (2) intent scope same hole, (3) symlink swapped after preview wrote through to an unreviewed file and reported verified, (4) consume() without a resource bypassed scope."
     },
     {
       "id": "W0-CI-PUSH",
@@ -186,6 +188,28 @@
         "jarvis/core/parallelworld.py"
       ],
       "evidence": "a clean apply recorded as 'committed' (628-byte journal)"
+    },
+    {
+      "id": "W7-GOAL-ROUTES",
+      "agent": "lead",
+      "title": "Goal routes + live observation",
+      "status": "VERIFIED",
+      "files": [
+        "jarvis/api/intelligence_routes.py"
+      ],
+      "evidence": "POST /intelligence/goals, /goals/tick verified live"
+    },
+    {
+      "id": "W11-SEC-FIXES",
+      "agent": "lead",
+      "title": "Close the four defects the adversarial suite found",
+      "status": "VERIFIED",
+      "files": [
+        "jarvis/security/leases.py",
+        "jarvis/security/intentshield.py",
+        "jarvis/core/parallelworld.py"
+      ],
+      "evidence": "each fix re-probed directly; 21/21 adversarial tests pass with no xfail; 129 security-adjacent tests pass"
     }
   ]
 }

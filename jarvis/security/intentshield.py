@@ -126,17 +126,23 @@ def _normalise_prefixes(raw: Optional[Iterable[str]]) -> List[str]:
 
 
 def _in_scope(resource: str, prefixes: List[str]) -> bool:
-    """Literal prefix containment, with a path boundary.
+    """Literal prefix containment, with a path boundary and `..` resolved first.
 
-    ``/a/bc`` must not satisfy a prefix of ``/a/b``. This mirrors
-    ``leases._in_scope`` exactly; two guards that disagreed about what "inside"
-    means would let a step pass one and fail the other depending on order.
+    ``/a/bc`` must not satisfy a prefix of ``/a/b``, and ``/a/b/../outside`` must
+    not satisfy it either -- a raw string comparison sees the prefix and allows
+    a path the OS resolves somewhere else. This mirrors ``leases._in_scope``
+    exactly; two guards that disagreed about what "inside" means would let a
+    step pass one and fail the other depending on order. Normalisation is
+    lexical (`posixpath.normpath`) so the check never touches the filesystem.
     """
-    candidate = str(resource).rstrip("/") or "/"
+    import posixpath
+
+    candidate = posixpath.normpath(str(resource).rstrip("/") or "/")
     for prefix in prefixes:
-        if candidate == prefix:
+        root = posixpath.normpath(str(prefix).rstrip("/") or "/")
+        if candidate == root:
             return True
-        if candidate.startswith(prefix + "/"):
+        if candidate.startswith(root.rstrip("/") + "/"):
             return True
     return False
 

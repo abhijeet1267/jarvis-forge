@@ -152,6 +152,13 @@ class ParallelWorld:
                               "cover files only"})
                 continue
 
+            if target.is_symlink():
+                conflicts.append({
+                    "path": item.path,
+                    "reason": "the path is a symlink; following it would write to a "
+                              "file the plan does not name"})
+                continue
+
             try:
                 current = target.read_text(encoding="utf-8", errors="replace") \
                     if target.exists() else ""
@@ -232,6 +239,20 @@ class ParallelWorld:
                 results.append({"path": item.path, "ok": False,
                                 "detail": "the path is a directory; only files are "
                                           "supported"})
+                continue
+
+            # A symlink at the target is refused, not followed. Swapping the
+            # path for a symlink *after* the preview otherwise writes through it
+            # to a file the path guard never evaluated -- and, because the bytes
+            # hash to what we wrote, the result still reported "verified". The
+            # guard sees paths; following a link changes which file the path
+            # means. Found by the adversarial suite.
+            if target.is_symlink():
+                results.append({
+                    "path": item.path, "ok": False,
+                    "detail": ("the path is a symlink; this preview and apply cover "
+                               "regular files, and following a link would write to a "
+                               "file nobody reviewed")})
                 continue
 
             # Freshness: the file must still be the one that was previewed.
