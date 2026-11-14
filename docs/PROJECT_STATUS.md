@@ -2583,3 +2583,48 @@ remaining failures are documented post-setup steps (`playwright install chromium
 
 New: `docs/SETUP_MACHINE.md` (complete second-laptop walkthrough),
 `tests/test_env_example_is_loadable.py`, `tests/test_companion_cert_is_a_valid_ca.py`.
+
+---
+
+## Update — 2026-11-14 (iteration 86: the data directory on a fresh clone)
+
+Cloned into a second checkout and ran it there. That exposed a first-run defect the
+suite cannot see, because `tests/conftest.py` always sets an absolute `JARVIS_HOME`.
+
+**`JARVIS_HOME=~/.jarvis-forge` was never expanded.** `Settings.home` is filled from the
+environment by pydantic-settings, so `Field(default_factory=_default_home)` never ran
+when the variable was present — and it is present the moment someone copies
+`.env.example` to `.env`. The tilde stayed literal, so the first run created the token,
+the SQLite database and the onboarding state in a directory named `~` **inside the
+checkout**, hidden from `git status` by `.gitignore`'s `*~` backup rule, while the real
+`~/.jarvis-forge` never existed. `wizard.OnboardingManager` did not expand either.
+
+**Fixed** with one resolver, `jarvis.config.data_home()`, reached from a `mode="before"`
+validator on `Settings.home`, `llm_file_path`, `gateway.selection.selection_path` and
+`OnboardingManager`. The `.env.example` line now says the tilde is expanded.
+
+**Evidence.**
+- Red, before the fix: `JARVIS_HOME='~/.jarvis-forge'` → `Settings().home` is the literal
+  `~/.jarvis-forge`, and `OnboardingManager().state_dir` likewise. (Pinned by
+  `tests/test_env_example_is_loadable.py::test_a_tilde_home_from_the_example_lands_in_the_real_home`.)
+- Green, after: both resolve to `/Users/<user>/.jarvis-forge`; 86 tests across the five
+  home-resolution files pass.
+- Runtime: the server started from the repo read its token from the real
+  `~/.jarvis-forge/api_token` and answered `/health` `status: ok`, 181 tools; no `~`
+  directory was created in the checkout.
+- `README.md`'s published collected count updated 3849 → 3850 (the new test), which
+  `test_r108_readme_counts_are_true.py` checks; it passes.
+
+**Full suite on this machine:** **3786 passed, 13 failed, 51 skipped** (486.69 s), with
+the backend running and Playwright Chromium installed. The 13, classified by running
+each:
+
+| Cause | Tests | Status |
+|---|---|---|
+| No audio backend (`ffmpeg` / `sounddevice` absent; documented optional) | `test_voice.py` ×5, `test_phase91_voice_agent_integration.py::test_audio_unavailable_raises_clear_error` | **BLOCKED** on an external prerequisite |
+| No `dist/` built (`build_app.py` not run on a fresh clone) | `test_phase96_release_preparation.py::TestArtifactIntegrity::test_dist_directory_exists` | **BLOCKED** on a build step |
+| Pre-existing, unrelated to this change — **proven**: both files fail identically on the clean tree with these changes stashed | `test_r85_macos_screen_models_match_the_server.py` ×2 (empty `/tasks` on a fresh data dir), `test_r96_macos_integration_harness.py` ×1 | **PRE-EXISTING** |
+
+A first run without the backend up showed 112 failures; 94 of those were the
+documented "start `run.py` first" files and 9 were the missing Chromium binary. That
+is why the number above was re-measured with both in place rather than reported as is.

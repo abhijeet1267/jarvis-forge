@@ -112,10 +112,25 @@ def test_status_route_does_not_block_the_event_loop(
 
 
 def test_status_route_moves_the_call_off_the_loop_structurally() -> None:
-    """Cheap, exact guard against a future 'simplification' back to a direct call."""
+    """Cheap, exact guard against a future 'simplification' back to a direct call.
+
+    Read from the endpoint the *live app* registers, and re-read the module
+    first: an earlier test can reload `jarvis.api.app`, and `inspect.getsource`
+    on a function from a stale module object returns the old source (or raises),
+    which made this look like a regression when the route was correct.
+    """
+    import importlib
     import inspect
 
-    source = inspect.getsource(_route("/voice/status"))
+    module = importlib.reload(importlib.import_module("jarvis.api.app"))
+    endpoint = None
+    for route in module.app.routes:
+        if getattr(route, "path", None) == "/voice/status":
+            endpoint = route.endpoint
+            break
+    assert endpoint is not None, "route /voice/status is missing"
+
+    source = inspect.getsource(endpoint)
     assert "to_thread" in source or "run_in_executor" in source, source
 
 

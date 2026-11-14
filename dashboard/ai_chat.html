@@ -874,6 +874,11 @@
           body: JSON.stringify({
             text,
             conversation_id: state.currentChat.id,
+            // A conversation opened here may have started in the macOS app,
+            // where the pipeline stores its turns under the session id. Sending
+            // the id as both makes the dashboard continue *that* conversation
+            // instead of starting a parallel one whose history is empty.
+            session_id: state.currentChat.id,
             provider_preference: providerId !== "auto" ? providerId : undefined,
             free_first: freeFirst,
             allow_paid_fallback: paidFallback,

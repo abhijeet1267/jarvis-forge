@@ -211,16 +211,45 @@ class ConversationService:
                 log.info("could not record chat turn",
                          extra_fields={"error": str(exc)[:120]})
 
-    def _ensure_chat(self, conversation_id: str) -> None:
-        """Make sure the chat row a turn will hang off exists."""
+    def _ensure_chat(self, conversation_id: str, title: str = "Conversation") -> None:
+        """Make sure the chat row a turn will hang off exists.
+
+        `INSERT OR IGNORE` keeps an existing title: the first name a
+        conversation gets is the one a person recognises it by.
+        """
         try:
             self.db.execute(
                 "INSERT OR IGNORE INTO ai_chats (id, title, created_at, updated_at) "
                 "VALUES (?, ?, ?, ?)",
-                (conversation_id, "Conversation", _now_iso(), _now_iso()),
+                (conversation_id, title or "Conversation", _now_iso(), _now_iso()),
             )
         except Exception as exc:
             log.info("could not create chat row",
+                     extra_fields={"error": str(exc)[:120]})
+
+    def register_session(self, session_id: str, opening_text: str = "") -> None:
+        """Make a pipeline session listable as a conversation.
+
+        The pipeline writes its turns to `messages`, which nothing lists. This
+        creates the `ai_chats` row that gives the session an identity a listing
+        route can return -- the id is the session id, so reading the
+        conversation back joins the pipeline's own turns.
+
+        A failing write is logged, never raised: a conversation that cannot be
+        listed is still a conversation that worked.
+        """
+        session_id = str(session_id or "").strip()
+        if not session_id:
+            return
+        title = " ".join(str(opening_text or "").split())[:60] or "Conversation"
+        self._ensure_chat(session_id, title=title)
+        try:
+            self.db.execute(
+                "UPDATE ai_chats SET updated_at = ? WHERE id = ?",
+                (_now_iso(), session_id),
+            )
+        except Exception as exc:
+            log.info("could not touch chat row",
                      extra_fields={"error": str(exc)[:120]})
 
     def append_exchange(
@@ -236,6 +265,121 @@ class ConversationService:
                     conversation_id=conversation_id, intent=intent)
         self.append("assistant", assistant_text, session_id=session_id,
                     conversation_id=conversation_id, intent=intent)
+
+    # -- listing ------------------------------------------------------------
+
+    def list_conversations(self, limit: int = 50) -> List[Dict[str, Any]]:
+        """Every conversation, newest first, whichever surface wrote it.
+
+        ``GET /ai/chats`` used to list only ``ai_chats`` -- the dashboard's own
+        store -- so a conversation held in the macOS app (which speaks
+        ``/command`` and writes ``messages`` keyed by ``session_id``) existed on
+        the server and was unreachable from any listing. "The id was never lost,
+        only unlistable" was true for the dashboard; for the app the id was
+        never created at all.
+
+        A pipeline session now appears as a conversation with its session id as
+        the chat id, so opening it from the dashboard reads the same turns. The
+        two sets are merged on that id: a session that also has an ``ai_chats``
+        row (because it was continued from the chat surface) yields one entry,
+        not two.
+        """
+        limit = max(1, min(int(limit or 50), 200))
+        rows: Dict[str, Dict[str, Any]] = {}
+
+        try:
+            for row in self.db.query(
+                """SELECT c.id, c.title, c.created_at, c.updated_at,
+                          (SELECT COUNT(*) FROM ai_messages m
+                            WHERE m.conversation_id = c.id) AS message_count
+                   FROM ai_chats c
+                   ORDER BY c.updated_at DESC LIMIT ?""",
+                (limit,),
+            ):
+                item = dict(row)
+                rows[str(item["id"])] = {
+                    "id": str(item["id"]),
+                    "title": str(item.get("title") or "Conversation"),
+                    "created_at": str(item.get("created_at") or ""),
+                    "updated_at": str(item.get("updated_at") or ""),
+                    "message_count": int(item.get("message_count") or 0),
+                    # Whether the chat surface actually wrote a turn here.
+                    # A pipeline session also has an `ai_chats` row (that row
+                    # is what makes it listable), so its presence alone cannot
+                    # tell the two apart -- only its turns can.
+                    "surface": "chat" if int(item.get("message_count") or 0) else "pipeline",
+                }
+        except Exception as exc:
+            log.info("could not list chat conversations",
+                     extra_fields={"error": str(exc)[:120]})
+
+        try:
+            for row in self.db.query(
+                """SELECT session_id, COUNT(*) AS message_count,
+                          MIN(created_at) AS created_at, MAX(created_at) AS updated_at
+                   FROM messages
+                   WHERE session_id IS NOT NULL AND session_id != ''
+                     AND role IN ('user', 'assistant')
+                   GROUP BY session_id
+                   ORDER BY updated_at DESC LIMIT ?""",
+                (limit,),
+            ):
+                sid = str(row["session_id"])
+                session_count = int(row["message_count"] or 0)
+                existing = rows.get(sid)
+                if existing is not None and existing["surface"] == "chat":
+                    # The chat surface genuinely wrote this conversation; its
+                    # rows are in `ai_messages`, the pipeline's in `messages`,
+                    # and a person counts both.
+                    existing["message_count"] = existing["message_count"] + session_count
+                    existing["surface"] = "both"
+                    continue
+                if existing is not None:
+                    # The row exists only because registering the session made
+                    # it listable; the turns are the pipeline's.
+                    existing["message_count"] = session_count
+                    if not existing.get("title") or existing["title"] == "Conversation":
+                        existing["title"] = _title_from_session(self, sid)
+                    existing["surface"] = "pipeline"
+                    continue
+                rows[sid] = {
+                    "id": sid,
+                    "title": _title_from_session(self, sid),
+                    "created_at": str(row["created_at"] or ""),
+                    "updated_at": str(row["updated_at"] or ""),
+                    "message_count": session_count,
+                    "surface": "pipeline",
+                }
+        except Exception as exc:
+            log.info("could not list pipeline conversations",
+                     extra_fields={"error": str(exc)[:120]})
+
+        merged = sorted(rows.values(),
+                        key=lambda c: c.get("updated_at") or "", reverse=True)
+        return merged[:limit]
+
+
+def _title_from_session(service: "ConversationService", session_id: str) -> str:
+    """The first thing the person said, as the conversation's name.
+
+    A session has no title of its own, and listing forty rows all called
+    "Conversation" tells the reader nothing about which one to reopen.
+    """
+    try:
+        rows = service.db.query(
+            """SELECT content FROM messages
+               WHERE session_id = ? AND role = 'user'
+               ORDER BY rowid ASC LIMIT 1""",
+            (session_id,),
+        )
+    except Exception:
+        return "Conversation"
+    if not rows:
+        return "Conversation"
+    text = " ".join(str(rows[0]["content"] or "").split())
+    if not text:
+        return "Conversation"
+    return text[:60] + ("…" if len(text) > 60 else "")
 
 
 def _new_message_id() -> str:

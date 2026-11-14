@@ -59,14 +59,28 @@ CATEGORY_PURPOSE: Dict[str, str] = {
 }
 
 #: Provider types the UI offers per tab. A provider that cannot do the job is
-#: not offered — the list is a promise the backend also enforces.
+#: not offered -- the list is a promise the backend also enforces.
+#:
+#: 9Router is offered for every tab its live catalog can actually serve. Its
+#: `/api/v1/models` reports capabilities per model, and the counts are what
+#: decide this: 1003 routes with `tools`, 668 with `vision`, 186 with `pdf`,
+#: 176 with `videoInput`, 103 with `audioInput` -- but **zero** with
+#: `imageOutput` or `audioOutput`.
+#:
+#: Note that `videoInput` is *reading* a video, which is not what the `video`
+#: tab does: that tab submits a generation job to `POST {base}/videos`, and
+#: 9router has no such route (it answers with its HTML shell, a 404). So 9router
+#: is added to text, documents and vision only -- not to `image` or `video`
+#: (nothing there generates media) and not to `speech` (nothing there speaks).
 CATEGORY_PROVIDERS: Dict[str, tuple] = {
     "text": ("openai", "gemini", "groq", "9router", "chat2api", "openai_compatible",
              "pollinations", "custom"),
-    "documents": ("openai", "gemini", "openai_compatible", "pollinations", "custom"),
+    "documents": ("openai", "gemini", "9router", "openai_compatible", "pollinations",
+                  "custom"),
     "speech": ("openai", "gemini", "openrouter", "openai_compatible", "custom"),
     "image": ("pollinations", "openai", "gemini", "openai_compatible", "custom"),
-    "vision": ("openai", "gemini", "openai_compatible", "pollinations", "custom"),
+    "vision": ("openai", "gemini", "9router", "openai_compatible", "pollinations",
+               "custom"),
     "video": ("openai", "openai_compatible", "custom"),
     "custom": ("custom", "openai_compatible"),
 }

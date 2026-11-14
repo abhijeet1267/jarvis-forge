@@ -52,6 +52,25 @@ def key_path(settings: Optional[Settings] = None) -> Path:
     return _cert_dir(settings) / "companion.key"
 
 
+def _common_name(hostname: str) -> str:
+    """A certificate CN that fits OpenSSL's 64-byte subject limit.
+
+    The hostname is the identifying part, but a CI runner's hostname plus the
+    ``vantage-companion-`` prefix routinely exceeds 64 bytes, and OpenSSL then
+    refuses to build the request at all. Trim the host to what fits and append
+    a short digest of the full hostname, so a shortened name stays unique.
+    """
+    import hashlib
+
+    prefix = "vantage-companion-"
+    full = f"{prefix}{hostname}"
+    if len(full) <= 64:
+        return full
+    digest = hashlib.sha256(hostname.encode("utf-8")).hexdigest()[:8]
+    keep = 64 - len(prefix) - len(digest) - 1
+    return f"{prefix}{hostname[:max(1, keep)]}-{digest}"
+
+
 def generate(settings: Optional[Settings] = None) -> None:
     """Generate a fresh self-signed certificate and private key.
 
@@ -67,7 +86,14 @@ def generate(settings: Optional[Settings] = None) -> None:
         if p.exists():
             p.unlink()
 
-    common_name = f"vantage-companion-{os.uname().nodename}"
+    # OpenSSL caps a subject attribute at 64 bytes (`ASN1_mbstring_ncopy:
+    # string too long`), and a CI runner hostname is long enough to blow that
+    # on its own -- GitHub's `runnervm...` names produced
+    # "vantage-companion-lvl04-dq151-...-6AA266DDE8CF.local" and every
+    # companion test failed at certificate generation. Bound the name and keep
+    # it unique: when the hostname is trimmed, append a short digest of the full
+    # name so two trimmed hosts never collide.
+    common_name = _common_name(os.uname().nodename)
     proc = subprocess.run(
         [
             "openssl", "req", "-x509",

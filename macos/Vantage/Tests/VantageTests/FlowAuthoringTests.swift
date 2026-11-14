@@ -204,12 +204,12 @@ final class ShortcutSpecTests: XCTestCase {
 
     func test_display_includes_every_modifier_in_order() {
         var spec = ShortcutSpec(keyCode: 0, modifiers: 0)
-        spec.modifiers = UInt32(controlKey) | UInt32(optionKey) | UInt32(shiftKey) | UInt32(cmdKey)
+        spec.modifiers = UInt32(ShortcutSpec.controlMask) | UInt32(ShortcutSpec.optionMask) | UInt32(ShortcutSpec.shiftMask) | UInt32(ShortcutSpec.commandMask)
         XCTAssertEqual(spec.displayString, "⌃⌥⇧⌘A")
     }
 
     func test_round_trip_through_json() throws {
-        let spec = ShortcutSpec(keyCode: 40, modifiers: UInt32(cmdKey) | UInt32(shiftKey))
+        let spec = ShortcutSpec(keyCode: 40, modifiers: UInt32(ShortcutSpec.commandMask) | UInt32(ShortcutSpec.shiftMask))
         let data = try JSONEncoder().encode(spec)
         XCTAssertEqual(try JSONDecoder().decode(ShortcutSpec.self, from: data), spec)
     }

@@ -58,8 +58,9 @@ def test_keychain_storage_imported():
 def test_provider_api_routes_exist():
     """API routes for providers are registered."""
     from jarvis.api.app import app
-    
-    route_paths = [route.path for route in app.routes]
+    from tests.conftest import flat_routes
+
+    route_paths = [route.path for route in flat_routes(app)]
     
     expected_routes = [
         "/ai/providers",

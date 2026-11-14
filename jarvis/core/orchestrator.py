@@ -175,7 +175,15 @@ class JarvisCore:
         # the pipeline and the chat surfaces share one history model. The
         # `messages` table stays the pipeline's own ledger -- it carries the
         # intent and the session index -- and the service writes it.
+        #
+        # R2.2b: the session is also registered in `ai_chats`, keyed by its own
+        # id. Without that row the conversation exists on the server but no
+        # listing route can name it, so the app's history was invisible to the
+        # dashboard and to every client that lists conversations. The chat row
+        # is what makes the session addressable; the turn itself stays in the
+        # pipeline's ledger, which is authoritative for these turns.
         self.conversations.append(role, content, session_id=session_id, intent=intent)
+        self.conversations.register_session(session_id, opening_text=content if role == "user" else "")
         self.db.execute(
             "INSERT OR IGNORE INTO sessions (session_id, user_id) VALUES (?, 'user')",
             (session_id,),

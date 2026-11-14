@@ -446,6 +446,29 @@ CREATE INDEX IF NOT EXISTS idx_memories_scope ON memories(scope);
 CREATE INDEX IF NOT EXISTS idx_memories_project ON memories(project_id);
 CREATE INDEX IF NOT EXISTS idx_nodes_project ON graph_nodes(project_id);
 CREATE INDEX IF NOT EXISTS idx_messages_session ON messages(session_id);
+
+-- Mission contracts (P1). One row per mission; its conditions and steps are
+-- JSON documents rather than child tables because the whole contract is read
+-- and written as a unit. `version` is the optimistic-concurrency guard: an
+-- update that names a stale version changes nothing, so two writers cannot
+-- silently interleave a state machine.
+CREATE TABLE IF NOT EXISTS missions (
+    mission_id         TEXT PRIMARY KEY,
+    request            TEXT NOT NULL,
+    outcome            TEXT NOT NULL DEFAULT '',
+    state              TEXT NOT NULL,
+    scope              TEXT NOT NULL DEFAULT '{}',
+    conditions         TEXT NOT NULL DEFAULT '[]',
+    steps              TEXT NOT NULL DEFAULT '[]',
+    created_at         TEXT NOT NULL,
+    updated_at         TEXT NOT NULL,
+    evidence           TEXT NOT NULL DEFAULT '[]',
+    reason             TEXT NOT NULL DEFAULT '',
+    recovery_attempts  INTEGER NOT NULL DEFAULT 0,
+    version            INTEGER NOT NULL DEFAULT 1,
+    last_actor         TEXT NOT NULL DEFAULT 'system'
+);
+CREATE INDEX IF NOT EXISTS idx_missions_state ON missions(state, updated_at DESC);
 """
 
 

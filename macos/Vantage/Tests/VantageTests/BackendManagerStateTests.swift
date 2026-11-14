@@ -22,7 +22,17 @@ final class BackendManagerStateTests: XCTestCase {
     }
 
     private func okHealth() -> APIModels.HealthResponse {
-        APIModels.HealthResponse(status: "ok", tools: 148)
+        // Built by decoding the real wire shape rather than by the synthesized
+        // memberwise initializer: that initializer requires every optional
+        // field positionally, so `HealthResponse(status:tools:)` does not
+        // exist. Decoding also keeps the fixture honest -- a field the server
+        // stops sending shows up here.
+        let json = Data(#"{"status":"ok","tools":148}"#.utf8)
+        do {
+            return try JSONDecoder().decode(APIModels.HealthResponse.self, from: json)
+        } catch {
+            fatalError("the HealthResponse fixture no longer decodes: \(error)")
+        }
     }
 
     // MARK: - State model
@@ -145,7 +155,16 @@ final class BackendManagerStateTests: XCTestCase {
 
         // A second start must cancel the first and create exactly one loop.
         m.startHealthPolling()
-        XCTAssertNotSame(m.healthPollTask, first, "a repeated start must not leave two loops")
+        // XCTest has no `XCTAssertNotSame`; comparing the task identities is
+        // the same claim and is what the test meant. `healthPollTask` is
+        // optional, so require it first, then compare through a closure that
+        // unwraps both sides.
+        if let firstTask = first, let secondTask = m.healthPollTask {
+            XCTAssertFalse(secondTask === firstTask,
+                           "a repeated start must not leave two loops")
+        } else {
+            XCTFail("both starts must create a polling task")
+        }
         XCTAssertNotNil(m.healthPollTask)
 
         m.stopHealthPolling()

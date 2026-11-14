@@ -163,3 +163,36 @@ def test_a_copy_of_the_example_sets_the_server_up(tmp_path):
         assert settings.port == 8765
     finally:
         os.environ.update(saved)
+
+
+def test_a_tilde_home_from_the_example_lands_in_the_real_home(tmp_path, monkeypatch):
+    """``JARVIS_HOME=~/.jarvis-forge`` must mean the user's home, not ``./~``.
+
+    **This was broken.** The template says ``~/.jarvis-forge``, and dotenv does
+    no expansion. ``_default_home`` expanded it, but three other readers of the
+    same variable returned the literal path -- so on a fresh clone the token,
+    database and onboarding state were created in a directory named ``~``
+    inside the repository (which ``.gitignore`` then hid, because ``*~`` is a
+    backup-file rule), while the real ``~/.jarvis-forge`` never existed. Every
+    reader now goes through one expanding resolver.
+    """
+    from jarvis.config import Settings, data_home, llm_file_path
+    from jarvis.gateway.selection import selection_path
+    from jarvis.wizard import OnboardingManager
+
+    monkeypatch.setenv("JARVIS_HOME", "~/.jarvis-forge")
+    expected = Path.home() / ".jarvis-forge"
+
+    # The root cause: the field is populated from the environment as-is, so
+    # `default_factory` never ran and nothing expanded the tilde.
+    assert Settings().home == expected, "Settings.home kept the literal '~'"
+    assert data_home() == expected
+    assert llm_file_path().parent == expected
+    assert selection_path().parent == expected
+    assert OnboardingManager().state_dir == expected
+
+    # The failure this pins: a relative, unexpanded path resolved inside the
+    # checkout rather than the home directory.
+    for resolved in (Settings().home, data_home(), llm_file_path().parent, selection_path().parent):
+        assert not str(resolved).startswith("~"), resolved
+        assert "AppData/Vantage/~" not in str(resolved), resolved

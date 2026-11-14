@@ -830,6 +830,16 @@ final class APIClient: ObservableObject {
         req.setValue("application/json", forHTTPHeaderField: "Accept")
         req.setValue(ownOrigin, forHTTPHeaderField: "Origin")
 
+        // Read the token fresh when it is not already cached. The app can start
+        // before the backend has written `api_token` (a first run creates the
+        // server, which then mints the file), and before this the client cached
+        // the nil from init for the rest of the process: every request went out
+        // unauthenticated and `/health` was rejected forever, while
+        // `backendIdentity()` -- which calls `refreshToken()` -- kept working
+        // and made the app look connected.
+        if token == nil || token?.isEmpty == true {
+            token = readToken()
+        }
         if let tok = token, !tok.isEmpty {
             req.setValue(tok, forHTTPHeaderField: "X-JARVIS-Token")
         }

@@ -626,6 +626,13 @@ async def require_same_origin_auth(request: Request) -> None:
 #: Routes that hand out dashboard credentials.
 SameOriginProtected = Depends(require_same_origin_auth)
 
+# Mission routes live in their own module so this file stops growing. The auth
+# dependency is passed in rather than imported there, which keeps the import
+# acyclic and makes "every mission route is protected" a fact of construction.
+from .missions_routes import build_router as _build_missions_router  # noqa: E402
+
+app.include_router(_build_missions_router(require_auth))
+
 _core: Optional[JarvisCore] = None
 _voice = None
 
@@ -3935,143 +3942,6 @@ def build_meeting_briefing(wanted: str = "") -> Dict[str, Any]:
     }
 
 
-@app.post("/meetings/prepare")
-async def prepare_meeting(body: dict = Body(None), _: None = Protected) -> Dict[str, Any]:
-    """Assemble a briefing for a meeting, from real calendar, planner and mail.
-
-    Finds the event (by name, or the next one if none is named), then gathers the
-    open planner tasks that mention it and searches the mailbox for messages
-    naming the meeting or an address in its description. An unreadable calendar
-    or mailbox is reported — never rendered as "no meeting" or "no related mail"
-    — and an ambiguous name asks which meeting rather than picking one.
-
-    This *prepares*; it does not attend, join or record anything. Nothing is sent
-    or changed, and ``workflow`` lists the steps that actually ran.
-    """
-    from datetime import datetime as _dt, timedelta as _td
-
-    from ..integrations.calendar_provider import get_calendar_provider, read_status
-
-    body = body or {}
-    wanted = str(body.get("meeting") or "").strip()
-    now = _dt.now().astimezone()
-    horizon = now + _td(days=14)
-    steps: List[str] = []
-
-    empty = {"meeting": None, "related_email": [], "related_tasks": [],
-             "talking_points": [], "workflow": steps}
-
-    try:
-        result = get_calendar_provider(get_settings()).list_events(
-            now - _td(hours=1), horizon, limit=200)
-    except Exception as exc:
-        steps.append(f"calendar read failed ({str(exc)[:60]})")
-        return {"ok": False, "reason": "calendar could not be read", **empty}
-    if not read_status(result).read_succeeded:
-        steps.append("calendar could not be read")
-        return {"ok": False, "reason": "calendar could not be read", **empty}
-
-    events = list(result)
-    steps.append(f"read {len(events)} calendar event(s) in the next two weeks")
-
-    if wanted:
-        needle = wanted.lower()
-        matches = [e for e in events if needle in (e.title or "").lower()]
-        if not matches:
-            return {"ok": False,
-                    "reason": f"no meeting matching {wanted!r} in the next two weeks", **empty}
-        if len(matches) > 1:
-            return {"ok": False, "reason": "more than one meeting matches",
-                    "candidates": [e.as_dict() for e in matches[:5]], **empty}
-        meeting = matches[0]
-    else:
-        upcoming = [e for e in events if _as_local(e.start) >= now]
-        if not upcoming:
-            return {"ok": False, "reason": "no upcoming meeting in the next two weeks", **empty}
-        meeting = min(upcoming, key=lambda e: _as_local(e.start))
-
-    steps.append(f"selected {meeting.title or '(untitled event)'}")
-
-    # Open planner tasks that name the meeting.
-    related_tasks: List[Dict[str, Any]] = []
-    try:
-        for task in get_core().planner_service.list_tasks():
-            hay = f"{task.title} {task.detail}".lower()
-            if meeting.title and meeting.title.lower() in hay:
-                related_tasks.append({"task_ref": task.task_ref, "title": task.title,
-                                      "due_at": task.due_at.isoformat() if task.due_at else None})
-        steps.append(f"matched {len(related_tasks)} open task(s)")
-    except Exception as exc:
-        steps.append(f"planner read failed ({str(exc)[:60]})")
-
-    # Related mail: the event title, or an address in the event's description.
-    import re as _re
-
-    queries = [meeting.title] if meeting.title else []
-    queries += _re.findall(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+", meeting.description or "")
-
-    related: List[Dict[str, Any]] = []
-    mail_error = ""
-    mail_read = False
-    try:
-        from ..integrations.email_provider import get_email_provider
-
-        mail = get_email_provider(get_settings())
-        seen: set = set()
-        for q in queries[:3]:
-            if not q:
-                continue
-            found = mail.search(query=q, limit=5)
-            if not read_status(found).read_succeeded:
-                mail_error = "mailbox could not be read"
-                continue
-            mail_read = True
-            for m in found:
-                if m.uid in seen:
-                    continue
-                seen.add(m.uid)
-                related.append({"uid": m.uid, "subject": m.subject, "from": m.sender,
-                                "date": m.date, "snippet": m.snippet})
-        steps.append(
-            f"searched the mailbox ({len(related)} related message(s))" if mail_read
-            else "mailbox could not be read")
-    except Exception as exc:
-        mail_error = f"mailbox read failed: {str(exc)[:80]}"
-        steps.append("mailbox read failed")
-
-    points: List[str] = []
-    if related:
-        points.append(f"{len(related)} related message(s): "
-                      + "; ".join(m["subject"] or "(no subject)" for m in related[:3]))
-    if related_tasks:
-        points.append(f"{len(related_tasks)} open task(s) mention this meeting.")
-    if meeting.description:
-        points.append("Agenda/notes: " + meeting.description[:200])
-    if meeting.location:
-        points.append(f"Location: {meeting.location}")
-    if not points:
-        points.append("No related mail, tasks or agenda found for this meeting.")
-
-    where = " ".join(filter(None, [meeting.location, meeting.description]))
-
-    return {
-        "ok": True,
-        "meeting": meeting.as_dict(),
-        "related_email": related,
-        "related_tasks": related_tasks,
-        "talking_points": points,
-        "email_error": mail_error,
-        "conflict": _meeting_conflict(events, meeting),
-        "prep_actions": [
-            {"action": "search_events", "params": {"query": meeting.title or ""}},
-            {"action": "open_meeting", "params": {"meeting": meeting.title or "",
-                                                  "join_url": _join_url(where)}},
-        ],
-        "workflow": steps,
-        "note": "A briefing assembled from real data — Vantage prepared it and does not attend the meeting. Nothing was sent or changed.",
-    }
-
-
 def _calling_available() -> bool:
     """Whether this Mac has the calling app the call route hands a number to."""
     from pathlib import Path as _P
@@ -4375,270 +4245,6 @@ async def meeting_notes(uid: str, _: None = Protected) -> Dict[str, Any]:
                       "notes": row["notes"], "action_items": items,
                       "created_at": row["created_at"]})
     return {"meeting": uid, "count": len(notes), "notes": notes}
-
-
-@app.get("/calls/availability")
-async def call_availability(_: None = Protected) -> Dict[str, Any]:
-    """Whether this Mac has a real, scriptable calling surface.
-
-    FaceTime's ``facetime://`` URL scheme is the whole authority here: if the app
-    is absent there is no call path, and the page must say so rather than offer a
-    button that cannot work.
-    """
-    from pathlib import Path as _P
-
-    facetime = _P("/System/Applications/FaceTime.app").exists()
-    return {
-        "available": facetime,
-        "provider": "FaceTime" if facetime else "",
-        "detail": ("Calls go through FaceTime, which is installed."
-                   if facetime else
-                   "FaceTime is not installed, so there is no calling app to hand a number to."),
-        "requires_confirmation": True,
-        "can_observe_call": False,
-    }
-
-
-@app.post("/contacts/{name}/call")
-async def place_call(name: str, body: dict = Body(None), _: None = Protected) -> Dict[str, Any]:
-    """Hand a contact's number to FaceTime. Explicitly, and only on request.
-
-    Two boundaries are kept deliberately:
-
-    * this **places** a call, it does not observe one. Vantage has no access to
-      the audio, so it never reports that a conversation happened, who joined, or
-      what was said;
-    * it only runs when the caller passes ``confirm: true``. The prepare screen
-      offers the call; dialling is a second, deliberate act, because ringing
-      somebody is not reversible.
-
-    The reply says what was actually done — handed to FaceTime — and no more.
-    """
-    from ..tools.email import resolve_recipient
-
-    body = body or {}
-    if not body.get("confirm"):
-        raise HTTPException(
-            status_code=409,
-            detail="Placing a call needs explicit confirmation (confirm: true).")
-
-    from pathlib import Path as _P
-
-    if not _P("/System/Applications/FaceTime.app").exists():
-        raise HTTPException(status_code=503,
-                            detail="FaceTime is not installed, so there is no app to call from.")
-
-    resolution = resolve_recipient(name)
-    if not resolution.get("ok"):
-        raise HTTPException(status_code=404, detail=resolution.get("reason", "no such contact"))
-    address = str(resolution.get("address") or "")
-    display = str(resolution.get("name") or name)
-
-    number = str(body.get("number") or "").strip()
-    target = number or address
-    if not target:
-        raise HTTPException(status_code=422, detail="that contact has no address to call")
-
-    import asyncio
-    import subprocess
-
-    # LaunchServices resolves the `facetime://` scheme to FaceTime. `open -a
-    # FaceTime <url>` is used rather than bare `open <url>` so the app is named
-    # explicitly instead of leaving the handler to whatever registered last.
-    def _dial() -> tuple:
-        try:
-            done = subprocess.run(["open", "-a", "FaceTime", f"facetime://{target}"],
-                                  capture_output=True, text=True, timeout=20)
-            return done.returncode, (done.stderr or "").strip()
-        except Exception as exc:  # a launch that failed must not read as a call
-            return 1, str(exc)[:160]
-
-    code, err = await asyncio.to_thread(_dial)
-    return {
-        "ok": code == 0,
-        "contact": {"name": display, "address": address},
-        "dialled": target,
-        "provider": "FaceTime",
-        "message": (f"Asked FaceTime to call {display}." if code == 0
-                    else f"Could not hand {display} to FaceTime: {err}"),
-        "observed": False,
-        "note": "Handed to FaceTime to ring. Vantage cannot see or hear the call, so it "
-                "will never claim the conversation happened — record what was said when "
-                "you are done.",
-    }
-
-
-@app.post("/contacts/{name}/call-notes")
-async def call_notes(name: str, body: dict = Body(None), _: None = Protected) -> Dict[str, Any]:
-    """Record what was said on a call and turn the agreed actions into tasks.
-
-    This is the half Vantage *can* do honestly. It never heard the call, so
-    nothing here is inferred — the notes are the person's own words, and only the
-    action lines they wrote become tasks, prefixed with the contact so the work is
-    traceable back to the conversation.
-    """
-    import re as _re
-
-    from ..tools.email import resolve_recipient
-
-    body = body or {}
-    notes = str(body.get("notes") or "").strip()
-    raw_items = body.get("action_items") or []
-    if isinstance(raw_items, str):
-        raw_items = raw_items.splitlines()
-
-    resolution = resolve_recipient(name)
-    display = str(resolution.get("name") or name)
-
-    items = [str(i).strip() for i in raw_items if str(i).strip()]
-    if not items and notes:
-        items = [line.strip(" -•*\t") for line in notes.splitlines()
-                 if _re.match(r"^\s*[-•*]\s+\S", line)]
-
-    created = []
-    planner = get_core().planner_service
-    for item in items:
-        task = planner.create_task(f"[Call with {display}] {item}"[:200],
-                                   detail="Agreed on a call.", source="call")
-        created.append({"task_ref": task.task_ref, "title": task.title})
-
-    return {
-        "ok": True,
-        "contact": display,
-        "created": created,
-        "created_count": len(created),
-        "notes_saved": bool(notes),
-        "note": ("Only the action lines you wrote became tasks; nothing was inferred "
-                 "from the call itself." if items
-                 else "No action items were written, so no tasks were created."),
-    }
-
-
-@app.post("/contacts/{name}/outreach")
-async def prepare_outreach(name: str, body: dict = Body(None), _: None = Protected) -> Dict[str, Any]:
-    """Draft a personalised outreach email to a contact, and save it as a draft.
-
-    Built from what Vantage actually knows about the person: open tasks that name
-    them and recent mail from them, so the message can reference something real
-    instead of a generic template. It is written to the mailbox's **drafts** folder
-    and never sent — sending is a separate, confirmed action on this project.
-    """
-    from ..integrations.email_provider import EmailDraft, get_email_provider, read_status
-    from ..tools.email import resolve_recipient
-
-    resolution = resolve_recipient(name)
-    if not resolution.get("ok"):
-        raise HTTPException(status_code=404, detail=resolution.get("reason", "no such contact"))
-    address = str(resolution.get("address") or "")
-    display = str(resolution.get("name") or name)
-
-    body = body or {}
-    purpose = str(body.get("purpose") or "").strip()
-    save = bool(body.get("save_draft", True))
-
-    open_tasks = []
-    for task in get_core().planner_service.list_tasks():
-        hay = f"{task.title} {task.detail}".lower()
-        if display.lower() in hay or address.lower() in hay:
-            open_tasks.append(task.title)
-
-    recent: List[str] = []
-    mail_error = ""
-    try:
-        provider = get_email_provider(get_settings())
-        found = provider.search(query=display, limit=5)
-        if read_status(found).read_succeeded:
-            recent = [m.subject for m in found if address.lower() in (m.sender or "").lower()]
-        else:
-            mail_error = "mailbox could not be read"
-    except Exception as exc:
-        mail_error = str(exc)[:120]
-
-    greeting = f"Hi {display.split()[0]}," if display.split() else "Hi,"
-    lines = [greeting, ""]
-    if purpose:
-        lines.append(purpose)
-    elif open_tasks:
-        lines.append(f"I wanted to follow up on {open_tasks[0]}.")
-    elif recent:
-        lines.append(f"Thanks for your note about \u201c{recent[0]}\u201d.")
-    else:
-        lines.append("I wanted to reach out and stay in touch.")
-    lines.append("")
-    lines.append("Best,")
-    draft_body = "\n".join(lines)
-
-    saved = None
-    if save:
-        draft = EmailDraft(to=[address], subject=purpose or f"Hello from {display.split()[0] if display.split() else 'me'}",
-                           body=draft_body)
-        result = get_email_provider(get_settings()).save_draft(draft)
-        saved = bool(result.get("ok", True))
-
-    return {
-        "contact": {"name": display, "address": address},
-        "draft": {"to": address, "body": draft_body,
-                  "subject": purpose or f"Hello from {display.split()[0] if display.split() else 'me'}"},
-        "context": {"open_tasks": open_tasks, "recent_email": recent},
-        "saved": saved,
-        "sending": {"supported": False,
-                    "reason": "Vantage saves this as a draft. Sending is a separate, "
-                              "confirmed action."},
-        "email_error": mail_error,
-    }
-
-
-@app.post("/meetings/{uid}/follow-up")
-async def meeting_follow_up(uid: str, body: dict = Body(None), _: None = Protected) -> Dict[str, Any]:
-    """Turn what happened in a meeting into tracked work.
-
-    Notes are the person's; the action items become planner tasks that appear in
-    "next up" and in the attention feed, so a decision does not die in a text box.
-    Nothing is invented: an item with no text is ignored, and the reply says how
-    many tasks were actually created and which meeting they belong to.
-    """
-    import re
-
-    body = body or {}
-    notes = str(body.get("notes") or "").strip()
-    raw_items = body.get("action_items") or []
-    if isinstance(raw_items, str):
-        raw_items = [line for line in raw_items.splitlines()]
-
-    items = [str(i).strip() for i in raw_items if str(i).strip()]
-    if not items and notes:
-        # A line that names an owner or starts with a verb is the common way a
-        # person writes these; anything else stays in the notes, unclaimed.
-        items = [line.strip(" -•\t") for line in notes.splitlines()
-                 if re.match(r"^\s*[-•*]\s+\S", line)]
-
-    meeting = None
-    try:
-        from ..integrations.calendar_provider import LocalCalendarProvider
-
-        meeting = LocalCalendarProvider().get(uid)
-    except Exception:
-        meeting = None
-    title = (meeting.title if meeting else "") or uid
-
-    created = []
-    planner = get_core().planner_service
-    for item in items:
-        task = planner.create_task(f"[{title}] {item}"[:200],
-                                   detail=f"From the {title} meeting" if meeting else "",
-                                   source="meeting")
-        created.append({"task_ref": task.task_ref, "title": task.title})
-
-    return {
-        "ok": True,
-        "meeting": uid,
-        "meeting_title": title,
-        "created": created,
-        "created_count": len(created),
-        "notes_saved": bool(notes),
-        "note": ("Nothing was invented: items that were blank were skipped."
-                 if items else "No action items were given, so no tasks were created."),
-    }
 
 
 def _join_url(text: str) -> str:
@@ -6611,18 +6217,14 @@ async def list_chats(limit: int = 50, _: None = Protected) -> List[Dict[str, Any
     it already held -- so every page load started a new one and the previous
     conversation became unreachable from the UI that wrote it. The id was
     never lost, only unlistable.
+
+    R2.2b: the listing covers both stores. A conversation that started in the
+    macOS app is written by the `/command` pipeline and keyed by its session
+    id; it had no `ai_chats` row, so it appeared in no listing at all. The
+    service merges the two and names a pipeline session by its opening line.
     """
-    db = get_db()
-    rows = db.query(
-        """SELECT c.id, c.title, c.created_at, c.updated_at,
-                  (SELECT COUNT(*) FROM ai_messages m
-                    WHERE m.conversation_id = c.id) AS message_count
-           FROM ai_chats c
-           ORDER BY c.updated_at DESC
-           LIMIT ?""",
-        (max(1, min(limit, 200)),)
-    )
-    return [dict(r) for r in rows]
+    core = get_core()
+    return core.conversations.list_conversations(limit=limit)
 
 
 @app.get("/ai/chats/{chat_id}")
@@ -6640,10 +6242,19 @@ async def get_chat(chat_id: str, _: None = Protected) -> Dict[str, Any]:
 
 @app.delete("/ai/chats/{chat_id}")
 async def delete_chat(chat_id: str, _: None = Protected) -> Dict[str, Any]:
-    """Delete a conversation and all its messages."""
+    """Delete a conversation and all its messages, in both stores.
+
+    A conversation listed from the pipeline lives in `messages` under the same
+    id as its chat row. Deleting only `ai_messages` and `ai_chats` left those
+    turns behind, and because the listing is built from `messages`, the
+    conversation came straight back on the next read -- a delete that reported
+    success and changed nothing visible is exactly the kind of false success
+    this project forbids.
+    """
     db = get_db()
     db.execute("DELETE FROM ai_messages WHERE conversation_id = ?", (chat_id,))
     db.execute("DELETE FROM ai_chats WHERE id = ?", (chat_id,))
+    db.execute("DELETE FROM messages WHERE session_id = ?", (chat_id,))
     return {"deleted": True}
 
 
@@ -6679,17 +6290,33 @@ async def save_message(chat_id: str, body: dict = Body(None), _: None = Protecte
 
 @app.get("/ai/chats/{chat_id}/messages")
 async def get_chat_messages(chat_id: str, limit: int = 50, _: None = Protected) -> List[Dict[str, Any]]:
-    """Get messages from a conversation."""
-    db = get_db()
-    rows = db.query(
-        """SELECT id, role, content, provider_meta, timestamp 
-           FROM ai_messages 
-           WHERE conversation_id = ? 
-           ORDER BY timestamp DESC 
-           LIMIT ?""",
-        (chat_id, limit)
+    """Get messages from a conversation, from whichever store holds them.
+
+    `ai_messages` is the chat surface's own table; a conversation that started
+    in the macOS app lives in `messages`, keyed by its session id. Returning
+    only the former meant a listed pipeline conversation opened empty, which is
+    a worse outcome than not listing it at all. The shared service merges both
+    (de-duplicated by role and content) and bounds the result the same way.
+    """
+    core = get_core()
+    turns = core.conversations.history(
+        conversation_id=chat_id,
+        session_id=chat_id,
+        limit=max(1, min(int(limit or 50), 200)),
     )
-    return [dict(r) for r in reversed(rows)]
+    # The service merges on (role, content) and returns the shape a model is
+    # fed. The route's contract is the stored row shape, so give the caller the
+    # same fields it has always received.
+    return [
+        {
+            "id": "",
+            "role": turn["role"],
+            "content": turn["content"],
+            "provider_meta": "{}",
+            "timestamp": "",
+        }
+        for turn in turns
+    ]
 
 
 #: How many prior turns to thread into a chat completion. Bounded: a whole

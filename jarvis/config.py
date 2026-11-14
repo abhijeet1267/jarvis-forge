@@ -9,7 +9,7 @@ from __future__ import annotations
 import functools
 import os
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -17,6 +17,21 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 def _default_home() -> Path:
     return Path(os.path.expanduser(os.environ.get("JARVIS_HOME", "~/.jarvis-forge")))
+
+
+def data_home(home: Optional[Path] = None) -> Path:
+    """The one place the data directory is resolved.
+
+    ``~`` must be expanded on *every* read of ``JARVIS_HOME``. A fresh clone's
+    ``.env`` says ``~/.jarvis-forge``, and a literal ``~`` makes that a
+    directory named ``~`` inside whatever the current working directory is --
+    which for the server is the repository, so the token and database land in
+    the checkout and the real ``~/.jarvis-forge`` is never used. Each caller
+    that forgot ``expanduser`` did that independently.
+    """
+    if home is not None:
+        return Path(home).expanduser()
+    return Path(os.environ.get("JARVIS_HOME") or Path.home() / ".jarvis-forge").expanduser()
 
 
 #: The desktop app's "allow devices on my wifi" checkbox writes this file. It is read as
@@ -101,6 +116,10 @@ class Settings(BaseSettings):
 
     # --- Core ---------------------------------------------------------------
     env: str = "dev"
+    #: ``default_factory`` only runs when the variable is *absent*. When it is
+    #: present -- which it is the moment a reader copies ``.env.example`` -- the
+    #: validator below is the only thing that expands ``~``, and without it the
+    #: data directory is a literal ``~`` inside the checkout.
     home: Path = Field(default_factory=_default_home)
     log_level: str = "INFO"
     host: str = "127.0.0.1"
@@ -335,6 +354,19 @@ class Settings(BaseSettings):
     # Directory for synthesised speech and captured audio.
     voice_dir: str = ""          # empty -> <home>/voice
 
+    @field_validator("home", mode="before")
+    @classmethod
+    def _expand_home(cls, value: object) -> object:
+        """``JARVIS_HOME=~/.jarvis-forge`` is the template's own value; expand it.
+
+        A value that came from the environment reaches the model as-is, so
+        without this the server's data directory is ``./~/.jarvis-forge``
+        relative to the checkout instead of the user's real home.
+        """
+        if isinstance(value, str):
+            return os.path.expanduser(value)
+        return value
+
     @field_validator("allowed_commands", "powerful_commands", mode="before")
     @classmethod
     def _split_commands(cls, value: object) -> object:
@@ -519,7 +551,7 @@ def llm_file_path() -> Path:
     not a feature.
     """
     root = os.environ.get("JARVIS_HOME") or _default_home()
-    return Path(root).expanduser() / LLM_FILE_NAME
+    return data_home(Path(root)) / LLM_FILE_NAME
 
 
 def llm_source() -> str:

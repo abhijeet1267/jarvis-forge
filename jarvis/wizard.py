@@ -10,7 +10,6 @@ Provides interactive setup flow that:
 from __future__ import annotations
 
 import asyncio
-import os
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
@@ -18,7 +17,7 @@ from typing import Any, Dict, Optional
 
 from pydantic import BaseModel, Field
 
-from .config import get_settings
+from .config import data_home, get_settings
 
 
 class PermissionStatus(str, Enum):
@@ -94,10 +93,7 @@ class OnboardingManager:
         
     def _default_state_dir(self) -> Path:
         """Use JARVIS_HOME if set, otherwise home directory."""
-        jarvis_home = os.environ.get("JARVIS_HOME")
-        if jarvis_home:
-            return Path(jarvis_home)
-        return Path.home() / ".jarvis-forge"
+        return data_home()
     
     def load_state(self) -> Optional[OnboardingState]:
         """Load persisted onboarding state."""

@@ -536,6 +536,11 @@ class AuditRecord(BaseModel):
     confirmation: bool = False
     result: str = ""
     detail: Dict[str, Any] = Field(default_factory=dict)
+    #: The row's id, assigned by the log when it writes the record. Callers use
+    #: it to point at this evidence later (a mission condition names the audit
+    #: row that supports it); before this field existed the id was generated
+    #: inline and discarded, so evidence could be written but never cited.
+    log_id: str = ""
     # Tamper-evidence: each record commits to the one before it, so removing or
     # editing a past entry breaks the chain and becomes detectable.
     prev_hash: str = ""

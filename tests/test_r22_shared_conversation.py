@@ -366,3 +366,102 @@ def test_the_chat_endpoint_reports_a_proposal_without_claiming_it_ran(client, mo
     assert action["needs_confirmation"] is True
     assert action["executed"] is False
     assert action["results"] == []
+
+
+# ---------------------------------------------------------------------------
+# R2.2b: a pipeline session is listable, and resumes, from the chat surface
+#
+# The macOS app talks to `/command`, which writes `messages` keyed by its
+# session id. Nothing listed those sessions: `GET /ai/chats` read `ai_chats`
+# only, so the app's conversations existed on the server and were unreachable
+# from every client that lists conversations -- including the app's own
+# History panel after a reload.
+# ---------------------------------------------------------------------------
+
+TOKEN = {"X-JARVIS-Token": "test-token-do-not-use-in-production", "Host": "127.0.0.1"}
+
+
+def _record_pipeline_turn(core, session_id: str, question: str, answer: str) -> None:
+    """Write one turn the way `/command` does."""
+    core._log_message(session_id, "user", question)
+    core._log_message(session_id, "assistant", answer)
+
+
+def test_a_pipeline_session_appears_in_the_conversation_list(client, core):
+    """The app's conversation is listable, named after what the person asked."""
+    _record_pipeline_turn(core, "S-APP-1", "what is on my calendar", "Nothing today.")
+
+    listed = client.get("/ai/chats", headers=TOKEN).json()
+    entry = next((c for c in listed if c["id"] == "S-APP-1"), None)
+
+    assert entry is not None, f"the pipeline session is not listed: {listed}"
+    assert entry["title"] == "what is on my calendar", entry["title"]
+    assert entry["surface"] == "pipeline"
+    assert entry["message_count"] == 2
+
+
+def test_a_listed_pipeline_session_resumes_with_its_own_turns(client, core):
+    """Opening it returns both turns, so the History panel is not empty."""
+    _record_pipeline_turn(core, "S-APP-2", "remember the milk", "Noted.")
+
+    messages = client.get("/ai/chats/S-APP-2/messages", headers=TOKEN).json()
+
+    assert [m["role"] for m in messages] == ["user", "assistant"]
+    assert messages[0]["content"] == "remember the milk"
+    assert messages[1]["content"] == "Noted."
+
+
+def test_a_conversation_written_by_both_surfaces_is_one_entry(client, core):
+    """Continuing a session from the chat surface must not fork it."""
+    _record_pipeline_turn(core, "S-BOTH", "a question", "an answer")
+    # The chat surface appends to the same id.
+    client.post("/ai/chats/S-BOTH/messages",
+                json={"role": "user", "content": "a follow-up"}, headers=TOKEN)
+
+    listed = client.get("/ai/chats", headers=TOKEN).json()
+    matches = [c for c in listed if c["id"] == "S-BOTH"]
+
+    assert len(matches) == 1, f"the conversation forked: {matches}"
+    assert matches[0]["surface"] == "both"
+    # Two pipeline turns plus the one chat turn: a person counts all three.
+    assert matches[0]["message_count"] == 3
+
+
+def test_registering_a_session_keeps_the_first_title(core):
+    """The name a conversation gets first is the one a reader recognises."""
+    core.conversations.register_session("S-TITLE", opening_text="the first question")
+    core.conversations.register_session("S-TITLE", opening_text="a later message")
+
+    listed = [c for c in core.conversations.list_conversations()
+              if c["id"] == "S-TITLE"]
+    assert listed[0]["title"] == "the first question"
+
+
+def test_an_empty_session_id_is_not_listed(client, core):
+    """A blank session is not a conversation, and must not become one."""
+    core.conversations.register_session("", opening_text="orphan")
+    core.conversations.register_session("   ", opening_text="orphan")
+
+    listed = client.get("/ai/chats", headers=TOKEN).json()
+    assert all(c["id"].strip() for c in listed), listed
+
+
+def test_deleting_a_pipeline_conversation_removes_its_turns(client, core):
+    """Delete has to reach the store the conversation actually lives in.
+
+    Deleting only the `ai_chats`/`ai_messages` rows left the pipeline's turns
+    in `messages`, and the listing -- built from `messages` -- returned the
+    conversation again on the next read. A delete that reports success and
+    changes nothing visible is a false success.
+    """
+    _record_pipeline_turn(core, "S-DEL", "delete me", "deleting")
+
+    resp = client.delete("/ai/chats/S-DEL", headers=TOKEN)
+    assert resp.status_code == 200 and resp.json()["deleted"] is True
+
+    listed = client.get("/ai/chats", headers=TOKEN).json()
+    assert not [c for c in listed if c["id"] == "S-DEL"], (
+        f"the conversation came back after deletion: {listed}")
+
+    messages = client.get("/ai/chats/S-DEL/messages", headers=TOKEN).json()
+    assert messages == [], f"its turns survived: {messages}"

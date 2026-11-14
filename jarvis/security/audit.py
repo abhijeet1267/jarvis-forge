@@ -96,6 +96,13 @@ class AuditLog:
         record.prev_hash = self.last_hash()
         record.record_hash = chain_hash(record.prev_hash, record)
 
+        # The id is produced once and kept on the record. Callers that need to
+        # point at this evidence later (a mission condition naming the audit row
+        # that supports it) had no way to learn it, so the id was effectively
+        # write-only.
+        log_id = new_id("LOG")
+        record.log_id = log_id
+
         self.db.execute(
             """
             INSERT INTO action_logs
@@ -105,7 +112,7 @@ class AuditLog:
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
-                new_id("LOG"),
+                log_id,
                 record.request_id,
                 record.session_id,
                 record.user,

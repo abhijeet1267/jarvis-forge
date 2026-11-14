@@ -79,7 +79,11 @@ def selection_path(home: Optional[Path] = None) -> Path:
     and the selection is kept with the data for the same reason.
     """
     root = home or Path(os.environ.get("JARVIS_HOME") or Path.home() / ".jarvis-forge")
-    return Path(root).expanduser() / SELECTION_FILE_NAME
+    # Imported here, not at module scope: ``config`` imports this module, so a
+    # top-level import would be a cycle.
+    from ..config import data_home
+
+    return data_home(Path(root)) / SELECTION_FILE_NAME
 
 
 def load_selection(home: Optional[Path] = None) -> Dict[str, str]:

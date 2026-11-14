@@ -5,7 +5,276 @@
 > record. This file is short on purpose: it must point the next iteration at
 > the next action, not re-describe the project.
 
-**Last updated:** 2026-11-13, after the dashboard-continuity run (iteration 84).
+**Last updated:** 2026-11-14, after Vantage X P0 + P1/P2 vertical slice (iteration 90).
+
+## Iteration 90 — Vantage X: foundation repair + mission contracts + ProofGraph (2026-11-14)
+
+### P0 — foundation
+
+- **Companion certificate failed on any long hostname.** `CN=vantage-companion-<hostname>`
+  exceeded OpenSSL's 64-byte subject limit on a CI runner, so *every* companion test
+  errored at certificate generation ("string too long: maxsize=64"). Fixed in
+  `jarvis/companion/cert.py` with a bounded CN that keeps a digest of the full name so
+  trimmed hosts stay unique. This was a real bug, not a CI quirk.
+- **CI never installed Chromium**, so every browser test failed with "Executable
+  doesn't exist" and read as a code failure. Added
+  `python -m playwright install --with-deps chromium`.
+- **The Android job blanked its own SDK path.** `env: ANDROID_HOME: ${{ env.ANDROID_HOME }}`
+  reads the *workflow* env context, which never defines it, so it resolved to "" and
+  overwrote the runner's SDK. Removed the override; the aapt2 step now probes
+  `ANDROID_HOME`/`ANDROID_SDK_ROOT`/the macOS default and picks the newest build-tools.
+- **The Python job never started a backend**, so the wire-contract tests failed with
+  `FileNotFoundError: ~/.jarvis-forge/api_token`. Those tests pass against a live
+  backend (verified locally); CI now starts `run.py`, waits for `/health`, and stops it.
+- **Swift test-target compile errors**, each fixed at the cause: `FlowAuthoringTests`
+  referenced Carbon's `controlKey`/`optionKey`/… which a test target cannot see through
+  `@testable import Vantage` — the masks are now declared on `ShortcutSpec` and both
+  sides use them; `MacControlCoordinator.combine` was main-actor-isolated although it is
+  a pure function (now `nonisolated`); `BackendManagerStateTests` used the non-existent
+  `XCTAssertNotSame`, compared optional tasks with `===`, and called a memberwise
+  `HealthResponse` initializer that does not exist (it now decodes the real payload).
+- **`test_no_duplicate_routes.py`** (new) fails if any `(path, method)` is registered
+  twice, and separately if two routes claim one OpenAPI operation id.
+
+### P1 — Mission contracts (`jarvis/core/missions.py`)
+
+A mission is a durable objective with explicit success conditions and a validated
+state machine (`draft → planned → awaiting_approval → running → verifying →
+completed`, plus paused/blocked/recovering/failed/cancelled/partially_completed).
+
+What the contract refuses to do is the feature:
+
+- `completed` is refused unless **every** condition is `verified`. A mission with no
+  conditions can never complete — "done" would be an assertion.
+- Illegal transitions raise `MissionTransitionError`; they are never silently ignored.
+- `verdict()` returns `verified` / `partial` / `failed` / `unknown`, so a mission whose
+  steps all "succeeded" but whose conditions were never checked reports `unknown`.
+
+`jarvis/core/mission_runner.py` runs the slice: gate each step through the real
+`PermissionEngine`, execute through the owning agent, then verify with a *separate*
+observer (`Verifiers.file_contains` / `file_hash` / `file_absent`). A runner with no
+permission engine refuses to run (absence is not permission), a refused step blocks the
+mission without touching anything, and a completed step is not replayed on resume.
+
+### P2 — ProofGraph / ProofLens (`jarvis/core/proofgraph.py`)
+
+Evidence is the **existing hash-chained audit log**, not a second store. Each
+verification writes a record whose `detail` carries `mission_id` and `condition_id`;
+ProofLens reads those back and answers claim by claim: what was observed, what
+contradicted it, and which claims have **no** observation at all. The report states in
+words that the chain detects an edit inside itself and is *not* signed or externally
+anchored.
+
+Found while wiring it: `AuditLog.record()` generated the log id inline and discarded it,
+so evidence could be written but never cited. `AuditRecord` now carries `log_id` and the
+log returns it.
+
+### Wiring
+
+- `jarvis/api/missions_routes.py` — a router (not more lines in the 7,500-line
+  `app.py`) for list/get/create/transition/cancel/run/proof. Auth is attached at
+  construction, and the runner refuses rather than guessing if no gate is attached.
+- `macos/Vantage/Sources/Views/MissionControlView.swift` — Mission Control plus the
+  ProofLens panel, wired into `NavItem`. It states verdicts in words as well as colour,
+  and shows "No missions yet" only when the read actually succeeded.
+
+### Evidence
+
+- `tests/test_mission_contracts.py` (16), `test_mission_runner.py` (11),
+  `test_missions_api.py` (7), `test_proofgraph.py` (6),
+  `test_demo_a_file_mission.py` (3), `test_no_duplicate_routes.py` (3) — all passing.
+- **Demo A, both halves**: a real write to a temp file completes the mission because a
+  verifier re-read the file and found the change; the identical run with the write
+  removed reports `partially_completed` / `failed`.
+- **End-to-end with real evidence**: a mission run in-process produced verdict
+  `verified`, the condition carried `LOG-a6119014c7be`, and ProofLens resolved that
+  record through `verify_chain`.
+- `swift build` succeeds with the new view and models.
+
+### Live verification (over HTTP, real gate, real tool)
+
+Run against the restarted backend, not a test client:
+
+```
+POST /missions  {request, conditions[C1], steps[S1 read_file]}
+POST /missions/{id}/run  {verifiers:{C1:{kind:file_contains, path:/tmp/demo_note.txt, needle:"--fast"}}}
+-> state: completed | verdict: verified
+   step S1 done
+   cond C1 -> verified | /tmp/demo_note.txt contains '--fast' (sha256:47092bac8f373b5d, 31 bytes)
+```
+
+**Three bugs this live run found that the unit seams could not**, each pinned by a
+test now:
+
+1. **The gate compared the wrong vocabulary.** `PolicyDecision`'s values are
+   `EXECUTE`/`CONFIRM`/`BLOCK`; the adapter compared against `"execute"`, so every
+   *allowed* step read as refused and the mission reported `blocked` with the reason
+   "low-risk action" — a policy-looking message for a string mismatch. `CONFIRM` is
+   also now treated as needing approval rather than as allowed: a mission is not an
+   approval.
+2. **A failure reported the word "failed".** `ActionResult` carries its reason in
+   `error` when it fails; the runner read only `message`, so "File is too large to read
+   inline (349.8 KB)" surfaced as a bare "failed".
+3. **`get_core` was imported from the wrong module** (`core.orchestrator`, where it does
+   not exist); it lives in `api/app.py`. The route 500'd until fixed.
+
+A fourth, found by the gate working correctly: the real `PermissionEngine` refused a
+step whose plan omitted a required `path` parameter. That is the system behaving as
+designed — it declined to invent a parameter rather than guessing one.
+
+## Iteration 89 — 9router configured per section (2026-11-14)
+
+9Router is running on this machine (`node`, `127.0.0.1:20128`) and its catalog
+reports **1033 models**. Configuration is driven from that live catalog, not from a
+guessed list: `GET /api/v1/models` carries per-model capabilities, and the counts are
+what decide which tab can use the gateway.
+
+**Configured (from real capability data):**
+
+| section | model | chosen for |
+|---|---|---|
+| text | `kc/google/gemini-2.5-pro` | tools + reasoning, 1M context |
+| documents | `kc/google/gemini-2.5-pro` | pdf + vision, 1M context |
+| vision | `kc/google/gemini-2.5-pro` | vision, 1M context |
+
+9router was added to those three tabs' provider lists in
+`jarvis/gateway/provider_categories.py` (it was previously offered for `text` only).
+
+**Deliberately not configured — the gateway cannot do these jobs:**
+
+- **image** — 0 models with `imageOutput`.
+- **speech** — 0 models with `audioOutput` (no TTS).
+- **video** — the tab submits a generation job to `POST {base}/videos`; 9router
+  answers that with its HTML shell (404). Its 176 `videoInput` models *read* a video,
+  which is a different job. This was added first and reverted after the live test
+  returned the HTML 404 — reading the capability counts alone was not enough.
+
+**Blocked, not done: every completion returns `401 Missing API key`.** Verified by
+calling `/v1/chat/completions` for seven models across five families, and again
+through the app's own route (`POST /ai/provider-categories/{c}/test`): text and
+vision answer `HTTP 401 Missing API key`. The catalog lists models; the route will
+not serve them without a key, and no key exists on this machine (`9router show`
+reports `(none)` in every tool). `test_ok` therefore stays unset — the state is
+*configured, awaiting a key*, never *working*.
+
+**The unblock is one owner action:** `9router login` (it prompts for the dashboard
+password and creates/prints a key). Then the key goes into the keychain through
+`provider_categories.store_key(category, secret)` and each tab's real test proves it.
+
+Suite after the change: **3826 passed, 30 skipped, 1 warning**.
+
+## Iteration 88b — duplicate route registrations removed (2026-11-14)
+
+FastAPI warned at startup about duplicate operation ids. Four paths were registered
+twice for the same method — `/meetings/prepare` (POST), `/calls/availability` (GET),
+`/contacts/{name}/call` (POST) and `/contacts/{name}/call-notes` (POST) — plus two
+earlier duplicates (`/contacts/{name}/outreach`, `/meetings/{uid}/follow-up`) that
+were shadowing each other. Starlette matches the **first** registration, so the later
+copies were dead code that still ran at import time.
+
+- **Two were byte-identical** (`/calls/availability`, `/contacts/{name}/call`,
+  `/contacts/{name}/call-notes`): deleted outright.
+- **The divergent ones had to be checked, not guessed.** For `/meetings/prepare` the
+  later copy appeared richer (it referenced `_join_url` and `_meeting_conflict`), which
+  suggested deleting it would lose `join_url`/`conflict`. That was wrong: the
+  **serving** copy at the first registration uses both helpers too. A first probe
+  returned the early "no meeting" shape and looked like evidence to the contrary; a
+  read of the serving body settled it. The lesson is in the order of checks — read the
+  serving handler, do not infer it from a diff of line ranges.
+
+**Evidence.** No `(path, method)` duplicates remain (checked against the live route
+table, not by eye). No duplicate-operation warnings at import. After the change:
+`GET /calls/availability` 200, `POST /contacts/x/call-notes` 200,
+`POST /meetings/prepare` 200, and `test_api_contract.py` +
+`test_r85_macos_screen_models_match_the_server.py` → **29 passed, 4 skipped**.
+
+The README publishes the route count and a test guards it: removing the 6 duplicate
+registrations moved it 228 → 222, and `test_phase25_desktop_truth.py` failed until the
+line was corrected. That drop matching the deletion count exactly is the cross-check
+that the removal was scoped to the duplicates and nothing else.
+
+## Iteration 88 — every remaining suite failure, classified and fixed (2026-11-14)
+
+The suite had 9–13 failures depending on what was installed. Each was traced to a
+cause and closed:
+
+- **6 voice tests** — no audio backend. Installed `ffmpeg`; `test_voice.py` +
+  `test_phase91_voice_agent_integration.py` now **91 passed, 1 skipped**.
+- **`dist/` missing** — `build_app.py` had never run on this clone. Built it;
+  `test_phase96_release_preparation.py` **6 passed, 1 skipped**.
+- **README published a stale count** — now 3856 (was 3850). `test_r108` **3 passed**.
+- **`test_r85` task-steps** — asserted a non-empty `/tasks`, but a fresh data dir has
+  no workflow job. It now skips on empty data (as every sibling check in that file
+  already did) and still runs the real check when a job exists: with a job created
+  through `/coding/tasks`, the file is **19 passed, 4 skipped**.
+- **`test_r96` harness (9 checks failing)** — two hardcoded copies of the old path
+  (`~/AppData/vantage/jarvis-forge`, which does not exist here). `findProjectDir` is
+  now `static` and exposed as `BackendManager.resolvedProjectDir()`, and the harness
+  asks it instead of naming a path by hand. **9 passed.**
+
+**A false lead worth recording.** The harness also reported "concurrent action →
+exactly one runs" as failing with `busy=0 ran=2`. The busy guard was correct: tested
+in isolation against the real actor, two overlapping `perform()` calls return
+`busy` and `ran`. The real cause was the missing path — both calls threw
+`scriptMissing`, and the harness's `catch { return true }` counted that as "ran".
+A test that treats "any error" as "it ran" cannot distinguish a broken fixture from
+a broken guard; fixing the fixture is what made the check meaningful.
+
+## Iteration 87 — E11: the app's conversations are listable and resume (2026-11-14)
+
+**The gap.** `GET /ai/chats` read `ai_chats` only. The macOS app speaks `/command`,
+whose turns live in `messages` keyed by `session_id` — and nothing listed those
+sessions. So a conversation held in the app existed on the server and was
+unreachable from any client that lists conversations, including the dashboard's
+History panel. The earlier note that "the id was never lost, only unlistable" was
+true for the dashboard; for the app no id was ever created.
+
+**Fixed.**
+- `ConversationService.list_conversations()` merges both stores on the id, names a
+  pipeline session by its opening line, and reports `surface` (`chat` / `pipeline`
+  / `both`) plus a `message_count` that counts both stores' turns.
+- `_log_message` registers each pipeline session as a chat row, so it has an
+  identity a listing route can return.
+- `GET /ai/chats/{id}/messages` reads through the shared service, so a listed
+  pipeline conversation opens with its real turns instead of empty.
+- `DELETE /ai/chats/{id}` also deletes the `messages` rows. Without that the
+  conversation reappeared on the next read — a false success.
+- The dashboard sends the conversation id as `session_id` too, so continuing a
+  pipeline conversation does not fork it.
+
+**Evidence.** 6 new tests in `tests/test_r22_shared_conversation.py` (25 pass in the
+file). Red-proven: with the source changes stashed, 4 of them fail; with the fix,
+all pass. Live against the running server, a `/command` turn appeared in
+`/ai/chats` as `surface=pipeline, msgs=2, title="what is the date"`, resumed with
+both turns, and deleted cleanly (`listed before: 1`, `listed after: 0`).
+
+**Found while testing.** The `messages` table has `created_at`, not `timestamp`;
+the first listing query used the wrong column and the swallowed exception made
+every pipeline conversation report `msgs=0`. The `surface` field also needed to be
+derived from whether turns exist, not from whether an `ai_chats` row exists —
+registering a session creates that row, so its presence proves nothing.
+
+## Iteration 86 — data directory on a fresh clone (2026-11-14)
+
+Cloning into a second location exposed a first-run defect the suite could not see,
+because the suite always sets an absolute `JARVIS_HOME` (`tests/conftest.py`).
+
+- **`JARVIS_HOME=~/.jarvis-forge` was not expanded.** `Settings.home` is populated
+  from the environment by pydantic-settings, so `Field(default_factory=_default_home)`
+  never ran and the tilde stayed literal; `wizard.OnboardingManager` did not expand
+  either. On a real first run the token, SQLite database and onboarding state were
+  created in a directory named `~` **inside the checkout**, hidden by `.gitignore`'s
+  `*~` backup rule, while the real `~/.jarvis-forge` never existed.
+- **Fixed** with one expanding resolver, `jarvis.config.data_home()`, used by
+  `Settings` (a `mode="before"` validator on `home`), `llm_file_path`,
+  `gateway.selection.selection_path` and `OnboardingManager`.
+- **Evidence.** Red-proven behaviourally before the fix (`Settings.home` →
+  `~/.jarvis-forge` literal; `OnboardingManager().state_dir` likewise), green after.
+  Pinned by `tests/test_env_example_is_loadable.py::test_a_tilde_home_from_the_example_lands_in_the_real_home`.
+  86 tests across the five home-resolution files pass.
+- **Runtime-verified on the fixed tree.** The server, started from the repo, read its
+  token from the real `~/.jarvis-forge/api_token` and answered `/health` with
+  `status: ok`, 181 tools — no `~` directory was created in the checkout.
 
 ## Next action
 

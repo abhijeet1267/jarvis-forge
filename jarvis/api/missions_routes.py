@@ -1,0 +1,286 @@
+"""Mission routes, as a router rather than more lines in app.py.
+
+`jarvis/api/app.py` is ~7,500 lines, which is its own architectural problem
+(the directive names it explicitly). New surfaces go into their own router with
+their own ownership so the file stops growing, and the app only includes it.
+
+The routes are thin on purpose: they translate HTTP to the mission service and
+back. Anything that decides policy, executes a step or judges an outcome lives in
+`jarvis/core/`, where it can be tested without going through the wire.
+"""
+
+from __future__ import annotations
+
+from typing import Any, Dict, List, Optional
+
+from fastapi import APIRouter, Body, Depends, HTTPException
+
+from ..core.mission_runner import MissionRunner, Verifiers
+from ..core.missions import MissionService, MissionState, MissionTransitionError
+
+
+def build_router(require_auth) -> APIRouter:
+    """The mission router, with the app's own auth attached to every route.
+
+    The dependency is passed in rather than imported: `app.py` imports this
+    module, so importing back would be a cycle. Every route in here reads or
+    changes durable state, so every route is protected -- there is no
+    unprotected surface to opt into.
+    """
+    router = APIRouter(prefix="/missions", tags=["missions"],
+                       dependencies=[Depends(require_auth)])
+
+    @router.get("")
+    async def list_missions(limit: int = 50, state: str = "") -> Dict[str, Any]:
+        """Every mission, newest first, optionally filtered to one state."""
+        service = _service()
+        states: Optional[List[MissionState]] = None
+        if state:
+            try:
+                states = [MissionState(state)]
+            except ValueError:
+                raise HTTPException(status_code=400, detail=f"unknown state {state!r}")
+        return {"missions": [_dump(m) for m in service.list(limit=limit, states=states)]}
+
+    @router.get("/interrupted")
+    async def interrupted_missions() -> Dict[str, Any]:
+        """Missions that were mid-flight when the process stopped.
+
+        A relaunch shows these instead of leaving the person to guess which work
+        survived.
+        """
+        return {"missions": [_dump(m) for m in _service().incomplete_missions()]}
+
+    @router.post("")
+    async def create_mission(body: Dict[str, Any] = Body(None)) -> Dict[str, Any]:
+        """Open a mission contract in DRAFT.
+
+        The contract is recorded even if planning later fails: losing the request
+        would leave no explanation for what the system was trying to do.
+        """
+        body = body or {}
+        request = str(body.get("request") or "").strip()
+        if not request:
+            raise HTTPException(status_code=422, detail="a mission needs a request")
+        service = _service()
+        try:
+            mission = service.create(
+                request,
+                outcome=str(body.get("outcome") or ""),
+                scope=dict(body.get("scope") or {}),
+                conditions=list(body.get("conditions") or []),
+                steps=list(body.get("steps") or []),
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc))
+        return _dump(mission)
+
+    @router.get("/{mission_id}")
+    async def get_mission(mission_id: str) -> Dict[str, Any]:
+        mission = _service().get(mission_id)
+        if mission is None:
+            raise HTTPException(status_code=404, detail=f"no mission {mission_id!r}")
+        return _dump(mission)
+
+    @router.post("/{mission_id}/transition")
+    async def transition_mission(mission_id: str,
+                                 body: Dict[str, Any] = Body(None)) -> Dict[str, Any]:
+        """Move a mission to a new state, enforcing the transition table."""
+        body = body or {}
+        target = str(body.get("state") or "").strip()
+        try:
+            mission = _service().transition(
+                mission_id, MissionState(target),
+                actor=str(body.get("actor") or "user"),
+                reason=str(body.get("reason") or ""))
+        except MissionTransitionError as exc:
+            # 409: the request was well-formed, the current state refuses it.
+            raise HTTPException(status_code=409, detail=str(exc))
+        except ValueError:
+            raise HTTPException(status_code=400, detail=f"unknown state {target!r}")
+        return _dump(mission)
+
+    @router.post("/{mission_id}/cancel")
+    async def cancel_mission(mission_id: str) -> Dict[str, Any]:
+        try:
+            mission = _service().transition(
+                mission_id, MissionState.CANCELLED, actor="user",
+                reason="cancelled by the operator")
+        except MissionTransitionError as exc:
+            raise HTTPException(status_code=409, detail=str(exc))
+        return _dump(mission)
+
+    @router.post("/{mission_id}/run")
+    async def run_mission(mission_id: str,
+                          body: Dict[str, Any] = Body(None)) -> Dict[str, Any]:
+        """Execute a mission through the real gate, then verify its conditions.
+
+        Dispatch resolves the step's tool through the same agent registry the
+        pipeline uses, so a mission cannot reach a capability a direct request
+        could not.
+        """
+        # `get_core` is defined in `app.py`, the module that includes this
+        # router, so importing it at module scope would be a cycle. Read it from
+        # the already-imported app module at call time.
+        from .app import get_core
+
+        body = body or {}
+        core = get_core()
+        service = _service()
+
+        runner = MissionRunner(
+            service,
+            execute_step=_executor_factory(core),
+            permission=_gate_factory(core),
+            audit=_audit(),
+        )
+        verifiers = _verifiers_from(body.get("verifiers") or {})
+        try:
+            mission = await runner.run(mission_id, verifiers=verifiers)
+        except ValueError as exc:
+            raise HTTPException(status_code=404, detail=str(exc))
+        return _dump(mission)
+
+    @router.get("/{mission_id}/proof")
+    async def mission_proof(mission_id: str) -> Dict[str, Any]:
+        """ProofLens: why does Vantage believe this mission's claims?
+
+        Answers claim by claim, naming the observations behind each one and
+        saying plainly when a claim has none. The evidence is the existing audit
+        chain, so ``evidence_integrity`` describes what the hash chain does and
+        does not establish rather than implying tamper-proofness.
+        """
+        from ..core.proofgraph import ProofGraph
+
+        service = _service()
+        mission = service.get(mission_id)
+        if mission is None:
+            raise HTTPException(status_code=404, detail=f"no mission {mission_id!r}")
+
+        audit = _audit()
+        rows: List[Dict[str, Any]] = []
+        chain = None
+        if audit is not None:
+            try:
+                rows = audit.recent(limit=500)
+                chain = audit.verify_chain()
+            except Exception:
+                rows, chain = [], None
+
+        graph = ProofGraph(mission, rows)
+        return graph.report(chain=chain)
+
+    return router
+
+
+# -- helpers ----------------------------------------------------------------
+
+def _service() -> MissionService:
+    from ..db.database import get_db
+
+    return MissionService(get_db())
+
+
+def _audit():
+    try:
+        from ..security.audit import AuditLog
+
+        return AuditLog()
+    except Exception:
+        return None
+
+
+def _dump(mission) -> Dict[str, Any]:
+    return mission.to_dict()
+
+
+def _gate_factory(core):
+    """A gate that asks the real PermissionEngine about one mission step."""
+    from ..core.models import PlannedAction
+
+    def gate(step, mission) -> Dict[str, Any]:
+        action = PlannedAction(
+            tool=step.tool or "", params=dict(step.params or {}),
+            device=str((step.params or {}).get("device") or "laptop_main"))
+        result = core.policy.evaluate(
+            action, session_id=f"mission:{mission.mission_id}",
+            requested_surface="mission")
+
+        # `PolicyDecision` is a str Enum whose values are UPPERCASE
+        # ("EXECUTE"/"CONFIRM"/"BLOCK"). Comparing against lowercase made every
+        # allowed step read as refused, which looked like a policy denial in the
+        # mission but was a string mismatch here.
+        decision = getattr(result.decision, "value", str(result.decision))
+        decision = str(decision).upper()
+
+        # Only EXECUTE may run. CONFIRM means the engine wants a person to
+        # approve first, and a mission is not an approval: the step is refused
+        # here and the mission reports it, rather than the runner answering on
+        # the operator's behalf.
+        allowed = decision == "EXECUTE"
+        reason = result.reason
+        if decision == "CONFIRM":
+            reason = (f"requires approval before it may run ({result.reason}); "
+                      "a mission does not supply that approval")
+        return {"allowed": allowed, "reason": reason, "decision": decision,
+                "confirmation_id": getattr(result, "confirmation_id", None)}
+    return gate
+
+
+def _executor_factory(core):
+    """A step executor that goes through the orchestrator's own agent path."""
+    async def execute(step, mission):
+        from ..agents.base import find_agent
+        from ..core.models import PlannedAction
+        from ..tools.base import ToolContext
+
+        action = PlannedAction(
+            tool=step.tool or "", params=dict(step.params or {}),
+            device=str((step.params or {}).get("device") or "laptop_main"))
+        agent = find_agent(core.agents, action.tool)
+        if agent is None:
+            class _Missing:
+                ok = False
+                message = f"no agent owns {action.tool!r}"
+            return _Missing()
+
+        ctx = ToolContext(
+            device_id=action.device,
+            session_id=f"mission:{mission.mission_id}",
+            settings=core.settings,
+            apps=getattr(core, "apps", None),
+            devices=core.devices,
+            memory=getattr(core, "memory", None),
+            graph=getattr(core, "graph", None),
+            core=core,
+        )
+        return await agent.execute(action, ctx)
+    return execute
+
+
+def _verifiers_from(spec: Dict[str, Any]) -> Dict[str, Any]:
+    """Build verifiers from a small declarative spec, never from code.
+
+    The wire may name the observers this module knows. It cannot name a Python
+    callable, and an unknown kind is recorded as UNKNOWN rather than silently
+    unverified-but-passing.
+    """
+    out: Dict[str, Any] = {}
+    for condition_id, raw in (spec or {}).items():
+        if not isinstance(raw, dict):
+            continue
+        kind = str(raw.get("kind") or "")
+        if kind == "file_contains":
+            out[condition_id] = Verifiers.file_contains(
+                str(raw.get("path") or ""), str(raw.get("needle") or ""), condition_id)
+        elif kind == "file_hash":
+            out[condition_id] = Verifiers.file_hash(
+                str(raw.get("path") or ""), str(raw.get("sha256") or ""), condition_id)
+        elif kind == "file_absent":
+            out[condition_id] = Verifiers.file_absent(
+                str(raw.get("path") or ""), condition_id)
+        else:
+            out[condition_id] = Verifiers.always_unknown(
+                f"no verifier of kind {kind!r} exists, so this condition was not "
+                "checked", condition_id)
+    return out

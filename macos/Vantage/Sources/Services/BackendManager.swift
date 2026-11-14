@@ -156,7 +156,7 @@ final class BackendManager: ObservableObject {
             lifecycleBusyLabel = nil
         }
         do {
-            lifecycleState = try await lifecycle.status(port: lifecyclePort, repo: findProjectDir())
+            lifecycleState = try await lifecycle.status(port: lifecyclePort, repo: BackendManager.findProjectDir())
             lifecycleError = nil
         } catch {
             lifecycleError = error.localizedDescription
@@ -181,7 +181,7 @@ final class BackendManager: ObservableObject {
             lifecycleBusyLabel = nil
         }
 
-        let repo = findProjectDir()
+        let repo = BackendManager.findProjectDir()
         var action: BackendLifecycle.Action
         var prior: BackendLifecycle.Status?
         do {
@@ -511,7 +511,7 @@ final class BackendManager: ObservableObject {
         }
 
         if let sourceRoot = id.source_root, !sourceRoot.isEmpty {
-            let expected = findProjectDir()
+            let expected = BackendManager.findProjectDir()
             if !Self.sameDirectory(sourceRoot, expected) {
                 warning = nil
                 state = .error("Connected to a Vantage backend from a different folder: \(sourceRoot). "
@@ -552,7 +552,7 @@ final class BackendManager: ObservableObject {
         state = .starting
 
         // Find the jarvis-forge project root
-        let projectDir = findProjectDir()
+        let projectDir = BackendManager.findProjectDir()
 
         // Spawn the checkout's own interpreter through the canonical launcher,
         // not `env uv run uvicorn`.
@@ -683,23 +683,62 @@ final class BackendManager: ObservableObject {
         companionProcess = nil
     }
 
-    private func findProjectDir() -> String {
+    /// Where this app's checkout is, resolved once by the same rules the app uses.
+    ///
+    /// Internal rather than private so the integration harness can seed its fake
+    /// backend with *this* value instead of hardcoding a path. Hardcoding is how
+    /// the harness and the app drifted apart: the harness still named
+    /// `AppData/vantage/jarvis-forge` after the resolver learned to find a
+    /// checkout anywhere, so every "same checkout" case failed against a tree
+    /// that was in fact the same checkout.
+    static func resolvedProjectDir() -> String {
+        BackendManager.findProjectDir()
+    }
+
+    private static func findProjectDir() -> String {
         if let env = ProcessInfo.processInfo.environment["JARVIS_PROJECT_DIR"],
            FileManager.default.fileExists(atPath: env) {
             return env
         }
 
-        // Default: the checkout beside the .app
-        let candidates = [
-            NSHomeDirectory() + "/AppData/vantage/jarvis-forge",
-            NSHomeDirectory() + "/jarvis-forge",
-        ]
-        for path in candidates {
+        // A backend shipped inside the bundle wins over any checkout: it is the
+        // copy this app was built against.
+        let bundle = Bundle.main.bundleURL
+        if let resource = Bundle.main.resourceURL,
+           FileManager.default.fileExists(atPath: resource.path + "/run.py") {
+            return resource.path
+        }
+
+        // A checkout beside the .app (the development layout).
+        for candidate in [bundle.deletingLastPathComponent(), bundle] {
+            let path = candidate.path
             if FileManager.default.fileExists(atPath: path + "/run.py") {
                 return path
             }
         }
-        return NSHomeDirectory() + "/AppData/vantage/jarvis-forge"
+
+        // Common checkout locations. `AppData/vantage/jarvis-forge` was the only
+        // spelling this used to try, so an ordinary clone in `AppData/Vantage` --
+        // or in `~/code`, or with any other capitalisation -- found nothing and
+        // the app sat there connected to no backend. Search the folders rather
+        // than enumerating one guess.
+        let home = NSHomeDirectory()
+        var roots = [home, home + "/AppData", home + "/code", home + "/dev",
+                     home + "/Documents", home + "/Projects", home + "/src"]
+        if let names = try? FileManager.default.contentsOfDirectory(atPath: home + "/AppData") {
+            roots.append(contentsOf: names.map { home + "/AppData/" + $0 })
+        }
+
+        for root in roots {
+            if FileManager.default.fileExists(atPath: root + "/run.py")
+                && FileManager.default.fileExists(atPath: root + "/jarvis") {
+                return root
+            }
+        }
+
+        // Nothing found. Return the historical default so `startBackend` reports
+        // "no backend found at <path>" instead of an empty, unexplained failure.
+        return home + "/AppData/vantage/jarvis-forge"
     }
 
     /// The Python that runs this checkout's backend.

@@ -402,7 +402,12 @@ final class MacControlCoordinator: ObservableObject {
     }
 
     /// One sentence for a sequence, never claiming more than happened.
-    static func combine(_ results: [MacActionResult], total: Int) -> MacActionResult {
+    ///
+    /// `nonisolated` because it reads no main-actor state: it is a pure
+    /// function of its arguments. Inheriting `@MainActor` from the class made
+    /// a synchronous test call it from a nonisolated context, which Swift 6
+    /// rejects outright.
+    nonisolated static func combine(_ results: [MacActionResult], total: Int) -> MacActionResult {
         let done = results.filter { $0.status == .verified }.count
         let allVerified = done == total && results.count == total
         let lines = results.map { "\($0.succeeded ? "✓" : ($0.status == .unverified ? "?" : "✕")) "

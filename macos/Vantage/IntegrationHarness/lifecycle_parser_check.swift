@@ -106,7 +106,7 @@ expect("refusal gives the manual status command", refusal.contains("backend_life
 
 // --- Concurrent invocation: a second call is refused, not a second process ---
 
-let repo = NSHomeDirectory() + "/AppData/vantage/jarvis-forge"
+let repo = BackendManager.resolvedProjectDir()
 let fixturePort = Int(ProcessInfo.processInfo.environment["FIXTURE_PORT"] ?? "0") ?? 0
 if fixturePort > 0 {
     let lifecycle = BackendLifecycle()

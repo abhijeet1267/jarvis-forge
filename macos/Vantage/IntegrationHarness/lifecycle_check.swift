@@ -34,10 +34,11 @@ try? FileManager.default.createDirectory(atPath: scratch, withIntermediateDirect
 try? "harness-test-token".write(toFile: scratch + "/api_token", atomically: true, encoding: .utf8)
 setenv("JARVIS_BACKEND_PORT", String(port), 1)
 setenv("JARVIS_HOME", scratch, 1)
-// The fake backend reports this path as its source_root. The driver's own
-// findProjectDir() must land on the same value for the "same checkout"
-// cases, so it is written before the manager is ever asked to connect.
-let expectedRoot = NSHomeDirectory() + "/AppData/vantage/jarvis-forge"
+// The fake backend reports this path as its source_root. It must be the path
+// the driver's own findProjectDir() lands on for the "same checkout" cases to
+// hold, so ask the real resolver rather than naming a path by hand -- the
+// hand-written copy drifted the moment the resolver learned to search.
+let expectedRoot = BackendManager.resolvedProjectDir()
 try? expectedRoot.write(toFile: ROOTF, atomically: true, encoding: .utf8)
 print("harness: backend on \(port)")
 

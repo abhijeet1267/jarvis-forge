@@ -246,7 +246,9 @@ def test_the_route_exists_and_is_authenticated():
     import importlib
 
     m = importlib.import_module("jarvis.api.app")
-    routes = {r.path: r for r in m.app.routes}
+    from tests.conftest import flat_routes
+
+    routes = {r.path: r for r in flat_routes(m.app)}
     assert "/permissions" in routes, sorted(routes)[:5]
 
 

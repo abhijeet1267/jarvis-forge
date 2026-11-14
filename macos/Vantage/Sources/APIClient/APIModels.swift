@@ -1471,4 +1471,75 @@ extension APIModels {
         /// is the authority, not the text that was typed.
         let allowed_tools: [String]?
     }
+
+    // MARK: - Missions
+
+    /// One mission contract as the server reports it.
+    ///
+    /// Every field past the identity is optional on purpose: the mission view
+    /// must keep working when the server grows or drops a field. The rule this
+    /// file already follows for `/health` -- an optional is "not sent", not a
+    /// decode failure that blanks the whole screen -- applies here too.
+    struct Mission: Codable, Identifiable {
+        let mission_id: String
+        let request: String
+        let outcome: String?
+        let state: String
+        /// One of verified / partial / failed / unknown. The server computes it
+        /// from the conditions; the client never re-derives or upgrades it.
+        let verdict: String
+        let reason: String?
+        let conditions: [MissionCondition]?
+        let steps: [MissionStep]?
+        let condition_summary: [String: Int]?
+
+        var id: String { mission_id }
+    }
+
+    struct MissionCondition: Codable, Identifiable {
+        let condition_id: String
+        let statement: String
+        let status: String
+        let observation: String?
+
+        var id: String { condition_id }
+    }
+
+    struct MissionStep: Codable, Identifiable {
+        let step_id: String
+        let title: String
+        let status: String
+        let detail: String?
+
+        var id: String { step_id }
+    }
+
+    struct MissionList: Codable {
+        let missions: [Mission]
+    }
+
+    struct MissionProof: Codable {
+        let mission_id: String
+        let verdict: String
+        let claims: [ProofClaim]
+        /// One sentence on what the evidence chain does and does not establish.
+        let evidence_integrity: String
+        let unsupported_claims: [String]?
+    }
+
+    struct ProofClaim: Codable, Identifiable {
+        let condition_id: String
+        let claim: String
+        let status: String?
+        let supported: Bool
+        let observations: [ProofObservation]
+        let contradictions: [ProofObservation]?
+
+        var id: String { condition_id }
+    }
+
+    struct ProofObservation: Codable {
+        let observation: String
+        let evidence_id: String?
+    }
 }

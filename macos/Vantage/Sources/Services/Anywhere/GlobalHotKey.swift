@@ -8,6 +8,17 @@ import Carbon
 /// preferences (VoiceService already uses the same store) and can be shown back in
 /// Settings without a second model.
 struct ShortcutSpec: Codable, Equatable, Hashable {
+    /// The modifier bits this app stores. They carry Carbon's own values so a
+    /// spec written by `ShortcutRecorder` is still a Carbon mask at
+    /// `RegisterEventHotKey`, but they are declared here rather than taken from
+    /// `import Carbon`: a test target cannot see Carbon's constants through
+    /// `@testable import Vantage`, so the tests referenced `controlKey` and
+    /// friends and failed to compile. One definition, visible to both.
+    static let controlMask: UInt32 = 4096      // controlKey
+    static let shiftMask: UInt32 = 512        // shiftKey
+    static let optionMask: UInt32 = 2048      // optionKey
+    static let commandMask: UInt32 = 256      // cmdKey
+
     /// The virtual key code (`kVK_*`), which is layout-independent in the way
     /// that matters here: the physical key, not the character it produces.
     var keyCode: UInt32
@@ -16,14 +27,14 @@ struct ShortcutSpec: Codable, Equatable, Hashable {
 
     /// Option-Space. Checked against the app's existing command shortcuts
     /// (⌘R / ⌘⇧R for the Backend menu): neither uses Option.
-    static let defaultShortcut = ShortcutSpec(keyCode: UInt32(kVK_Space), modifiers: UInt32(optionKey))
+    static let defaultShortcut = ShortcutSpec(keyCode: UInt32(kVK_Space), modifiers: optionMask)
 
     var displayString: String {
         var parts = ""
-        if modifiers & UInt32(controlKey) != 0 { parts += "⌃" }
-        if modifiers & UInt32(optionKey) != 0 { parts += "⌥" }
-        if modifiers & UInt32(shiftKey) != 0 { parts += "⇧" }
-        if modifiers & UInt32(cmdKey) != 0 { parts += "⌘" }
+        if modifiers & Self.controlMask != 0 { parts += "⌃" }
+        if modifiers & Self.optionMask != 0 { parts += "⌥" }
+        if modifiers & Self.shiftMask != 0 { parts += "⇧" }
+        if modifiers & Self.commandMask != 0 { parts += "⌘" }
         return parts + Self.keyName(keyCode)
     }
 

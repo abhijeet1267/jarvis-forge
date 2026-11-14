@@ -361,7 +361,7 @@ struct AuditRow: View {
     /// happen.
     private var resultIcon: String {
         switch entry.result {
-        case "success", "allowed", "executed": return "checkmark.circle.fill"
+        case "success", "allowed", "executed", "verified": return "checkmark.circle.fill"
         case "recovered": return "arrow.uturn.backward.circle.fill"
         case "unverified": return "questionmark.circle.fill"
         case "denied", "blocked": return "xmark.circle.fill"
@@ -376,7 +376,7 @@ struct AuditRow: View {
 
     private var resultColor: Color {
         switch entry.result {
-        case "success", "allowed", "executed", "recovered": return V.accent
+        case "success", "allowed", "executed", "recovered", "verified": return V.accent
         case "unverified": return V.warning
         case "denied", "blocked": return V.danger
         case "failure", "error", "failed": return V.warning

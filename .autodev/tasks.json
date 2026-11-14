@@ -1,8 +1,191 @@
 {
-  "updated": "2026-11-13T00:00:00+00:00",
+  "updated": "2026-11-14T00:00:00+00:00",
   "version": 1,
   "note": "Durable task queue for the autodev supervisor. Statuses: pending, ready, running, completed, failed, blocked, skipped. A task is completed only when its acceptance criteria are met AND evidence is recorded. Priority: lower = sooner. Mirror of docs/PROJECT_ROADMAP.md.",
   "tasks": {
+    "VX-P0-foundation": {
+      "title": "Vantage X P0: CI health, duplicate routes, certificate CN, Swift test target",
+      "status": "completed",
+      "priority": 0,
+      "acceptance": [
+        "Companion certificate generation survives a long CI hostname",
+        "CI installs Chromium and starts the backend the wire-contract tests pin",
+        "The Android job resolves aapt2 from the runner's real SDK",
+        "Swift test-target compile errors fixed at their cause",
+        "No duplicate (path, method) route registrations"
+      ],
+      "evidence": [
+        {
+          "date": "2026-11-14",
+          "iteration": 90,
+          "cert": "CN bounded to 64 bytes with a digest suffix; was 'string too long: maxsize=64' on every runner",
+          "ci": "playwright install --with-deps chromium added; ANDROID_HOME self-blanking override removed; backend started + stopped around pytest",
+          "swift": "Carbon masks declared on ShortcutSpec; combine() made nonisolated; XCTAssertNotSame/optional ===/memberwise HealthResponse fixed",
+          "routes": "tests/test_no_duplicate_routes.py (3) pins no duplicate (path, method) and no duplicate operation id"
+        }
+      ],
+      "attempts": 1,
+      "max_attempts": 3
+    },
+    "VX-P1-mission-contracts": {
+      "title": "Vantage X P1: durable mission contracts, validated state machine, gated execution, independent verification",
+      "status": "completed",
+      "priority": 1,
+      "acceptance": [
+        "A mission records success conditions and how each is verified",
+        "Illegal transitions raise; completed requires every condition verified",
+        "Every step goes through the real PermissionEngine; no engine means no run",
+        "A step that reports success but did not do the work is caught by an independent verifier",
+        "Missions survive a restart and completed steps are not replayed"
+      ],
+      "evidence": [
+        {
+          "date": "2026-11-14",
+          "iteration": 90,
+          "modules": "jarvis/core/missions.py, jarvis/core/mission_runner.py, jarvis/api/missions_routes.py",
+          "tests": "test_mission_contracts.py (16), test_mission_runner.py (13), test_missions_api.py (7), test_demo_a_file_mission.py (3)",
+          "live": "POST /missions -> POST /run -> state completed, verdict verified, observation carries sha256 of the file",
+          "bugs_found_live": "PolicyDecision case mismatch blocked every allowed step; ActionResult.error was not read so failures said only 'failed'; get_core imported from the wrong module"
+        }
+      ],
+      "attempts": 1,
+      "max_attempts": 3
+    },
+    "VX-P2-proofgraph": {
+      "title": "Vantage X P2: ProofGraph/ProofLens over the existing hash-chained audit",
+      "status": "completed",
+      "priority": 1,
+      "acceptance": [
+        "Every claim is linked to the observations that support or contradict it",
+        "A claim with no observation is reported unsupported, never verified",
+        "Evidence ids are durable and resolve back to the audit record",
+        "The integrity sentence states what hashing does and does not prove"
+      ],
+      "evidence": [
+        {
+          "date": "2026-11-14",
+          "iteration": 90,
+          "modules": "jarvis/core/proofgraph.py, GET /missions/{id}/proof, MissionControlView ProofLens panel",
+          "tests": "test_proofgraph.py (6)",
+          "fix": "AuditRecord gained log_id and AuditLog.record() returns it; the id was generated inline and discarded, so evidence could be written but never cited"
+        }
+      ],
+      "attempts": 1,
+      "max_attempts": 3
+    },
+    "R9router-per-section": {
+      "title": "9router provider configured for every section it can actually serve",
+      "status": "blocked",
+      "priority": 1,
+      "acceptance": [
+        "Each section's provider list offers 9router only where its catalog can do the job",
+        "Each configured section names a model chosen from live capability data",
+        "Each section's real test proves an answer end to end"
+      ],
+      "blockers": [
+        "9router returns 401 Missing API key for every model; no key exists on this machine. Unblock: `9router login` (owner action), then store the key via provider_categories.store_key(category, secret)."
+      ],
+      "evidence": [
+        {
+          "date": "2026-11-14",
+          "iteration": 89,
+          "catalog": "GET http://127.0.0.1:20128/api/v1/models -> 1033 models; capability counts: tools 1003, vision 668, pdf 186, videoInput 176, audioInput 103, imageOutput 0, audioOutput 0",
+          "configured": "text/documents/vision -> 9router kc/google/gemini-2.5-pro; image+speech+video deliberately left unconfigured",
+          "live_probe": "7 models across 5 families -> all HTTP 401 Missing API key; app route POST /ai/provider-categories/{text,vision}/test -> ok:false HTTP 401",
+          "reverted": "video was added then removed: POST {base}/videos answers with 9router's HTML shell (404); videoInput is reading, not generating",
+          "tests": "tests/test_provider_categories.py 31 passed; full suite 3826 passed / 30 skipped"
+        }
+      ],
+      "attempts": 1,
+      "max_attempts": 3
+    },
+    "R-api-duplicate-routes": {
+      "title": "Remove duplicate FastAPI route registrations that shadow each other",
+      "status": "completed",
+      "priority": 2,
+      "acceptance": [
+        "No (path, method) is registered twice",
+        "No duplicate-operation-id warning at import",
+        "The serving handler keeps every feature the shadowed copy had"
+      ],
+      "evidence": [
+        {
+          "date": "2026-11-14",
+          "iteration": "88b",
+          "what": "6 duplicate registrations removed: /contacts/{name}/outreach, /meetings/{uid}/follow-up, /meetings/prepare, /calls/availability, /contacts/{name}/call, /contacts/{name}/call-notes",
+          "check": "route table inspected programmatically -- remaining (path,method) duplicates: NONE; no duplicate-operation warnings at import; GET /calls/availability 200, POST /contacts/x/call-notes 200, POST /meetings/prepare 200",
+          "cross_check": "README route count 228 -> 222, exactly the 6 removed; test_phase25_desktop_truth.py caught the stale README and now passes",
+          "false_lead": "the shadowed /meetings/prepare looked richer and seemed to justify keeping it; the serving copy used _join_url/_meeting_conflict too -- an early-return probe looked like contrary evidence"
+        }
+      ],
+      "attempts": 1,
+      "max_attempts": 3
+    },
+    "R-macos-app-reaches-the-backend": {
+      "title": "The installed macOS app finds the checkout and authenticates on a fresh install",
+      "status": "completed",
+      "priority": 1,
+      "acceptance": [
+        "findProjectDir finds this checkout instead of two hardcoded paths that do not exist",
+        "The API token is read on demand, so an app started before the token file exists still authenticates",
+        "A token-requiring route is accepted, verified on the wire"
+      ],
+      "evidence": [
+        {
+          "date": "2026-11-14",
+          "iteration": 87,
+          "what": "BackendManager.findProjectDir searches env override, bundled backend, beside the .app, then common roots by content (run.py + jarvis/); APIClient.makeRequest re-reads api_token when its cache is empty",
+          "wire_proof": "probe proxy on :8765 -> backend :8766 showed /tasks, /devices, /ai/providers, /confirmations, /attention, /health, /health/identity all carrying X-JARVIS-Token after the fix",
+          "known_correct_behaviour": "one unauthenticated GET /health per launch from checkBackend() is deliberate -- a 401 is how it proves the port is owned"
+        }
+      ],
+      "attempts": 1,
+      "max_attempts": 3
+    },
+    "R2.2b-pipeline-conversations-listable": {
+      "title": "The macOS app's /command conversations are listable and resume from every surface",
+      "status": "completed",
+      "priority": 1,
+      "acceptance": [
+        "GET /ai/chats lists a session written by /command, named after its opening line",
+        "Opening a listed pipeline conversation returns its real turns, not an empty list",
+        "A conversation written by both surfaces appears once",
+        "Deleting it removes the turns, so it does not reappear"
+      ],
+      "evidence": [
+        {
+          "date": "2026-11-14",
+          "iteration": 87,
+          "tests": "tests/test_r22_shared_conversation.py (6 new; 25 pass in file)",
+          "red_proof": "with source stashed, 4 of the new tests fail; with the fix all pass",
+          "live": "a /command turn -> /ai/chats surface=pipeline msgs=2; resume returned both turns; delete: listed before 1, after 0",
+          "found_while_testing": "messages has created_at not timestamp (wrong column made msgs=0); surface must be derived from turns because registering a session creates the ai_chats row"
+        }
+      ],
+      "attempts": 1,
+      "max_attempts": 3
+    },
+    "R0.4-fresh-clone-data-dir": {
+      "title": "Fresh clone: JARVIS_HOME tilde is expanded into the real home",
+      "status": "completed",
+      "priority": 0,
+      "acceptance": [
+        "A clone whose .env says JARVIS_HOME=~/.jarvis-forge writes the token/db/onboarding state under $HOME, not ./~",
+        "Every reader of JARVIS_HOME resolves it through one expanding helper",
+        "A regression test fails when the expansion is removed"
+      ],
+      "evidence": [
+        {
+          "date": "2026-11-14",
+          "iteration": 86,
+          "what": "jarvis.config.data_home() + expansion validator on Settings.home; llm_file_path, gateway.selection.selection_path and wizard.OnboardingManager use it",
+          "red_proof": "JARVIS_HOME='~/.jarvis-forge' Settings().home -> '~/.jarvis-forge' (literal) before the fix",
+          "tests": "tests/test_env_example_is_loadable.py::test_a_tilde_home_from_the_example_lands_in_the_real_home"
+        }
+      ],
+      "attempts": 1,
+      "max_attempts": 3
+    },
     "R0.1-infra": {
       "title": "Durable dev infrastructure (CLAUDE.md, docs, queue, supervisor, runbook, login agent)",
       "status": "completed",

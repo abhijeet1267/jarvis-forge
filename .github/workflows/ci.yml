@@ -63,13 +63,46 @@ jobs:
       - name: Install the capture backend the voice tests presuppose
         run: brew install ffmpeg
 
+      # The dashboard browser tests drive a real Chromium. `pip install playwright`
+      # installs the client, never the browser binary, so without this every
+      # browser test failed with "Executable doesn't exist" -- an environment gap
+      # reported as a code failure. Install the premise the tests assume.
+      - name: Install the browser the dashboard tests drive
+        run: python -m playwright install --with-deps chromium
+
       - name: Node availability (the dashboard's own JS is executed, not iminated)
         run: node --version
+
+      # A set of tests pin the *live* backend's wire shape (they read
+      # `$JARVIS_HOME/api_token` and GET /health). On a developer's machine the
+      # server is already running; on a runner it never is, so those files failed
+      # with FileNotFoundError and looked like code defects. Start the real
+      # server and give it time to answer, rather than weakening the tests: the
+      # point of those files is that they check what the server actually sends.
+      - name: Start the backend the wire-contract tests pin
+        run: |
+          .venv/bin/python run.py > "$RUNNER_TEMP/backend.log" 2>&1 &
+          echo $! > "$RUNNER_TEMP/backend.pid"
+          for i in $(seq 1 60); do
+            if curl -sf -o /dev/null "http://127.0.0.1:8765/health" \
+               -H "X-JARVIS-Token: $(cat "$HOME/.jarvis-forge/api_token" 2>/dev/null)"; then
+              echo "backend is answering"; exit 0
+            fi
+            sleep 1
+          done
+          echo "backend did not answer in 60s"; tail -50 "$RUNNER_TEMP/backend.log"; exit 1
 
       - name: Test suite
         env:
           JARVIS_LOG_LEVEL: WARNING
         run: python -m pytest -q
+
+      - name: Stop the backend
+        if: always()
+        run: |
+          if [ -f "$RUNNER_TEMP/backend.pid" ]; then
+            kill "$(cat "$RUNNER_TEMP/backend.pid")" 2>/dev/null || true
+          fi
 
       # The README's Downloads section tells people to build the app, so CI builds it.
       # Into a temp dir: dist/ is gitignored, and the point is that a clean checkout
@@ -124,24 +157,35 @@ jobs:
       - name: Native unit tests (incl. pinning contract)
         # Uses the pinned Gradle wrapper (gradle/wrapper/gradle-wrapper.properties)
         # so the toolchain is reproducible -- a bare runner has no `gradle` on PATH.
+        #
+        # No `env: ANDROID_HOME: ${{ env.ANDROID_HOME }}` here. That expression
+        # reads the *workflow* env context, which never defines ANDROID_HOME, so
+        # it resolved to an empty string and overwrote the runner's own SDK
+        # path. The package-identity step then looked in `/build-tools/...`
+        # and failed with "No such file or directory" on a perfectly good APK.
+        # The runner already exports ANDROID_HOME; inheriting it is the fix.
         working-directory: android
-        env:
-          ANDROID_HOME: ${{ env.ANDROID_HOME }}
         run: ./gradlew :app:testDebugUnitTest --console=plain
 
       - name: Build the native APK
         working-directory: android
-        env:
-          ANDROID_HOME: ${{ env.ANDROID_HOME }}
         run: ./gradlew :app:assembleDebug --console=plain
 
       - name: Verify APK package identity
         working-directory: android
-        env:
-          ANDROID_HOME: ${{ env.ANDROID_HOME }}
         run: |
-          AAPT="$ANDROID_HOME/build-tools/34.0.0/aapt2"
-          [ -x "$AAPT" ] || AAPT="$(ls "$ANDROID_HOME"/build-tools/*/aapt2 | sort | tail -1)"
+          # Resolve aapt2 from wherever this runner keeps the SDK: the
+          # ANDROID_HOME env var, ANDROID_SDK_ROOT, or the default location on
+          # a macOS image. Then take the newest build-tools that has it.
+          SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-$HOME/Library/Android/sdk}}"
+          echo "SDK: $SDK"
+          AAPT="$(ls -d "$SDK"/build-tools/*/aapt2 2>/dev/null | sort -V | tail -1)"
+          if [ -z "$AAPT" ] || [ ! -x "$AAPT" ]; then
+            echo "FAIL: aapt2 not found under $SDK/build-tools"
+            ls "$SDK" 2>/dev/null || echo "(no SDK directory)"
+            exit 1
+          fi
+          echo "aapt2: $AAPT"
           IDENTITY="$("$AAPT" dump badging app/build/outputs/apk/debug/app-debug.apk | grep '^package:')"
           echo "$IDENTITY"
           echo "$IDENTITY" | grep -q "com.vantage.companion" \
