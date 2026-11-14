@@ -219,6 +219,23 @@
       "title": "GET /intelligence/missions/{id}/schedule",
       "status": "VERIFIED",
       "evidence": "reports ready/running/waiting with reasons"
+    },
+    {
+      "id": "W10-TRUST-DELTA",
+      "agent": "lead",
+      "title": "Trust Delta: widened plans require fresh approval",
+      "status": "VERIFIED",
+      "files": [
+        "jarvis/api/intelligence_routes.py"
+      ],
+      "evidence": "live: added delete_file + risk 1->2 reported as expanded/requires_new_approval"
+    },
+    {
+      "id": "W15-RETENTION",
+      "agent": "15",
+      "title": "Bound the file journal",
+      "status": "VERIFIED",
+      "evidence": "60 transactions pruned to 10 (3985 bytes); unfinished never pruned"
     }
   ]
 }
