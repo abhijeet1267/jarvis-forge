@@ -565,7 +565,7 @@ jarvis/
                host's answer returned unchanged — proven on loopback, never claimed off-LAN
   gateway/     provider-neutral model gateway: OpenAI and Gemini wire shapes behind one selection
                point, each answer naming its vendor and model; no vendor call has been made here
-tests/         211 modules · 3939 collected · includes the shipped page JS, run by Node
+tests/         211 modules · 3941 collected · includes the shipped page JS, run by Node
 dashboard/     index.html control panel · planner.html daily plan, tasks, schedules, attention ·
                operator.html run apps/documents/sites, contacts + call briefs, post drafts ·
                work.html workspaces + workflow jobs · phone.html the LAN phone client

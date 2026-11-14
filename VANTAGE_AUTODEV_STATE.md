@@ -193,13 +193,24 @@ Nothing in the view invents progress or success: every value comes from the back
 
 - `test_mission_runner.py` now 19 (audit-write failure ⇒ no verified claim; CONFIRM
   parks; resume without approval stays parked; matching approval resumes).
-- `test_parallelworld.py` 15 (partial failure identifies applied vs refused; stale
-  preview refused).
+- `test_parallelworld.py` 17 (partial failure identifies applied vs refused; stale
+  preview refused; a directory is a conflict, not a crash).
 - `test_selfhealing.py` 12, `test_demo_a_file_mission.py` 5 (restart-and-resume,
   interrupted missions listed).
 - `swift build` succeeds with the new screen; the UI's exact API payloads verified
   live (preview reports before/after without writing; apply verified per file;
   `/etc/hosts` refused as protected).
+
+**Found by exercising the installed app, not the tests:** `/files/preview` returned
+**500** for a path that is a directory — `read_text` raised `IsADirectoryError` straight
+out of the route. A directory is now reported as a conflict ("this preview and apply
+cover files only") in both preview and apply, and the route answers 200 with
+`applicable: false`. Two tests pin it. This is the second bug this session found only
+by running the real surface: the unit seams never pass a directory.
+
+**The installed app was rebuilt, signed and reinstalled** with Mission Control and
+ParallelWorld in the sidebar; it connects to the backend (114 requests to `:8765`, only
+the deliberate port probes rejected).
 
 ## Iteration 89 — 9router configured per section (2026-11-14)
 

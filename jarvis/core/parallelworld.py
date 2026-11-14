@@ -141,8 +141,24 @@ class ParallelWorld:
                 conflicts.append({"path": item.path, "reason": refusal})
                 continue
 
-            current = target.read_text(encoding="utf-8", errors="replace") \
-                if target.exists() else ""
+            # A directory is not a file to replace or delete. Reporting this as a
+            # conflict is the difference between "this plan cannot run" and a
+            # 500: reading a directory raised IsADirectoryError straight out of
+            # the preview.
+            if target.is_dir():
+                conflicts.append({
+                    "path": item.path,
+                    "reason": "the path is a directory, and this preview and apply "
+                              "cover files only"})
+                continue
+
+            try:
+                current = target.read_text(encoding="utf-8", errors="replace") \
+                    if target.exists() else ""
+            except OSError as exc:
+                conflicts.append({"path": item.path,
+                                  "reason": f"the path could not be read: {exc}"})
+                continue
             proposed = _propose(item, current)
 
             entry = {
@@ -201,6 +217,14 @@ class ParallelWorld:
             refusal = self._guard(item.path) if self._guard else None
             if refusal:
                 results.append({"path": item.path, "ok": False, "detail": refusal})
+                continue
+
+            # Same reason as the preview: this covers files, and a directory is
+            # refused rather than raising out of the apply loop.
+            if target.is_dir():
+                results.append({"path": item.path, "ok": False,
+                                "detail": "the path is a directory; only files are "
+                                          "supported"})
                 continue
 
             # Freshness: the file must still be the one that was previewed.

@@ -228,3 +228,28 @@ def test_a_preview_taken_before_an_external_edit_is_then_refused(tmp_path):
     assert result["applied"] is False
     assert target.read_text(encoding="utf-8") == "edited by the person\n"
     assert "changed after the preview" in result["results"][0]["detail"]
+
+
+def test_a_directory_is_a_conflict_not_a_crash(tmp_path):
+    """Previewing a directory used to raise IsADirectoryError out of the route."""
+    directory = tmp_path / "a-folder"
+    directory.mkdir()
+
+    world = ParallelWorld()
+    plan = world.plan([{"op": "create", "path": str(directory), "content": "x"}])
+    preview = world.preview(plan)
+
+    assert preview["applicable"] is False
+    assert any("directory" in c["reason"] for c in preview["conflicts"])
+
+
+def test_applying_to_a_directory_is_refused_without_raising(tmp_path):
+    directory = tmp_path / "a-folder"
+    directory.mkdir()
+    world = ParallelWorld()
+    plan = world.plan([{"op": "delete", "path": str(directory)}])
+    result = world.apply(plan, approved=True)
+
+    assert result["applied"] is False
+    assert any("directory" in r["detail"] for r in result["results"])
+    assert directory.is_dir()
