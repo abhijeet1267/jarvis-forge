@@ -78,6 +78,38 @@ def build_router(require_auth) -> APIRouter:
             revoked += 1
         return {"revoked": revoked}
 
+    @router.post("/intent/delta")
+    async def intent_delta(body: Dict[str, Any] = Body(None)) -> Dict[str, Any]:
+        """What a plan revision change adds, before anyone approves it.
+
+        The Trust Delta: a changed plan must not inherit the old approval. This
+        reports the expansion in words a person can weigh -- a new capability,
+        a new resource prefix, a higher risk budget -- and says whether the
+        change needs fresh approval, rather than letting a widened plan reuse a
+        decision made for a narrower one.
+        """
+        from ..security.intentshield import IntentScope, scope_delta
+
+        body = body or {}
+        try:
+            old = IntentScope.from_dict(body.get("old") or {})
+            new = IntentScope.from_dict(body.get("new") or {})
+            delta = scope_delta(old, new)
+        except (ValueError, TypeError) as exc:
+            raise HTTPException(status_code=422, detail=str(exc))
+
+        expanded = bool(delta.get("added_capabilities")
+                        or delta.get("added_resource_prefixes")
+                        or delta.get("increased_risk"))
+        return {**delta,
+                "expanded": expanded,
+                "requires_new_approval": expanded,
+                "note": ("The plan now asks for more than it was approved for. "
+                         "A previous approval does not cover this."
+                         if expanded else
+                         "The plan did not widen its scope, so the existing "
+                         "approval still describes it.")}
+
     @router.get("/missions/{mission_id}/schedule")
     async def mission_schedule(mission_id: str) -> Dict[str, Any]:
         """Which steps may run now, and why the others are waiting.

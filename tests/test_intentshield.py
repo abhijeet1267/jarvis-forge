@@ -439,3 +439,25 @@ def test_a_decision_serializes_for_a_route(scope):
         "violation": "forbidden",
     }
     assert isinstance(decision, Decision)
+
+def test_a_changed_plan_that_widens_scope_requires_new_approval():
+    """The route-level contract: expansion must not reuse an old approval.
+
+    `scope_delta` reports the difference; this pins the decision the API makes
+    from it, which is the part a person actually relies on.
+    """
+    from jarvis.security.intentshield import IntentScope, scope_delta
+
+    old = IntentScope(mission_id="M1", goal="organize",
+                      allowed_capabilities={"write_file"},
+                      allowed_resource_prefixes=["/tmp/proj"], risk_budget=1)
+    new = IntentScope(mission_id="M1", goal="organize",
+                      allowed_capabilities={"write_file", "delete_file"},
+                      allowed_resource_prefixes=["/tmp/proj"], risk_budget=1)
+
+    delta = scope_delta(old, new)
+    assert "delete_file" in delta["added_capabilities"]
+
+    unchanged = scope_delta(old, old)
+    assert unchanged["added_capabilities"] == []
+    assert unchanged["added_resource_prefixes"] == []
