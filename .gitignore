@@ -32,6 +32,11 @@ coverage.xml
 !.env.example
 *.key
 *.pem
+# Throwaway self-signed fixtures the Android pinning contract test loads
+# (CN=vantage-pin-test / vantage-pin-wrong). They are test data, not secrets;
+# the Android unit suite fails without them.
+!android/app/src/test/resources/pinning-test-cert.pem
+!android/app/src/test/resources/pinning-test-wrong.pem
 *.p12
 *.pfx
 secrets/
@@ -45,7 +50,8 @@ macos/Vantage/Vantage.app/
 macos/Vantage/stale/
 macos/Vantage/*.xcodeproj/xcuserdata/
 macos/Vantage/*.xcworkspace/xcuserdata/
-macos/artifacts/
+# An offscreen-render screenshot kept as verification evidence (not a build output).
+!macos/artifacts/
 
 # --- iOS app (Swift Package) -----------------------------------------------
 ios/VantageAI/.build/
