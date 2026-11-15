@@ -15,6 +15,9 @@ struct SmartFilesView: View {
     @State private var plan: APIModels.OrganizePlan?
     @State private var scanning = false
     @State private var errorMessage: String?
+    @State private var renameFind = ""
+    @State private var renameReplace = ""
+    @State private var rename: APIModels.RenamePlan?
 
     private let api = APIClient.shared
 
@@ -31,6 +34,7 @@ struct SmartFilesView: View {
                 chooser
                 if let report { summary(report); duplicates(report); largest(report) }
                 if let plan { planPanel(plan) }
+                if report != nil { renamePanel }
             }
             .padding(V.Space.gutter)
         }
@@ -173,6 +177,59 @@ struct SmartFilesView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(V.surface)
         .clipShape(RoundedRectangle(cornerRadius: V.Radius.card))
+    }
+
+    /// Bulk rename: a rule, a preview of every name, and any collision.
+    ///
+    /// Collisions are reported and the plan becomes inapplicable rather than
+    /// resolved automatically -- which name should win is a decision a person
+    /// makes, not one this screen guesses.
+    private var renamePanel: some View {
+        VStack(alignment: .leading, spacing: V.Space.s) {
+            SectionHeader("Bulk rename")
+            HStack(spacing: V.Space.s) {
+                TextField("find", text: $renameFind)
+                    .textFieldStyle(.roundedBorder).font(V.Font.mono)
+                TextField("replace with", text: $renameReplace)
+                    .textFieldStyle(.roundedBorder).font(V.Font.mono)
+                Button("Preview rename") { Task { await proposeRename() } }
+                    .buttonStyle(VPrimaryButtonStyle())
+                    .disabled(renameFind.isEmpty || folder.isEmpty)
+            }
+
+            if let rename {
+                Text(rename.summary)
+                    .font(V.Font.body)
+                    .foregroundColor(rename.applicable ? V.text : V.warning)
+                ForEach(Array(rename.preview.prefix(15).enumerated()), id: \.offset) { _, entry in
+                    Text("\(entry.from)  →  \(entry.to)")
+                        .font(V.Font.mono).foregroundColor(V.textSecondary)
+                        .lineLimit(1).truncationMode(.middle)
+                }
+                ForEach(Array(rename.conflicts.enumerated()), id: \.offset) { _, conflict in
+                    Text("\(conflict.name): \(conflict.reason)")
+                        .font(V.Font.caption).foregroundColor(V.danger)
+                }
+            }
+        }
+        .padding(V.Space.m)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(V.surface)
+        .clipShape(RoundedRectangle(cornerRadius: V.Radius.card))
+    }
+
+    private func proposeRename() async {
+        errorMessage = nil
+        do {
+            rename = try await api.post(
+                "/files/rename-plan",
+                body: APIModels.RenamePlanRequest(
+                    path: folder, find: renameFind, replace: renameReplace),
+                as: APIModels.RenamePlan.self)
+        } catch {
+            errorMessage = error.localizedDescription
+            rename = nil
+        }
     }
 
     private func stat(_ label: String, _ value: String, _ tone: Color) -> some View {

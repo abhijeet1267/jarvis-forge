@@ -1866,4 +1866,30 @@ extension APIModels {
         let decision: String
         let lease_id: String?
     }
+
+    struct RenamePlanRequest: Codable {
+        let path: String
+        let find: String
+        let replace: String
+    }
+
+    struct RenamePlan: Codable {
+        let root: String
+        let operations: [OrganizeMove]
+        let conflicts: [RenameConflict]
+        let applicable: Bool
+        let summary: String
+        let preview: [RenamePreview]
+    }
+
+    struct RenameConflict: Codable {
+        let name: String
+        let reason: String
+        let sources: [String]
+    }
+
+    struct RenamePreview: Codable {
+        let from: String
+        let to: String
+    }
 }

@@ -12,7 +12,7 @@ import os
 import pytest
 
 from jarvis.core.smartfiles import (
-    MAX_DEPTH, category_for, organize_plan, scan,
+    MAX_DEPTH, category_for, organize_plan, rename_plan, scan,
 )
 
 
@@ -131,3 +131,64 @@ def test_an_organize_plan_never_writes(tmp_path):
 def test_an_unknown_organize_mode_is_refused(tmp_path):
     with pytest.raises(ValueError):
         organize_plan(str(tmp_path), by="date")
+
+
+# -- bulk rename -----------------------------------------------------------
+
+def test_a_prefix_is_added_and_the_extension_is_kept(tmp_path):
+    (tmp_path / "report.txt").write_text("x", encoding="utf-8")
+    plan = rename_plan(str(tmp_path), prefix="2026_")
+
+    assert plan["applicable"] is True
+    preview = plan["preview"][0]
+    assert preview["from"] == "report.txt"
+    assert preview["to"] == "2026_report.txt", "the extension must survive a rename"
+
+
+def test_find_and_replace_changes_only_the_name(tmp_path):
+    (tmp_path / "draft_v1.md").write_text("x", encoding="utf-8")
+    plan = rename_plan(str(tmp_path), find="draft", replace="final")
+    assert plan["preview"][0]["to"] == "final_v1.md"
+
+
+def test_a_sequence_numbers_each_file(tmp_path):
+    for name in ("a.txt", "b.txt"):
+        (tmp_path / name).write_text("x", encoding="utf-8")
+    plan = rename_plan(str(tmp_path), sequence=True, start=1)
+    assert [p["to"] for p in plan["preview"]] == ["a_001.txt", "b_002.txt"]
+
+
+def test_two_files_landing_on_one_name_is_a_conflict(tmp_path):
+    """A person decides which name wins; the plan refuses to guess."""
+    (tmp_path / "draft_a.txt").write_text("x", encoding="utf-8")
+    (tmp_path / "final_a.txt").write_text("y", encoding="utf-8")
+    plan = rename_plan(str(tmp_path), find="draft", replace="final")
+
+    assert plan["applicable"] is False
+    assert plan["conflicts"], plan
+    # It lands on an existing file rather than two renames colliding, and the
+    # plan says so precisely -- either wording is a conflict, and the exact
+    # reason matters for the person deciding what to do.
+    assert any("already exists" in c["reason"] or "same name" in c["reason"]
+               for c in plan["conflicts"]), plan["conflicts"]
+
+
+def test_renaming_onto_an_existing_file_is_a_conflict(tmp_path):
+    (tmp_path / "a.txt").write_text("x", encoding="utf-8")
+    (tmp_path / "b_a.txt").write_text("y", encoding="utf-8")
+    plan = rename_plan(str(tmp_path), prefix="b_")
+    assert plan["applicable"] is False
+    assert any("already exists" in c["reason"] for c in plan["conflicts"])
+
+
+def test_a_rename_needs_at_least_one_rule(tmp_path):
+    (tmp_path / "a.txt").write_text("x", encoding="utf-8")
+    with pytest.raises(ValueError):
+        rename_plan(str(tmp_path))
+
+
+def test_a_rename_plan_writes_nothing(tmp_path):
+    (tmp_path / "a.txt").write_text("x", encoding="utf-8")
+    rename_plan(str(tmp_path), prefix="new_")
+    assert (tmp_path / "a.txt").exists()
+    assert not (tmp_path / "new_a.txt").exists()

@@ -227,3 +227,81 @@ def organize_plan(root_path: str, *, by: str = "type") -> Dict[str, Any]:
                     if operations else "Nothing at this level would move."),
         "applicable": bool(operations),
     }
+
+def rename_plan(root_path: str, *, prefix: str = "", suffix: str = "",
+                find: str = "", replace: str = "", sequence: bool = False,
+                start: int = 1) -> Dict[str, Any]:
+    """Propose renaming the loose files in a folder, and report conflicts.
+
+    A rename is the operation most likely to collide, so the plan flags every
+    case where two files would end up with the same name -- including a
+    collision with a file that already exists. It does not resolve them: a
+    person deciding which name wins is the only correct answer there.
+
+    The extension is preserved unless the rule explicitly replaces it, because
+    a rename that silently drops `.json` changes how the file is opened.
+    """
+    root = Path(root_path).expanduser()
+    if not root.is_dir():
+        raise ValueError(f"{root} is not a directory")
+    if not (prefix or suffix or find or sequence):
+        raise ValueError("a rename needs at least one rule: prefix, suffix, "
+                         "find/replace, or a sequence number")
+
+    operations: List[Dict[str, Any]] = []
+    taken: Dict[str, List[str]] = defaultdict(list)
+
+    files = sorted(e for e in root.iterdir()
+                   if e.is_file() and not e.is_symlink())
+    for index, entry in enumerate(files):
+        stem, dot, extension = entry.name.partition(".")
+        extension = f"{dot}{extension}"
+
+        new_stem = stem
+        if find:
+            new_stem = new_stem.replace(find, replace)
+        if sequence:
+            new_stem = f"{new_stem}_{start + index:03d}"
+        new_name = f"{prefix}{new_stem}{suffix}{extension}"
+
+        if new_name == entry.name:
+            continue
+
+        destination = root / new_name
+        operations.append({
+            "op": "move",
+            "path": str(entry),
+            "destination": str(destination),
+            "reason": f"rename to {new_name}",
+        })
+        taken[new_name].append(str(entry))
+
+    conflicts: List[Dict[str, Any]] = []
+    for name, sources in taken.items():
+        if len(sources) > 1:
+            conflicts.append({
+                "name": name,
+                "reason": f"{len(sources)} files would be renamed to the same name",
+                "sources": sources,
+            })
+        elif (root / name).exists():
+            conflicts.append({
+                "name": name,
+                "reason": "a file with this name already exists",
+                "sources": sources,
+            })
+
+    return {
+        "root": str(root),
+        "operations": operations,
+        "conflicts": conflicts,
+        "applicable": bool(operations) and not conflicts,
+        "summary": (
+            f"{len(operations)} file(s) would be renamed." if operations
+            else "No file in this folder would change name."),
+        "preview": [
+            {"from": op["path"].rsplit("/", 1)[-1],
+             "to": op["destination"].rsplit("/", 1)[-1]}
+            for op in operations
+        ],
+    }

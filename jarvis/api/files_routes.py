@@ -137,6 +137,31 @@ def build_router(require_auth) -> APIRouter:
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc))
 
+    @router.post("/rename-plan")
+    async def rename_plan_route(body: Dict[str, Any] = Body(None)) -> Dict[str, Any]:
+        """Propose a bulk rename, reporting collisions rather than resolving them.
+
+        Operations come back in the apply route's shape, so nothing is renamed
+        here.
+        """
+        from ..core.smartfiles import rename_plan
+
+        body = body or {}
+        path = str(body.get("path") or "").strip()
+        if not path:
+            raise HTTPException(status_code=422, detail="a folder path is required")
+        try:
+            return rename_plan(
+                path,
+                prefix=str(body.get("prefix") or ""),
+                suffix=str(body.get("suffix") or ""),
+                find=str(body.get("find") or ""),
+                replace=str(body.get("replace") or ""),
+                sequence=body.get("sequence") is True,
+                start=int(body.get("start") or 1))
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc))
+
     @router.get("/recovery")
     async def file_recovery_report() -> Dict[str, Any]:
         """Interrupted transactions and what a restart can honestly conclude.
