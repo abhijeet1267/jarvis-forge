@@ -175,6 +175,47 @@ class JarvisCore:
             core=self,
         )
 
+    def _settle_mission(self, mission_id: str, *, outcome: str,
+                        reason: str = "") -> None:
+        """Move a command's mission to a final state.
+
+        Every exit from the action loop has to call this. Without it a mission
+        stays `running` forever after its command finished -- which is exactly
+        what Mission Control showed: three commands that had completed, listed
+        as work still in progress. `running` means "something is executing
+        right now", and nothing was.
+
+        `outcome` is one of the mission service's transitions from RUNNING
+        (partially_completed / failed / blocked). A failure to settle is logged
+        and never raised: the person's answer matters more than the ledger.
+        """
+        if not mission_id:
+            return
+        from .missions import MissionState
+
+        target = {
+            "completed": MissionState.COMPLETED,
+            "partially_completed": MissionState.PARTIALLY_COMPLETED,
+            "failed": MissionState.FAILED,
+            "blocked": MissionState.BLOCKED,
+            "cancelled": MissionState.CANCELLED,
+        }.get(outcome)
+        if target is None:
+            log.info(f"unknown mission outcome {outcome!r}; leaving the mission as is")
+            return
+        try:
+            mission = self.missions.get(mission_id)
+            if mission is None:
+                return
+            if mission.state in ("completed", "failed", "cancelled",
+                                 "partially_completed"):
+                return
+            self.missions.transition(mission_id, target, actor="pipeline",
+                                     reason=reason[:300])
+        except Exception as exc:
+            log.info(f"could not settle mission {mission_id}: "
+                     f"{type(exc).__name__}: {str(exc)[:160]}")
+
     def _log_message(self, session_id: str, role: str, content: str, intent: str = "") -> None:
         # R2.2: the conversation service is the one place a turn is written, so
         # the pipeline and the chat surfaces share one history model. The
@@ -1263,6 +1304,8 @@ class JarvisCore:
                 self._note_unhandled(response, plan)
                 self._log_message(request.session_id, "assistant", response.reply, plan.intent)
                 response.duration_ms = int((time.perf_counter() - started) * 1000)
+                self._settle_mission(mission_id, outcome="blocked",
+                                     reason=f"policy refused: {verdict.reason}")
                 return response
 
             if verdict.decision is PolicyDecision.CONFIRM:
@@ -1270,6 +1313,9 @@ class JarvisCore:
                 response.decision = PolicyDecision.CONFIRM
                 response.needs_confirmation = True
                 response.confirmation_id = verdict.confirmation_id
+                self._settle_mission(
+                    mission_id, outcome="blocked",
+                    reason="waiting for approval before any action ran")
                 response.reply = self._confirmation_prompt(action, verdict.preview or "")
                 response.reply += self._watch_confirmation_note(verdict.confirmation_id, action)
                 if job_id:
@@ -1394,6 +1440,15 @@ class JarvisCore:
         self._note_unhandled(response, plan)
         self._log_message(request.session_id, "assistant", response.reply, plan.intent)
         response.duration_ms = int((time.perf_counter() - started) * 1000)
+        # The actions ran. Whether the command is *verified* is a separate
+        # question -- a tool returning success is not an observation -- so the
+        # mission closes as partially_completed unless a verifier said otherwise.
+        failed = [a for a in response.actions if not getattr(a, "ok", False)]
+        self._settle_mission(
+            mission_id,
+            outcome="failed" if failed else "partially_completed",
+            reason=("one or more actions failed" if failed else
+                    "actions ran; their outcome was not independently verified"))
         return response
 
     # -------------------------------------------------------------- re-run

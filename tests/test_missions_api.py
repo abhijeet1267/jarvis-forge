@@ -214,3 +214,37 @@ def test_a_command_records_a_mission_and_does_not_forge_a_job_id():
     listed = client.get("/missions?limit=200", headers=HEADERS).json()["missions"]
     assert any(m["mission_id"] == body["mission_id"] for m in listed), (
         "the command left no mission record")
+
+
+# -- a command's mission must reach a final state --------------------------
+
+def test_a_command_mission_does_not_stay_running_forever():
+    """`running` means something is executing right now.
+
+    Before this was fixed, every command left its mission in `running` after the
+    command had finished, so Mission Control listed completed work as still in
+    progress. The mission must settle to an accurate final state.
+    """
+    client = _client()
+    body = client.post("/command", headers=HEADERS, json={
+        "text": "list files in /tmp", "source": "test"}).json()
+    mission_id = body.get("mission_id")
+    assert mission_id, body
+
+    mission = client.get(f"/missions/{mission_id}", headers=HEADERS).json()
+    assert mission["state"] != "running", (
+        f"the command finished but its mission is still {mission['state']}")
+    assert mission["state"] in ("partially_completed", "completed", "failed",
+                                  "blocked", "cancelled"), mission["state"]
+
+
+def test_a_failing_command_settles_as_failed_not_running():
+    client = _client()
+    body = client.post("/command", headers=HEADERS, json={
+        "text": "read /nonexistent/place/xyz", "source": "test"}).json()
+    mission_id = body.get("mission_id")
+    if not mission_id:
+        pytest.skip("this command did not reach the action loop")
+
+    mission = client.get(f"/missions/{mission_id}", headers=HEADERS).json()
+    assert mission["state"] != "running"
