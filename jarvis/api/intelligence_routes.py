@@ -125,6 +125,63 @@ def build_router(require_auth) -> APIRouter:
             raise HTTPException(status_code=404, detail=f"no mission {mission_id!r}")
         return schedule_summary(mission.steps)
 
+    # -- Demonstrate-to-Automate -------------------------------------------
+    #
+    # One recorder process-wide: a demonstration is a single live session, and
+    # two concurrent recorders would interleave one person's steps into another
+    # recording.
+    @router.post("/recordings")
+    async def start_recording(body: Dict[str, Any] = Body(None)) -> Dict[str, Any]:
+        """Begin an explicit recording. Nothing is captured implicitly."""
+        from ..core.recorder import Recorder, RecordingError, _recorder_singleton
+
+        try:
+            recording = _recorder_singleton().start(str((body or {}).get("name") or ""))
+        except RecordingError as exc:
+            raise HTTPException(status_code=409, detail=str(exc))
+        return recording.to_dict()
+
+    @router.post("/recordings/steps")
+    async def capture_step(body: Dict[str, Any] = Body(None)) -> Dict[str, Any]:
+        """Record one semantic step. A sensitive parameter is refused, not stored."""
+        from ..core.recorder import Recorder, RecordingError, _recorder_singleton
+
+        body = body or {}
+        try:
+            step = _recorder_singleton().capture(
+                str(body.get("kind") or ""),
+                dict(body.get("params") or {}),
+                label=str(body.get("label") or ""))
+        except RecordingError as exc:
+            raise HTTPException(status_code=409, detail=str(exc))
+        return step.to_dict()
+
+    @router.post("/recordings/stop")
+    async def stop_recording() -> Dict[str, Any]:
+        from ..core.recorder import Recorder, RecordingError, _recorder_singleton
+
+        try:
+            return _recorder_singleton().stop().to_dict()
+        except RecordingError as exc:
+            raise HTTPException(status_code=409, detail=str(exc))
+
+    @router.post("/recordings/draft")
+    async def recording_draft() -> Dict[str, Any]:
+        """The reviewable workflow draft. Unverified until a replay succeeds."""
+        from ..core.recorder import Recorder, RecordingError, _recorder_singleton
+
+        try:
+            return _recorder_singleton().derive()
+        except RecordingError as exc:
+            raise HTTPException(status_code=409, detail=str(exc))
+
+    @router.delete("/recordings/current")
+    async def discard_recording() -> Dict[str, Any]:
+        """Discard the current recording. Nothing is left behind."""
+        from ..core.recorder import Recorder, _recorder_singleton
+
+        return {"discarded": _recorder_singleton().discard()}
+
     @router.get("/goals")
     async def list_goals() -> Dict[str, Any]:
         """Opt-in monitored goals and when each was last observed."""

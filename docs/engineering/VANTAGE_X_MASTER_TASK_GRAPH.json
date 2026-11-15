@@ -298,7 +298,11 @@
       "id": "V5-GOAL-MISSION-UI",
       "agent": "11",
       "title": "GoalGuard status + recovery history in the native UI",
-      "status": "NOT_STARTED"
+      "status": "IMPLEMENTED",
+      "files": [
+        "macos/Vantage/Sources/Views/GoalGuardView.swift"
+      ],
+      "evidence": "builds; payload matched the live endpoint field-by-field; visual acceptance unverified"
     },
     {
       "id": "V5-PW-RECOVERY-UI",
@@ -324,7 +328,7 @@
       "files": [
         "jarvis/security/leases.py"
       ],
-      "evidence": "Mission steps: lease spent before execution (enforced). ParallelWorld apply: an optional lease_id is now consumed per operation and a spent/out-of-scope lease is refused (409, live). NOT yet default: apply still accepts approved=true with no lease, so the strictest posture is opt-in. Browser/MCP/desktop surfaces: not wired."
+      "evidence": "Mission steps and ParallelWorld apply: lease spent and refused when spent/out-of-scope (live). Strict posture available via JARVIS_REQUIRE_LEASE_FOR_FILE_APPLY and verified. Browser/MCP/desktop: not wired."
     },
     {
       "id": "V5-TRUST-DELTA-UI",
