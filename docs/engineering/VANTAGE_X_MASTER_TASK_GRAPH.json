@@ -149,7 +149,7 @@
       "files": [
         "jarvis/core/goalguard.py"
       ],
-      "evidence": "18 tests; live: goal observed verified (213 bytes), immediate re-tick returned nothing (duplicate-loop guard)"
+      "evidence": "18 tests; live: goal observed verified (213 bytes), immediate re-tick returned nothing (duplicate-loop guard) | real repair execution: owned-only restart, recycled pid refused, recovered only on a fresh observation (6 new tests)"
     },
     {
       "id": "W9-VOICE",
@@ -257,6 +257,16 @@
         "macos/Vantage/Sources/Views/SkillsLibraryView.swift"
       ],
       "evidence": "swift build ok; payload shape matched field-by-field against the live endpoint; visual acceptance unverified"
+    },
+    {
+      "id": "W3-REAL-REPAIR",
+      "agent": "5",
+      "title": "Self-healing performs a real, verified repair",
+      "status": "VERIFIED",
+      "files": [
+        "jarvis/core/selfhealing.py"
+      ],
+      "evidence": "restart_owned_service + full cycle test: service stopped, owned restart, fresh observation verified; recycled pid refused; restart alone is never reported as recovered"
     }
   ]
 }

@@ -258,3 +258,73 @@ class RecoveryController:
             "remaining": max(0, self.max_attempts - len(attempts)),
             "history": [a.to_dict() for a in attempts],
         }
+
+# -- real repair execution -------------------------------------------------
+
+@dataclass
+class RepairResult:
+    """What a repair attempt actually did, and whether a fresh look confirmed it."""
+
+    attempted: bool
+    action: str
+    ok: bool
+    detail: str
+    recovered: bool = False
+    verification: Optional[GoalObservation] = None
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "attempted": self.attempted, "action": self.action, "ok": self.ok,
+            "detail": self.detail, "recovered": self.recovered,
+            "verification": self.verification.to_dict() if self.verification else None,
+        }
+
+
+def restart_owned_service(record: Dict[str, Any], *, launcher=None,
+                          timeout: float = 10.0) -> RepairResult:
+    """Restart a process Vantage started, and only when it is provably ours.
+
+    `record` is the durable launch record ({pid, started_at, command, argv}),
+    not a bare pid. The ownership check is the whole point: a pid alone can be
+    recycled, and restarting whatever now holds that number would be acting on
+    a different process than the one we are responsible for.
+
+    A restart is not a recovery. This returns ``recovered=False`` always --
+    the caller must observe the resource again and only then may claim the goal
+    was met.
+    """
+    if launcher is None:
+        return RepairResult(False, "restart", False,
+                            "no launcher is configured, so nothing was restarted")
+
+    pid = int(record.get("pid") or 0)
+    started_at = float(record.get("started_at") or 0.0)
+    argv = list(record.get("argv") or [])
+    if not argv:
+        return RepairResult(False, "restart", False,
+                            "the launch record has no argv, so there is nothing "
+                            "known to restart")
+
+    # Ownership: if the recorded process is still alive, it must be the same
+    # process we started. If it is gone, there is nothing to terminate.
+    if pid:
+        current = _ps_start_time(pid)
+        if current is not None and started_at and abs(current - started_at) > 1.0:
+            return RepairResult(
+                False, "restart", False,
+                "the recorded pid now belongs to a different process; refusing to "
+                "terminate a process Vantage does not own")
+
+    try:
+        launcher(argv)
+    except Exception as exc:
+        return RepairResult(True, "restart", False, f"the launcher raised: {exc}")
+
+    return RepairResult(True, "restart", True,
+                        "the owned service was asked to restart; this is not yet "
+                        "evidence that it is healthy")
+
+
+def observe_after_repair(observer: Callable[[], GoalObservation]) -> GoalObservation:
+    """A fresh look after a repair. Never returns the previous observation."""
+    return observer()

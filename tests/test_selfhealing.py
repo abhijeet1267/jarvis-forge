@@ -162,3 +162,129 @@ def _serve(status: int, body: str):
     thread.start()
     url = f"http://127.0.0.1:{server.server_port}/health"
     return server, url
+
+# -- real repair execution --------------------------------------------------
+
+def test_a_repair_without_a_launcher_does_nothing_and_says_so():
+    from jarvis.core.selfhealing import restart_owned_service
+
+    result = restart_owned_service({"pid": 0, "argv": ["/bin/true"]}, launcher=None)
+    assert result.attempted is False
+    assert "no launcher" in result.detail
+
+
+def test_a_repair_with_no_argv_is_refused():
+    from jarvis.core.selfhealing import restart_owned_service
+
+    result = restart_owned_service({"pid": 0, "argv": []}, launcher=lambda a: None)
+    assert result.attempted is False
+    assert "no argv" in result.detail
+
+
+def test_a_recycled_pid_blocks_the_restart():
+    """The recorded pid now belongs to something else; it must not be touched."""
+    import os
+
+    from jarvis.core.selfhealing import restart_owned_service
+
+    # Point at a process that exists but was not started at our recorded time.
+    record = {"pid": os.getpid(), "started_at": 1.0, "argv": ["/bin/true"]}
+    launched = []
+    result = restart_owned_service(record, launcher=lambda argv: launched.append(argv))
+
+    assert result.attempted is False
+    assert "different process" in result.detail
+    assert launched == [], "nothing may be launched when ownership is not established"
+
+
+def test_a_verified_owned_restart_is_attempted_but_not_called_recovered():
+    """Restarting is not recovering: only a fresh observation can say that."""
+    from jarvis.core.selfhealing import restart_owned_service
+
+    launched = []
+    record = {"pid": 0, "argv": ["/bin/true"], "started_at": 0.0}
+    result = restart_owned_service(record, launcher=lambda argv: launched.append(argv))
+
+    assert result.attempted is True
+    assert result.ok is True
+    assert launched == [["/bin/true"]]
+    assert result.recovered is False, (
+        "a restart is not evidence that the service is healthy")
+
+
+def test_a_launcher_failure_is_reported_not_hidden():
+    from jarvis.core.selfhealing import restart_owned_service
+
+    def boom(argv):
+        raise RuntimeError("could not exec")
+
+    result = restart_owned_service({"pid": 0, "argv": ["/bin/true"]}, launcher=boom)
+    assert result.attempted is True
+    assert result.ok is False
+    assert "could not exec" in result.detail
+
+
+def test_the_full_repair_cycle_recovers_only_on_a_fresh_observation():
+    """Demo F's shape: observed failure, owned restart, then a fresh look.
+
+    The service really stops and really comes back; recovery is claimed only
+    because the post-repair observation says so.
+    """
+    import socket
+
+    from jarvis.core.selfhealing import restart_owned_service
+
+    port = _free_port()
+    server, _url = _serve_port(port)
+    url = f"http://127.0.0.1:{port}/health"
+
+    healthy = observe_http(url, expect_body="healthy")
+    assert healthy.result == ConditionStatus.VERIFIED.value
+
+    server.shutdown()
+    server.server_close()
+    time.sleep(0.2)
+    broken = observe_http(url, timeout=0.5)
+    assert broken.result == ConditionStatus.UNKNOWN.value
+
+    holder = {}
+
+    def launcher(argv):
+        restored, _ = _serve_port(port, body="healthy")
+        holder["server"] = restored
+
+    repair = restart_owned_service({"pid": 0, "argv": ["/bin/true"]},
+                                   launcher=launcher)
+    assert repair.ok is True
+    assert repair.recovered is False
+
+    fresh = observe_http(url, expect_body="healthy")
+    try:
+        assert fresh.result == ConditionStatus.VERIFIED.value
+        assert fresh is not healthy, "recovery must rest on a new observation"
+    finally:
+        holder["server"].shutdown()
+        holder["server"].server_close()
+
+
+def _serve_port(port: int, body: str = "healthy"):
+    import threading
+
+    server = HTTPServer(("127.0.0.1", port), _handler_for(body))
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    return server, f"http://127.0.0.1:{port}/health"
+
+
+def _handler_for(body: str):
+    class Handler(BaseHTTPRequestHandler):
+        def do_GET(self):
+            payload = body.encode()
+            self.send_response(200)
+            self.send_header("Content-Length", str(len(payload)))
+            self.end_headers()
+            self.wfile.write(payload)
+
+        def log_message(self, *args):
+            pass
+
+    return Handler
