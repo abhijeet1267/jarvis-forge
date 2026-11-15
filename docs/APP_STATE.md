@@ -42,9 +42,14 @@ first check, not the last.
   button. Verified live against a genuinely broken package.json: detected the
   real parse error and refused to guess a repair.
 
+## Suite
+
+4105 passed / 30 skipped / 0 failed at this revision.
+
 ## Not done
 
-- Command Center still does not execute a full mission from a typed goal.
+- Command Center executes tools and now records each command as a mission, but
+  there is no plan-preview-and-approve step before execution.
 - Smart Files screen does not exist yet.
 - No approve/run control in Mission Control.
 - Visual acceptance never confirmed: screen capture is refused here. Every claim
