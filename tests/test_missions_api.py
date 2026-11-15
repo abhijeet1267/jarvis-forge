@@ -188,3 +188,27 @@ def test_apply_without_a_lease_is_refused_when_the_server_requires_one(
     assert refused.status_code == 409
     assert "lease" in refused.json()["detail"]
     assert target.read_text(encoding="utf-8") == "keep\n"
+
+
+def test_a_command_records_a_mission_and_does_not_forge_a_job_id():
+    """/command now leaves a mission record, without breaking the job-id rule.
+
+    `job_id` is a workflow correlation id with its own invariant: a caller must
+    not be able to choose one. Recording the command as a mission reuses
+    neither field -- it reports `mission_id`, so the work is reachable in
+    Mission Control while the job-id rule stays intact.
+    """
+    client = _client()
+    before = len(client.get("/missions", headers=HEADERS).json()["missions"])
+
+    response = client.post("/command", headers=HEADERS, json={
+        "text": "list files in /tmp", "job_id": "JOB-forged", "source": "test"})
+    assert response.status_code == 200, response.text
+    body = response.json()
+
+    assert body["job_id"] == "", "a caller-supplied job id reached the response"
+    assert body["mission_id"].startswith("MIS-"), body
+
+    after = client.get("/missions", headers=HEADERS).json()["missions"]
+    assert len(after) > before, "the command left no mission record"
+    assert any(m["mission_id"] == body["mission_id"] for m in after)

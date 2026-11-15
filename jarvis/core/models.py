@@ -434,6 +434,11 @@ class CommandResponse(BaseModel):
     #: A correlation id only -- it carries no verdict, and the states behind it
     #: are read from the server, never supplied by whoever renders them.
     job_id: str = ""
+    #: The mission this command was recorded as, so its work is reachable in
+    #: Mission Control. Separate from `job_id` on purpose: `job_id` is the
+    #: workflow correlation id with its own "a caller may not choose one" rule,
+    #: and overloading it made that rule indistinguishable from this one.
+    mission_id: str = ""
     model_used: str = "rules"
     duration_ms: int = 0
     created_at: datetime = Field(default_factory=utcnow)

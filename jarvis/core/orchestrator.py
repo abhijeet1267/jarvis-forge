@@ -1230,7 +1230,7 @@ class JarvisCore:
                 log.info(f"could not record a mission for this command: "
                          f"{type(exc).__name__}: {str(exc)[:200]}")
         if mission_id:
-            response.job_id = response.job_id or mission_id
+            response.mission_id = mission_id
 
         step_seqs = list(seqs) if seqs is not None else list(range(len(plan.actions)))
 
