@@ -323,7 +323,8 @@
       "status": "PARTIALLY_VERIFIED",
       "files": [
         "jarvis/security/leases.py"
-      ]
+      ],
+      "evidence": "Mission steps: lease spent before execution (enforced). ParallelWorld apply: an optional lease_id is now consumed per operation and a spent/out-of-scope lease is refused (409, live). NOT yet default: apply still accepts approved=true with no lease, so the strictest posture is opt-in. Browser/MCP/desktop surfaces: not wired."
     },
     {
       "id": "V5-TRUST-DELTA-UI",

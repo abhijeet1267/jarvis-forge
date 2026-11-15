@@ -122,3 +122,50 @@ def test_the_file_routes_require_authentication(tmp_path):
                            json={"operations": [{"op": "delete",
                                                  "path": str(tmp_path / "x")}]})
     assert response.status_code in (401, 403)
+
+
+# -- a lease on the ParallelWorld apply path -------------------------------
+
+def test_apply_spends_a_supplied_lease_and_refuses_an_exhausted_one(tmp_path):
+    """`approved: true` is a boolean; a lease is the scoped authorization."""
+    import os
+
+    target = tmp_path / "doc.txt"
+    target.write_text("before\n", encoding="utf-8")
+    client = _client()
+    ops = [{"op": "replace", "path": str(target), "content": "after\n"}]
+
+    mission_id = client.post("/missions", headers=HEADERS, json={
+        "request": "lease apply", "conditions": [{"statement": "x"}]}).json()["mission_id"]
+    lease = client.post(f"/missions/{mission_id}/leases", headers=HEADERS, json={
+        "capability": "write_file", "scope": [str(tmp_path)],
+        "max_uses": 1, "ttl_seconds": 60}).json()
+
+    applied = client.post("/files/apply", headers=HEADERS, json={
+        "operations": ops, "approved": True, "lease_id": lease["lease_id"]})
+    assert applied.status_code == 200, applied.text
+    assert applied.json()["applied"] is True
+    assert target.read_text(encoding="utf-8") == "after\n"
+
+    # The single use is spent; a second apply with the same lease is refused.
+    second = client.post("/files/apply", headers=HEADERS, json={
+        "operations": ops, "approved": True, "lease_id": lease["lease_id"]})
+    assert second.status_code == 409, second.text
+    assert "lease" in second.json()["detail"]
+
+
+def test_apply_with_a_lease_for_another_directory_is_refused(tmp_path):
+    target = tmp_path / "doc.txt"
+    target.write_text("keep\n", encoding="utf-8")
+    client = _client()
+    mission_id = client.post("/missions", headers=HEADERS, json={
+        "request": "wrong scope", "conditions": [{"statement": "x"}]}).json()["mission_id"]
+    lease = client.post(f"/missions/{mission_id}/leases", headers=HEADERS, json={
+        "capability": "write_file", "scope": [str(tmp_path / "elsewhere")],
+        "max_uses": 1, "ttl_seconds": 60}).json()
+
+    refused = client.post("/files/apply", headers=HEADERS, json={
+        "operations": [{"op": "replace", "path": str(target), "content": "x"}],
+        "approved": True, "lease_id": lease["lease_id"]})
+    assert refused.status_code == 409
+    assert target.read_text(encoding="utf-8") == "keep\n"

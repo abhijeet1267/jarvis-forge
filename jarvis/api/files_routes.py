@@ -40,6 +40,33 @@ def build_router(require_auth) -> APIRouter:
         if body.get("approved") is not True:
             raise HTTPException(status_code=409,
                                 detail="applying file changes requires approved=true")
+
+        # A caller that supplies a lease gets it enforced against this exact
+        # operation: the capability, the resource, the plan revision and the
+        # session. `approved: true` alone is a boolean, not an authorization --
+        # this is the path by which a scoped grant is actually spent.
+        lease_id = str(body.get("lease_id") or "").strip()
+        if lease_id:
+            from ..db.database import get_db
+            from ..security.leases import LeaseRefusal, LeaseService
+
+            operations = body.get("operations") or []
+            service = LeaseService(get_db())
+            try:
+                for operation in operations:
+                    service.consume(
+                        lease_id,
+                        # The lease names a *capability* (`write_file`); the
+                        # operation is create/replace/append/delete. Spending
+                        # against the operation's own name would never match.
+                        capability="write_file",
+                        resource=str(operation.get("path") or ""),
+                        session_id=str(body.get("session_id") or ""))
+            except LeaseRefusal as exc:
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"the lease does not authorize this apply: {exc}")
+
         return _apply(body)
 
     @router.post("/undo")
