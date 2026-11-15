@@ -318,3 +318,66 @@ def test_an_empty_journal_undoes_nothing_and_says_so(tmp_path):
     result = world.undo({"entries": []}, approved=True)
     assert result["undone"] is False
     assert "records nothing" in result["refused"]
+
+
+# -- move ----------------------------------------------------------------
+
+def test_a_move_previews_as_a_path_change_not_a_text_diff(tmp_path):
+    source = tmp_path / "loose.txt"
+    source.write_text("content\n", encoding="utf-8")
+    destination = tmp_path / "docs" / "loose.txt"
+
+    world = ParallelWorld()
+    plan = world.plan([{"op": "move", "path": str(source),
+                        "destination": str(destination)}])
+    preview = world.preview(plan)
+
+    assert preview["applicable"] is True
+    change = preview["changes"][0]
+    assert change["before"] == str(source)
+    assert "move to" in change["after"]
+    assert source.exists(), "preview must not move anything"
+
+
+def test_an_approved_move_renames_and_verifies(tmp_path):
+    source = tmp_path / "loose.txt"
+    source.write_text("content\n", encoding="utf-8")
+    destination = tmp_path / "docs" / "loose.txt"
+
+    world = ParallelWorld()
+    result = world.apply(
+        world.plan([{"op": "move", "path": str(source),
+                     "destination": str(destination)}]),
+        approved=True)
+
+    assert result["applied"] is True, result
+    assert not source.exists()
+    assert destination.read_text(encoding="utf-8") == "content\n"
+
+
+def test_a_move_refuses_to_overwrite_an_existing_destination(tmp_path):
+    """A silent replacement here would destroy a real file."""
+    source = tmp_path / "loose.txt"
+    source.write_text("mine\n", encoding="utf-8")
+    destination = tmp_path / "docs" / "loose.txt"
+    destination.parent.mkdir()
+    destination.write_text("theirs\n", encoding="utf-8")
+
+    world = ParallelWorld()
+    result = world.apply(
+        world.plan([{"op": "move", "path": str(source),
+                     "destination": str(destination)}]),
+        approved=True)
+
+    assert result["applied"] is False
+    assert destination.read_text(encoding="utf-8") == "theirs\n", (
+        "the existing file must survive a refused move")
+    assert source.exists()
+
+
+def test_a_move_of_a_missing_source_is_a_conflict(tmp_path):
+    world = ParallelWorld()
+    plan = world.plan([{"op": "move", "path": str(tmp_path / "nope.txt"),
+                        "destination": str(tmp_path / "docs" / "nope.txt")}])
+    preview = world.preview(plan)
+    assert preview["applicable"] is False

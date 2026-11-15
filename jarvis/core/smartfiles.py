@@ -214,7 +214,7 @@ def organize_plan(root_path: str, *, by: str = "type") -> Dict[str, Any]:
         if category == "other":
             continue
         operations.append({
-            "op": "move_file",
+            "op": "move",
             "path": str(entry),
             "destination": str(root / category / entry.name),
             "reason": f"{category} file",

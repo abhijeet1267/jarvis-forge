@@ -63,14 +63,17 @@ class SourceSnapshot:
 class PlannedOperation:
     """One typed file operation."""
 
-    op: str                      # create | replace | append | delete
+    op: str                      # create | replace | append | delete | move
     path: str
     content: str = ""            # new text, for create/replace/append
+    #: Where a `move` sends the file. Empty for every other operation.
+    destination: str = ""
     reason: str = ""
     snapshot: Optional[SourceSnapshot] = None
 
     def to_dict(self) -> Dict[str, Any]:
         return {"op": self.op, "path": self.path,
+                "destination": self.destination,
                 "reason": self.reason,
                 "snapshot": self.snapshot.to_dict() if self.snapshot else None}
 
@@ -112,15 +115,16 @@ class ParallelWorld:
         planned: List[PlannedOperation] = []
         for raw in operations:
             op = str(raw.get("op") or "").strip().lower()
-            if op not in ("create", "replace", "append", "delete"):
+            if op not in ("create", "replace", "append", "delete", "move"):
                 raise ValueError(
                     f"{op!r} is not a supported file operation; this preview "
-                    "covers create, replace, append and delete only")
+                    "covers create, replace, append, delete and move only")
             path = Path(os.path.expanduser(str(raw.get("path") or ""))).resolve()
             if not str(path):
                 raise ValueError("an operation needs a path")
             planned.append(PlannedOperation(
                 op=op, path=str(path), content=str(raw.get("content") or ""),
+                destination=str(raw.get("destination") or ""),
                 reason=str(raw.get("reason") or ""), snapshot=snapshot(path)))
         return planned
 
@@ -160,13 +164,17 @@ class ParallelWorld:
                 continue
 
             try:
-                current = target.read_text(encoding="utf-8", errors="replace") \
-                    if target.exists() else ""
+                if item.op == "move":
+                    current = str(target)
+                else:
+                    current = target.read_text(encoding="utf-8", errors="replace") \
+                        if target.exists() else ""
             except OSError as exc:
                 conflicts.append({"path": item.path,
                                   "reason": f"the path could not be read: {exc}"})
                 continue
-            proposed = _propose(item, current)
+            proposed = (f"move to {item.destination}" if item.op == "move"
+                        else _propose(item, current))
 
             entry = {
                 "path": item.path,
@@ -184,7 +192,7 @@ class ParallelWorld:
             if item.op == "create" and entry["exists"]:
                 conflicts.append({"path": item.path,
                                   "reason": "the file already exists"})
-            elif item.op in ("replace", "append", "delete") and not entry["exists"]:
+            elif item.op in ("replace", "append", "delete", "move") and not entry["exists"]:
                 conflicts.append({"path": item.path,
                                   "reason": "the file does not exist"})
             changes.append(entry)
@@ -459,6 +467,16 @@ def _propose(item: PlannedOperation, current: str) -> str:
 
 
 def _apply_one(item: PlannedOperation, target: Path) -> None:
+    if item.op == "move":
+        destination = Path(item.destination).expanduser()
+        if not item.destination:
+            raise ValueError("a move needs a destination")
+        if destination.exists():
+            # A move that silently replaced an existing file would destroy it.
+            raise FileExistsError(f"{destination} already exists")
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        target.rename(destination)
+        return
     target.parent.mkdir(parents=True, exist_ok=True)
     if item.op == "delete":
         target.unlink(missing_ok=True)
@@ -471,6 +489,10 @@ def _apply_one(item: PlannedOperation, target: Path) -> None:
 
 
 def _matches_expectation(item: PlannedOperation, after: SourceSnapshot) -> bool:
+    if item.op == "move":
+        destination = Path(item.destination).expanduser()
+        return (not after.exists) and destination.is_file()
+    # (the remaining checks are for content operations)
     """Did the file end up as the preview said it would?
 
     Verified by re-reading and hashing, not by trusting that `write_text`

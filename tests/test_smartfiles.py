@@ -116,6 +116,9 @@ def test_an_organize_plan_moves_only_mapped_top_level_files(tmp_path):
     assert not any(p.endswith("mystery.xyz") for p in paths), "unmapped left alone"
     assert not any("project/" in p for p in paths), "nested files untouched"
     assert plan["applicable"] is True
+    # The operation name must be one ParallelWorld accepts, or the plan could
+    # never be applied: the two modules once disagreed on `move` vs `move_file`.
+    assert {op["op"] for op in plan["operations"]} == {"move"}
 
 
 def test_an_organize_plan_never_writes(tmp_path):
