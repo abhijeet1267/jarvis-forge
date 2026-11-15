@@ -381,3 +381,60 @@ def test_a_move_of_a_missing_source_is_a_conflict(tmp_path):
                         "destination": str(tmp_path / "docs" / "nope.txt")}])
     preview = world.preview(plan)
     assert preview["applicable"] is False
+
+
+# -- move undo -------------------------------------------------------------
+
+def test_a_move_can_be_undone(tmp_path):
+    source = tmp_path / "loose.txt"
+    source.write_text("content\n", encoding="utf-8")
+    destination = tmp_path / "docs" / "loose.txt"
+
+    world = ParallelWorld()
+    applied = world.apply(
+        world.plan([{"op": "move", "path": str(source),
+                     "destination": str(destination)}]), approved=True)
+    assert destination.exists()
+
+    undone = world.undo(applied["journal"], approved=True)
+
+    assert undone["undone"] is True, undone
+    assert source.exists(), "the file did not come back"
+    assert not destination.exists()
+    assert source.read_text(encoding="utf-8") == "content\n"
+
+
+def test_undo_refuses_when_the_moved_file_changed(tmp_path):
+    """The newer work wins, exactly as it does for a content undo."""
+    source = tmp_path / "loose.txt"
+    source.write_text("content\n", encoding="utf-8")
+    destination = tmp_path / "docs" / "loose.txt"
+
+    world = ParallelWorld()
+    applied = world.apply(
+        world.plan([{"op": "move", "path": str(source),
+                     "destination": str(destination)}]), approved=True)
+
+    destination.write_text("edited after the move\n", encoding="utf-8")
+    undone = world.undo(applied["journal"], approved=True)
+
+    assert undone["undone"] is False
+    assert destination.read_text(encoding="utf-8") == "edited after the move\n"
+
+
+def test_undo_refuses_when_the_original_path_is_occupied_again(tmp_path):
+    source = tmp_path / "loose.txt"
+    source.write_text("original\n", encoding="utf-8")
+    destination = tmp_path / "docs" / "loose.txt"
+
+    world = ParallelWorld()
+    applied = world.apply(
+        world.plan([{"op": "move", "path": str(source),
+                     "destination": str(destination)}]), approved=True)
+
+    source.write_text("a new file appeared\n", encoding="utf-8")
+    undone = world.undo(applied["journal"], approved=True)
+
+    assert undone["undone"] is False
+    assert source.read_text(encoding="utf-8") == "a new file appeared\n", (
+        "undo must not overwrite a file someone created in the meantime")

@@ -299,13 +299,28 @@ class ParallelWorld:
                 import base64
 
                 original = backups.get(item.path)
-                journal_entries.append({
-                    "path": item.path,
-                    "op": item.op,
-                    "original_b64": (base64.b64encode(original).decode("ascii")
-                                     if original is not None else None),
-                    "after_sha256": after.sha256,
-                })
+                # A move leaves the source absent, so its "after" hash is empty
+                # and the entry has to name where the file went. Without this
+                # the journal recorded a move it could not reverse.
+                if item.op == "move":
+                    destination = Path(item.destination).expanduser()
+                    moved_digest = (snapshot(destination).sha256
+                                    if destination.exists() else "")
+                    journal_entries.append({
+                        "path": item.path,
+                        "op": "move",
+                        "destination": str(destination),
+                        "original_b64": None,
+                        "after_sha256": moved_digest,
+                    })
+                else:
+                    journal_entries.append({
+                        "path": item.path,
+                        "op": item.op,
+                        "original_b64": (base64.b64encode(original).decode("ascii")
+                                         if original is not None else None),
+                        "after_sha256": after.sha256,
+                    })
 
             results.append({
                 "path": item.path, "ok": ok,
@@ -326,6 +341,50 @@ class ParallelWorld:
             # module, so "what would undo do" is inspectable before it is done.
             "journal": {"entries": journal_entries},
         }
+
+    def _undo_move(self, entry: Dict[str, Any]) -> Dict[str, Any]:
+        """Move a file back to where it came from, refusing if it changed.
+
+        Two refusals matter here: the destination may now hold different
+        content than our move put there (someone edited it), and the original
+        path may be occupied again (someone created a new file). Either way,
+        moving would destroy work that was not ours.
+        """
+        source = Path(str(entry.get("path") or ""))
+        destination = Path(str(entry.get("destination") or ""))
+        expected = str(entry.get("after_sha256") or "")
+
+        if not entry.get("destination"):
+            return {"path": str(source), "ok": False,
+                    "detail": "this move was journalled without a destination, "
+                              "so it cannot be reversed"}
+
+        refusal = self._guard(str(source)) if self._guard else None
+        if refusal:
+            return {"path": str(source), "ok": False, "detail": refusal}
+
+        if not destination.exists():
+            return {"path": str(source), "ok": False,
+                    "detail": "the moved file is no longer where the move put it"}
+        if expected and snapshot(destination).sha256 != expected:
+            return {"path": str(source), "ok": False,
+                    "detail": ("the moved file changed after the move, so putting "
+                               "it back would overwrite newer work")}
+        if source.exists():
+            return {"path": str(source), "ok": False,
+                    "detail": f"{source} is occupied again; not overwriting it"}
+
+        try:
+            source.parent.mkdir(parents=True, exist_ok=True)
+            destination.rename(source)
+        except Exception as exc:
+            return {"path": str(source), "ok": False,
+                    "detail": f"could not move the file back: {exc}"}
+
+        ok = source.exists() and not destination.exists()
+        return {"path": str(source), "ok": ok,
+                "detail": ("moved back to its original place" if ok
+                           else "the file did not end up back where it was")}
 
     # -- crash journal ------------------------------------------------------
     def _open_transaction(self, planned: List[PlannedOperation]) -> Optional[str]:
@@ -401,6 +460,12 @@ class ParallelWorld:
             target = Path(str(entry.get("path") or ""))
             original_b64 = entry.get("original_b64")
             expected_after = str(entry.get("after_sha256") or "")
+
+            # A move is reversed by moving the file back, with the same rule as
+            # every other undo: refuse when someone else has touched it since.
+            if str(entry.get("op") or "") == "move":
+                results.append(self._undo_move(entry))
+                continue
 
             refusal = self._guard(str(target)) if self._guard else None
             if refusal:
