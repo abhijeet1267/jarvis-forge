@@ -102,6 +102,7 @@ struct ContentView: View {
             case .safety:       SafetyCenterView()
             case .skills:       SkillsLibraryView()
             case .goals:        GoalGuardView()
+            case .doctor:       ProjectDoctorView()
             case .planner:      PlannerView()
             case .operator_:    OperatorView()
             case .control:      MacControlView()
@@ -363,7 +364,7 @@ private struct StatusFooter: View {
 // MARK: - Navigation model
 
 enum NavItem: String, Identifiable, CaseIterable {
-    case today, home, missions, parallelworld, safety, skills, goals, planner, operator_, control, flows, work, people, connections,
+    case today, home, missions, parallelworld, safety, skills, goals, doctor, planner, operator_, control, flows, work, people, connections,
          google, mcp, automation, command, providers, capabilities, devices, approvals,
          activity, memory, settings
     // Phase 3
@@ -380,6 +381,7 @@ enum NavItem: String, Identifiable, CaseIterable {
         case .safety: return "Safety Center"
         case .skills: return "Skills Library"
         case .goals: return "GoalGuard"
+        case .doctor: return "Project Doctor"
         case .planner: return "Planner"
         case .operator_: return "Operator"
         case .control: return "Control Mac"
@@ -414,6 +416,7 @@ enum NavItem: String, Identifiable, CaseIterable {
         case .safety: return "lock.shield"
         case .skills: return "square.stack.3d.up"
         case .goals: return "eye"
+        case .doctor: return "stethoscope"
         case .planner: return "calendar.day.timeline.left"
         case .operator_: return "rectangle.on.rectangle"
         case .control: return "slider.horizontal.3"

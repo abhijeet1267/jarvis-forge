@@ -1745,4 +1745,50 @@ extension APIModels {
         let tool: String
         let params: [String: String]
     }
+
+    // MARK: - Project Doctor
+
+    struct DoctorInspectRequest: Codable {
+        let path: String
+        let run_checks: Bool
+    }
+
+    struct DoctorRepairRequest: Codable {
+        let path: String
+        let finding: String
+    }
+
+    struct ProjectReport: Codable {
+        let kind: String
+        let root: String
+        let name: String?
+        let manifest: String
+        let build_file: String?
+        let test_command: [String]?
+        let findings: [ProjectFinding]
+        let problems: [ProjectFinding]
+    }
+
+    struct ProjectFinding: Codable {
+        let check: String
+        let status: String
+        let detail: String
+        let command: String?
+        let exit_code: Int?
+    }
+
+    struct ProjectRepair: Codable {
+        let operations: [FileOperationLoose]
+        let summary: String
+        let applicable: Bool
+    }
+
+    /// A repair operation as the doctor proposes it. Kept separate from the
+    /// strict FileOperation because a proposal may omit fields the apply route
+    /// would require -- it is a suggestion, not a validated plan.
+    struct FileOperationLoose: Codable {
+        let op: String?
+        let path: String?
+        let content: String?
+    }
 }

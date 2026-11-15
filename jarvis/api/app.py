@@ -644,6 +644,11 @@ from .intelligence_routes import build_router as _build_intelligence_router  # n
 
 app.include_router(_build_intelligence_router(require_auth))
 
+# Project Doctor: read-only inspection, repairs proposed for ParallelWorld.
+from .doctor_routes import build_router as _build_doctor_router  # noqa: E402
+
+app.include_router(_build_doctor_router(require_auth))
+
 _core: Optional[JarvisCore] = None
 _voice = None
 
