@@ -41,10 +41,61 @@ struct HomeView: View {
 
     private let api = APIClient.shared
 
+    /// A greeting that matches the actual time of day. Small, but the Home
+    /// screen is the first thing a person sees and a fixed "Home" title tells
+    /// them nothing.
+    private var greeting: String {
+        switch Calendar.current.component(.hour, from: Date()) {
+        case 5..<12: return "Good morning"
+        case 12..<18: return "Good afternoon"
+        default: return "Good evening"
+        }
+    }
+
+    /// The launch pad: every tile navigates to a screen that exists and does
+    /// real work. These are the actions a person actually starts from, so they
+    /// come before any status metric.
+    private var launchPad: some View {
+        VStack(alignment: .leading, spacing: V.Space.s) {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: V.Space.s)],
+                      spacing: V.Space.s) {
+                ForEach(QuickAction.all) { action in
+                    Button {
+                        AppNavigation.shared.go(action.destination)
+                    } label: {
+                        VStack(alignment: .leading, spacing: V.Space.xs) {
+                            Image(systemName: action.symbol)
+                                .font(.system(size: 16, weight: .light))
+                                .foregroundStyle(V.accent)
+                            Text(action.title)
+                                .font(V.Font.label)
+                                .foregroundStyle(V.text)
+                            Text(action.detail)
+                                .font(V.Font.caption)
+                                .foregroundStyle(V.textTertiary)
+                                .lineLimit(2)
+                                .multilineTextAlignment(.leading)
+                        }
+                        .frame(maxWidth: .infinity, minHeight: 78, alignment: .leading)
+                        .padding(V.Space.m)
+                        .background(V.surface)
+                        .clipShape(RoundedRectangle(cornerRadius: V.Radius.card))
+                        .overlay(RoundedRectangle(cornerRadius: V.Radius.card)
+                            .stroke(V.border, lineWidth: 1))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("\(action.title). \(action.detail)")
+                }
+            }
+        }
+    }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: V.Space.l) {
-                PageHeader(title: "Home", subtitle: "What Vantage can do right now.")
+                PageHeader(title: greeting, subtitle: "What would you like Vantage to do?")
+
+                launchPad
 
                 if let error = errorMessage {
                     ErrorBanner(message: error) { Task { await loadAll() } }
@@ -473,4 +524,35 @@ struct ErrorBanner: View {
         Notice(kind: .error, message: message, actionTitle: retry == nil ? nil : "Retry",
                action: retry)
     }
+}
+
+/// The Home launch pad's actions. Each one is a real screen that exists in the
+/// sidebar, so a tile can never lead somewhere that does nothing.
+private struct QuickAction: Identifiable {
+    let id: String
+    let title: String
+    let detail: String
+    let symbol: String
+    let destination: NavItem
+
+    static let all: [QuickAction] = [
+        QuickAction(id: "command", title: "Command Center",
+                    detail: "Ask for something in your own words",
+                    symbol: "bubble.left.and.bubble.right.fill", destination: .command),
+        QuickAction(id: "missions", title: "Mission Control",
+                    detail: "What Vantage is working on, and what it proved",
+                    symbol: "target", destination: .missions),
+        QuickAction(id: "files", title: "Preview file changes",
+                    detail: "Inspect and approve edits before they happen",
+                    symbol: "rectangle.split.3x1", destination: .parallelworld),
+        QuickAction(id: "skills", title: "Skills",
+                    detail: "Reusable automations and how they have performed",
+                    symbol: "square.stack.3d.up", destination: .skills),
+        QuickAction(id: "goals", title: "GoalGuard",
+                    detail: "Watch a service or file, and why it last failed",
+                    symbol: "eye", destination: .goals),
+        QuickAction(id: "safety", title: "Safety Center",
+                    detail: "What Vantage may do right now, and how to stop it",
+                    symbol: "lock.shield", destination: .safety),
+    ]
 }
