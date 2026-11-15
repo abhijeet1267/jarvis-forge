@@ -1,56 +1,37 @@
-# Vantage Mac App — what is actually in the installed build
+# Vantage Mac App — current state
 
-**Installed:** /Applications/Vantage.app (rebuilt + reinstalled this session)
-**Backend:** running on 127.0.0.1:8765, token at ~/.jarvis-forge/api_token
+**Installed:** /Applications/Vantage.app (rebuilt this session)
+**Backend:** 127.0.0.1:8765
+**Suite:** 4140 passed / 30 skipped / 0 failed
 
-## The bug this session fixed
+## What actually works, verified against the live backend
 
-Five screens existed in source and the user had never seen them. The installed
-binary was stale: it contained Mission Control and ParallelWorld but not Safety
-Center, Skills Library or GoalGuard. `strings` on the installed app is now the
-first check, not the last.
-
-## Screens in the installed app (verified by symbol/string)
-
-| Screen | In installed build |
+| Screen | What you can do |
 |---|---|
-| Home (with launch pad) | YES |
-| Mission Control (with composer) | YES |
-| ParallelWorld | YES |
-| Safety Center (leases + Trust Delta) | YES |
-| Skills Library | YES |
-| GoalGuard | YES |
-| Project Doctor | YES (added this session) |
+| **Home** | Greeting, launch pad of tiles → every real screen |
+| **Command Center** | Type a command; it runs real tools **and records a mission** that settles to a final state |
+| **Mission Control** | Create a mission (goal + acceptance condition), run it, approve a parked one, **approve or deny individual steps**, open ProofLens |
+| **Smart Files** | Pick a folder, find duplicates, see the largest files, propose organise-by-type, **bulk rename with collisions reported** |
+| **ParallelWorld** | Build operations, preview (never writes), apply with approval, **undo — including moves** |
+| **Safety Center** | Active leases with scope/expiry, revoke one, revoke all, Trust Delta |
+| **Skills Library** | Run a skill (parks for approval on protected steps); measured reliability |
+| **GoalGuard** | Monitored goals with honest observation state; check what is due |
+| **Project Doctor** | Inspect a project, see what is actually wrong, **repair corrections JSON forces**, refuse ambiguous ones |
 
-## What each can do, and what it cannot yet
+## Fixes this session that changed behaviour
 
-- **Home** — greets by time of day; launch pad of six tiles, each navigating to a
-  real screen. Does not yet accept a command inline.
-- **Mission Control** — create a mission (goal + acceptance condition), list,
-  open detail, open ProofLens. No approve/run controls yet.
-- **ParallelWorld** — build a plan, preview (no writes), apply with approval,
-  undo. Verified live over HTTP.
-- **Safety Center** — active leases with scope/expiry, per-lease revoke, revoke
-  all (verified 1 -> 0), Trust Delta comparison.
-- **Skills Library** — list skills with measured reliability, run (parks for
-  approval on level-2 actions).
-- **GoalGuard** — list monitored goals with real observation state, check what
-  is due.
-- **Project Doctor** — pick a project folder, see what is actually wrong. Every
-  finding names the check, command and exit code; an unperformable check shows
-  "not checked". Running the project's build/tests is a separate explicit
-  button. Verified live against a genuinely broken package.json: detected the
-  real parse error and refused to guess a repair.
-
-## Suite
-
-4105 passed / 30 skipped / 0 failed at this revision.
+1. **The installed app had 2 of 5 screens.** Source had them; the bundle did not.
+2. **Commands vanished.** `/command` ran tools and left no record — now every command records a mission.
+3. **Missions were stuck in `running` forever** after their command finished. Now every exit path settles them.
+4. **Smart Files couldn't run.** It proposed `move_file`; ParallelWorld knew only `create`/`replace`/`append`/`delete`. Moves are now a real, reversible operation.
+5. **Approving a step re-parked it forever** — the parked confirmation id was never recorded anywhere durable.
+6. **A move looked successful but journalled nothing**, so undo could not reverse it.
 
 ## Not done
 
-- Command Center executes tools and now records each command as a mission, but
-  there is no plan-preview-and-approve step before execution.
-- Smart Files screen does not exist yet.
-- No approve/run control in Mission Control.
-- Visual acceptance never confirmed: screen capture is refused here. Every claim
-  above is from binary inspection and live API responses, not from seeing pixels.
+- **I have never seen the UI render.** Screen capture is refused in this environment.
+  Everything above rests on compiled symbols and live API responses.
+- Swift tests never run (no XCTest here). Nothing pushed; CI has validated none of it.
+- No Mac Control screen (open apps / workspaces).
+- No Automation Studio UI (the semantic recorder backend exists).
+- No per-step *execution* progress streaming; the screen refreshes on demand.
