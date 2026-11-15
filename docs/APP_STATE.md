@@ -20,6 +20,7 @@ first check, not the last.
 | Safety Center (leases + Trust Delta) | YES |
 | Skills Library | YES |
 | GoalGuard | YES |
+| Project Doctor | YES (added this session) |
 
 ## What each can do, and what it cannot yet
 
@@ -35,11 +36,16 @@ first check, not the last.
   approval on level-2 actions).
 - **GoalGuard** — list monitored goals with real observation state, check what
   is due.
+- **Project Doctor** — pick a project folder, see what is actually wrong. Every
+  finding names the check, command and exit code; an unperformable check shows
+  "not checked". Running the project's build/tests is a separate explicit
+  button. Verified live against a genuinely broken package.json: detected the
+  real parse error and refused to guess a repair.
 
 ## Not done
 
 - Command Center still does not execute a full mission from a typed goal.
-- Smart Files and Project Doctor screens do not exist yet.
+- Smart Files screen does not exist yet.
 - No approve/run control in Mission Control.
 - Visual acceptance never confirmed: screen capture is refused here. Every claim
   above is from binary inspection and live API responses, not from seeing pixels.
