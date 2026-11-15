@@ -1695,4 +1695,35 @@ extension APIModels {
         let requires_new_approval: Bool
         let note: String
     }
+
+    // MARK: - GoalGuard
+
+    struct MonitoredGoal: Codable, Identifiable {
+        let goal_id: String
+        let kind: String
+        let target: String
+        let interval_seconds: Double
+        let enabled: Bool
+        let last_result: String?
+        let last_detail: String?
+        let last_observed_at: Double?
+        let run_count: Int
+        let consecutive_failures: Int
+
+        var id: String { goal_id }
+    }
+
+    struct GoalList: Codable {
+        let goals: [MonitoredGoal]
+    }
+
+    struct GoalTick: Codable {
+        let observations: [GoalObservationEntry]
+    }
+
+    struct GoalObservationEntry: Codable {
+        let goal_id: String
+        let result: String
+        let detail: String
+    }
 }
