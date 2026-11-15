@@ -47,6 +47,7 @@ from .models import (
     new_id,
 )
 from .conversation import ConversationService
+from .missions import MissionService, MissionState
 from .model_planner import ModelPlanner
 from .planner import RulePlanner
 from .recovery import RecoveryEngine, RecoveryOutcome
@@ -129,6 +130,10 @@ class JarvisCore:
         # and the chat surfaces share it, so a follow-up resolves the same way
         # on either.
         self.conversations = ConversationService(self.db)
+        # The mission ledger. A command that actually executes tools records
+        # itself here, so the work a person asked for in the Command Center is
+        # visible in Mission Control instead of vanishing into a reply string.
+        self.missions = MissionService(self.db)
         # The message a conversation has just been about, per session. A
         # demonstrative follow-up ("read that one", "summarize the second one")
         # resolves against this instead of a fresh search of nothing.
@@ -1199,6 +1204,34 @@ class JarvisCore:
                                        planned=list(plan.actions)).job_id
         if job_id:
             response.job_id = job_id
+        # Record the executed command as a mission so it is inspectable later.
+        # The mission is created here, before the actions run, with one
+        # condition per action: the reply a person sees and the ledger Mission
+        # Control reads are then the same work, not two parallel accounts.
+        mission_id = ""
+        if plan.actions:
+            try:
+                mission = self.missions.create(
+                    (request.text or "").strip() or "command",
+                    scope={}, conditions=[
+                        {"condition_id": f"S{index + 1}",
+                         "statement": f"{action.tool} on {action.device}",
+                         "verifier": f"tool:{action.tool}"}
+                        for index, action in enumerate(plan.actions)],
+                    steps=[{"step_id": f"S{index + 1}", "title": a.tool,
+                            "tool": a.tool, "params": dict(a.params or {})}
+                           for index, a in enumerate(plan.actions)])
+                self.missions.transition(mission.mission_id, MissionState.PLANNED,
+                                         actor="pipeline", reason="the planner routed this command")
+                self.missions.transition(mission.mission_id, MissionState.RUNNING,
+                                         actor="pipeline", reason="actions are executing")
+                mission_id = mission.mission_id
+            except Exception as exc:
+                log.info(f"could not record a mission for this command: "
+                         f"{type(exc).__name__}: {str(exc)[:200]}")
+        if mission_id:
+            response.job_id = response.job_id or mission_id
+
         step_seqs = list(seqs) if seqs is not None else list(range(len(plan.actions)))
 
         for index, action in enumerate(plan.actions):
