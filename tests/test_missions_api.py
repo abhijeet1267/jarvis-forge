@@ -199,7 +199,6 @@ def test_a_command_records_a_mission_and_does_not_forge_a_job_id():
     Mission Control while the job-id rule stays intact.
     """
     client = _client()
-    before = len(client.get("/missions", headers=HEADERS).json()["missions"])
 
     response = client.post("/command", headers=HEADERS, json={
         "text": "list files in /tmp", "job_id": "JOB-forged", "source": "test"})
@@ -209,6 +208,9 @@ def test_a_command_records_a_mission_and_does_not_forge_a_job_id():
     assert body["job_id"] == "", "a caller-supplied job id reached the response"
     assert body["mission_id"].startswith("MIS-"), body
 
-    after = client.get("/missions", headers=HEADERS).json()["missions"]
-    assert len(after) > before, "the command left no mission record"
-    assert any(m["mission_id"] == body["mission_id"] for m in after)
+    # Assert on this mission, not on a count: `/missions` is capped at a limit
+    # and shared with other tests, so a before/after comparison is fragile in a
+    # full run even though it passes alone.
+    listed = client.get("/missions?limit=200", headers=HEADERS).json()["missions"]
+    assert any(m["mission_id"] == body["mission_id"] for m in listed), (
+        "the command left no mission record")
