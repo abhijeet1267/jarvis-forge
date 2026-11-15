@@ -312,3 +312,52 @@ def _serve(status: int, body: str):
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     return server, f"http://127.0.0.1:{server.server_port}/health"
+
+# -- goal -> mission bridge -------------------------------------------------
+
+def test_a_goal_becomes_a_verifiable_mission_condition():
+    from jarvis.core.goalguard import mission_condition_for
+
+    class Goal:
+        goal_id = "g1"
+        kind = "http"
+        target = "http://127.0.0.1:9/health"
+        expect_body = "ready"
+
+    condition = mission_condition_for(Goal())
+    assert condition["condition_id"] == "G:g1"
+    assert "HTTP 200" in condition["statement"]
+    assert condition["verifier"] == "http"
+
+
+def test_the_goal_verifier_observes_the_real_resource(tmp_path):
+    """The verifier must read the file, not trust the monitor's last result."""
+    from jarvis.core.goalguard import verifier_for
+
+    path = tmp_path / "f.txt"
+    path.write_text("contains ready\n", encoding="utf-8")
+
+    class Goal:
+        goal_id = "g2"
+        kind = "file"
+        target = str(path)
+        expect_text = "ready"
+        expect_body = ""
+
+    result = verifier_for(Goal())(None)
+    assert result.condition_id == "G:g2"
+    assert result.status == "verified"
+
+
+def test_a_violation_list_includes_unknown_not_only_failed():
+    """A goal that cannot be observed is not healthy; it must not be dropped."""
+    from jarvis.core.goalguard import violation_outcome
+
+    outcomes = [
+        {"goal_id": "a", "result": "verified", "detail": "ok"},
+        {"goal_id": "b", "result": "failed", "detail": "503"},
+        {"goal_id": "c", "result": "unknown", "detail": "unreachable"},
+    ]
+    violations = violation_outcome(outcomes)
+    ids = [v["goal_id"] for v in violations]
+    assert ids == ["b", "c"]

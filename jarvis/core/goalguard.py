@@ -486,3 +486,60 @@ def run_due_observations(store: GoalStore, *,
             "detail": observation.actual,
         })
     return outcomes
+
+# -- connecting an observation to a mission --------------------------------
+
+def mission_condition_for(goal) -> Dict[str, Any]:
+    """How a monitored goal becomes a verifiable mission condition.
+
+    A goal is only worth a mission if its success can be checked independently.
+    This maps the goal's own observer to the same declarative verifier shape the
+    mission runner uses, so "the mission completed" means the resource was
+    actually observed healthy -- not that the monitor fired.
+    """
+    condition_id = f"G:{goal.goal_id}"
+    if goal.kind == "http":
+        return {"condition_id": condition_id,
+                "statement": f"{goal.target} answers HTTP 200"
+                             + (f" with {goal.expect_body!r}" if goal.expect_body else ""),
+                "verifier": "http"}
+    return {"condition_id": condition_id,
+            "statement": f"{goal.target} exists and matches",
+            "verifier": "file"}
+
+
+def verifier_for(goal):
+    """A real verifier for this goal, reusing the self-healing observers."""
+    from .selfhealing import observe_file, observe_http
+
+    condition_id = f"G:{goal.goal_id}"
+
+    def verify(mission):
+        if goal.kind == "http":
+            observation = observe_http(goal.target, expect_body=goal.expect_body or "",
+                                       goal_id=goal.goal_id)
+        else:
+            observation = observe_file(goal.target,
+                                       expect_text=goal.expect_text,
+                                       goal_id=goal.goal_id)
+        return _as_verification(observation, condition_id)
+
+    return verify
+
+
+def _as_verification(observation, condition_id):
+    from .mission_runner import Verification
+    from .missions import ConditionStatus
+
+    return Verification(condition_id, ConditionStatus(observation.result),
+                        observation.actual)
+
+
+def violation_outcome(outcomes: List[Dict[str, str]]) -> List[Dict[str, str]]:
+    """The observations that are not 'verified' -- what a mission should react to.
+
+    UNKNOWN is included: a goal that cannot be observed is not healthy, and a
+    monitor that silently dropped it would report a quiet system that is
+    actually blind.
+    """
+    return [o for o in outcomes if o.get("result") != "verified"]
