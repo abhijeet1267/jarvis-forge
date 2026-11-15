@@ -181,6 +181,68 @@ def build_router(require_auth) -> APIRouter:
             lease_id, reason=str((body or {}).get("reason") or ""), actor="user")
         return {"revoked": True, "lease_id": lease_id}
 
+    @router.post("/{mission_id}/steps/{step_id}/decide")
+    async def decide_step(mission_id: str, step_id: str,
+                          body: Dict[str, Any] = Body(None)) -> Dict[str, Any]:
+        """Approve or deny ONE step of a parked mission.
+
+        An approval is bound to a lease scoped to that step's own resource, so
+        approving step S1 cannot authorize step S2 -- the two carry different
+        leases. A denial marks the step failed and blocks the mission, which is
+        the honest outcome: half a plan did not run.
+        """
+        from ..security.leases import LeaseRefusal, LeaseService
+        from ..db.database import get_db
+
+        body = body or {}
+        decision = str(body.get("decision") or "").lower()
+        if decision not in ("approve", "deny"):
+            raise HTTPException(status_code=422,
+                                detail="decision must be 'approve' or 'deny'")
+
+        service = _service()
+        mission = service.get(mission_id)
+        if mission is None:
+            raise HTTPException(status_code=404, detail=f"no mission {mission_id!r}")
+        step = next((s for s in mission.steps if s.step_id == step_id), None)
+        if step is None:
+            raise HTTPException(status_code=404,
+                                detail=f"no step {step_id!r} in {mission_id!r}")
+        if step.status not in ("pending",):
+            raise HTTPException(
+                status_code=409,
+                detail=f"step {step_id} is {step.status}, not awaiting a decision")
+
+        # A draft mission has never been planned, so it has no state a decision
+        # applies to. Planning it first is what makes the refusal meaningful:
+        # "this plan was refused" rather than "this draft was edited".
+        if mission.state == "draft":
+            service.transition(mission_id, MissionState.PLANNED, actor="user",
+                               reason="the plan was reviewed to decide a step")
+
+        if decision == "deny":
+            service.mark_step(mission_id, step_id, status="failed",
+                              detail="denied by the operator", actor="user")
+            settled = service.transition(
+                mission_id, MissionState.BLOCKED, actor="user",
+                reason=f"step {step_id} was denied, so the plan did not run")
+            return _dump(settled)
+
+        resource = str((step.params or {}).get("path") or "")
+        lease_id = str(body.get("lease_id") or "").strip()
+        if lease_id:
+            try:
+                LeaseService(get_db()).consume(
+                    lease_id, capability=step.tool or "", resource=resource,
+                    session_id=str(body.get("session_id") or ""))
+            except LeaseRefusal as exc:
+                raise HTTPException(status_code=409,
+                                    detail=f"the lease does not authorize this step: {exc}")
+
+        service.mark_step(mission_id, step_id, status="pending",
+                          detail=f"approved by the operator; {decision}", actor="user")
+        return _dump(service.get(mission_id))
+
     @router.post("/{mission_id}/run")
     async def run_mission(mission_id: str,
                           body: Dict[str, Any] = Body(None)) -> Dict[str, Any]:

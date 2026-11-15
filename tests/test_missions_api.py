@@ -248,3 +248,59 @@ def test_a_failing_command_settles_as_failed_not_running():
 
     mission = client.get(f"/missions/{mission_id}", headers=HEADERS).json()
     assert mission["state"] != "running"
+
+
+# -- per-step approve / deny ----------------------------------------------
+
+def _parked_mission(client):
+    mission = client.post("/missions", headers=HEADERS, json={
+        "request": "two protected steps",
+        "conditions": [{"statement": "x"}],
+        "steps": [{"title": "one", "tool": "write_file",
+                   "params": {"path": "/tmp/step_one.txt", "content": "a"}},
+                  {"title": "two", "tool": "write_file",
+                   "params": {"path": "/tmp/step_two.txt", "content": "b"}}],
+    }).json()
+    return mission["mission_id"]
+
+
+def test_denying_a_step_blocks_the_mission_and_runs_nothing():
+    """Half a plan did not run, so the mission says so rather than pretending."""
+    client = _client()
+    mission_id = _parked_mission(client)
+
+    decided = client.post(f"/missions/{mission_id}/steps/S1/decide",
+                          headers=HEADERS, json={"decision": "deny"})
+    assert decided.status_code == 200, decided.text
+    body = decided.json()
+    assert body["state"] == "blocked"
+    assert "denied" in (body.get("reason") or "").lower()
+
+    steps = {s["step_id"]: s for s in body["steps"]}
+    assert steps["S1"]["status"] == "failed"
+
+
+def test_a_step_decision_rejects_an_unknown_decision():
+    client = _client()
+    mission_id = _parked_mission(client)
+    bad = client.post(f"/missions/{mission_id}/steps/S1/decide",
+                      headers=HEADERS, json={"decision": "maybe"})
+    assert bad.status_code == 422
+
+
+def test_an_unknown_step_is_a_404():
+    client = _client()
+    mission_id = _parked_mission(client)
+    missing = client.post(f"/missions/{mission_id}/steps/S99/decide",
+                          headers=HEADERS, json={"decision": "deny"})
+    assert missing.status_code == 404
+
+
+def test_a_denied_step_cannot_be_decided_twice():
+    client = _client()
+    mission_id = _parked_mission(client)
+    client.post(f"/missions/{mission_id}/steps/S1/decide",
+                headers=HEADERS, json={"decision": "deny"})
+    again = client.post(f"/missions/{mission_id}/steps/S1/decide",
+                        headers=HEADERS, json={"decision": "approve"})
+    assert again.status_code == 409

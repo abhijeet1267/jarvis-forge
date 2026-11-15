@@ -136,6 +136,8 @@ struct MissionControlView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
 
+            stepDecisions(for: mission)
+
             if mission.state == "awaiting_approval" {
                 Text("Approving grants a scoped, single-use lease for this mission's "
                      + "steps and submits the confirmation it is waiting on.")
@@ -150,6 +152,85 @@ struct MissionControlView: View {
         .clipShape(RoundedRectangle(cornerRadius: V.Radius.card))
         .overlay(RoundedRectangle(cornerRadius: V.Radius.card)
             .stroke(V.border, lineWidth: 1))
+    }
+
+    /// One row per pending step, with its own approve and deny.
+    ///
+    /// The two decisions are deliberately separate buttons on separate rows: an
+    /// approval for one step must never be read as approval for another, and a
+    /// single "approve everything" control would make that distinction
+    /// invisible.
+    @ViewBuilder
+    private func stepDecisions(for mission: APIModels.Mission) -> some View {
+        let pending = (mission.steps ?? []).filter { $0.status == "pending" }
+        if !pending.isEmpty {
+            VStack(alignment: .leading, spacing: V.Space.xs) {
+                SectionHeader("Steps awaiting a decision")
+                ForEach(pending) { step in
+                    VStack(alignment: .leading, spacing: V.Space.xs) {
+                        Text(step.title.isEmpty ? step.step_id : step.title)
+                            .font(V.Font.label).foregroundColor(V.text)
+                        if let detail = step.detail, !detail.isEmpty {
+                            Text(detail)
+                                .font(V.Font.caption)
+                                .foregroundColor(V.textSecondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        HStack(spacing: V.Space.s) {
+                            Button("Allow") {
+                                Task { await decide(mission, step: step, approve: true) }
+                            }
+                            .buttonStyle(VPrimaryButtonStyle())
+                            .disabled(acting != nil)
+
+                            Button("Deny") {
+                                Task { await decide(mission, step: step, approve: false) }
+                            }
+                            .buttonStyle(VPrimaryButtonStyle())
+                            .tint(V.danger)
+                            .disabled(acting != nil)
+                            Spacer()
+                        }
+                    }
+                    .padding(V.Space.s)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(V.surface)
+                    .clipShape(RoundedRectangle(cornerRadius: V.Radius.control))
+                }
+            }
+        }
+    }
+
+    private func decide(_ mission: APIModels.Mission, step: APIModels.MissionStep,
+                        approve: Bool) async {
+        acting = "step:\(step.step_id)"
+        runNote = nil
+        defer { acting = nil }
+        do {
+            var leaseID: String?
+            if approve {
+                let scope = step.params?["path"].map { [$0] } ?? []
+                let lease: APIModels.MissionLease = try await api.post(
+                    "/missions/\(mission.mission_id)/leases",
+                    body: APIModels.MissionLeaseRequest(
+                        capability: "write_file", scope: scope, max_uses: 1,
+                        ttl_seconds: 300),
+                    as: APIModels.MissionLease.self)
+                leaseID = lease.lease_id
+            }
+            let updated: APIModels.Mission = try await api.post(
+                "/missions/\(mission.mission_id)/steps/\(step.step_id)/decide",
+                body: APIModels.StepDecisionRequest(
+                    decision: approve ? "approve" : "deny", lease_id: leaseID),
+                as: APIModels.Mission.self)
+            runNote = approve
+                ? "Allowed \(step.step_id). It runs when the mission runs."
+                : "Denied \(step.step_id); the mission is blocked."
+            selected = updated
+            await load()
+        } catch {
+            runNote = error.localizedDescription
+        }
     }
 
     private func actionButton(_ title: String, busyKey: String,

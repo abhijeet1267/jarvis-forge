@@ -1861,4 +1861,9 @@ extension APIModels {
         let destination: String?
         let reason: String?
     }
+
+    struct StepDecisionRequest: Codable {
+        let decision: String
+        let lease_id: String?
+    }
 }
