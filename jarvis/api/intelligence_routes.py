@@ -231,6 +231,7 @@ def build_router(require_auth) -> APIRouter:
                 execute_step=_executor_factory(core),
                 permission=_gate_factory(core),
                 approval=body.get("approval"),
+                run_id=str(body.get("run_id") or ""),
                 available_capabilities=list(body.get("available_capabilities") or []),
                 allowed_scope=list(body.get("allowed_scope") or []),
                 max_risk=body.get("max_risk"))

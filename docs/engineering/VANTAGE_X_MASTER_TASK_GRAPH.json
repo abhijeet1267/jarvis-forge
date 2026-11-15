@@ -267,6 +267,167 @@
         "jarvis/core/selfhealing.py"
       ],
       "evidence": "restart_owned_service + full cycle test: service stopped, owned restart, fresh observation verified; recycled pid refused; restart alone is never reported as recovered"
+    },
+    {
+      "id": "W5-SKILL-RESUME",
+      "agent": "9",
+      "title": "A skill invocation has a stable identity that approval resumes",
+      "status": "VERIFIED",
+      "files": [
+        "jarvis/core/skill_runner.py",
+        "jarvis/core/mission_runner.py"
+      ],
+      "evidence": "Two real defects found by driving the HTTP path, not the unit seams. (1) every invocation created a new mission, so approving the parked run could never reach it -- run_skill now accepts a run_id and _existing_run continues it. (2) the parked confirmation id was never recorded on the step, and PermissionEngine.evaluate mints a fresh id per call, so a stored approval could never match -- the id is now written into the step's detail and matched against that. Live: invoke parks, approve with a lease, same mission resumes, completed/verified, file written, observation carries sha256."
+    },
+    {
+      "id": "V5-SKILLS-UI-EDIT",
+      "agent": "11",
+      "title": "Skills Library: create/edit/search/version from the UI",
+      "status": "NOT_STARTED",
+      "files": [
+        "macos/Vantage/Sources/Views/SkillsLibraryView.swift"
+      ]
+    },
+    {
+      "id": "V5-SKILLS-HISTORY",
+      "agent": "9",
+      "title": "Show a skill's execution history and evidence",
+      "status": "NOT_STARTED"
+    },
+    {
+      "id": "V5-GOAL-MISSION-UI",
+      "agent": "11",
+      "title": "GoalGuard status + recovery history in the native UI",
+      "status": "NOT_STARTED"
+    },
+    {
+      "id": "V5-PW-RECOVERY-UI",
+      "agent": "11",
+      "title": "Incomplete-transaction notice and recovery screen",
+      "status": "NOT_STARTED"
+    },
+    {
+      "id": "V5-PW-CRASH-E2E",
+      "agent": "4",
+      "title": "Real interrupted multi-file commit reconciled after restart",
+      "status": "IMPLEMENTED",
+      "files": [
+        "jarvis/core/journal.py"
+      ]
+    },
+    {
+      "id": "V5-LEASE-COVERAGE",
+      "agent": "2",
+      "title": "Lease enforced on every protected surface (browser/MCP/desktop)",
+      "status": "PARTIALLY_VERIFIED",
+      "files": [
+        "jarvis/security/leases.py"
+      ]
+    },
+    {
+      "id": "V5-TRUST-DELTA-UI",
+      "agent": "11",
+      "title": "Trust Delta shown in the Safety Center",
+      "status": "NOT_STARTED"
+    },
+    {
+      "id": "V5-EMERGENCY-STOP",
+      "agent": "2",
+      "title": "Emergency stop cancels queued work, not just revokes leases",
+      "status": "PARTIALLY_VERIFIED"
+    },
+    {
+      "id": "V5-AUTOMATE",
+      "agent": "10",
+      "title": "Demonstrate-to-Automate: semantic recording -> workflow",
+      "status": "NOT_STARTED"
+    },
+    {
+      "id": "V5-WORKFLOW-STUDIO",
+      "agent": "11",
+      "title": "Workflow Studio native screen",
+      "status": "NOT_STARTED"
+    },
+    {
+      "id": "V5-ANDROID-PROTOCOL",
+      "agent": "12",
+      "title": "Continuity capsule + approval protocol (backend side)",
+      "status": "NOT_STARTED",
+      "files": [
+        "jarvis/companion/"
+      ]
+    },
+    {
+      "id": "V5-ANDROID-UI",
+      "agent": "12",
+      "title": "Compose screens for missions/approvals",
+      "status": "NOT_STARTED",
+      "files": [
+        "android/"
+      ]
+    },
+    {
+      "id": "V5-NATIVE-AUDIT",
+      "agent": "11",
+      "title": "Every screen: loading, error, empty, keyboard, VoiceOver",
+      "status": "PARTIALLY_VERIFIED"
+    },
+    {
+      "id": "V5-VOICE-MISSIONS",
+      "agent": "13",
+      "title": "Voice create/pause/cancel mission through the same gates",
+      "status": "NOT_STARTED"
+    },
+    {
+      "id": "V5-PROVIDERS-ROUTING",
+      "agent": "14",
+      "title": "Provider health, routing, privacy + cost budgets",
+      "status": "PARTIALLY_VERIFIED"
+    },
+    {
+      "id": "V5-MCP-POLICY",
+      "agent": "14",
+      "title": "MCP tools through the same authorization path",
+      "status": "PARTIALLY_VERIFIED"
+    },
+    {
+      "id": "V5-PERF-BASELINE",
+      "agent": "15",
+      "title": "Measured startup, idle RAM/CPU, dispatch latency",
+      "status": "NOT_STARTED"
+    },
+    {
+      "id": "V5-PACKAGING",
+      "agent": "17",
+      "title": "Reproducible .app + APK + first-run/upgrade docs",
+      "status": "NOT_STARTED"
+    },
+    {
+      "id": "V5-SWIFT-TESTS",
+      "agent": "1",
+      "title": "Swift test target verified on a capable runner",
+      "status": "BLOCKED",
+      "blocker": "no XCTest locally; needs a CI runner"
+    },
+    {
+      "id": "V5-ANDROID-CI",
+      "agent": "17",
+      "title": "Android CI/emulator verification",
+      "status": "BLOCKED",
+      "blocker": "no device or emulator package installed"
+    },
+    {
+      "id": "V5-PUBLIC-CI",
+      "agent": "17",
+      "title": "CI validated on the real remote",
+      "status": "BLOCKED",
+      "blocker": "requires owner authorization to push"
+    },
+    {
+      "id": "V5-SHOWCASE-UI",
+      "agent": "18",
+      "title": "Flagship demo driven from the native app",
+      "status": "PARTIALLY_VERIFIED"
     }
   ]
 }

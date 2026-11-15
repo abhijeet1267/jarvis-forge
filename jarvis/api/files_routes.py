@@ -63,6 +63,29 @@ def build_router(require_auth) -> APIRouter:
                                 detail="undo requires approved=true")
         return ParallelWorld(guard=file_guard).undo(journal, approved=True)
 
+    @router.get("/recovery")
+    async def file_recovery_report() -> Dict[str, Any]:
+        """Interrupted transactions and what a restart can honestly conclude.
+
+        Read-only with respect to your files: it compares recorded hashes with
+        what is on disk now and classifies each operation as completed,
+        not_applied, changed_since or unknown. Nothing is replayed -- a repair
+        needs its own authorisation, and this route does not provide one.
+        """
+        from ..core.journal import FileTransactionJournal, sha256_of_file
+
+        journal = FileTransactionJournal()
+        try:
+            reports = journal.reconcile(sha256_of_file)
+        except Exception as exc:
+            raise HTTPException(status_code=500,
+                                detail=f"the file journal could not be read: {exc}")
+        needing_action = [r for r in reports if r.get("state") in ("unknown", "failed")]
+        return {"transactions": reports,
+                "needing_action": len(needing_action),
+                "note": ("Reconciling only reports. Applying a repair or an undo is a "
+                         "separate, authorised action.")}
+
     return router
 
 

@@ -143,6 +143,14 @@ class Verifiers:
             condition_id, ConditionStatus.UNKNOWN, reason)
 
 
+def _parked_confirmation(detail: str) -> str:
+    """The confirmation id recorded in a parked step's detail, if any."""
+    import re
+
+    match = re.search(r"confirmation (\S+)", detail or "")
+    return match.group(1).rstrip(")").strip() if match else ""
+
+
 class MissionRunner:
     """Drives one mission through gating, execution and independent verification."""
 
@@ -209,12 +217,21 @@ class MissionRunner:
                 # person answering. The confirmation id must match the one the
                 # gate issued for this step: an approval for something else is
                 # not an approval for this.
+                # `PermissionEngine.evaluate` mints a fresh confirmation id on
+                # every call, so comparing against the one it just returned can
+                # never match a stored approval -- a parked run would re-park
+                # forever. The id that matters is the one recorded when the run
+                # was parked; that is what a person was shown and approved.
+                parked_conf = str(getattr(step, "detail", "") or "")
+                parked_conf = _parked_confirmation(parked_conf)
+                offered = str((approval or {}).get("confirmation_id") or "").strip()
+
                 approved_here = (
                     str(gate.get("decision") or "").upper() == "CONFIRM"
-                    and approval is not None
-                    and str(approval.get("confirmation_id") or "").strip()
-                    == str(gate.get("confirmation_id") or "").strip()
-                    and bool(str(gate.get("confirmation_id") or "").strip()))
+                    and offered
+                    and (offered == parked_conf or
+                         (not parked_conf and
+                          offered == str(gate.get("confirmation_id") or "").strip())))
 
                 if approved_here:
                     self.service.mark_step(
@@ -227,9 +244,16 @@ class MissionRunner:
                     # confirmation id, so resuming is explicit and checkable. A
                     # mission parked here stays parked across a restart.
                     if str(gate.get("decision") or "").upper() == "CONFIRM":
+                        # Record the confirmation id ON THE STEP. It is the only
+                        # durable place an approval can be matched against: the
+                        # engine mints a new id each call, and the mission's
+                        # reason string is rewritten on the next transition.
+                        confirmation = str(gate.get("confirmation_id") or "").strip()
                         self.service.mark_step(
                             mission_id, step.step_id, status="pending",
-                            detail=f"awaiting approval: {reason}", actor=actor)
+                            detail=f"awaiting approval: {reason}; "
+                                   f"confirmation {confirmation or 'unspecified'}",
+                            actor=actor)
                         return self.service.transition(
                             mission_id, MissionState.AWAITING_APPROVAL, actor=actor,
                             reason=(f"step {step.step_id} needs approval "

@@ -227,3 +227,91 @@ def test_a_skill_never_run_reports_no_success_rate(store, tmp_path):
     store.save(manifest)
     reliability = store.reliability("write-note")
     assert reliability["success_rate"] is None
+
+# -- a skill run has an identity that approval resumes ---------------------
+
+@pytest.mark.asyncio
+async def test_a_parked_run_resumes_the_same_mission_after_approval(store, missions, tmp_path):
+    """The defect this fixes: approval must reach the run that needed it.
+
+    Originally every invocation created a new mission, so approving the parked
+    one could never resume it -- the run needing authorisation and the run that
+    executed were different missions. Passing `run_id` back continues the same
+    mission.
+    """
+    manifest, target = _manifest(tmp_path)
+    store.save(manifest)
+
+    def needs_confirm(step, mission):
+        return {"allowed": False, "decision": "CONFIRM",
+                "reason": "writing a file needs approval",
+                "confirmation_id": "CONF-SKILL"}
+
+    def write(step, mission):
+        target.write_text("this is a note\n", encoding="utf-8")
+
+        class _Ok:
+            ok = True
+            message = "wrote"
+        return _Ok()
+
+    parked = await run_skill(
+        "write-note", store=store, mission_service=missions,
+        execute_step=write, permission=needs_confirm,
+        available_capabilities=["write_file"], allowed_scope=[str(tmp_path)])
+
+    assert parked["state"] == "awaiting_approval"
+    run_id = parked["run_id"]
+    assert run_id, "a parked run must expose an identity to resume"
+
+    def allow(step, mission):
+        return {"allowed": False, "decision": "CONFIRM",
+                "reason": "writing a file needs approval",
+                "confirmation_id": "CONF-SKILL"}
+
+    resumed = await run_skill(
+        "write-note", store=store, mission_service=missions,
+        execute_step=write, permission=allow,
+        approval={"confirmation_id": "CONF-SKILL"},
+        run_id=run_id,
+        available_capabilities=["write_file"], allowed_scope=[str(tmp_path)])
+
+    assert resumed["mission_id"] == parked["mission_id"], (
+        "approval resumed a different mission than the one that was parked")
+    assert resumed["state"] == "completed"
+    assert resumed["verdict"] == "verified"
+    assert target.read_text(encoding="utf-8") == "this is a note\n"
+
+
+@pytest.mark.asyncio
+async def test_a_wrong_approval_does_not_resume_the_parked_run(store, missions, tmp_path):
+    manifest, target = _manifest(tmp_path)
+    store.save(manifest)
+
+    def needs_confirm(step, mission):
+        return {"allowed": False, "decision": "CONFIRM",
+                "reason": "needs approval", "confirmation_id": "CONF-RIGHT"}
+
+    def write(step, mission):
+        target.write_text("note\n", encoding="utf-8")
+
+        class _Ok:
+            ok = True
+            message = "wrote"
+        return _Ok()
+
+    parked = await run_skill(
+        "write-note", store=store, mission_service=missions,
+        execute_step=write, permission=needs_confirm,
+        available_capabilities=["write_file"], allowed_scope=[str(tmp_path)])
+
+    resumed = await run_skill(
+        "write-note", store=store, mission_service=missions,
+        execute_step=write, permission=needs_confirm,
+        approval={"confirmation_id": "CONF-WRONG"},
+        run_id=parked["run_id"],
+        available_capabilities=["write_file"], allowed_scope=[str(tmp_path)])
+
+    assert resumed["state"] == "awaiting_approval", (
+        "an approval for a different confirmation must not resume this run")
+    assert not target.exists()

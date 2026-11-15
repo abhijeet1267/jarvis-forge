@@ -110,6 +110,7 @@ async def run_skill(
     mission_service: Optional[MissionService] = None,
     verifiers: Optional[Dict[str, Any]] = None,
     approval: Optional[Dict[str, Any]] = None,
+    run_id: str = "",
     available_capabilities: Optional[List[str]] = None,
     allowed_scope: Optional[List[str]] = None,
     max_risk: Optional[int] = None,
@@ -173,13 +174,24 @@ async def run_skill(
         })
         default_verifiers[condition_id] = _verifier_for(spec, condition_id)
 
-    mission = mission_service.create(
-        f"run skill {manifest.name or skill_id}",
-        outcome=f"skill {skill_id} v{manifest.version}",
-        scope={"paths": list(manifest.required_scope)},
-        conditions=conditions,
-        steps=[dict(step) for step in manifest.steps],
-    )
+    # A skill invocation has an identity so approval can *resume* it.
+    #
+    # Creating a fresh mission on every call meant an approval for the parked
+    # run could never reach it: the run that needed authorizing and the run that
+    # executed were different missions. A caller may now name the run; passing
+    # the same `run_id` again continues that mission rather than starting a
+    # second one. Without an id, a new run is created and its id is returned so
+    # the caller has something to resume.
+    mission = _existing_run(mission_service, run_id) if run_id else None
+    if mission is None:
+        mission = mission_service.create(
+            f"run skill {manifest.name or skill_id}",
+            outcome=f"skill {skill_id} v{manifest.version}",
+            scope={"paths": list(manifest.required_scope)},
+            conditions=conditions,
+            steps=[dict(step) for step in manifest.steps],
+        )
+        run_id = mission.mission_id
 
     runner = MissionRunner(mission_service,
                            execute_step=execute_step,
@@ -207,6 +219,8 @@ async def run_skill(
     return {
         "skill_id": skill_id,
         "version": manifest.version,
+        # The stable identity a caller resumes with after approving.
+        "run_id": run_id or mission.mission_id,
         "mission_id": mission.mission_id,
         "state": result.state,
         "verdict": verdict,
@@ -214,6 +228,19 @@ async def run_skill(
         "reliability": reliability,
         "mission": result.to_dict(),
     }
+
+
+def _existing_run(mission_service, run_id: str):
+    """The mission for a named run, or None when it does not exist.
+
+    A resumed run must be the same mission -- same plan, same conditions, same
+    approval. Looking it up by id (rather than creating a new one) is what makes
+    "approve then resume" mean something.
+    """
+    try:
+        return mission_service.get(str(run_id))
+    except Exception:
+        return None
 
 
 def _leases_for(approval: Optional[Dict[str, Any]]):

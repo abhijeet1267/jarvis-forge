@@ -14,6 +14,8 @@ struct SafetyCenterView: View {
     @State private var errorMessage: String?
     @State private var revoking: String?
     @State private var confirmStop = false
+    @State private var delta: APIModels.TrustDelta?
+    @State private var deltaError: String?
 
     private let api = APIClient.shared
 
@@ -28,6 +30,7 @@ struct SafetyCenterView: View {
                 }
 
                 emergencyStop
+                trustDelta
 
                 SectionHeader("Active leases")
                 if leases.isEmpty && !isLoading && errorMessage == nil {
@@ -77,6 +80,81 @@ struct SafetyCenterView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(V.dangerSoft)
         .clipShape(RoundedRectangle(cornerRadius: V.Radius.card))
+    }
+
+    // MARK: - Trust Delta
+
+    /// Compare two authorization scopes, so a widened plan is visible here.
+    ///
+    /// The comparison is the backend's, not the view's: `scope_delta` is the one
+    /// implementation of "what changed", and re-deriving it in Swift would let
+    /// the two disagree about whether something needs re-approval.
+    private var trustDelta: some View {
+        VStack(alignment: .leading, spacing: V.Space.s) {
+            SectionHeader("Trust Delta")
+            Text("Compare what a plan asks for now against what it asked before. "
+                 + "Any widening needs fresh approval; a previous approval does not "
+                 + "cover it.")
+                .font(V.Font.caption)
+                .foregroundColor(V.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            HStack(spacing: V.Space.s) {
+                Button("Compare a widened plan") { Task { await compareDemo() } }
+                    .buttonStyle(VPrimaryButtonStyle())
+                Spacer()
+            }
+
+            if let deltaError {
+                Text(deltaError).font(V.Font.caption).foregroundColor(V.danger)
+            }
+
+            if let delta {
+                VStack(alignment: .leading, spacing: V.Space.xxs) {
+                    if !delta.added_capabilities.isEmpty {
+                        Text("New capabilities: \(delta.added_capabilities.joined(separator: ", "))")
+                            .font(V.Font.mono).foregroundColor(V.warning)
+                    }
+                    if !delta.added_resource_prefixes.isEmpty {
+                        Text("New resources: \(delta.added_resource_prefixes.joined(separator: ", "))")
+                            .font(V.Font.mono).foregroundColor(V.warning)
+                    }
+                    if delta.increased_risk > 0 {
+                        Text("Risk increased by \(delta.increased_risk)")
+                            .font(V.Font.caption).foregroundColor(V.warning)
+                    }
+                    Text(delta.note)
+                        .font(V.Font.caption)
+                        .foregroundColor(delta.requires_new_approval ? V.warning : V.textSecondary)
+                }
+                .padding(V.Space.s)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(V.surface)
+                .clipShape(RoundedRectangle(cornerRadius: V.Radius.control))
+            }
+        }
+    }
+
+    /// A comparison the person can actually see the behaviour of.
+    private func compareDemo() async {
+        deltaError = nil
+        let before = APIModels.IntentScopePayload(
+            mission_id: "preview", goal: "organize a project",
+            allowed_capabilities: ["write_file"],
+            allowed_resource_prefixes: ["/tmp/project"], risk_budget: 1)
+        let after = APIModels.IntentScopePayload(
+            mission_id: "preview", goal: "organize a project",
+            allowed_capabilities: ["write_file", "delete_file"],
+            allowed_resource_prefixes: ["/tmp/project", "/tmp/archive"],
+            risk_budget: 2)
+        do {
+            delta = try await api.post(
+                "/intelligence/intent/delta",
+                body: APIModels.TrustDeltaRequest(old: before, new: after),
+                as: APIModels.TrustDelta.self)
+        } catch {
+            deltaError = error.localizedDescription
+        }
     }
 
     // MARK: - One lease

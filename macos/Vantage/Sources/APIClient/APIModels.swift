@@ -1670,4 +1670,29 @@ extension APIModels {
         let reason: String?
         let mission_id: String?
     }
+
+    // MARK: - Trust Delta
+
+    struct TrustDeltaRequest: Codable {
+        let old: IntentScopePayload
+        let new: IntentScopePayload
+    }
+
+    struct IntentScopePayload: Codable {
+        let mission_id: String
+        let goal: String
+        let allowed_capabilities: [String]
+        let allowed_resource_prefixes: [String]
+        let risk_budget: Int
+    }
+
+    struct TrustDelta: Codable {
+        let added_capabilities: [String]
+        let removed_capabilities: [String]
+        let added_resource_prefixes: [String]
+        let increased_risk: Int
+        let expanded: Bool
+        let requires_new_approval: Bool
+        let note: String
+    }
 }
