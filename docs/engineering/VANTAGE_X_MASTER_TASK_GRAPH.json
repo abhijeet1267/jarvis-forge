@@ -277,7 +277,7 @@
         "jarvis/core/skill_runner.py",
         "jarvis/core/mission_runner.py"
       ],
-      "evidence": "Two real defects found by driving the HTTP path, not the unit seams. (1) every invocation created a new mission, so approving the parked run could never reach it -- run_skill now accepts a run_id and _existing_run continues it. (2) the parked confirmation id was never recorded on the step, and PermissionEngine.evaluate mints a fresh id per call, so a stored approval could never match -- the id is now written into the step's detail and matched against that. Live: invoke parks, approve with a lease, same mission resumes, completed/verified, file written, observation carries sha256."
+      "evidence": "live: park -> lease + parked confirmation -> same mission resumes -> completed/verified"
     },
     {
       "id": "V5-SKILLS-UI-EDIT",
@@ -310,10 +310,11 @@
       "id": "V5-PW-CRASH-E2E",
       "agent": "4",
       "title": "Real interrupted multi-file commit reconciled after restart",
-      "status": "IMPLEMENTED",
+      "status": "VERIFIED",
       "files": [
         "jarvis/core/journal.py"
-      ]
+      ],
+      "evidence": "tests/test_crash_recovery_e2e.py (7): real half-commit -> unknown; person-edited -> changed_since; reconcile never writes"
     },
     {
       "id": "V5-LEASE-COVERAGE",
@@ -328,7 +329,8 @@
       "id": "V5-TRUST-DELTA-UI",
       "agent": "11",
       "title": "Trust Delta shown in the Safety Center",
-      "status": "NOT_STARTED"
+      "status": "IMPLEMENTED",
+      "evidence": "Safety Center panel calls /intelligence/intent/delta; builds; visual acceptance unverified"
     },
     {
       "id": "V5-EMERGENCY-STOP",
@@ -428,6 +430,16 @@
       "agent": "18",
       "title": "Flagship demo driven from the native app",
       "status": "PARTIALLY_VERIFIED"
+    },
+    {
+      "id": "V5-FILE-RECOVERY-ROUTE",
+      "agent": "5",
+      "title": "Expose interrupted file transactions for recovery",
+      "status": "VERIFIED",
+      "files": [
+        "jarvis/api/files_routes.py"
+      ],
+      "evidence": "GET /files/recovery live; reports needing_action; explicitly does not repair"
     }
   ]
 }
