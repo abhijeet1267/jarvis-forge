@@ -1628,4 +1628,46 @@ extension APIModels {
     struct LeaseList: Codable {
         let leases: [PermissionLease]
     }
+
+    // MARK: - Skills Library
+
+    struct Skill: Codable, Identifiable {
+        let skill_id: String
+        let version: Int
+        let name: String
+        let description: String
+        let required_capabilities: [String]
+        let required_scope: [String]
+        let reliability: SkillReliability?
+
+        var id: String { skill_id }
+    }
+
+    struct SkillList: Codable {
+        let skills: [Skill]
+    }
+
+    struct SkillReliability: Codable {
+        let verified_successes: Int?
+        let failures: Int?
+        let unknowns: Int?
+        /// nil until the skill has actually run. The view shows "never run" for
+        /// nil rather than inventing a percentage.
+        let success_rate: Double?
+        let runs: Int?
+        let last_duration_s: Double?
+    }
+
+    struct SkillRunRequest: Codable {
+        let available_capabilities: [String]
+        let allowed_scope: [String]
+    }
+
+    struct SkillRun: Codable {
+        let skill_id: String
+        let state: String
+        let verdict: String
+        let reason: String?
+        let mission_id: String?
+    }
 }

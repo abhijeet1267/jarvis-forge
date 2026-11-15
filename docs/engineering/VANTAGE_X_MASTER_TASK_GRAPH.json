@@ -236,6 +236,27 @@
       "title": "Bound the file journal",
       "status": "VERIFIED",
       "evidence": "60 transactions pruned to 10 (3985 bytes); unfinished never pruned"
+    },
+    {
+      "id": "W5-SKILLS-EXECUTE",
+      "agent": "9",
+      "title": "Skills execution engine: a skill runs as a gated mission",
+      "status": "VERIFIED",
+      "files": [
+        "jarvis/core/skill_runner.py",
+        "jarvis/api/intelligence_routes.py"
+      ],
+      "evidence": "11 tests. In-process: state completed, verdict verified, file really written, success_rate 1.0 from a measured run. Over HTTP write_file is a level-2 action so the run parks awaiting approval -- the gate, not a defect. A skill that claims success without doing the work is recorded as failed, never verified."
+    },
+    {
+      "id": "W8-SKILLS-UI",
+      "agent": "11",
+      "title": "Skills Library native screen",
+      "status": "IMPLEMENTED",
+      "files": [
+        "macos/Vantage/Sources/Views/SkillsLibraryView.swift"
+      ],
+      "evidence": "swift build ok; payload shape matched field-by-field against the live endpoint; visual acceptance unverified"
     }
   ]
 }

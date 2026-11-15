@@ -201,6 +201,43 @@ def build_router(require_auth) -> APIRouter:
         stored = SkillStore().save(manifest)
         return stored.to_dict()
 
+    @router.post("/skills/{skill_id}/enable")
+    async def enable_skill(skill_id: str) -> Dict[str, Any]:
+        """Re-enable a skill. A disabled skill cannot run; this is the way back."""
+        from ..core.skills import SkillStore
+
+        return {"enabled": SkillStore().enable(skill_id), "skill_id": skill_id}
+
+    @router.post("/skills/{skill_id}/run")
+    async def run_skill_route(skill_id: str,
+                              body: Dict[str, Any] = Body(None)) -> Dict[str, Any]:
+        """Execute a stored skill as a real mission.
+
+        The skill's steps become a mission and go through the same permission
+        engine, leases and verifiers as any other work. Callers state which
+        capabilities and resource scope they actually hold; a skill never
+        widens that. Verification is the skill's own declarative checks, so a
+        run with no check cannot report success.
+        """
+        from ..core.skill_runner import SkillRunError, run_skill
+        body = body or {}
+        try:
+            from .app import get_core as _get_core
+            from .missions_routes import _executor_factory, _gate_factory
+
+            core = _get_core()
+            result = await run_skill(
+                skill_id,
+                execute_step=_executor_factory(core),
+                permission=_gate_factory(core),
+                approval=body.get("approval"),
+                available_capabilities=list(body.get("available_capabilities") or []),
+                allowed_scope=list(body.get("allowed_scope") or []),
+                max_risk=body.get("max_risk"))
+        except SkillRunError as exc:
+            raise HTTPException(status_code=409, detail=str(exc))
+        return result
+
     @router.post("/skills/{skill_id}/disable")
     async def disable_skill(skill_id: str) -> Dict[str, Any]:
         from ..core.skills import SkillStore
