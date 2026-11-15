@@ -1,60 +1,68 @@
-# Vantage X — Execution State
+# Vantage X — Execution State (resumable checkpoint)
 
-> Operational tracker. One file, updated on meaningful state changes only.
+> Read this first when resuming. Update on meaningful state changes only.
+> Current revision: HEAD after `807be6b`. Working tree clean.
 
-**Revision:** `e77f34c` (clean tree)
-**Python suite (frozen run at `e77f34c`):** 3939 passed / 30 skipped / 0 failed (492 s)
+## How to resume
 
-## Completed
+1. `git log --oneline -12` and `git status` — confirm the tree is as described here.
+2. Read `docs/engineering/VANTAGE_X_MASTER_TASK_GRAPH.json` for per-task status.
+3. Pick the highest-priority task whose status is NOT_STARTED or IMPLEMENTED.
+4. Run `swift build -C macos/Vantage` after any Swift change.
+5. Full suite: `.venv/bin/python -m pytest -q -p no:cacheprovider`
+   **Do not restart the backend while it runs** — several files read the live one.
 
-| Capability | State | Evidence |
-|---|---|---|
-| Mission contracts + validated state machine | VERIFIED | `tests/test_mission_contracts.py` (16) |
-| Permission-gated execution | VERIFIED | `tests/test_mission_runner.py` |
-| Approval parking + matching-id resume | VERIFIED | runner tests; `RUNNING → AWAITING_APPROVAL` |
-| ProofGraph / ProofLens | VERIFIED | `tests/test_proofgraph.py` |
-| Audit evidence ids + failure downgrade | VERIFIED | audit failure test |
-| ParallelWorld preview/apply | VERIFIED | `tests/test_parallelworld.py` |
-| ParallelWorld undo | VERIFIED | undo restores, removes created files, refuses newer work |
-| Partial-failure reporting | VERIFIED | applied-vs-refused test |
-| Self-healing observers + bounded proposals | VERIFIED | `tests/test_selfhealing.py` (12); live HTTP |
-| **PermissionLease** | VERIFIED | `tests/test_permission_leases.py` (17) incl. atomic single-use |
-| Lease enforcement in mission steps | VERIFIED | runner lease tests (unleased/revoked/wrong-scope refused) |
-| **Outcome Receipt** | VERIFIED | `tests/test_proofgraph.py` receipt tests |
-| **IntentShield** | VERIFIED | `tests/test_intentshield.py` (48); injection boundary probed live |
-| **Verified skills store** | VERIFIED | `tests/test_skills.py` (29); no execute path by design |
-| **Crash journal + reconcile** | VERIFIED | `tests/test_journal.py` (19); wired into ParallelWorld apply |
-| **GoalGuard monitoring** | VERIFIED | `tests/test_goalguard.py` (18); live tick observed once then no-op |
-| **Safety Center** | IMPLEMENTED | builds; emergency stop verified live (1 -> 0); **visual acceptance unverified** |
-| **Adversarial security suite** | VERIFIED | 21 tests; 4 real defects found and fixed |
-| Mission Control + ParallelWorld screens | BUILT | `swift build`; API paths exercised live; **visual acceptance unverified** |
+## VERIFIED capabilities
 
-## Current work
+| Capability | Evidence |
+|---|---|
+| Mission contracts + validated state machine | `test_mission_contracts.py` (16) |
+| Permission-gated execution, CONFIRM parks awaiting approval | `test_mission_runner.py` (24) |
+| PermissionLease: scope, TTL, revocation, atomic spend | `test_permission_leases.py` (17) |
+| IntentShield + prompt-injection boundary | `test_intentshield.py` (49) |
+| Trust Delta (widened plan needs fresh approval) | live endpoint verified |
+| ProofGraph / ProofLens / Outcome Receipts | `test_proofgraph.py` (8) |
+| ParallelWorld preview/apply/undo | `test_parallelworld.py` (22) |
+| Crash journal + reconcile + retention | `test_journal.py` (19), wired into apply |
+| Self-healing: observers, bounded proposals, **real owned repair** | `test_selfhealing.py` (18) |
+| GoalGuard monitoring + goal→mission bridge | `test_goalguard.py` (21) |
+| Skills engine: skill runs as a gated mission | `test_skill_runner.py` (11) |
+| Parallel mission scheduler | `test_scheduler.py` (15) + runner (3) |
+| Adversarial security suite | `test_security_adversarial.py` (21, no xfail) |
+| Flagship showcase (real write→verify→run→recover) | `test_flagship_showcase.py` (2) |
+| Skill store, validation, reliability counters | `test_skills.py` (29) |
 
-- None in flight. Tree clean at `e77f34c`.
-
-## Security defects found and fixed (adversarial suite)
+## Security defects found and fixed
 
 | # | Defect | Fix |
 |---|---|---|
-| 1 | A lease scoped to `/a/b` authorized `/a/b/../outside` (raw string prefix) | `_in_scope` normalises with `posixpath.normpath` before comparing |
-| 2 | Same hole in `intentshield._in_scope` | same normalisation; the two guards still agree |
-| 3 | Swapping the target for a symlink after preview wrote **through** it to an unreviewed file and reported "verified" | symlink targets are refused at preview and at apply |
-| 4 | `consume(lease_id)` with no resource skipped the scope check and spent a fully-scoped lease | a scoped lease must now name the resource it is for |
+| 1 | Lease scope escaped with `..` | `_in_scope` normalises before comparing |
+| 2 | Same hole in IntentShield | same normalisation |
+| 3 | Symlink swapped after preview wrote through it, reported verified | symlinks refused at preview and apply |
+| 4 | `consume()` without a resource bypassed scope | a use must name its resource |
 
-All four are re-probed directly and pinned by `tests/test_security_adversarial.py`
-(21 tests, no xfail).
+## IMPLEMENTED, visual acceptance unverified
 
-## Known gaps (unchanged this pass)
+- Mission Control, ParallelWorld, Safety Center, Skills Library screens.
+- All build; API payload shapes matched against live endpoints.
+- **Not seen rendering** — screen capture is refused in this environment.
 
-- Self-healing is not yet driven from inside a mission's own lifecycle.
-- Multi-agent parallel step scheduling not implemented.
-- Demonstrate-to-Automate, Android continuity, skills *execution* (store exists).
-- Android continuity, Demonstrate-to-Automate, skills library: not started.
-- Swift tests unverified locally (no XCTest); Android CI unverified.
-- Nothing pushed; CI has not run on these commits.
+## BLOCKED
+
+| Item | Blocker |
+|---|---|
+| Swift test target verification | no `XCTest` locally; needs a CI runner |
+| Public CI / push | requires owner authorization (repo is public) |
+| Android continuity | no device or emulator package installed |
+
+## NOT STARTED
+
+- Demonstrate-to-Automate (semantic recording → Workflow Studio)
+- Multi-agent runtime lifecycle polish beyond the scheduler
+- Capability Health Map, privacy boundary controller, analytics
+- Release packaging / installer acceptance
 
 ## Owner actions outstanding
 
-- Authorize pushing to the public remote (required before CI can validate).
-- Decide the repository license (still unresolved).
+1. **Authorize the push** — the only way CI can validate Swift and Android.
+2. **Decide the repository license** — unresolved; not to be invented.
