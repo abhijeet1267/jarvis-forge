@@ -1726,4 +1726,23 @@ extension APIModels {
         let result: String
         let detail: String
     }
+
+    // MARK: - Mission creation
+
+    struct CreateMissionRequest: Codable {
+        let request: String
+        let outcome: String
+        let conditions: [CreateMissionCondition]
+        let steps: [CreateMissionStep]
+    }
+
+    struct CreateMissionCondition: Codable {
+        let statement: String
+    }
+
+    struct CreateMissionStep: Codable {
+        let title: String
+        let tool: String
+        let params: [String: String]
+    }
 }

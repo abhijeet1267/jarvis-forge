@@ -20,6 +20,12 @@ struct MissionControlView: View {
     @State private var proof: APIModels.MissionProof?
     @State private var isLoading = true
     @State private var errorMessage: String?
+    /// The goal being composed. Creating a mission from here is the whole point
+    /// of a control screen -- a list you can only read is a log, not a control.
+    @State private var newGoal = ""
+    @State private var newCondition = ""
+    @State private var creating = false
+    @State private var acting: String?
 
     private let api = APIClient.shared
 
@@ -32,6 +38,8 @@ struct MissionControlView: View {
                 if let error = errorMessage {
                     ErrorBanner(message: error, retry: { Task { await load() } })
                 }
+
+                composer
 
                 if missions.isEmpty && !isLoading && errorMessage == nil {
                     EmptyState(
@@ -86,6 +94,66 @@ struct MissionControlView: View {
             proof = nil
         }
     }
+
+    // MARK: - Composer
+
+        /// Create a mission: a goal, and at least one condition that proves it.
+        ///
+        /// The acceptance condition is required here rather than optional, because a
+        /// mission with nothing to check cannot honestly complete -- the backend
+        /// refuses it, and asking up front is kinder than letting the person find
+        /// out at the end.
+        private var composer: some View {
+            VStack(alignment: .leading, spacing: V.Space.s) {
+                SectionHeader("New mission")
+                TextField("What should Vantage achieve?", text: $newGoal)
+                    .textFieldStyle(.roundedBorder)
+                    .font(V.Font.body)
+                TextField("How will we know it worked? (a condition you can check)",
+                          text: $newCondition)
+                    .textFieldStyle(.roundedBorder)
+                    .font(V.Font.body)
+
+                HStack(spacing: V.Space.s) {
+                    Button(creating ? "Creating…" : "Create mission") {
+                        Task { await createMission() }
+                    }
+                    .buttonStyle(VPrimaryButtonStyle())
+                    .disabled(newGoal.trimmingCharacters(in: .whitespaces).isEmpty
+                              || newCondition.trimmingCharacters(in: .whitespaces).isEmpty
+                              || creating)
+                    Spacer()
+                }
+            }
+            .padding(V.Space.m)
+            .background(V.surface)
+            .clipShape(RoundedRectangle(cornerRadius: V.Radius.card))
+            .overlay(RoundedRectangle(cornerRadius: V.Radius.card)
+                .stroke(V.border, lineWidth: 1))
+        }
+
+        private func createMission() async {
+            creating = true
+            errorMessage = nil
+            do {
+                let created: APIModels.Mission = try await api.post(
+                    "/missions",
+                    body: APIModels.CreateMissionRequest(
+                        request: newGoal.trimmingCharacters(in: .whitespaces),
+                        outcome: newGoal.trimmingCharacters(in: .whitespaces),
+                        conditions: [APIModels.CreateMissionCondition(
+                            statement: newCondition.trimmingCharacters(in: .whitespaces))],
+                        steps: []),
+                    as: APIModels.Mission.self)
+                newGoal = ""
+                newCondition = ""
+                selected = created
+                await load()
+            } catch {
+                errorMessage = error.localizedDescription
+            }
+            creating = false
+        }
 }
 
 // MARK: - Rows
