@@ -107,6 +107,7 @@ struct ContentView: View {
             case .planner:      PlannerView()
             case .operator_:    OperatorView()
             case .control:      MacControlView()
+            case .workspaces:   WorkspacesView()
             case .flows:        FlowsView(handoff: $flowDraftHandoff)
             case .work:         WorkView()
             case .people:       PeopleView()
@@ -146,7 +147,7 @@ private struct VantageSidebar: View {
 
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: V.Space.m) {
-                    group("Workspace", [.today, .home, .briefing, .planner, .command])
+                    group("Workspace", [.today, .home, .briefing, .planner, .workspaces, .command])
                     group("Capture & Documents", [.capture, .documents])
                     group("Connections", [.connections, .google, .mcp, .automation])
                     group("Mac", [.control, .flows, .operator_])
@@ -365,7 +366,7 @@ private struct StatusFooter: View {
 // MARK: - Navigation model
 
 enum NavItem: String, Identifiable, CaseIterable {
-    case today, home, missions, smartfiles, parallelworld, safety, skills, goals, doctor, planner, operator_, control, flows, work, people, connections,
+    case today, home, missions, smartfiles, parallelworld, safety, skills, goals, doctor, planner, operator_, control, flows, work, people, connections, workspaces,
          google, mcp, automation, command, providers, capabilities, devices, approvals,
          activity, memory, settings
     // Phase 3
@@ -387,6 +388,7 @@ enum NavItem: String, Identifiable, CaseIterable {
         case .planner: return "Planner"
         case .operator_: return "Operator"
         case .control: return "Control Mac"
+        case .workspaces: return "Workspaces"
         case .flows: return "Flows"
         case .work: return "Work"
         case .people: return "People"
@@ -423,6 +425,7 @@ enum NavItem: String, Identifiable, CaseIterable {
         case .planner: return "calendar.day.timeline.left"
         case .operator_: return "rectangle.on.rectangle"
         case .control: return "slider.horizontal.3"
+        case .workspaces: return "square.grid.2x2.fill"
         case .flows: return "square.stack.3d.up"
         case .work: return "hammer.fill"
         case .people: return "person.2.fill"

@@ -20,9 +20,25 @@ import pytest
 
 
 def _routes():
+    """Every route the app serves, including the ones behind included routers.
+
+    FastAPI 0.162 keeps an included router as an ``_IncludedRouter`` wrapper with
+    no ``path`` of its own and the real routes on ``original_router``. Reading
+    only ``app.routes`` therefore skipped every router-included route -- which
+    is how a ``/workspaces`` router that shadowed an existing plain route passed
+    this test. The wrappers are expanded so a collision is found regardless of
+    which style registered the loser.
+    """
     from jarvis.api.app import app
 
-    return app.routes
+    out = []
+    for route in app.routes:
+        inner = getattr(route, "original_router", None)
+        if inner is not None:
+            out.extend(getattr(inner, "routes", []) or [])
+        else:
+            out.append(route)
+    return out
 
 
 def test_no_path_is_registered_twice_for_the_same_method():

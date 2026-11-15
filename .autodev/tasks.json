@@ -1647,6 +1647,40 @@
       ],
       "attempts": 1,
       "max_attempts": 3
+    },
+    "V10-mac-control-and-saved-workspaces": {
+      "title": "V10: backend-observed Mac Control + Saved Workspaces in the native app",
+      "status": "completed",
+      "priority": 0,
+      "acceptance": [
+        "Mac Control screen lists launchable applications with running state",
+        "launching an app reports observation, not just an accepted command",
+        "an app that cannot be resolved is refused before any subprocess runs",
+        "Saved Workspaces: create, edit, duplicate, delete persist in SQLite",
+        "workspace names are unique case-insensitively",
+        "a launch reports every member separately with a verified flag",
+        "URLs are restricted to http(s); a missing file is refused without opening",
+        "routes do not shadow any existing path",
+        "route-collision test sees routes behind included routers",
+        "build verified in debug and release",
+        "visual verification of the Workspaces screen contents"
+      ],
+      "evidence": [
+        "2026-11-15: jarvis/core/maccontrol.py, jarvis/api/mac_routes.py, jarvis/core/workspaces.py, jarvis/api/workspace_routes.py; Swift MacControlView.swift (rewritten), WorkspacesView.swift, APIModels.swift, ContentView.swift.",
+        "Live HTTP: GET /mac/control -> 15 launchable, 109 running, can_list_running true. POST /mac/open with an unknown app -> 409 with detail. Missing field -> 422.",
+        "Live HTTP: POST /saved-workspaces create -> PATCH -> POST launch -> verified true ('opened in Finder' + 'Finder is running') -> DELETE. Duplicate produced a distinct name ('X copy'); a case-insensitive name clash returned 409.",
+        "Tests: tests/test_workspaces.py 14 passed; tests/test_maccontrol.py 6 passed; tests/test_no_duplicate_routes.py 3 passed. Targeted batch 23 passed.",
+        "Full suite: 4157 passed, 30 skipped, 3 failed -- all three were stale README/FILE_OWNERSHIP counts, fixed by scripts/sync_readme_counts.py; the 5 count tests then passed.",
+        "Defect found and fixed: the new router had claimed /workspaces, silently shadowing the existing coding-workspace registry because it was included earlier in app.py. Renamed to /saved-workspaces and documented why.",
+        "Defect found and fixed: tests/test_no_duplicate_routes.py read only app.routes, which in FastAPI 0.162 hides every route behind an _IncludedRouter wrapper -- which is why it passed with the shadowing live. It now expands original_router.routes; red-proved with an injected colliding GET /workspaces (routes seen 228 -> 276, test failed naming both lines).",
+        "Defect found and fixed: the assembled bundle held a stale release binary, so the feature was invisible. Rebuilt release (swift build -c release), re-ran assemble_app.sh; strings then found saved-workspaces twice.",
+        "Swift builds clean in debug and release; bundle 19 MB, codesign verified.",
+        "VISUALLY VERIFIED: a freshly launched instance shows 'Workspaces' in the sidebar under WORKSPACE, between Planner and Command Center (screenshot /tmp/vantage_shots/ws_home.png).",
+        "NOT VERIFIED: the Workspaces screen contents (list, editor, launch panel). The machine is at the macOS lock screen ('Touch ID or Enter Password'), so synthetic clicks do not reach the app and per-window capture fails. This is a standing environment block, not a pass.",
+        "NOT VERIFIED: XCTest -- CLT only, no XCTest runner on this machine."
+      ],
+      "attempts": 1,
+      "max_attempts": 3
     }
   }
 }

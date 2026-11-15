@@ -2628,3 +2628,61 @@ each:
 A first run without the backend up showed 112 failures; 94 of those were the
 documented "start `run.py` first" files and 9 were the missing Chromium binary. That
 is why the number above was re-measured with both in place rather than reported as is.
+
+---
+
+## Update — 2026-11-15 (V10 wave one: a Mac Control screen that observes, and Saved Workspaces)
+
+Two product surfaces, both backed by real routes, plus one latent routing defect that
+had been invisible to the test meant to catch it.
+
+**Mac Control** (`jarvis/core/maccontrol.py`, `jarvis/api/mac_routes.py`,
+`Views/MacControlView.swift`). The screen lists the launchable applications from the
+existing `AppRegistry`, shows which of them are running, and opens one on request. The
+detail that matters: an accepted `open` command is not proof an application started, so
+`open_application` refuses an unresolvable name **before** any subprocess runs, then polls
+`pgrep -x` for up to 15 s and returns `launched` and `observed_running` as separate
+fields. The view renders `observed_running == false` as a warning, not a tick. Live:
+`GET /mac/control` → 15 launchable, 109 running, `can_list_running: true`; an unknown app
+→ 409 with its reason; a missing field → 422.
+
+**Saved Workspaces** (`jarvis/core/workspaces.py`, `jarvis/api/workspace_routes.py`,
+`Views/WorkspacesView.swift`). A named set of applications, files and links, persisted in
+SQLite (`workspaces` table, case-insensitive unique name), created/edited/duplicated/
+deleted from the app, and launched. Launch opens the project directory first, then each
+app, file and URL, and reports **every member separately** (`{kind, target, ok, detail}`)
+with `verified` true only when every member succeeded — "launched" as a single word would
+hide the case the screen exists to show. A missing file is refused without calling `open`;
+a URL must be `http(s)` and is refused before any subprocess. Live: create → edit → launch
+(`verified: true`, "opened in Finder" + "Finder is running") → delete; duplicate names
+itself `X copy`; a case-insensitive clash returns 409.
+
+**Defect found — a router silently shadowed an existing one.** The first draft registered
+`/workspaces`, which is already the *coding* workspace registry, and because the new
+router was included earlier in `app.py`, Starlette kept it and the older routes became
+dead code. Renamed to `/saved-workspaces`.
+
+**Defect found — the test that should have caught it was blind.** `tests/test_no_duplicate_routes.py`
+read only `app.routes`; FastAPI 0.162 keeps router-included routes behind an
+`_IncludedRouter` wrapper that has no `path`, so those routes were skipped entirely. It now
+expands `original_router.routes`. Red-proved by injecting a colliding `GET /workspaces`:
+routes seen went 228 → 276 and the test failed naming both definitions.
+
+**Defect found — a stale release binary hid the feature.** The assembled bundle held an
+older `Vantage` binary, so the new sidebar entry did not appear. `swift build -c release`
+then `assemble_app.sh release` fixed it; `strings` then found `saved-workspaces` twice in
+the bundle.
+
+**Evidence.** `tests/test_workspaces.py` 14 passed, `tests/test_maccontrol.py` 6 passed,
+`tests/test_no_duplicate_routes.py` 3 passed (targeted batch 23 passed). Full suite
+**4157 passed, 30 skipped, 3 failed** — all three were stale README/`FILE_OWNERSHIP`
+counts after the new modules; `scripts/sync_readme_counts.py` updated them and the 5
+count tests then passed. Swift builds clean in debug and release.
+
+**Visually verified:** a freshly launched instance shows **Workspaces** in the sidebar
+under WORKSPACE, between Planner and Command Center.
+
+**NOT verified:** the Workspaces screen's contents (list, editor, launch panel) and the
+Mac Control screen. The machine sat at the macOS lock screen — synthetic clicks do not
+reach the app and per-window capture fails — so this is an environment block, not a pass.
+Re-check both on an unlocked session before calling V10 wave one done.

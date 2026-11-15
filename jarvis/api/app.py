@@ -649,6 +649,16 @@ from .doctor_routes import build_router as _build_doctor_router  # noqa: E402
 
 app.include_router(_build_doctor_router(require_auth))
 
+# Mac Control: launch applications and report what was actually observed.
+from .mac_routes import build_router as _build_mac_router  # noqa: E402
+
+app.include_router(_build_mac_router(require_auth))
+
+# Saved Workspaces: a named set of apps, files and URLs, launched and observed.
+from .workspace_routes import build_router as _build_workspace_router  # noqa: E402
+
+app.include_router(_build_workspace_router(require_auth))
+
 _core: Optional[JarvisCore] = None
 _voice = None
 

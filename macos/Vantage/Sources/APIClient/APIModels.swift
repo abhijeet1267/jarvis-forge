@@ -1892,4 +1892,97 @@ extension APIModels {
         let from: String
         let to: String
     }
+
+    // MARK: - Mac Control
+
+    struct MacApp: Codable, Identifiable {
+        let key: String
+        let name: String
+        let aliases: [String]
+        let launch_target: String
+        let running: Bool
+
+        var id: String { key }
+    }
+
+    struct MacRunning: Codable {
+        let name: String
+    }
+
+    struct MacStatus: Codable {
+        let supported: [MacApp]
+        let running: [MacRunning]
+        let can_list_running: Bool
+        let note: String
+    }
+
+    struct MacOpenRequest: Codable {
+        let app: String
+    }
+
+    struct MacLaunchResult: Codable {
+        let ok: Bool
+        let launched: Bool
+        let observed_running: Bool
+        let detail: String
+        let app: String?
+    }
+
+    // MARK: - Saved Workspaces
+
+    struct Workspace: Codable, Identifiable {
+        let workspace_id: String
+        let name: String
+        let description: String
+        let project_dir: String
+        let apps: [String]
+        let files: [String]
+        let urls: [String]
+        let created_at: String
+        let updated_at: String
+        let launch_count: Int
+        let last_launched_at: String?
+
+        var id: String { workspace_id }
+
+        var isEmpty: Bool {
+            project_dir.isEmpty && apps.isEmpty && files.isEmpty && urls.isEmpty
+        }
+    }
+
+    struct SavedWorkspaceList: Codable {
+        let workspaces: [Workspace]
+    }
+
+    struct WorkspaceRequest: Codable {
+        let name: String?
+        let description: String?
+        let project_dir: String?
+        let apps: [String]?
+        let files: [String]?
+        let urls: [String]?
+    }
+
+    struct WorkspaceLaunchResult: Codable {
+        struct Member: Codable {
+            let kind: String
+            let target: String
+            let ok: Bool
+            let detail: String
+        }
+
+        let workspace_id: String
+        let name: String
+        let results: [Member]
+        let verified: Bool
+        let summary: String
+    }
+
+    struct WorkspaceDuplicateRequest: Codable {
+        let name: String?
+    }
+
+    struct WorkspaceDeleteResult: Codable {
+        let deleted: String
+    }
 }

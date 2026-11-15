@@ -495,6 +495,26 @@ CREATE TABLE IF NOT EXISTS permission_leases (
     plan_revision  INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_leases_mission ON permission_leases(mission_id, revoked);
+
+-- Saved workspaces (V10). A named set of things a person opens together: a
+-- project folder, applications, files and URLs. The members are one JSON
+-- document because a workspace is saved and edited as a whole. `launch_count`
+-- and `last_launched_at` record that a launch was requested, not that it
+-- succeeded -- success is observed per member and reported by the caller.
+CREATE TABLE IF NOT EXISTS workspaces (
+    workspace_id     TEXT PRIMARY KEY,
+    name             TEXT NOT NULL,
+    description      TEXT NOT NULL DEFAULT '',
+    project_dir      TEXT NOT NULL DEFAULT '',
+    apps             TEXT NOT NULL DEFAULT '[]',
+    files            TEXT NOT NULL DEFAULT '[]',
+    urls             TEXT NOT NULL DEFAULT '[]',
+    created_at       TEXT NOT NULL,
+    updated_at       TEXT NOT NULL,
+    launch_count     INTEGER NOT NULL DEFAULT 0,
+    last_launched_at TEXT
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_workspaces_name ON workspaces(name COLLATE NOCASE);
 """
 
 
