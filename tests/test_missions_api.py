@@ -304,3 +304,40 @@ def test_a_denied_step_cannot_be_decided_twice():
     again = client.post(f"/missions/{mission_id}/steps/S1/decide",
                         headers=HEADERS, json={"decision": "approve"})
     assert again.status_code == 409
+
+
+def test_approving_a_parked_step_keeps_the_confirmation_the_runner_matches():
+    """Approving a step must not erase the id that makes the approval usable.
+
+    `POST /missions/{id}/steps/{sid}/decide` used to rewrite the step's detail
+    to "approved by the operator; approve", destroying the
+    "confirmation CONF-..." the runner reads out of that same field to decide
+    whether a later run was approved. A mission a person had explicitly approved
+    therefore re-parked forever: the decision was recorded, and then made
+    unmatchable by the act of recording it.
+    """
+    import re
+
+    client = _client()
+    created = client.post("/missions", headers=HEADERS, json={
+        "request": "write a probe file",
+        "steps": [{"step_id": "S1", "title": "write", "tool": "write_file",
+                   "params": {"path": "/tmp/vantage_probe_decide.txt",
+                              "content": "x"}}],
+    })
+    assert created.status_code == 200, created.text
+    mission_id = created.json()["mission_id"]
+
+    parked = client.post(f"/missions/{mission_id}/run", headers=HEADERS, json={})
+    assert parked.status_code == 200, parked.text
+    step = next(s for s in parked.json()["steps"] if s["step_id"] == "S1")
+    match = re.search(r"confirmation (\S+)", step["detail"] or "")
+    assert match, f"the parked step names no confirmation: {step}"
+
+    decided = client.post(f"/missions/{mission_id}/steps/S1/decide",
+                          headers=HEADERS, json={"decision": "approve"})
+    assert decided.status_code == 200, decided.text
+    after = next(s for s in decided.json()["steps"] if s["step_id"] == "S1")
+    assert match.group(1).rstrip(")") in (after["detail"] or ""), (
+        "the approval removed the confirmation id, so a resume can never match "
+        f"it: {after['detail']!r}")

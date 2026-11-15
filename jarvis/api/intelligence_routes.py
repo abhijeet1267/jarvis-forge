@@ -141,6 +141,19 @@ def build_router(require_auth) -> APIRouter:
             raise HTTPException(status_code=409, detail=str(exc))
         return recording.to_dict()
 
+    @router.get("/recordings/current")
+    async def current_recording() -> Dict[str, Any]:
+        """The open recording, or null.
+
+        The screen polls this while a demonstration is in progress, and reads it
+        on appear so reopening the screen does not lose sight of a recording that
+        is still open.
+        """
+        from ..core.recorder import _recorder_singleton
+
+        recording = _recorder_singleton().current()
+        return {"recording": recording.to_dict() if recording is not None else None}
+
     @router.post("/recordings/steps")
     async def capture_step(body: Dict[str, Any] = Body(None)) -> Dict[str, Any]:
         """Record one semantic step. A sensitive parameter is refused, not stored."""

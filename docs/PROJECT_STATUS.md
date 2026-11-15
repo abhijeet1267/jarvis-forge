@@ -2686,3 +2686,68 @@ under WORKSPACE, between Planner and Command Center.
 Mac Control screen. The machine sat at the macOS lock screen — synthetic clicks do not
 reach the app and per-window capture fails — so this is an environment block, not a pass.
 Re-check both on an unlocked session before calling V10 wave one done.
+
+## Update — 2026-11-15 (V10 wave two: Automation Studio, and two screens finally seen)
+
+**The visual-verification block is broken, not bypassed.** Synthetic input is genuinely
+impossible for this process on this machine: `CGPreflightPostEventAccess()` and
+`AXIsProcessTrusted()` both return false, so `CGEvent` clicks are dropped silently, while
+`CGPreflightScreenCaptureAccess()` is true. Rather than claim the screens from symbol
+inspection, a throwaway harness outside the repo (`/tmp/vantage_render/`) hosts the real
+`ContentView` in a real `NSWindow`, selects a screen through the app's own
+`AppNavigation.shared.go(...)`, and renders it with
+`bitmapImageRepForCachingDisplay` + `cacheDisplay`. It answers exactly one question — does
+the screen lay out and say what it claims — and it is **not** a substitute for using the
+app: no click reaches a control through it.
+
+**Workspaces and Mac Control, previously NOT verified, are now seen.** Against an isolated
+backend (`JARVIS_HOME=/tmp/vantage_probe_home`, port 8799 — the user's running instance on
+8765 was not touched): the Workspaces empty state, then a real workspace listing
+("Vantage Development", `1 app(s) 1 file(s) 1 link(s)`, `never launched`), then after a
+launch `launched 1× · last 2026-11-15T18:25:35`. The launch itself returned
+`verified: true` with all four members reported separately (`opened in Finder`,
+`Finder is running`, `opened`, `opened`). Mac Control renders **15 launchable / 126
+running** with per-app running dots and the honest caption that window control and input
+injection need Accessibility and are not offered. Both screens are now closed out.
+
+**Automation Studio** (`Views/AutomationStudioView.swift`, `jarvis/core/recorder.py`,
+`jarvis/api/intelligence_routes.py`). Record → review → save-as-mission → run. Screens
+verified: the idle explainer, an open recording ("Stop", `RECORDING`, live step count), the
+draft review panel, and the disabled-Save state.
+
+**Defect found — three of the recorder's own kinds were not tools.** `SUPPORTED_KINDS`
+listed `append_file`, `replace_text`, `open_app`, `run_command` and `http_request`; none is
+a registered tool. Appending is `write_file` with `mode="append"`, opening is
+`open_application`, commands are `run_allowlisted_command`; `http_request` and
+`replace_text` have no tool at all. A draft built from them reviewed clean and failed on
+replay with `no agent owns ...`. The list now names real tools, and two tests pin every kind
+to both a registered tool and an owning agent (`find_agent`).
+
+**Defect found — approving a parked step destroyed the id the approval is matched against.**
+`POST /missions/{id}/steps/{sid}/decide` rewrote the step detail to
+`"approved by the operator; approve"`, erasing the `confirmation CONF-…` that
+`MissionRunner._parked_confirmation` reads out of that same field. The decision was
+recorded and then made unmatchable by the act of recording it, so an approved mission
+re-parked on every run. The detail now keeps the id. Proven live: park → read
+`CONF-4f928c…` from the detail → approve → resume with that id → `S1 done`,
+`Created vantage_probe_out.txt (21 bytes), read it back and it matches.` Before the fix the
+same sequence re-parked.
+
+**Defect found — Save & run discarded every captured parameter.** `saveAndRun` built
+`MissionStepDraft(params: [:])` for every step, and `RecordingDraft.Step` had no `params`
+field to read them from. Every automation saved from the app would have failed with
+`not executed: missing required parameter 'path'; missing required parameter 'content'` —
+verified by running exactly that mission. The params are now carried through and sent, and a
+step with no captured values disables **Save & run** with a reason rather than creating a
+mission that was never going to run (a sensitive value is deliberately never stored, so
+such a step cannot be replayed as recorded).
+
+**Evidence.** `tests/test_recorder.py`, `tests/test_missions_api.py`,
+`tests/test_no_duplicate_routes.py` → **39 passed**. Full suite
+**4162 passed, 30 skipped, 1 failed** (508s); the one failure was the README's collected
+count (`4190` vs `4193`), fixed with `scripts/sync_readme_counts.py` and re-run →
+**3 passed**. Swift builds clean.
+
+**NOT verified:** no click has ever reached a control in this app on this machine. The
+render harness proves layout and live data, not interaction. The Studio's record/capture
+forms were exercised through the API, not by typing into them.

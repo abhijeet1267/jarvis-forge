@@ -43,11 +43,21 @@ _SENSITIVE_HINTS = (
     "one_time", "card_number", "cvv", "ssn", "social_security",
 )
 
-#: The action kinds a demonstration may produce. Each maps to a real tool the
-#: mission runner can execute; a step with an unknown kind cannot be replayed.
+#: The action kinds a demonstration may produce. These are the *registered tool
+#: names*, not descriptive labels: a draft's step is dispatched by name through
+#: the same agent registry a direct request uses, so a kind with no tool behind
+#: it produces a draft whose first replay fails with "no agent owns ...".
+#:
+#: An earlier version listed `append_file`, `replace_text`, `open_app`,
+#: `run_command` and `http_request`. None of those is a tool: appending is
+#: `write_file` with `mode="append"`, opening is `open_application`, and running
+#: a command is `run_allowlisted_command`. `http_request` and `replace_text`
+#: have no tool at all and were removed rather than left to fail at replay.
+#: `tests/test_recorder.py` pins every kind here to a registered tool.
 SUPPORTED_KINDS = (
-    "write_file", "replace_text", "append_file", "delete_file", "read_file",
-    "open_app", "run_command", "http_request",
+    "write_file", "read_file", "delete_file",
+    "open_application", "open_url", "run_allowlisted_command",
+    "move_file", "copy_file",
 )
 
 

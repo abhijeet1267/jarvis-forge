@@ -1986,3 +1986,169 @@ extension APIModels {
         let deleted: String
     }
 }
+
+// MARK: - Automation Studio (Demonstrate-to-Automate)
+
+extension APIModels {
+
+    /// One semantic step captured during a demonstration.
+    ///
+    /// A skipped step is a real event: something happened there that the
+    /// recorder refused to store (a password field, a token). It is kept so the
+    /// reviewer sees the gap, and its reason names the parameter, never a value.
+    struct RecordedStep: Codable, Identifiable {
+        let index: Int
+        let kind: String
+        let label: String
+        let at: Double
+        let skipped: Bool
+        let skip_reason: String
+
+        var id: Int { index }
+    }
+
+    struct RecordingSession: Codable {
+        let recording_id: String
+        let name: String
+        let started_at: Double
+        let stopped_at: Double
+        let open: Bool
+        let duration_s: Double
+        let steps: [RecordedStep]
+    }
+
+    struct RecordingStartRequest: Codable {
+        let name: String
+    }
+
+    struct RecordingStepRequest: Codable {
+        let kind: String
+        let label: String
+        let params: [String: String]
+    }
+
+    /// The reviewable workflow draft. `verdict` begins at `unverified` and only a
+    /// real replay can change it, so it is never shown as a tick on the strength
+    /// of a demonstration alone.
+    struct RecordingDraft: Codable {
+        struct Step: Codable, Identifiable {
+            let title: String
+            let tool: String
+            let needs_input: String?
+
+            /// The parameters the demonstration actually captured. They are
+            /// absent only for a step that was skipped because it carried a
+            /// sensitive value, which is exactly the step `needs_input` marks.
+            /// A step without them cannot be replayed, so the screen refuses to
+            /// save one rather than creating a mission that always fails.
+            let params: [String: String]?
+
+            var id: String { title + tool }
+        }
+
+        let recording_id: String
+        let name: String
+        let steps: [Step]
+        let required_capabilities: [String]
+        let required_scope: [String]
+        let needs_input: Int
+        let verdict: String
+        let review_required: Bool
+        let notes: String
+    }
+
+    struct RecordingDiscardResult: Codable {
+        let discarded: Bool
+    }
+}
+
+// MARK: - Automation Studio (follow-on types)
+
+extension APIModels {
+
+    /// `GET /intelligence/recordings/current`. `null` when nothing is open.
+    struct CurrentRecording: Codable {
+        let recording: RecordingSession?
+    }
+
+    struct MissionStepDraft: Codable {
+        let step_id: String
+        let title: String
+        let tool: String
+        let params: [String: String]
+    }
+
+    struct MissionCreateRequest: Codable {
+        let request: String
+        let outcome: String
+        let steps: [MissionStepDraft]
+    }
+
+    /// One executed step in a run's response, flattened for display.
+    struct MissionDecision: Codable {
+        let decision: String
+    }
+
+    struct MissionRunStep {
+        let title: String
+        let ok: Bool
+        let detail: String
+    }
+
+    struct MissionRunResult {
+        let verdict: String
+        let steps: [MissionRunStep]
+    }
+
+    /// The recorder's own action list, and the fields each action takes.
+    ///
+    /// These mirror `jarvis/core/recorder.py`'s `SUPPORTED_KINDS` and the
+    /// registered tools' parameter names. They are written here rather than
+    /// fetched because the fields are needed to draw the form *before* any
+    /// request is made; `tests/test_recorder.py` pins the server side to real
+    /// tools, so a drift between the two is a test failure rather than a
+    /// silently unrunnable step.
+    enum AutomationKinds {
+        static let names = ["write_file", "read_file", "delete_file",
+                            "open_application", "open_url",
+                            "run_allowlisted_command", "move_file", "copy_file"]
+
+        struct ParamField: Identifiable {
+            let name: String
+            let placeholder: String
+            var value: String = ""
+            var options: [String] = []
+            /// Named rather than hidden: the person sees which field will not be
+            /// stored instead of wondering why the step came back empty.
+            let isSensitive: Bool
+
+            var id: String { name }
+            var isChoice: Bool { !options.isEmpty }
+        }
+
+        static func fields(for kind: String) -> [ParamField] {
+            switch kind {
+            case "write_file":
+                return [ParamField(name: "path", placeholder: "absolute path", isSensitive: false),
+                        ParamField(name: "content", placeholder: "contents", isSensitive: false),
+                        ParamField(name: "mode", placeholder: "", value: "overwrite",
+                                   options: ["overwrite", "append"], isSensitive: false)]
+            case "read_file", "delete_file":
+                return [ParamField(name: "path", placeholder: "absolute path", isSensitive: false)]
+            case "open_application":
+                return [ParamField(name: "app", placeholder: "e.g. finder", isSensitive: false)]
+            case "open_url":
+                return [ParamField(name: "url", placeholder: "https://…", isSensitive: false)]
+            case "run_allowlisted_command":
+                return [ParamField(name: "command", placeholder: "allowlisted command",
+                                   isSensitive: false)]
+            case "move_file", "copy_file":
+                return [ParamField(name: "source", placeholder: "absolute path", isSensitive: false),
+                        ParamField(name: "destination", placeholder: "absolute path",
+                                   isSensitive: false)]
+            default:
+                return []
+            }
+        }
+    }
+}

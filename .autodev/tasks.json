@@ -1,5 +1,5 @@
 {
-  "updated": "2026-11-14T00:00:00+00:00",
+  "updated": "2026-11-15T18:40:00+00:00",
   "version": 1,
   "note": "Durable task queue for the autodev supervisor. Statuses: pending, ready, running, completed, failed, blocked, skipped. A task is completed only when its acceptance criteria are met AND evidence is recorded. Priority: lower = sooner. Mirror of docs/PROJECT_ROADMAP.md.",
   "tasks": {
@@ -218,7 +218,7 @@
       "updated": "2026-10-21T09:47:32.145785+00:00",
       "evidence": [
         "Every skip names an external prerequisite (grouped by cause: playwright not installed, Pillow not installed, qrcode not installed, macOS-only desktop tests, no Vantage.app in dist/, no physical device, no real API key, mic permission)",
-        "Clean full suite 2026-10-21 (nothing else running): 2822 passed / 33 skipped / 0 failed (174s) \u2014 .venv/bin/python -m pytest -q -p no:cacheprovider",
+        "Clean full suite 2026-10-21 (nothing else running): 2822 passed / 33 skipped / 0 failed (174s) — .venv/bin/python -m pytest -q -p no:cacheprovider",
         "The 5 OCR failures seen in one run were a 45s timeout under concurrent Gradle load, not a defect: clean run is green, and test_vision.py is 49/49."
       ]
     },
@@ -254,7 +254,9 @@
         "proxy allowlist denial tested",
         "master-token forwarding + device identity tested"
       ],
-      "evidence": ["tests/test_companion_gateway.py: 31 passed (2026-10-16)"],
+      "evidence": [
+        "tests/test_companion_gateway.py: 31 passed (2026-10-16)"
+      ],
       "attempts": 1,
       "max_attempts": 3
     },
@@ -276,7 +278,9 @@
       "title": "Wire companion gateway into backend lifecycle (start/stop with backend, health, stable cert)",
       "status": "completed",
       "priority": 2,
-      "depends_on": ["R1.1-gateway-tests"],
+      "depends_on": [
+        "R1.1-gateway-tests"
+      ],
       "acceptance": [
         "a documented command starts the gateway on demand",
         "main-backend shutdown stops it (no orphan process on :8766)",
@@ -303,14 +307,18 @@
       "title": "Native Android client: gateway contract + TLS cert pinning",
       "status": "completed",
       "priority": 3,
-      "depends_on": ["R1.3-gateway-wiring"],
+      "depends_on": [
+        "R1.3-gateway-wiring"
+      ],
       "acceptance": [
         "QR/manual entry -> POST /companion/pairing-redeem",
         "scoped token stored (EncryptedSharedPreferences, already done)",
         "OkHttp CertificatePinner on served fingerprint",
-        "allowed paths 200 / denied 403 / expired+reused codes fail \u2014 verified against a real gateway"
+        "allowed paths 200 / denied 403 / expired+reused codes fail — verified against a real gateway"
       ],
-      "blockers": ["needs R1.3 (a running gateway) to verify end-to-end"],
+      "blockers": [
+        "needs R1.3 (a running gateway) to verify end-to-end"
+      ],
       "files": [
         "android/app/src/main/java/.../VantageApiClient.kt",
         "AuthInterceptor.kt",
@@ -338,9 +346,12 @@
         "legacy installers/android/ retired or clearly marked"
       ],
       "blockers": [
-        "Android SDK / gradle availability in this environment is unverified \u2014 may be BLOCKED on toolchain"
+        "Android SDK / gradle availability in this environment is unverified — may be BLOCKED on toolchain"
       ],
-      "files": ["installers/build_release.sh:93", "android/"],
+      "files": [
+        "installers/build_release.sh:93",
+        "android/"
+      ],
       "evidence": [
         "build_release.sh:93 -> installers/android/build_apk.sh (WebView wrapper); :100 'The Android project uses a WebView' (2026-10-16 audit)",
         "android/build_apk.sh builds com.vantage.companion; installers/build_release.sh calls it; aapt2 identity check fails on the wrong package; provenance manifest; tests/test_release_pipeline.py"
@@ -376,7 +387,9 @@
       "title": "Unify the two chat surfaces; model actions gated by PermissionEngine",
       "status": "completed",
       "priority": 4,
-      "depends_on": ["R2.1-conversation-memory"],
+      "depends_on": [
+        "R2.1-conversation-memory"
+      ],
       "acceptance": [
         "one documented primary path",
         "model-proposed actions validated (params/paths/risk) + permission decision",
@@ -402,12 +415,16 @@
       "title": "Model-planned actions feeding Plan.actions (beyond the 54 regex rules)",
       "status": "completed",
       "priority": 5,
-      "depends_on": ["R2.2-unify-chat"],
+      "depends_on": [
+        "R2.2-unify-chat"
+      ],
       "acceptance": [
         "model proposes structured plan -> validated -> permission -> execution with tri-state verification",
         "negative tests for invalid/over-privileged proposals"
       ],
-      "files": ["jarvis/core/planner.py:224"],
+      "files": [
+        "jarvis/core/planner.py:224"
+      ],
       "blockers": [],
       "attempts": 0,
       "max_attempts": 3,
@@ -429,13 +446,15 @@
         "affected tools updated + tested",
         "replies read honestly"
       ],
-      "files": ["jarvis/tools/base.py:105,135"],
+      "files": [
+        "jarvis/tools/base.py:105,135"
+      ],
       "blockers": [],
       "attempts": 0,
       "max_attempts": 3,
       "updated": "2026-10-21T09:33:01.098016+00:00",
       "evidence": [
-        "jarvis/tools/base.py ok() defaults to Verification.UNKNOWN (not SUCCESS) \u2014 verified in source 2026-10-21. Write-side tools either observe the effect before claiming success (open_application reads the process table, write_file reads the file back) or return unverified()/UNKNOWN. Pinned by test_phase10_verification_authority, test_phase11_write_file, test_home."
+        "jarvis/tools/base.py ok() defaults to Verification.UNKNOWN (not SUCCESS) — verified in source 2026-10-21. Write-side tools either observe the effect before claiming success (open_application reads the process table, write_file reads the file back) or return unverified()/UNKNOWN. Pinned by test_phase10_verification_authority, test_phase11_write_file, test_home."
       ]
     },
     "R3.1-macos-lifecycle": {
@@ -455,7 +474,7 @@
       "evidence": [
         "audit 2026-10-16: no terminationHandler; SIGTERM to /usr/bin/env",
         "ContentView.onDisappear no longer kills the backend; connect() is idempotent; SIGINT escalation to the Python child. 2026-10-21 live check: 3 cold launches each produced a window and a live backend connection; backend killed -> app alive -> backend restarted -> app reconnected (GET /health 200).",
-        "2026-10-21: fixed a P0 \u2014 the app could launch with ZERO windows (scene never activated, so .task never ran and it never connected). Root cause: stale per-bundle-id app state. Fix in VantageApp.swift (ApplePersistenceIgnoreState/NSQuitAlwaysKeepsWindows registered before AppKit restores state)."
+        "2026-10-21: fixed a P0 — the app could launch with ZERO windows (scene never activated, so .task never ran and it never connected). Root cause: stale per-bundle-id app state. Fix in VantageApp.swift (ApplePersistenceIgnoreState/NSQuitAlwaysKeepsWindows registered before AppKit restores state)."
       ],
       "attempts": 0,
       "max_attempts": 3,
@@ -497,21 +516,25 @@
       "max_attempts": 2,
       "updated": "2026-10-21T09:33:01.098016+00:00",
       "evidence": [
-        "HomeView/ProvidersView/SettingsView render a distinct per-section error state with Retry instead of an empty list; SectionPresentationTests.swift covers the mapping. 2026-10-21: verified live \u2014 app exercised against a stopped and a restarted backend."
+        "HomeView/ProvidersView/SettingsView render a distinct per-section error state with Retry instead of an empty list; SectionPresentationTests.swift covers the mapping. 2026-10-21: verified live — app exercised against a stopped and a restarted backend."
       ]
     },
     "R3.4-version-plist": {
       "title": "macOS version from Info.plist (not hardcoded)",
       "status": "completed",
       "priority": 8,
-      "acceptance": ["CFBundleShortVersionString read at runtime"],
-      "files": ["SettingsView.swift:248"],
+      "acceptance": [
+        "CFBundleShortVersionString read at runtime"
+      ],
+      "files": [
+        "SettingsView.swift:248"
+      ],
       "blockers": [],
       "attempts": 0,
       "max_attempts": 1,
       "updated": "2026-10-21T09:33:01.098016+00:00",
       "evidence": [
-        "macos/Vantage/Sources/Views/SettingsView.swift:392 appVersion reads Bundle.main.infoDictionary[\"CFBundleShortVersionString\"] (falls back to \"dev\") \u2014 not hardcoded"
+        "macos/Vantage/Sources/Views/SettingsView.swift:392 appVersion reads Bundle.main.infoDictionary[\"CFBundleShortVersionString\"] (falls back to \"dev\") — not hardcoded"
       ]
     },
     "R3.5-url-encoding": {
@@ -522,7 +545,9 @@
         "addingPercentEncoding applied to interpolated ids",
         "a non-ASCII id round-trips in a test"
       ],
-      "files": ["APIClient.swift:75"],
+      "files": [
+        "APIClient.swift:75"
+      ],
       "blockers": [],
       "attempts": 0,
       "max_attempts": 1,
@@ -538,7 +563,10 @@
       "acceptance": [
         "signing failure = build failure, or explicit logged opt-in ad-hoc mode"
       ],
-      "files": ["build_app.py:182", "installers/macos/build_dmg.sh:51"],
+      "files": [
+        "build_app.py:182",
+        "installers/macos/build_dmg.sh:51"
+      ],
       "blockers": [],
       "attempts": 0,
       "max_attempts": 2,
@@ -555,7 +583,10 @@
         "manifest carries sha/timestamp/sha256",
         "scripts/release_verify.sh checks provenance"
       ],
-      "files": ["scripts/release_verify.sh", "build_app.py"],
+      "files": [
+        "scripts/release_verify.sh",
+        "build_app.py"
+      ],
       "blockers": [],
       "attempts": 0,
       "max_attempts": 2,
@@ -601,7 +632,10 @@
         "a test pins the contract without needing a browser"
       ],
       "blockers": [],
-      "files": ["dashboard/ai_chat.html", "dashboard/mission_control.html"],
+      "files": [
+        "dashboard/ai_chat.html",
+        "dashboard/mission_control.html"
+      ],
       "evidence": [
         "2026-10-21: `grep -rl \"ai/attachment\" dashboard/ macos/ android/ ios/` returns NOTHING. The upload/list/delete/process routes exist and are tested, but no client calls them -- so there is currently no way to attach anything to a message from any surface. The server side (upload -> process -> truthful status -> extracted text) is done; the client side does not exist.",
         "Start with the dashboard chat view: it is the surface with a message list to attach to, and it needs no native build to verify.",
@@ -722,7 +756,10 @@
         "a refusal to write (a protected path) is reported, not forced through"
       ],
       "blockers": [],
-      "files": ["jarvis/core/planner.py", "jarvis/tools/files.py"],
+      "files": [
+        "jarvis/core/planner.py",
+        "jarvis/tools/files.py"
+      ],
       "evidence": [
         "2026-10-21: the browser slice's read works (iteration 61) -- open, read the page's text, mark it untrusted. What it does NOT yet do is hand that result to the file layer with the guarantees the rest of the product has: the path guard, the workspace rule, and a read-back confirmation.",
         "write_file already has the guard and the confirmation, so this is most likely a route plus a test rather than new machinery. The route must be a READ-then-WRITE the user asked for, not a sentence that silently saves anything.",
@@ -1272,7 +1309,7 @@
       "priority": 1,
       "depends_on": [],
       "acceptance": [
-        "owner decision: gate (dangerous \u2014 refuses a working provider) vs delete"
+        "owner decision: gate (dangerous — refuses a working provider) vs delete"
       ],
       "blockers": [
         "Owner-gated architectural choice. The safe reporting half is done (R6.4a2). Wiring can_handle_request as a live gate would refuse a working provider (r88 pins it returns False for the live 9router model). Deleting the tracked module or the owner's untracked providers.py.multimodal copy is not an agent decision."
@@ -1316,8 +1353,8 @@
       "evidence": {
         "date": "2026-10-23",
         "iteration": 82,
-        "lifecycle": "IntegrationHarness/run_lifecycle_check.sh \u2014 12/12 checks against REAL BackendManager + real local backend",
-        "command_center": "IntegrationHarness/run_command_center_check.sh \u2014 17/17 against REAL ConversationService/APIClient",
+        "lifecycle": "IntegrationHarness/run_lifecycle_check.sh — 12/12 checks against REAL BackendManager + real local backend",
+        "command_center": "IntegrationHarness/run_command_center_check.sh — 17/17 against REAL ConversationService/APIClient",
         "seam": "JARVIS_BACKEND_PORT (production default 8765 unchanged)",
         "suite": "non-OCR 3220 passed / 0 failed (310 s) incl. tests/test_r96_macos_integration_harness.py; OCR 81/81 in isolation"
       }
@@ -1336,14 +1373,14 @@
       "evidence": {
         "date": "2026-10-23",
         "iteration": "81 loop",
-        "email": "r95 (17 tests) \u2014 file routes decline email organize honestly (backend has no op)",
-        "calendar": "r90 (5 new tests) \u2014 file routes defer to calendar rule (backend has cancel_event); container-exclusion shared",
+        "email": "r95 (17 tests) — file routes decline email organize honestly (backend has no op)",
+        "calendar": "r90 (5 new tests) — file routes defer to calendar rule (backend has cancel_event); container-exclusion shared",
         "suite": "non-OCR full 3217 passed / 0 failed (272.69 s); OCR cluster 12/12 in isolation",
-        "calendar+design+paper+schedule+workspace": "r90 (13 total deferral tests) \u2014 file routes defer to the domain rule via _names_a_domain_thing"
+        "calendar+design+paper+schedule+workspace": "r90 (13 total deferral tests) — file routes defer to the domain rule via _names_a_domain_thing"
       }
     },
     "R-release-macos-dmg-artifact": {
-      "title": "macOS DMG ships which artifact \u2014 native SwiftUI GUI (com.jarvisforge.vantage) vs Tk launcher (com.jarvisforge.app)?",
+      "title": "macOS DMG ships which artifact — native SwiftUI GUI (com.jarvisforge.vantage) vs Tk launcher (com.jarvisforge.app)?",
       "status": "blocked",
       "priority": 2,
       "depends_on": [],
@@ -1351,7 +1388,7 @@
         "owner chooses; then build_dmg.sh packages that bundle and the docs/RELEASE_AND_BUILD.md table is updated"
       ],
       "blockers": [
-        "OWNER DECISION (documented open in docs/RELEASE_AND_BUILD.md): the DMG currently packages the Tk-launcher bundle (dist/Vantage.app, com.jarvisforge.app, built by build_app.py). The intended macOS GUI is the native SwiftUI app (macos/Vantage/Vantage.app, com.jarvisforge.vantage, built by assemble_app.sh). Two bundles by design. Not a defect \u2014 a product decision about which one ships."
+        "OWNER DECISION (documented open in docs/RELEASE_AND_BUILD.md): the DMG currently packages the Tk-launcher bundle (dist/Vantage.app, com.jarvisforge.app, built by build_app.py). The intended macOS GUI is the native SwiftUI app (macos/Vantage/Vantage.app, com.jarvisforge.vantage, built by assemble_app.sh). Two bundles by design. Not a defect — a product decision about which one ships."
       ],
       "evidence": {
         "date": "2026-10-23",
@@ -1365,12 +1402,14 @@
       "status": "completed",
       "priority": 1,
       "depends_on": [],
-      "acceptance": ["to be detailed as the epic is worked"],
+      "acceptance": [
+        "to be detailed as the epic is worked"
+      ],
       "blockers": [],
       "evidence": {
         "date": "2026-10-24",
         "iteration": "fast-build",
-        "note": "3222\u21923272 suite; r97 16, r98 6 browser, planner-native.png",
+        "note": "3222→3272 suite; r97 16, r98 6 browser, planner-native.png",
         "suite": "3272 passed / 0 failed (non-OCR)"
       }
     },
@@ -1379,7 +1418,9 @@
       "status": "completed",
       "priority": 1,
       "depends_on": [],
-      "acceptance": ["to be detailed as the epic is worked"],
+      "acceptance": [
+        "to be detailed as the epic is worked"
+      ],
       "blockers": [],
       "evidence": {
         "date": "2026-10-24",
@@ -1393,7 +1434,9 @@
       "status": "completed",
       "priority": 2,
       "depends_on": [],
-      "acceptance": ["to be detailed as the epic is worked"],
+      "acceptance": [
+        "to be detailed as the epic is worked"
+      ],
       "blockers": [],
       "evidence": {
         "date": "2026-10-24",
@@ -1407,7 +1450,9 @@
       "status": "completed",
       "priority": 2,
       "depends_on": [],
-      "acceptance": ["to be detailed as the epic is worked"],
+      "acceptance": [
+        "to be detailed as the epic is worked"
+      ],
       "blockers": [],
       "evidence": {
         "date": "2026-10-24",
@@ -1421,7 +1466,9 @@
       "status": "completed",
       "priority": 2,
       "depends_on": [],
-      "acceptance": ["to be detailed as the epic is worked"],
+      "acceptance": [
+        "to be detailed as the epic is worked"
+      ],
       "blockers": [],
       "evidence": {
         "date": "2026-10-24",
@@ -1435,7 +1482,9 @@
       "status": "completed",
       "priority": 3,
       "depends_on": [],
-      "acceptance": ["to be detailed as the epic is worked"],
+      "acceptance": [
+        "to be detailed as the epic is worked"
+      ],
       "blockers": [],
       "evidence": {
         "date": "2026-10-24",
@@ -1449,7 +1498,9 @@
       "status": "pending",
       "priority": 3,
       "depends_on": [],
-      "acceptance": ["to be detailed as the epic is worked"],
+      "acceptance": [
+        "to be detailed as the epic is worked"
+      ],
       "blockers": [
         "Call preparation + contacts DONE; actually placing a call needs an approved telephony integration or the user opening their calling app."
       ],
@@ -1460,7 +1511,9 @@
       "status": "completed",
       "priority": 3,
       "depends_on": [],
-      "acceptance": ["to be detailed as the epic is worked"],
+      "acceptance": [
+        "to be detailed as the epic is worked"
+      ],
       "blockers": [],
       "evidence": {
         "date": "2026-10-24",
@@ -1470,11 +1523,13 @@
       }
     },
     "E9-cross-app-research": {
-      "title": "Connected goal workflow: goal \u2192 ordered dependency-linked tasks (no calendar write)",
+      "title": "Connected goal workflow: goal → ordered dependency-linked tasks (no calendar write)",
       "status": "completed",
       "priority": 3,
       "depends_on": [],
-      "acceptance": ["to be detailed as the epic is worked"],
+      "acceptance": [
+        "to be detailed as the epic is worked"
+      ],
       "blockers": [],
       "evidence": {
         "date": "2026-10-24",
@@ -1488,7 +1543,9 @@
       "status": "completed",
       "priority": 3,
       "depends_on": [],
-      "acceptance": ["to be detailed as the epic is worked"],
+      "acceptance": [
+        "to be detailed as the epic is worked"
+      ],
       "blockers": [],
       "evidence": {
         "date": "2026-10-24",
@@ -1528,7 +1585,9 @@
       "status": "pending",
       "priority": 4,
       "depends_on": [],
-      "acceptance": ["to be detailed as the epic is worked"],
+      "acceptance": [
+        "to be detailed as the epic is worked"
+      ],
       "blockers": [
         "Owner decision: which macOS artifact ships in the DMG (native GUI vs Tk launcher)."
       ],
@@ -1566,7 +1625,7 @@
       ],
       "evidence": [
         "BackendManager.startBackend replaced `env uv run uvicorn ...` (ignored run.py: port refusal, LAN host, HTTPS) with backendInterpreter()+run.py serve+--host from the same lan_mode switch; bindHost(interpreter) checked in a compiled harness (5/5).",
-        "backend_lifecycle._startup_failure_reason surfaces the launcher sentence (e.g. single-instance claim) \u2014 verified live against the refused-start path; 4 new tests.",
+        "backend_lifecycle._startup_failure_reason surfaces the launcher sentence (e.g. single-instance claim) — verified live against the refused-start path; 4 new tests.",
         "macOS Makefile install target no longer `rm -rf /Applications/Vantage.app`; it calls installers/macos/install_app.sh (backup, atomic swap, verify). Verified: backup created, install verified."
       ],
       "attempts": 1,
@@ -1611,7 +1670,7 @@
         "Fixed tooling: run_lifecycle_check.sh no longer mutates the tracked fixture (was making the live backend report stale); run_command_center_check.sh now enumerates Sources/ (17/17 passed).",
         "Focused backend regression 131 passed.",
         "Release build clean; bundle assembled; codesign verified; installed via installers/macos/install_app.sh with backup; installed app launches, attaches to backend pid 86594, one listener, no duplicate.",
-        "BLOCKED: window ops cannot be exercised \u2014 AXIsProcessTrusted false and screen locked. Buttons disabled with the reason shown."
+        "BLOCKED: window ops cannot be exercised — AXIsProcessTrusted false and screen locked. Buttons disabled with the reason shown."
       ],
       "attempts": 1,
       "max_attempts": 3
@@ -1643,7 +1702,7 @@
         "Backend focused 43 passed; broad non-OCR 3637 passed / 21 skipped / 0 failed.",
         "Release build clean; bundle 11 MB codesign valid; installed with backup 20261028-171857; installed app attached to backend pid 59871, one listener, no duplicate spawn.",
         "Palette window probe: repeated show keeps ONE panel, dismiss hides, reopening reuses it.",
-        "NOT VERIFIED: the physical Option-Space press \u2014 screen locked, no global key events reach any process."
+        "NOT VERIFIED: the physical Option-Space press — screen locked, no global key events reach any process."
       ],
       "attempts": 1,
       "max_attempts": 3
@@ -1681,6 +1740,32 @@
       ],
       "attempts": 1,
       "max_attempts": 3
+    },
+    "V10-1-automation-studio": {
+      "title": "V10: Automation Studio — record a demonstration, review the draft, save and run it",
+      "status": "completed",
+      "priority": 0,
+      "acceptance": [
+        "a demonstration is captured as semantic steps (tool + params), never coordinates",
+        "a sensitive parameter is refused and its value never stored, while the step still appears for review",
+        "the draft states unverified and needs_input rather than claiming the automation works",
+        "every supported kind is a registered tool with an owning agent",
+        "saving a draft creates a real mission contract and runs it through the gated executor",
+        "the captured parameters are sent, so a saved step can actually run",
+        "a step with no captured values cannot be saved as runnable",
+        "approving a parked step keeps the confirmation id the runner matches, so a resume does not re-park",
+        "the screen renders: idle, recording, draft, and run result"
+      ],
+      "evidence": [
+        "2026-11-15: jarvis/core/recorder.py SUPPORTED_KINDS now names real tools (write_file, read_file, delete_file, open_application, open_url, run_allowlisted_command, move_file, copy_file); the earlier list named five tools that do not exist.",
+        "2026-11-15: tests/test_recorder.py pins every kind to a registered tool (core.tools.names()) and to an owning agent (find_agent); 39 passed across test_recorder + test_missions_api + test_no_duplicate_routes.",
+        "2026-11-15: jarvis/api/missions_routes.py decide no longer overwrites the step detail, preserving 'confirmation CONF-...' that MissionRunner._parked_confirmation reads. Live proof on an isolated backend (:8799, JARVIS_HOME=/tmp/vantage_probe_home): park -> CONF-4f928c590a60ef32243d152c69f32698 -> approve -> resume with that id -> 'S1 done; Created vantage_probe_out.txt (21 bytes), read it back and it matches.' Before the fix the same sequence re-parked forever.",
+        "2026-11-15: APIModels.RecordingDraft.Step gained params; AutomationStudioView.saveAndRun sends step.params instead of [:]. Verified the pre-fix behaviour by running the exact mission it produced: 'not executed: missing required parameter path; missing required parameter content'.",
+        "2026-11-15: Save & run is disabled when any step captured no values, with a stated reason; rendering confirms the disabled state on a draft containing a password-skipped step.",
+        "2026-11-15 VISUAL: rendered the real ContentView in an NSWindow (AppNavigation.shared.go(.studio)) to PNG. Idle explainer; open recording with live step count; 2-step draft with 'not yet proven' and a lock on the sensitive step; 1-step clean draft with Save & run enabled. Raw: /tmp/vantage_shots/studio_*.png",
+        "2026-11-15 LIMIT: synthetic input is impossible here (CGPreflightPostEventAccess=false, AXIsProcessTrusted=false), so no click reached any control. The forms were driven through the API, not typed into."
+      ],
+      "notes": "Routes: POST /intelligence/recordings, /recordings/steps, /recordings/stop, /recordings/draft, GET /recordings/current."
     }
   }
 }

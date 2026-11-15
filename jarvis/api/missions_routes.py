@@ -239,8 +239,21 @@ def build_router(require_auth) -> APIRouter:
                 raise HTTPException(status_code=409,
                                     detail=f"the lease does not authorize this step: {exc}")
 
+        # The confirmation id recorded when the step parked is what the runner
+        # matches a resume against (`_parked_confirmation`). Overwriting the
+        # detail with "approved by the operator" destroyed it, so a mission a
+        # person had explicitly approved re-parked forever on every run. Keep
+        # the id in the detail and record the approval beside it.
+        parked = str(getattr(step, "detail", "") or "")
+        confirmation = ""
+        if "confirmation " in parked:
+            confirmation = parked.split("confirmation ", 1)[1].split()[0].rstrip(")").strip()
+
         service.mark_step(mission_id, step_id, status="pending",
-                          detail=f"approved by the operator; {decision}", actor="user")
+                          detail=("approved by the operator; "
+                                  f"confirmation {confirmation}" if confirmation
+                                  else "approved by the operator"),
+                          actor="user")
         return _dump(service.get(mission_id))
 
     @router.post("/{mission_id}/run")

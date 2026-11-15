@@ -29,11 +29,12 @@ def test_capturing_without_a_recording_is_refused(recorder):
 def test_a_recording_captures_typed_steps_and_stops(recorder):
     recorder.start("tidy the notes")
     recorder.capture("write_file", {"path": "/tmp/a.md", "content": "one"}, label="write a")
-    recorder.capture("append_file", {"path": "/tmp/a.md", "content": "two"}, label="append")
+    recorder.capture("write_file", {"path": "/tmp/a.md", "content": "two",
+                                    "mode": "append"}, label="append")
 
     stopped = recorder.stop()
     assert stopped.open is False
-    assert [s.kind for s in stopped.steps] == ["write_file", "append_file"]
+    assert [s.kind for s in stopped.steps] == ["write_file", "write_file"]
     assert stopped.stopped_at >= stopped.started_at
 
 
@@ -64,7 +65,7 @@ def test_an_unknown_action_kind_is_refused(recorder):
 
 def test_a_password_parameter_is_refused_and_its_value_never_stored(recorder):
     recorder.start("sign in")
-    step = recorder.capture("run_command",
+    step = recorder.capture("run_allowlisted_command",
                             {"command": "login", "password": "hunter2"})
 
     assert step.skipped is True
@@ -77,14 +78,15 @@ def test_a_password_parameter_is_refused_and_its_value_never_stored(recorder):
 def test_every_sensitive_hint_refuses_the_step(recorder):
     recorder.start()
     for key in ("api_key", "otp", "card_number", "cvv", "token"):
-        step = recorder.capture("http_request", {"url": "https://x", key: "v"})
+        step = recorder.capture("open_url", {"url": "https://x", key: "v"})
         assert step.skipped is True, key
 
 
 def test_a_skipped_step_still_appears_for_the_reviewer(recorder):
     """The person must know something happened there, without seeing the value."""
     recorder.start()
-    recorder.capture("run_command", {"command": "login", "password": "secret"})
+    recorder.capture("run_allowlisted_command",
+                     {"command": "login", "password": "secret"})
     recorder.stop()
 
     draft = recorder.derive()
@@ -151,3 +153,40 @@ def test_the_draft_shape_matches_a_mission_step(recorder):
     step = draft["steps"][0]
     assert set(step) >= {"title", "tool", "params"}
     assert isinstance(step["params"], dict)
+
+# -- every kind must be a tool that actually exists ------------------------
+
+def test_every_supported_kind_is_a_registered_tool():
+    """A kind the recorder accepts must be dispatchable, or its draft cannot run.
+
+    This is the check the recorder lacked: it listed `append_file`,
+    `replace_text`, `open_app`, `run_command` and `http_request`, none of which
+    is a tool. A draft built from them looked complete and failed on its first
+    replay step with "no agent owns ...". Recording a step that cannot be
+    replayed is worse than refusing it, because the person reviews and approves
+    something that was never going to work.
+    """
+    from jarvis.core.recorder import SUPPORTED_KINDS
+
+    from jarvis.api.app import get_core
+
+    core = get_core()
+    names = set(core.tools.names())
+    missing = [kind for kind in SUPPORTED_KINDS if kind not in names]
+    assert not missing, (
+        f"these recorded kinds have no registered tool, so a draft using them "
+        f"cannot be replayed: {missing}")
+
+
+def test_every_supported_kind_has_an_owning_agent():
+    """Registration is not enough -- the mission executor dispatches by agent."""
+    from jarvis.agents.base import find_agent
+    from jarvis.core.recorder import SUPPORTED_KINDS
+
+    from jarvis.api.app import get_core
+
+    agents = get_core().agents
+    orphans = [kind for kind in SUPPORTED_KINDS if find_agent(agents, kind) is None]
+    assert not orphans, (
+        f"these recorded kinds resolve to no agent, so a mission step using "
+        f"them fails with 'no agent owns ...': {orphans}")
