@@ -126,6 +126,14 @@ class Settings(BaseSettings):
     port: int = 8765
     companion_port: int = 8766
 
+    #: When true, /files/apply refuses a plan that does not name a lease.
+    #: The default keeps the existing behaviour (a lease is spent when given),
+    #: because turning every apply into a two-step dance would break clients
+    #: that have not been taught about leases yet. Setting this makes the
+    #: strictest posture the only one, which is what an operator who wants
+    #: scoped authorization on every file write actually means.
+    require_lease_for_file_apply: bool = False
+
     #: Where a relative filename typed by a user is anchored.
     #:
     #: Deliberately not the process working directory: "create a file called

@@ -46,6 +46,17 @@ def build_router(require_auth) -> APIRouter:
         # session. `approved: true` alone is a boolean, not an authorization --
         # this is the path by which a scoped grant is actually spent.
         lease_id = str(body.get("lease_id") or "").strip()
+
+        # An operator who has required leases gets a refusal, not a quiet
+        # downgrade to boolean approval.
+        from ..config import get_settings
+
+        if not lease_id and get_settings().require_lease_for_file_apply:
+            raise HTTPException(
+                status_code=409,
+                detail="this server requires a scoped lease to apply file changes; "
+                       "issue one at POST /missions/{id}/leases and pass its id")
+
         if lease_id:
             from ..db.database import get_db
             from ..security.leases import LeaseRefusal, LeaseService

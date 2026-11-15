@@ -169,3 +169,22 @@ def test_apply_with_a_lease_for_another_directory_is_refused(tmp_path):
         "approved": True, "lease_id": lease["lease_id"]})
     assert refused.status_code == 409
     assert target.read_text(encoding="utf-8") == "keep\n"
+
+
+def test_apply_without_a_lease_is_refused_when_the_server_requires_one(
+        tmp_path, monkeypatch):
+    """The strict posture is available, and it fails closed."""
+    from jarvis.config import get_settings
+
+    target = tmp_path / "f.txt"
+    target.write_text("keep\n", encoding="utf-8")
+    settings = get_settings()
+    monkeypatch.setattr(settings, "require_lease_for_file_apply", True, raising=False)
+
+    client = _client()
+    refused = client.post("/files/apply", headers=HEADERS, json={
+        "operations": [{"op": "replace", "path": str(target), "content": "x"}],
+        "approved": True})
+    assert refused.status_code == 409
+    assert "lease" in refused.json()["detail"]
+    assert target.read_text(encoding="utf-8") == "keep\n"
