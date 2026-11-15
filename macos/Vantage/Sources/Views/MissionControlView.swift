@@ -26,6 +26,7 @@ struct MissionControlView: View {
     @State private var newCondition = ""
     @State private var creating = false
     @State private var acting: String?
+    @State private var runNote: String?
 
     private let api = APIClient.shared
 
@@ -64,6 +65,7 @@ struct MissionControlView: View {
                 }
 
                 if let mission = selected {
+                    controls(for: mission)
                     ProofLensPanel(mission: mission, proof: proof)
                 }
             }
@@ -93,6 +95,122 @@ struct MissionControlView: View {
         } catch {
             proof = nil
         }
+    }
+
+    // MARK: - Controls
+
+    /// Act on the selected mission: run it, or approve a parked one.
+    ///
+    /// Approving issues a scoped lease and submits the confirmation the mission
+    /// is actually waiting on, so the resume is the same durable invocation
+    /// rather than a fresh attempt. The button says what it will do; it never
+    /// shows a success state the backend did not report.
+    @ViewBuilder
+    private func controls(for mission: APIModels.Mission) -> some View {
+        VStack(alignment: .leading, spacing: V.Space.s) {
+            SectionHeader("Actions")
+            HStack(spacing: V.Space.s) {
+                switch mission.state {
+                case "draft":
+                    actionButton("Run this mission", busyKey: "run:\(mission.mission_id)") {
+                        await run(mission, approving: false)
+                    }
+                case "awaiting_approval":
+                    actionButton("Approve and run", busyKey: "approve:\(mission.mission_id)") {
+                        await run(mission, approving: true)
+                    }
+                case "running":
+                    Text("This mission is running.").font(V.Font.caption)
+                        .foregroundColor(V.textSecondary)
+                default:
+                    Text("Nothing to do: this mission is \(mission.state).")
+                        .font(V.Font.caption).foregroundColor(V.textTertiary)
+                }
+                Spacer()
+            }
+
+            if let note = runNote {
+                Text(note)
+                    .font(V.Font.caption)
+                    .foregroundColor(V.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            if mission.state == "awaiting_approval" {
+                Text("Approving grants a scoped, single-use lease for this mission's "
+                     + "steps and submits the confirmation it is waiting on.")
+                    .font(V.Font.caption)
+                    .foregroundColor(V.textTertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(V.Space.m)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(V.surface)
+        .clipShape(RoundedRectangle(cornerRadius: V.Radius.card))
+        .overlay(RoundedRectangle(cornerRadius: V.Radius.card)
+            .stroke(V.border, lineWidth: 1))
+    }
+
+    private func actionButton(_ title: String, busyKey: String,
+                              work: @escaping () async -> Void) -> some View {
+        Button(acting == busyKey ? "Working…" : title) {
+            Task { await work() }
+        }
+        .buttonStyle(VPrimaryButtonStyle())
+        .disabled(acting != nil)
+    }
+
+    /// Run or approve. Approval issues a lease first, then submits the
+    /// confirmation the mission recorded when it parked.
+    private func run(_ mission: APIModels.Mission, approving: Bool) async {
+        acting = (approving ? "approve:" : "run:") + mission.mission_id
+        runNote = nil
+        defer { acting = nil }
+        do {
+            var approval: APIModels.MissionApproval?
+            if approving {
+                let scope = mission.steps?.first?.params?["path"].map { [$0] } ?? []
+                let lease: APIModels.MissionLease = try await api.post(
+                    "/missions/\(mission.mission_id)/leases",
+                    body: APIModels.MissionLeaseRequest(
+                        capability: "write_file", scope: scope, max_uses: 8,
+                        ttl_seconds: 600),
+                    as: APIModels.MissionLease.self)
+                guard let confirmation = parkedConfirmation(mission) else {
+                    runNote = "This mission is waiting on a confirmation this app "
+                        + "cannot read, so it was not approved."
+                    return
+                }
+                approval = APIModels.MissionApproval(
+                    confirmation_id: confirmation, lease_id: lease.lease_id)
+            }
+
+            let updated: APIModels.Mission = try await api.post(
+                "/missions/\(mission.mission_id)/run",
+                body: APIModels.MissionRunRequest(approval: approval),
+                as: APIModels.Mission.self)
+
+            runNote = "Ended \(updated.state); outcome: \(updated.verdict)."
+                + ((updated.reason ?? "").isEmpty ? "" : " \((updated.reason ?? ""))")
+            selected = updated
+            await load()
+        } catch {
+            runNote = error.localizedDescription
+        }
+    }
+
+    /// The confirmation a parked step recorded, read from its detail line.
+    private func parkedConfirmation(_ mission: APIModels.Mission) -> String? {
+        for step in mission.steps ?? [] {
+            guard let detail = step.detail else { continue }
+            if let range = detail.range(of: "confirmation ") {
+                let rest = detail[range.upperBound...]
+                let id = rest.prefix { !$0.isWhitespace }
+                if !id.isEmpty && id != "unspecified" { return String(id) }
+            }
+        }
+        return nil
     }
 
     // MARK: - Composer

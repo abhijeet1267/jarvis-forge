@@ -1510,6 +1510,9 @@ extension APIModels {
         let title: String
         let status: String
         let detail: String?
+        /// The tool call this step makes, as the server recorded it. Optional so
+        /// a step written by an older server still decodes.
+        let params: [String: String]?
 
         var id: String { step_id }
     }
@@ -1790,5 +1793,27 @@ extension APIModels {
         let op: String?
         let path: String?
         let content: String?
+    }
+
+    // MARK: - Running a mission
+
+    struct MissionRunRequest: Codable {
+        let approval: MissionApproval?
+    }
+
+    struct MissionApproval: Codable {
+        let confirmation_id: String
+        let lease_id: String
+    }
+
+    struct MissionLeaseRequest: Codable {
+        let capability: String
+        let scope: [String]
+        let max_uses: Int
+        let ttl_seconds: Int
+    }
+
+    struct MissionLease: Codable {
+        let lease_id: String
     }
 }
