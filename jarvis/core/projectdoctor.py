@@ -220,6 +220,54 @@ def inspect(root_path: str, *, run_checks: bool = False) -> Dict[str, Any]:
     return profile.to_dict()
 
 
+def _deterministic_json_repair(text: str) -> Optional[str]:
+    """The one obvious correction for a JSON manifest, or None.
+
+    The discipline here is what makes this a *deterministic* repairable case
+    rather than a guess: the repair is attempted only for a small set of
+    syntactic mistakes whose correction is forced by JSON itself --
+
+    * single-quoted keys and strings,
+    * unquoted identifier keys,
+    * a trailing comma before a closing brace.
+
+    Each is applied only if the result **parses**. If the repaired text still
+    does not parse, the original mistake was not one of these and no proposal
+    comes back. Inventing a value is never part of it: no key is added, no
+    number changed, nothing semantic.
+    """
+    import re
+
+    candidates = [text]
+
+    # 1. Single quotes -> double quotes (only where a quote delimits a token).
+    candidates.append(re.sub(r"'([^'\n]*)'", r'"\1"', text))
+
+    # 2. Unquoted identifier keys -> quoted keys.
+    candidates.append(re.sub(r'([{,]\s*)([A-Za-z_][A-Za-z0-9_]*)(\s*:)',
+                             r'\1"\2"\3', text))
+
+    # 3. Trailing comma before a closing brace or bracket.
+    candidates.append(re.sub(r",(\s*[}\]])", r"\1", text))
+
+    # 4. Each of those combined, since real manifests make several mistakes.
+    combined = re.sub(r"'([^'\n]*)'", r'"\1"', text)
+    combined = re.sub(r'([{,]\s*)([A-Za-z_][A-Za-z0-9_]*)(\s*:)',
+                      r'\1"\2"\3', combined)
+    combined = re.sub(r",(\s*[}\]])", r"\1", combined)
+    candidates.append(combined)
+
+    for candidate in candidates:
+        if candidate == text:
+            continue
+        try:
+            json.loads(candidate)
+        except ValueError:
+            continue
+        return candidate
+    return None
+
+
 def propose_repair(root_path: str, finding_detail: str = "") -> Dict[str, Any]:
     """A repair proposal, or an honest statement that none is known.
 
@@ -236,15 +284,39 @@ def propose_repair(root_path: str, finding_detail: str = "") -> Dict[str, Any]:
     if profile is not None and manifest.is_file():
         try:
             json.loads(manifest.read_text(encoding="utf-8"))
-        except ValueError:
-            # A malformed package.json cannot be repaired by guessing its
-            # contents; say so rather than inventing a replacement.
+        except ValueError as exc:
+            original = manifest.read_text(encoding="utf-8")
+            repaired = _deterministic_json_repair(original)
+
+            if repaired is None:
+                # The mistake is not one whose correction JSON forces -- a
+                # missing value, a truncated file, a duplicated key. Guessing
+                # here would replace real configuration with invented content.
+                return {
+                    "operations": [],
+                    "summary": (
+                        f"package.json is not valid JSON ({exc}). That mistake is not "
+                        "one this system can correct without guessing what the file "
+                        "should contain -- restore it from version control or rewrite "
+                        "it deliberately."),
+                    "applicable": False,
+                    "tier": "human",
+                }
+
+            operations.append({
+                "op": "replace",
+                "path": str(manifest),
+                "content": repaired,
+                "reason": f"correct the JSON syntax error ({exc})",
+            })
             return {
-                "operations": [],
-                "summary": ("package.json is not valid JSON. This system will not "
-                            "guess what it should contain -- restore it from version "
-                            "control or rewrite it deliberately."),
-                "applicable": False,
+                "operations": operations,
+                "summary": (
+                    "package.json has a syntax error whose correction is forced by "
+                    "JSON itself (quoting or a trailing comma). The proposed file "
+                    "parses and changes nothing else."),
+                "applicable": True,
+                "tier": "deterministic",
             }
 
     if not operations:

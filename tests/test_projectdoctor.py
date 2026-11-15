@@ -82,7 +82,10 @@ def test_a_repair_for_an_unparseable_manifest_is_refused_rather_than_invented(tm
     proposal = propose_repair(str(tmp_path))
     assert proposal["applicable"] is False
     assert proposal["operations"] == []
-    assert "will not guess" in proposal["summary"]
+    # Refused because the correction is not forced by JSON -- not because the
+    # message happens to contain a particular phrase.
+    assert proposal["tier"] == "human"
+    assert "not one this system can correct" in proposal["summary"]
 
 
 def test_an_unknown_finding_yields_no_automatic_repair(tmp_path):
@@ -100,3 +103,60 @@ def test_a_repair_is_shaped_for_parallelworld_not_applied_here(tmp_path):
     assert set(proposal) >= {"operations", "summary", "applicable"}
     assert (tmp_path / "pyproject.toml").read_text(encoding="utf-8") == \
         "[project]\nname='x'\n"
+
+# -- deterministic repairs -------------------------------------------------
+
+def test_a_single_quoted_manifest_gets_a_forced_correction(tmp_path):
+    """The fix is forced by JSON itself: quoting. Nothing semantic changes."""
+    from jarvis.core.projectdoctor import propose_repair
+
+    (tmp_path / "package.json").write_text(
+        "{'name': 'demo', 'version': '1.0.0'}", encoding="utf-8")
+
+    proposal = propose_repair(str(tmp_path))
+    assert proposal["applicable"] is True
+    assert proposal["tier"] == "deterministic"
+    assert len(proposal["operations"]) == 1
+    op = proposal["operations"][0]
+    assert op["op"] == "replace"
+
+    # The proposed content parses, and carries the same values.
+    repaired = json.loads(op["content"])
+    assert repaired == {"name": "demo", "version": "1.0.0"}
+
+
+def test_unquoted_keys_and_a_trailing_comma_are_corrected(tmp_path):
+    from jarvis.core.projectdoctor import propose_repair
+
+    (tmp_path / "package.json").write_text(
+        '{name: "demo", version: "1.0.0",}', encoding="utf-8")
+
+    proposal = propose_repair(str(tmp_path))
+    assert proposal["applicable"] is True
+    assert json.loads(proposal["operations"][0]["content"]) == {
+        "name": "demo", "version": "1.0.0"}
+
+
+def test_an_ambiguous_manifest_is_refused_with_the_reason(tmp_path):
+    """A truncated file has no forced correction; inventing one would be a guess."""
+    from jarvis.core.projectdoctor import propose_repair
+
+    (tmp_path / "package.json").write_text('{"name": "demo"', encoding="utf-8")
+
+    proposal = propose_repair(str(tmp_path))
+    assert proposal["applicable"] is False
+    assert proposal["operations"] == []
+    assert proposal["tier"] == "human"
+    assert "not one this system can correct" in proposal["summary"]
+
+
+def test_a_repair_never_writes_on_its_own(tmp_path):
+    from jarvis.core.projectdoctor import propose_repair
+
+    manifest = tmp_path / "package.json"
+    manifest.write_text("{'name': 'demo'}", encoding="utf-8")
+    before = manifest.read_text(encoding="utf-8")
+
+    propose_repair(str(tmp_path))
+    assert manifest.read_text(encoding="utf-8") == before, (
+        "the doctor proposes; ParallelWorld applies")
