@@ -60,6 +60,180 @@ SUPPORTED_KINDS = (
     "move_file", "copy_file",
 )
 
+#: The parameters each supported tool requires, mirroring the registered
+#: ``ToolSpec.required_parameters`` for exactly the kinds above.
+#:
+#: Not imported from the registry on purpose: ``jarvis/registry/tools`` builds
+#: the whole tool catalog, and the recorder must stay importable without one
+#: (``tests/test_recorder.py`` constructs it standalone). The mirror is pinned
+#: to the registry by ``test_the_recorder_knows_every_required_parameter_the_registry_does``,
+#: so a tool that grows a required parameter fails that test rather than
+#: silently producing drafts that cannot replay.
+#:
+#: Optional parameters with a tool-side default are absent on purpose.
+#: ``write_file``'s ``mode`` defaults to ``overwrite`` when it is not supplied,
+#: so a recording that never set it is complete and must not be reported as
+#: needing input.
+REQUIRED_PARAMETERS: Dict[str, tuple] = {
+    "write_file": ("path", "content"),
+    "read_file": ("path",),
+    "delete_file": ("path",),
+    "open_application": ("app",),
+    "open_url": ("url",),
+    "run_allowlisted_command": ("command",),
+    "move_file": ("source", "destination"),
+    "copy_file": ("source", "destination"),
+}
+
+
+def missing_parameters(kind: str, params: Dict[str, Any]) -> List[str]:
+    """The required parameters ``params`` does not carry a value for.
+
+    An unknown kind reports nothing missing: whether the tool exists at all is a
+    different question, already enforced by ``SUPPORTED_KINDS`` and by the test
+    that pins every kind to a registered tool and an owning agent.
+    """
+    required = REQUIRED_PARAMETERS.get(kind, ())
+    return [name for name in required
+            if name not in params or params[name] in (None, "")]
+
+
+def _missing_reason(missing: List[str]) -> str:
+    names = ", ".join(missing)
+    return (f"{names} {'was' if len(missing) == 1 else 'were'} never captured; "
+            f"supply {'it' if len(missing) == 1 else 'them'} before running")
+
+
+def _acceptance_for(kind: str, params: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """The condition a step's own parameters claim it will establish, or None.
+
+    A demonstration is evidence of intent, not of outcome, so a condition is
+    only proposed where the step's parameters *name* something a later observer
+    can re-read from disk. Nothing here trusts the executor: each condition is
+    checked after the fact by a verifier that reads state, never a return value.
+
+    Only three kinds have an honest observer available:
+
+    * ``write_file`` -- after the write, the path contains the content.
+    * ``copy_file`` -- after the copy, the destination holds the source's exact
+      bytes. ``file_hash`` needs the source's hash at *verification* time, and a
+      step that changed the source between plan and check would produce a
+      spurious failure, so the condition is on content rather than a stored hash.
+    * ``delete_file`` -- after the delete, the path is gone.
+
+    ``read_file``, ``open_url`` and ``open_application`` observe nothing that
+    persists, and ``move_file``'s destination content depends on a source that
+    may itself have moved. Those steps run and are reported as run; no condition
+    is invented for them. A recorded automation whose steps are all of those
+    kinds therefore never reaches ``verified`` -- which is the honest verdict,
+    and the reason this function returns None instead of a plausible-looking
+    condition nobody can check.
+    """
+    path = str(params.get("path") or "")
+    if kind == "write_file" and path:
+        content = str(params.get("content") or "")
+        # Empty content would make `needle in text` vacuously true for any file,
+        # so it establishes nothing and is not offered as a condition.
+        if not content:
+            return None
+        # Holds for both modes: an overwrite leaves exactly this content, and an
+        # append leaves the earlier content followed by it.
+        return {"kind": "file_contains", "path": path, "needle": content,
+                "statement": f"{path} exists and contains the recorded content"}
+    if kind == "copy_file":
+        destination = str(params.get("destination") or "")
+        source = str(params.get("source") or "")
+        if destination and source:
+            return {"kind": "file_identical", "path": destination, "source": source,
+                    "statement": f"{destination} holds exactly the contents of {source}"}
+    if kind == "delete_file" and path:
+        return {"kind": "file_absent", "path": path,
+                "statement": f"{path} no longer exists"}
+    return None
+
+
+def _apply_review(steps: List[Dict[str, Any]],
+                  reviewed: List[Dict[str, Any]]) -> tuple:
+    """Apply the values a person supplied, then re-derive what can be checked.
+
+    The review is the step list the editor holds: same steps, in the order the
+    editor now shows them, with the values it holds. Order is honoured because
+    the editor offers reordering, and a reordered workflow runs in that order.
+
+    Parameters the review does not mention keep their recorded value, so a
+    client that sends only corrections does not erase the demonstration.
+    Conditions are rebuilt from the merged parameters rather than carried over:
+    a condition describes a value, and the value may have changed. A step whose
+    parameters no longer support any checkable outcome loses its claim instead of
+    keeping one that no longer matches what will run.
+
+    A malformed review is refused rather than partially applied -- guessing at
+    which steps the person meant is how a review screen silently edits a
+    workflow the person did not edit.
+    """
+    if not isinstance(reviewed, list) or len(reviewed) != len(steps):
+        raise RecordingError(
+            f"the review has {len(reviewed) if isinstance(reviewed, list) else 'no'} "
+            f"step(s); the recording has {len(steps)}. A review must cover every "
+            "step, in the order it should run.")
+
+    merged: List[Dict[str, Any]] = []
+    for index, supplied in enumerate(reviewed):
+        # Each reviewed entry names which recorded step it is editing, by its
+        # position in the recording. Matching on values instead would make two
+        # identical-looking steps indistinguishable, and zipping by position
+        # would make a reorder silently swap one step's parameters onto another
+        # step's title and condition.
+        if not isinstance(supplied, dict):
+            raise RecordingError(f"reviewed step {index + 1} is not an object")
+        try:
+            source = int(supplied.get("index"))
+        except (TypeError, ValueError):
+            raise RecordingError(
+                f"reviewed step {index + 1} does not say which recorded step it "
+                "is; the editor sends each step's original position as 'index'")
+        if not 0 <= source < len(steps):
+            raise RecordingError(
+                f"reviewed step {index + 1} names recorded step {source}, which "
+                f"does not exist (the recording has {len(steps)})")
+        original = steps[source]
+
+        if str(supplied.get("tool") or original["tool"]) != original["tool"]:
+            raise RecordingError(
+                f"reviewed step {index + 1} changes the action from "
+                f"{original['tool']!r} to {supplied.get('tool')!r}; a review may "
+                "supply values and order, not replace what was demonstrated")
+        params = dict(original.get("params") or {})
+        for name, value in (supplied.get("params") or {}).items():
+            params[str(name)] = "" if value is None else str(value)
+        entry: Dict[str, Any] = {"title": str(supplied.get("title") or original["title"]),
+                                 "tool": original["tool"], "params": params}
+        missing = missing_parameters(original["tool"], params)
+        if missing:
+            entry["needs_input"] = _missing_reason(missing)
+        merged.append(entry)
+
+    seen = [int(s["index"]) for s in reviewed]
+    if sorted(seen) != list(range(len(steps))):
+        raise RecordingError(
+            "a review must name every recorded step exactly once; it named "
+            f"{sorted(seen)} of {len(steps)}")
+
+    conditions: List[Dict[str, Any]] = []
+    for entry in merged:
+        if "needs_input" in entry:
+            continue
+        acceptance = _acceptance_for(entry["tool"], entry["params"])
+        if acceptance is None:
+            continue
+        condition_id = f"C{len(conditions) + 1}"
+        conditions.append({"condition_id": condition_id,
+                           "statement": acceptance["statement"],
+                           "verifier": {k: v for k, v in acceptance.items()
+                                        if k != "statement"}})
+        entry["satisfies"] = condition_id
+    return merged, conditions
+
 
 class RecordingError(ValueError):
     """A recording or a step could not be accepted; the message says why."""
@@ -207,13 +381,30 @@ class Recorder:
         return self._recording
 
     # -- deriving a workflow ------------------------------------------------
-    def derive(self, recording: Optional[Recording] = None) -> Dict[str, Any]:
+    def derive(self, recording: Optional[Recording] = None,
+               *, reviewed: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
         """Turn a stopped recording into a workflow draft a person can review.
 
         Every step becomes a mission-shaped step. Required capabilities are
         derived from the kinds actually captured -- not from what the person
         hoped to do -- and the resource scope is the set of paths the
         demonstration touched.
+
+        A step is only reported as complete when it carries every parameter its
+        tool declares. The recorder used to count only *skipped* steps as
+        needing input, so a `copy_file` captured with a `source` and no
+        `destination` produced a draft that said "0 needing input" and failed at
+        replay with "missing required parameter 'destination'". A draft that
+        reviews as complete and cannot run is worse than one that asks for the
+        value, so the missing parameters are named here and the step is counted.
+
+        ``reviewed`` replaces the recorded values with what a person supplied in
+        the editor, in capture order. It exists because a value filled in after
+        capture can *create* a checkable outcome -- a `copy_file` gains a
+        `destination` the demonstration never had, and only then is there
+        something to verify afterwards. Re-deriving from the raw recording left
+        such a step with no condition at all, so the run reported the outcome as
+        unverified no matter what the copy actually did.
         """
         rec = recording or self._recording
         if rec is None:
@@ -225,10 +416,13 @@ class Recorder:
         steps = []
         capabilities = set()
         scope = set()
+        conditions: List[Dict[str, Any]] = []
         skipped = 0
+        incomplete = 0
         for step in rec.steps:
             if step.skipped:
                 skipped += 1
+                incomplete += 1
                 steps.append({"title": f"[needs input] {step.label}",
                               "tool": step.kind, "params": {},
                               "needs_input": step.skip_reason})
@@ -238,23 +432,47 @@ class Recorder:
                 value = (step.params or {}).get(key)
                 if isinstance(value, str) and value:
                     scope.add(value)
-            steps.append({"title": step.label or step.kind,
-                          "tool": step.kind,
-                          "params": dict(step.params)})
+            missing = missing_parameters(step.kind, step.params or {})
+            if missing:
+                incomplete += 1
+                steps.append({"title": step.label or step.kind,
+                              "tool": step.kind,
+                              "params": dict(step.params or {}),
+                              "needs_input": _missing_reason(missing)})
+                continue
+
+            entry: Dict[str, Any] = {"title": step.label or step.kind,
+                                     "tool": step.kind,
+                                     "params": dict(step.params)}
+            acceptance = _acceptance_for(step.kind, step.params or {})
+            if acceptance is not None:
+                condition_id = f"C{len(conditions) + 1}"
+                conditions.append({"condition_id": condition_id,
+                                   "statement": acceptance["statement"],
+                                   "verifier": {k: v for k, v in acceptance.items()
+                                                if k != "statement"}})
+                entry["satisfies"] = condition_id
+            steps.append(entry)
+
+        if reviewed is not None:
+            steps, conditions = _apply_review(steps, reviewed)
+            incomplete = sum(1 for s in steps if s.get("needs_input"))
 
         return {
             "recording_id": rec.recording_id,
             "name": rec.name or "Demonstrated workflow",
             "steps": steps,
+            "conditions": conditions,
             "required_capabilities": sorted(capabilities),
             "required_scope": sorted(scope),
-            "needs_input": skipped,
+            "needs_input": incomplete,
             # A demonstration proves what was done, not that doing it again
             # works. Verification only comes from a replay.
             "verdict": "unverified",
             "review_required": True,
             "notes": (
-                f"{len(steps)} step(s) captured, {skipped} needing input. "
+                f"{len(steps)} step(s) captured, {incomplete} needing input, "
+                f"{len(conditions)} checkable outcome(s). "
                 "Review before saving: this draft is what you demonstrated, not "
                 "a verified automation."),
         }

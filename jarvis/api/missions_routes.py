@@ -11,6 +11,8 @@ back. Anything that decides policy, executes a step or judges an outcome lives i
 
 from __future__ import annotations
 
+import json
+
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Body, Depends, HTTPException
@@ -63,12 +65,14 @@ def build_router(require_auth) -> APIRouter:
         if not request:
             raise HTTPException(status_code=422, detail="a mission needs a request")
         service = _service()
+
+        conditions = _conditions_with_stored_specs(body.get("conditions") or [])
         try:
             mission = service.create(
                 request,
                 outcome=str(body.get("outcome") or ""),
                 scope=dict(body.get("scope") or {}),
-                conditions=list(body.get("conditions") or []),
+                conditions=conditions,
                 steps=list(body.get("steps") or []),
             )
         except ValueError as exc:
@@ -453,6 +457,31 @@ def _executor_factory(core):
     return execute
 
 
+def _conditions_with_stored_specs(raw: Any) -> list:
+    """Turn each condition's structured verifier into the text a mission stores.
+
+    A condition arrives with either a declarative `verifier` object (what a
+    recorder produces) or a plain string (hand-written). The mission keeps a
+    string, so the object is serialised here and parsed back at verification
+    time. Doing it at creation is what lets a mission be verified later without
+    the caller re-sending the spec -- a run that forgot to would otherwise
+    report a checkable condition as "no independent verifier was supplied".
+
+    An unknown kind is kept verbatim: it parses to no verifier and the condition
+    is recorded UNKNOWN, which is the honest report.
+    """
+    out = []
+    for entry in raw or []:
+        if not isinstance(entry, dict):
+            continue
+        verifier = entry.get("verifier")
+        if isinstance(verifier, dict):
+            out.append({**entry, "verifier": json.dumps(verifier, sort_keys=True)})
+        else:
+            out.append(entry)
+    return out
+
+
 def _verifiers_from(spec: Dict[str, Any]) -> Dict[str, Any]:
     """Build verifiers from a small declarative spec, never from code.
 
@@ -460,22 +489,15 @@ def _verifiers_from(spec: Dict[str, Any]) -> Dict[str, Any]:
     callable, and an unknown kind is recorded as UNKNOWN rather than silently
     unverified-but-passing.
     """
+    from ..core.mission_runner import _verifier_from_spec
+
     out: Dict[str, Any] = {}
     for condition_id, raw in (spec or {}).items():
         if not isinstance(raw, dict):
             continue
-        kind = str(raw.get("kind") or "")
-        if kind == "file_contains":
-            out[condition_id] = Verifiers.file_contains(
-                str(raw.get("path") or ""), str(raw.get("needle") or ""), condition_id)
-        elif kind == "file_hash":
-            out[condition_id] = Verifiers.file_hash(
-                str(raw.get("path") or ""), str(raw.get("sha256") or ""), condition_id)
-        elif kind == "file_absent":
-            out[condition_id] = Verifiers.file_absent(
-                str(raw.get("path") or ""), condition_id)
-        else:
-            out[condition_id] = Verifiers.always_unknown(
-                f"no verifier of kind {kind!r} exists, so this condition was not "
-                "checked", condition_id)
+        verifier = _verifier_from_spec(json.dumps(raw), condition_id)
+        out[condition_id] = verifier if verifier is not None else \
+            Verifiers.always_unknown(
+                f"no verifier of kind {raw.get('kind')!r} exists, so this "
+                "condition was not checked", condition_id)
     return out

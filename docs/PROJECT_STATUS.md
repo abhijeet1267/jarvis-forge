@@ -2751,3 +2751,55 @@ count (`4190` vs `4193`), fixed with `scripts/sync_readme_counts.py` and re-run 
 **NOT verified:** no click has ever reached a control in this app on this machine. The
 render harness proves layout and live data, not interaction. The Studio's record/capture
 forms were exercised through the API, not by typing into them.
+
+## Update — 2026-11-15 (V12 phase 1: Automation Studio closes its last gap)
+
+**Automation Studio now produces verified automations.** A recorded demonstration used to
+run and report `partially_completed` no matter how well it worked, because `derive()` emitted
+steps and **no acceptance conditions** — `Mission.verdict()` had nothing to check. A
+demonstration that reaches `completed` with every condition independently verified was
+impossible before this change.
+
+Three defects were found and fixed, each proven by running it:
+
+1. **The editor asked for a value it was already showing.** `write_file`'s `mode` is declared
+   in the schema but not required (the tool defaults it to `overwrite`). The editor treated
+   every declared field as required, so a step that never chose a mode showed
+   `⚠ needs mode` beside a picker displaying `overwrite`. Required-ness is the registry's
+   answer; the client now reads it the same way, and a schema default counts as satisfied.
+   Pinned by `test_an_optional_tool_default_does_not_make_a_step_incomplete`.
+2. **A filled-in value created no checkable outcome.** Conditions were derived from the raw
+   recording, so a `copy_file` whose `destination` the person supplied produced no condition
+   and the replay reported the copy as unverified however exactly it matched. The draft
+   endpoint now accepts the review (`POST /intelligence/recordings/draft {"steps": [...]}`)
+   and re-derives conditions from the merged values. A review identifies steps by their
+   *recorded* index: zipping by position made a reorder silently swap one step's parameters
+   onto another step's title and condition.
+3. **A mission could not verify itself.** Verification depended on the caller re-sending the
+   verifier spec on every run; forgetting it recorded a checkable condition as "no
+   independent verifier was supplied". A condition now stores its declarative spec at
+   creation and `_verify_all` builds the observer from it. `file_identical` was added
+   (destination bytes equal source bytes, both read after the fact).
+
+Also: a blocked primary action rendered as a dimmed emerald button, still reading
+"press me" while doing nothing. `VPrimaryButtonStyle` now draws disabled as a neutral fill
+with a border. Sampled pixels: accent `#3FBF8A` at 40% over the dark surface vs. the new
+neutral `V.surfaceAlt`.
+
+**Complete journey, PASS (level 7 — full user journey):** draft → supply `destination` →
+reviewed draft re-derives conditions → mission → two approval gates (each with its own
+confirmation id) → `state=completed`, `C1 verified` (`file_contains`), `C2 verified`
+(`file_identical`), and the copy on disk byte-identical to the source. Driven over the real
+HTTP surface on an isolated backend (`:8798`, `JARVIS_HOME=/tmp/vantage_probe2`), mirroring
+`saveAndRun` + `runMission` + `approveParked` step for step.
+
+**Evidence.** `test_recorder.py` 30 passed · `test_mission_runner.py` 26 passed ·
+`test_mission_contracts.py` + `test_missions_api.py` + `test_demo_a_file_mission.py` +
+`test_phase10_verification_authority.py` together with the above → **105 passed, 0 failed**.
+Swift builds clean (only the pre-existing `Sendable` warning).
+
+**NOT verified:** the journey was driven through the app's HTTP calls, not by typing into the
+native fields and clicking **Save & run**. Synthetic clicks are still dropped on this machine
+(`AXIsProcessTrusted()` false), so the editor is proven at levels 1–4 (source, compiled,
+contract, rendered with live data) and the *backend* journey at level 7 — the seam between
+the two, a human clicking the control, is unproven.

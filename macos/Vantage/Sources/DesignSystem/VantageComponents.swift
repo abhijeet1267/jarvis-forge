@@ -354,14 +354,22 @@ struct VPrimaryButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(V.Font.label)
-            .foregroundStyle(.white)
+            // Disabled reads as disabled, not as a dimmed call to action: an
+            // emerald fill at 40% still reads "press me" while the button does
+            // nothing. A neutral fill with secondary text states the same thing
+            // without inviting the press.
+            .foregroundStyle(enabled ? Color.white : V.textSecondary)
             .padding(.horizontal, V.Space.l)
             .padding(.vertical, 7)
             .frame(maxWidth: fullWidth ? .infinity : nil)
             .background(
                 RoundedRectangle(cornerRadius: V.Radius.control, style: .continuous)
-                    .fill(configuration.isPressed ? V.accentPressed : V.accent)
-                    .opacity(enabled ? 1 : 0.40)
+                    .fill(enabled
+                          ? (configuration.isPressed ? V.accentPressed : V.accent)
+                          : V.surfaceAlt)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: V.Radius.control, style: .continuous)
+                            .strokeBorder(enabled ? Color.clear : V.border, lineWidth: 1))
             )
             .contentShape(RoundedRectangle(cornerRadius: V.Radius.control, style: .continuous))
             .scaleEffect(configuration.isPressed && V.motionAllowed ? 0.985 : 1)

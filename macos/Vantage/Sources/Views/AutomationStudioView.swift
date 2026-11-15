@@ -246,26 +246,8 @@ struct AutomationStudioView: View {
                     .foregroundColor(draft.verdict == "unverified" ? V.warning : V.success)
             }
 
-            ForEach(Array(draft.steps.enumerated()), id: \.offset) { index, step in
-                HStack(alignment: .top, spacing: V.Space.s) {
-                    Text("\(index + 1).")
-                        .font(V.Font.mono).foregroundColor(V.textTertiary)
-                        .frame(width: 20, alignment: .trailing)
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text(step.title)
-                            .font(V.Font.body).foregroundColor(V.text)
-                        Text(step.tool)
-                            .font(V.Font.mono).foregroundColor(V.textTertiary)
-                    }
-                    Spacer()
-                    if let need = step.needs_input, !need.isEmpty {
-                        Text("needs input")
-                            .font(V.Font.caption).foregroundColor(V.warning)
-                    } else if (step.params ?? [:]).isEmpty {
-                        Text("no captured values")
-                            .font(V.Font.caption).foregroundColor(V.warning)
-                    }
-                }
+            ForEach(Array(draft.steps.enumerated()), id: \.element.id) { index, step in
+                draftStepRow(index: index, step: step)
             }
 
             if !draft.required_scope.isEmpty {
@@ -279,10 +261,41 @@ struct AutomationStudioView: View {
                 }
             }
 
+            // What a replay will be checked against, stated before the run so
+            // nobody mistakes "it ran" for "it worked". An automation with no
+            // checkable outcome says so rather than implying it will verify.
+            if draft.conditions.isEmpty {
+                Text("Nothing here can be re-checked afterwards, so a replay "
+                     + "will run without being verified.")
+                    .font(V.Font.caption).foregroundColor(V.textTertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, V.Space.xs)
+            } else {
+                Text("Checked afterwards")
+                    .font(V.Font.caption).foregroundColor(V.textTertiary)
+                    .padding(.top, V.Space.xs)
+                ForEach(draft.conditions, id: \.condition_id) { condition in
+                    HStack(alignment: .firstTextBaseline, spacing: V.Space.xs) {
+                        Image(systemName: "checkmark.seal")
+                            .font(.system(size: 10))
+                            .foregroundColor(V.textTertiary)
+                        Text(condition.statement)
+                            .font(V.Font.caption).foregroundColor(V.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+            }
+
             Text(draft.notes)
                 .font(V.Font.caption).foregroundColor(V.textTertiary)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.top, V.Space.xs)
+
+            if let problem = draftSaveBlocker {
+                Text(problem)
+                    .font(V.Font.caption).foregroundColor(V.warning)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
 
             HStack(spacing: V.Space.s) {
                 TextField("Name this automation", text: $name)
@@ -291,9 +304,8 @@ struct AutomationStudioView: View {
                     .frame(maxWidth: 280)
                 Button(busy ? "Saving…" : "Save & run") { Task { await saveAndRun(draft) } }
                     .buttonStyle(VPrimaryButtonStyle())
-                    .disabled(busy || !draft.steps.allSatisfy { !($0.params ?? [:]).isEmpty })
-                    .help(draft.steps.allSatisfy { !($0.params ?? [:]).isEmpty }
-                          ? "" : "A step with no captured values cannot be replayed.")
+                    .disabled(busy || draftSaveBlocker != nil)
+                    .help(draftSaveBlocker ?? "")
                 Spacer()
             }
             .padding(.top, V.Space.xs)
@@ -392,8 +404,22 @@ struct AutomationStudioView: View {
 
     private func loadDraft() async {
         do {
-            draft = try await api.post("/intelligence/recordings/draft",
-                                       as: APIModels.RecordingDraft.self)
+            var loaded = try await api.post("/intelligence/recordings/draft",
+                                            as: APIModels.RecordingDraft.self)
+            // Seed every schema field the step did not capture, so what the
+            // editor displays is exactly what will be sent. A field that showed
+            // "overwrite" from its schema default while the parameter list
+            // still lacked it was both displayed and reported as missing.
+            for index in loaded.steps.indices {
+                var params = loaded.steps[index].params ?? [:]
+                for field in APIModels.RecordingDraft.requiredFields(
+                    for: loaded.steps[index].tool) where !field.value.isEmpty {
+                    if (params[field.name] ?? "").isEmpty { params[field.name] = field.value }
+                }
+                loaded.steps[index].params = params
+                loaded.steps[index].recordedIndex = index
+            }
+            draft = loaded
         } catch {
             // No draft for a stopped-but-discarded recording is not an error the
             // person needs to see; the recording panel already says what happened.
@@ -496,28 +522,72 @@ struct AutomationStudioView: View {
 
         let title = name.trimmingCharacters(in: .whitespaces)
 
+        // The review is submitted first so the draft that is saved describes
+        // exactly what will run: the values as edited, in the order shown, and
+        // the conditions those values support. A value filled in here can
+        // create an outcome that did not exist when the recording stopped -- a
+        // destination to compare against, say -- and the run should be checked
+        // against it rather than reporting the outcome as unverifiable.
+        var reviewed: APIModels.RecordingDraft
+        do {
+            reviewed = try await api.post(
+                "/intelligence/recordings/draft",
+                body: APIModels.RecordingDraftReview(
+                    steps: draft.steps.map {
+                        APIModels.RecordingDraftReviewStep(
+                            index: $0.recordedIndex, title: $0.title,
+                            tool: $0.tool, params: $0.params ?? [:])
+                    }),
+                as: APIModels.RecordingDraft.self)
+        } catch {
+            errorMessage = "The reviewed workflow could not be prepared: "
+                + error.localizedDescription
+            return
+        }
+        self.draft = reviewed
+
         // A step with no captured parameters cannot be replayed: the executor
         // rejects it with "missing required parameter ...". Saving it anyway
         // would create a mission the person asked to run and that was never
         // going to. Name the step and stop instead.
-        let unrunnable = draft.steps.filter { ($0.params ?? [:]).isEmpty }
+        let unrunnable = reviewed.steps.filter { !missingFields(in: $0).isEmpty }
         guard unrunnable.isEmpty else {
             let names = unrunnable.map { $0.title }.joined(separator: ", ")
-            errorMessage = "Cannot run yet — \(names) captured no values"
-                + (unrunnable.contains { $0.needs_input != nil }
+            // A step the recorder refused to capture carries the reason it did,
+            // which is the only part of that step that was ever stored.
+            let sensitive = unrunnable.contains {
+                ($0.needs_input ?? "").contains("sensitive")
+            }
+            errorMessage = "Cannot run yet — \(names) is missing required values"
+                + (sensitive
                    ? ". Vantage does not store passwords or other sensitive fields, "
                      + "so that step cannot be replayed as recorded. Discard and "
                      + "record an automation that does not include it."
-                   : ". Discard and record that step again.")
+                   : ". Fill them in above.")
             return
         }
 
-        let steps = draft.steps.enumerated().map { index, step in
-            APIModels.MissionStepDraft(step_id: "S\(index + 1)",
-                                       title: step.title,
-                                       tool: step.tool,
-                                       params: step.params ?? [:])
+        // The reviewed draft's own conditions are what will be checked: the
+        // server re-derived them from the values just submitted, so each one
+        // describes the step as it now stands. Nothing is filtered here -- a
+        // second, client-side opinion about which conditions still hold is how
+        // the displayed check and the executed check drift apart.
+        let steps = reviewed.steps.enumerated().map { index, step in
+            // A parameter the schema defaulted is sent explicitly. The tool
+            // would apply the same default, but sending it keeps the mission's
+            // recorded parameters equal to the ones the editor displayed.
+            var params = step.params ?? [:]
+            for field in APIModels.RecordingDraft.requiredFields(for: step.tool)
+            where !field.value.isEmpty && (params[field.name] ?? "").isEmpty {
+                params[field.name] = field.value
+            }
+            return APIModels.MissionStepDraft(step_id: "S\(index + 1)",
+                                              title: step.title,
+                                              tool: step.tool,
+                                              params: params,
+                                              satisfies: step.satisfies)
         }
+        let live = reviewed.conditions
         guard !steps.isEmpty else {
             errorMessage = "This draft has no steps to run."
             return
@@ -527,9 +597,15 @@ struct AutomationStudioView: View {
             let mission = try await api.post(
                 "/missions",
                 body: APIModels.MissionCreateRequest(
-                    request: title.isEmpty ? draft.name : title,
-                    outcome: draft.notes,
-                    steps: steps),
+                    request: title.isEmpty ? reviewed.name : title,
+                    outcome: reviewed.notes,
+                    steps: steps,
+                    conditions: live.map {
+                        APIModels.MissionConditionDraft(
+                            condition_id: $0.condition_id,
+                            statement: $0.statement,
+                            verifier: $0.verifier)
+                    }),
                 as: APIModels.Mission.self)
             missionId = mission.mission_id
             await runMission(mission.mission_id)
@@ -596,6 +672,162 @@ struct AutomationStudioView: View {
         } catch {
             errorMessage = error.localizedDescription
         }
+    }
+
+    // MARK: - Draft step editing
+
+    /// One editable draft row. The fields offered are the ones the tool's own
+    /// schema declares, so supplying a missing value means filling in the
+    /// parameter that tool requires — not inventing a replacement.
+    @ViewBuilder
+    private func draftStepRow(index: Int, step: APIModels.RecordingDraft.Step) -> some View {
+        let fields = APIModels.RecordingDraft.requiredFields(for: step.tool)
+        let missing = missingFields(in: step)
+
+        VStack(alignment: .leading, spacing: V.Space.xs) {
+            HStack(alignment: .firstTextBaseline, spacing: V.Space.s) {
+                Text("\(index + 1).")
+                    .font(V.Font.mono).foregroundColor(V.textTertiary)
+                    .frame(width: 20, alignment: .trailing)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(step.title).font(V.Font.body).foregroundColor(V.text)
+                    Text(step.tool).font(V.Font.mono).foregroundColor(V.textTertiary)
+                }
+                Spacer()
+                if !missing.isEmpty {
+                    Label("needs \(missing.map(\.name).joined(separator: ", "))",
+                          systemImage: "exclamationmark.circle")
+                        .font(V.Font.caption).foregroundColor(V.warning)
+                }
+                Button { moveStep(index, by: -1) } label: {
+                    Image(systemName: "arrow.up")
+                }
+                .buttonStyle(.plain).disabled(index == 0 || busy)
+                .help("Move earlier")
+                Button { moveStep(index, by: 1) } label: {
+                    Image(systemName: "arrow.down")
+                }
+                .buttonStyle(.plain).disabled(index >= (draft?.steps.count ?? 0) - 1 || busy)
+                .help("Move later")
+                Button { removeStep(index) } label: {
+                    Image(systemName: "trash")
+                }
+                .buttonStyle(.plain).disabled(busy)
+                .help("Remove this step")
+            }
+
+            if fields.isEmpty {
+                Text("Vantage has no field schema for this tool, so it cannot offer an editor for it.")
+                    .font(V.Font.caption).foregroundColor(V.warning)
+            } else {
+                ForEach(fields) { field in
+                    HStack(spacing: V.Space.s) {
+                        Text(field.name)
+                            .font(V.Font.mono).foregroundColor(V.textTertiary)
+                            .frame(width: 110, alignment: .trailing)
+                        if field.isChoice {
+                            Picker("", selection: binding(for: index, field: field.name,
+                                                          fallback: field.value)) {
+                                ForEach(field.options, id: \.self) { Text($0).tag($0) }
+                            }
+                            .labelsHidden().frame(maxWidth: 160)
+                        } else {
+                            TextField(field.placeholder,
+                                      text: binding(for: index, field: field.name,
+                                                    fallback: field.value))
+                                .textFieldStyle(.roundedBorder)
+                                .font(V.Font.mono)
+                        }
+                        Spacer()
+                    }
+                }
+            }
+        }
+        .padding(V.Space.s)
+        .background(V.surfaceAlt)
+        .clipShape(RoundedRectangle(cornerRadius: V.Radius.control))
+    }
+
+    /// A binding straight into the draft's step parameters, with the schema's
+    /// default when the step did not capture the field at all.
+    private func binding(for index: Int, field: String, fallback: String) -> Binding<String> {
+        Binding(
+            get: { guard let draft, draft.steps.indices.contains(index) else { return fallback }
+                   return draft.steps[index].params?[field] ?? fallback },
+            set: { newValue in
+                guard var steps = draft?.steps, index < steps.count else { return }
+                var params = steps[index].params ?? [:]
+                params[field] = newValue
+                steps[index].params = params
+                draft?.steps = steps
+            })
+    }
+
+    private func moveStep(_ index: Int, by delta: Int) {
+        guard var steps = draft?.steps else { return }
+        let target = index + delta
+        guard steps.indices.contains(index), steps.indices.contains(target) else { return }
+        steps.swapAt(index, target)
+        draft?.steps = steps
+    }
+
+    private func removeStep(_ index: Int) {
+        guard var steps = draft?.steps, steps.indices.contains(index) else { return }
+        steps.remove(at: index)
+
+        // A level-3 tool the recorder supported must still be declared, since
+        // the draft's capabilities are what a reviewer reads. The scope list is
+        // recomputed from the parameters that remain, so removing a step cannot
+        // leave a stale path in "Touches".
+        draft?.steps = steps
+        recomputeDraftSummary()
+    }
+
+    /// The schema fields this step has no value for.
+    ///
+    /// The one definition of "incomplete" in this view: the row's warning, the
+    /// save guard and the summary count all read it. They used to differ — the
+    /// row judged a field missing while the picker beside it displayed the
+    /// schema default, and the summary only asked whether *any* parameter was
+    /// present. A step whose `mode` defaulted but whose `path` was blank
+    /// therefore read as complete.
+    ///
+    /// A field the schema gives a default counts as satisfied: `write_file`'s
+    /// `mode` is optional and the tool applies `overwrite` when it is absent,
+    /// so demanding it would ask the person for a value that already exists.
+    private func missingFields(in step: APIModels.RecordingDraft.Step) -> [APIModels.AutomationKinds.ParamField] {
+        APIModels.RecordingDraft.requiredFields(for: step.tool)
+            .filter { $0.value.isEmpty && (step.params?[$0.name] ?? "").isEmpty }
+    }
+
+    /// Derives capabilities and touched scope from the steps as they now stand.
+    private func recomputeDraftSummary() {
+        guard let steps = draft?.steps else { return }
+        var capabilities: [String] = []
+        var scope: [String] = []
+        for step in steps {
+            if !capabilities.contains(step.tool) { capabilities.append(step.tool) }
+            for key in ["path", "source", "destination"] {
+                if let value = step.params?[key], !value.isEmpty, !scope.contains(value) {
+                    scope.append(value)
+                }
+            }
+        }
+        draft?.steps = steps
+        draft?.required_capabilities = capabilities
+        draft?.required_scope = scope
+        draft?.needs_input = steps.filter { !missingFields(in: $0).isEmpty }.count
+    }
+
+    /// Why Save & run is unavailable, or nil when every step can replay.
+    private var draftSaveBlocker: String? {
+        guard let draft, !draft.steps.isEmpty else { return "This draft has no steps to run." }
+        let incomplete = draft.steps.filter { !missingFields(in: $0).isEmpty }
+        guard incomplete.isEmpty else {
+            return "Fill in the missing values above, or remove the step. "
+                + "A step without its required parameters cannot be replayed."
+        }
+        return nil
     }
 
     private func resetParams() {

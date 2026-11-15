@@ -123,6 +123,48 @@ class Verifiers:
         return verify
 
     @staticmethod
+    def file_identical(path: str, source: str, condition_id: str) -> Verifier:
+        """The file at ``path`` holds exactly the bytes at ``source``.
+
+        Both are read at verification time, after the step ran, so this compares
+        states rather than trusting a copy call's return value. A missing either
+        side is a FAILED (the effect is not there), not an UNKNOWN: the
+        condition claimed the destination would hold the source's contents.
+        """
+
+        def verify(mission: Mission) -> Verification:
+            target, origin = Path(path).expanduser(), Path(source).expanduser()
+            try:
+                target_bytes = target.read_bytes()
+            except FileNotFoundError:
+                return Verification(condition_id, ConditionStatus.FAILED,
+                                    f"{target} does not exist after the step")
+            except OSError as exc:
+                return Verification(condition_id, ConditionStatus.UNKNOWN,
+                                    f"{target} could not be read: {exc}")
+            try:
+                source_bytes = origin.read_bytes()
+            except FileNotFoundError:
+                return Verification(
+                    condition_id, ConditionStatus.UNKNOWN,
+                    f"{origin} no longer exists, so the copy cannot be compared")
+            except OSError as exc:
+                return Verification(condition_id, ConditionStatus.UNKNOWN,
+                                    f"{origin} could not be read: {exc}")
+
+            if target_bytes == source_bytes:
+                digest = hashlib.sha256(target_bytes).hexdigest()[:16]
+                return Verification(condition_id, ConditionStatus.VERIFIED,
+                                    f"{target} matches {origin} exactly "
+                                    f"(sha256:{digest}, {len(target_bytes)} bytes)")
+            return Verification(
+                condition_id, ConditionStatus.FAILED,
+                f"{target} is {len(target_bytes)} bytes, {origin} is "
+                f"{len(source_bytes)}; the contents differ")
+
+        return verify
+
+    @staticmethod
     def file_absent(path: str, condition_id: str) -> Verifier:
         """The path no longer exists."""
 
@@ -149,6 +191,41 @@ def _parked_confirmation(detail: str) -> str:
 
     match = re.search(r"confirmation (\S+)", detail or "")
     return match.group(1).rstrip(")").strip() if match else ""
+
+
+def _verifier_from_spec(spec: str, condition_id: str) -> Optional[Verifier]:
+    """Build a verifier from a condition's stored declarative spec.
+
+    The spec is JSON naming one of the observers above and the fields it needs,
+    e.g. ``{"kind": "file_contains", "path": "/a", "needle": "x"}``. It is data,
+    not code: a mission row can name an observer this build already has, never a
+    callable. Anything unparseable or unknown returns None so the condition is
+    recorded UNKNOWN rather than silently passing.
+    """
+    import json
+
+    if not spec:
+        return None
+    try:
+        parsed = json.loads(spec)
+    except (TypeError, ValueError):
+        return None
+    if not isinstance(parsed, dict):
+        return None
+
+    kind = str(parsed.get("kind") or "")
+    if kind == "file_contains":
+        return Verifiers.file_contains(
+            str(parsed.get("path") or ""), str(parsed.get("needle") or ""), condition_id)
+    if kind == "file_hash":
+        return Verifiers.file_hash(
+            str(parsed.get("path") or ""), str(parsed.get("sha256") or ""), condition_id)
+    if kind == "file_absent":
+        return Verifiers.file_absent(str(parsed.get("path") or ""), condition_id)
+    if kind == "file_identical":
+        return Verifiers.file_identical(
+            str(parsed.get("path") or ""), str(parsed.get("source") or ""), condition_id)
+    return None
 
 
 class MissionRunner:
@@ -483,9 +560,19 @@ class MissionRunner:
 
     def _verify_all(self, mission: Mission, verifiers: Dict[str, Verifier],
                     *, actor: str) -> Mission:
-        """Run each condition's independent observer and record what it found."""
+        """Run each condition's independent observer and record what it found.
+
+        A caller-supplied verifier wins. When none is supplied, the condition's
+        own declarative spec is used -- a mission created from a recorded
+        demonstration carries the check it was recorded with, so verification
+        does not depend on the caller remembering to pass it again. A condition
+        with neither stays UNKNOWN, which is what it is: nobody looked.
+        """
         for condition in mission.conditions:
             verifier = verifiers.get(condition.condition_id)
+            if verifier is None:
+                verifier = _verifier_from_spec(condition.verifier,
+                                               condition.condition_id)
             if verifier is None:
                 # No verifier is not a pass. The condition stays UNKNOWN, which
                 # is exactly what it is: nobody looked.

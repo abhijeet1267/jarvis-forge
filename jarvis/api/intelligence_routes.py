@@ -179,12 +179,22 @@ def build_router(require_auth) -> APIRouter:
             raise HTTPException(status_code=409, detail=str(exc))
 
     @router.post("/recordings/draft")
-    async def recording_draft() -> Dict[str, Any]:
-        """The reviewable workflow draft. Unverified until a replay succeeds."""
+    async def recording_draft(body: Dict[str, Any] = Body(None)) -> Dict[str, Any]:
+        """The reviewable workflow draft. Unverified until a replay succeeds.
+
+        An optional ``steps`` list is the review: the values the person supplied
+        in the editor, in the order the steps should run. Supplying them here
+        rather than at run time is what lets a value filled in after capture
+        produce a checkable condition -- the person is reviewing, and what they
+        review is exactly what the replay will be checked against.
+        """
         from ..core.recorder import Recorder, RecordingError, _recorder_singleton
 
+        body = body or {}
+        reviewed = body.get("steps")
         try:
-            return _recorder_singleton().derive()
+            return _recorder_singleton().derive(
+                reviewed=reviewed if isinstance(reviewed, list) else None)
         except RecordingError as exc:
             raise HTTPException(status_code=409, detail=str(exc))
 

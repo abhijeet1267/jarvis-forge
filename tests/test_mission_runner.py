@@ -669,3 +669,41 @@ async def test_two_writers_to_one_file_do_not_run_together(service, workspace):
     await runner.run_parallel(mission.mission_id)
 
     assert concurrent["max"] == 1, "two writers to one file ran at the same time"
+
+def test_file_identical_compares_real_bytes(workspace):
+    """A copy condition: the destination holds exactly the source's contents."""
+    from jarvis.core.missions import Mission
+
+    source = workspace / "source.txt"
+    source.write_text("report body", encoding="utf-8")
+    copy = workspace / "copy.txt"
+    copy.write_bytes(source.read_bytes())
+
+    mission = Mission(mission_id="M", request="", outcome="")
+    same = Verifiers.file_identical(str(copy), str(source), "C1")(mission)
+    assert same.status == ConditionStatus.VERIFIED
+
+    copy.write_text("report body, edited", encoding="utf-8")
+    differs = Verifiers.file_identical(str(copy), str(source), "C1")(mission)
+    assert differs.status == ConditionStatus.FAILED
+
+def test_a_missing_destination_is_failed_and_a_missing_source_unknown(workspace):
+    """The two absences mean different things and must not be conflated.
+
+    A missing destination means the copy did not happen -- the condition it
+    claimed is false. A missing *source* means the comparison can no longer be
+    made at all, so the honest report is "nobody can tell", not "it failed".
+    """
+    from jarvis.core.missions import Mission
+
+    mission = Mission(mission_id="M", request="", outcome="")
+    source = workspace / "source.txt"
+    source.write_text("x", encoding="utf-8")
+
+    assert Verifiers.file_identical(str(workspace / "gone.txt"), str(source), "C1")(
+        mission).status == ConditionStatus.FAILED
+
+    copy = workspace / "copy.txt"
+    copy.write_text("x", encoding="utf-8")
+    assert Verifiers.file_identical(str(copy), str(workspace / "gone.txt"), "C1")(
+        mission).status == ConditionStatus.UNKNOWN

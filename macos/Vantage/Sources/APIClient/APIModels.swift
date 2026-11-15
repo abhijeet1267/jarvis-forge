@@ -2030,31 +2030,101 @@ extension APIModels {
     /// The reviewable workflow draft. `verdict` begins at `unverified` and only a
     /// real replay can change it, so it is never shown as a tick on the strength
     /// of a demonstration alone.
+    ///
+    /// Steps are editable before saving: a demonstration records what happened,
+    /// and a person is allowed to correct it before it becomes a mission. The
+    /// editable fields are the ones the tool's own schema declares
+    /// (`AutomationKinds.fields(for:)`), never free-form replacements for a
+    /// parameter the tool requires.
+    /// One step as the editor holds it, sent back for review. `index` is the
+    /// step's position in the *recording*, which is what identifies it: the
+    /// editor may have reordered steps, so its current position says nothing
+    /// about which recorded step it is editing.
+    struct RecordingDraftReviewStep: Codable {
+        let index: Int
+        let title: String
+        let tool: String
+        let params: [String: String]
+    }
+
+    struct RecordingDraftReview: Codable {
+        let steps: [RecordingDraftReviewStep]
+    }
+
     struct RecordingDraft: Codable {
         struct Step: Codable, Identifiable {
-            let title: String
-            let tool: String
-            let needs_input: String?
+            var title: String
+            var tool: String
+            var needs_input: String?
 
-            /// The parameters the demonstration actually captured. They are
-            /// absent only for a step that was skipped because it carried a
-            /// sensitive value, which is exactly the step `needs_input` marks.
-            /// A step without them cannot be replayed, so the screen refuses to
-            /// save one rather than creating a mission that always fails.
-            let params: [String: String]?
+            /// The parameters the demonstration actually captured. Absent on a
+            /// step that was skipped because it carried a sensitive value.
+            var params: [String: String]?
 
-            var id: String { title + tool }
+            /// The condition this step is meant to establish, when the recorder
+            /// could name one it can actually re-check.
+            var satisfies: String?
+
+            /// Where this step sat in the recording. Reordering in the editor
+            /// changes the plan's order but not which recorded step this is, so
+            /// the review identifies steps by this rather than by their current
+            /// position.
+            var recordedIndex: Int = 0
+
+            private enum CodingKeys: String, CodingKey {
+                case title, tool, needs_input, params, satisfies
+            }
+
+            init(from decoder: Decoder) throws {
+                let c = try decoder.container(keyedBy: CodingKeys.self)
+                title = try c.decode(String.self, forKey: .title)
+                tool = try c.decode(String.self, forKey: .tool)
+                needs_input = try c.decodeIfPresent(String.self, forKey: .needs_input)
+                params = try c.decodeIfPresent([String: String].self, forKey: .params)
+                satisfies = try c.decodeIfPresent(String.self, forKey: .satisfies)
+                recordedIndex = 0
+            }
+
+            func encode(to encoder: Encoder) throws {
+                var c = encoder.container(keyedBy: CodingKeys.self)
+                try c.encode(title, forKey: .title)
+                try c.encode(tool, forKey: .tool)
+                try c.encodeIfPresent(needs_input, forKey: .needs_input)
+                try c.encodeIfPresent(params, forKey: .params)
+                try c.encodeIfPresent(satisfies, forKey: .satisfies)
+            }
+
+            var id: String { "\(recordedIndex)-" + title + tool
+                + (params ?? [:]).sorted { $0.key < $1.key }
+                    .map { $0.key + $0.value }.joined() }
         }
 
-        let recording_id: String
-        let name: String
-        let steps: [Step]
-        let required_capabilities: [String]
-        let required_scope: [String]
-        let needs_input: Int
+        struct Condition: Codable {
+            let condition_id: String
+            let statement: String
+            let verifier: [String: String]
+        }
+
+        var recording_id: String
+        var name: String
+        var steps: [Step]
+        /// What a replay will be checked against, derived from the parameters
+        /// the demonstration captured. Empty when no step's effect can be
+        /// re-observed, which reads honestly as "nothing to verify".
+        var conditions: [Condition]
+        var required_capabilities: [String]
+        var required_scope: [String]
+        var needs_input: Int
         let verdict: String
         let review_required: Bool
         let notes: String
+
+        /// The parameters this step must carry for the tool behind it to run.
+        /// Empty for a tool the schema does not describe, which the editor
+        /// reports rather than guessing at.
+        static func requiredFields(for tool: String) -> [AutomationKinds.ParamField] {
+            AutomationKinds.fields(for: tool)
+        }
     }
 
     struct RecordingDiscardResult: Codable {
@@ -2076,12 +2146,25 @@ extension APIModels {
         let title: String
         let tool: String
         let params: [String: String]
+        /// The condition this step is meant to establish, when the recorder
+        /// could name one. Absent for a step whose effect nothing can re-check.
+        var satisfies: String?
+    }
+
+    /// A condition with a declarative verifier. `verifier` carries a `kind` and
+    /// the fields that kind needs, in the same shape the backend parses; the
+    /// wire names an observer this build knows, never code.
+    struct MissionConditionDraft: Codable {
+        let condition_id: String
+        let statement: String
+        let verifier: [String: String]
     }
 
     struct MissionCreateRequest: Codable {
         let request: String
         let outcome: String
         let steps: [MissionStepDraft]
+        var conditions: [MissionConditionDraft] = []
     }
 
     /// One executed step in a run's response, flattened for display.

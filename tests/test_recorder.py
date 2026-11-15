@@ -190,3 +190,240 @@ def test_every_supported_kind_has_an_owning_agent():
     assert not orphans, (
         f"these recorded kinds resolve to no agent, so a mission step using "
         f"them fails with 'no agent owns ...': {orphans}")
+
+
+def test_the_recorder_knows_every_required_parameter_the_registry_does():
+    """The recorder's required-parameter mirror must match the tool registry.
+
+    `RECORDER.REQUIRED_PARAMETERS` is written out rather than imported so the
+    recorder stays constructible without building the whole tool catalog. A
+    mirror that drifts is worse than no mirror: the draft would report a step as
+    complete, and the executor would refuse it with "missing required parameter".
+    This test is what keeps the two in step.
+    """
+    from jarvis.core.recorder import REQUIRED_PARAMETERS, SUPPORTED_KINDS
+
+    from jarvis.api.app import get_core
+
+    tools = get_core().tools
+    for kind in SUPPORTED_KINDS:
+        spec = tools.get(kind)
+        assert spec is not None, f"{kind} is not a registered tool"
+        assert set(spec.required_parameters) == set(REQUIRED_PARAMETERS[kind]), (
+            f"{kind}: registry requires {sorted(spec.required_parameters)}, "
+            f"recorder believes {sorted(REQUIRED_PARAMETERS[kind])}")
+
+
+def test_a_step_missing_a_required_parameter_is_reported_as_needing_input(recorder):
+    """A captured step that cannot replay must not review as complete.
+
+    Capturing `copy_file` with only a source produced a draft that said
+    "0 needing input" and then failed at replay with "missing required
+    parameter 'destination'". The person reviews the draft to decide whether it
+    is safe to run; that review is worthless if the draft hides an unfillable
+    step.
+    """
+    recorder.start()
+    recorder.capture("copy_file", {"source": "/tmp/a.txt"}, label="Copy the archive")
+    stopped = recorder.stop()
+    draft = recorder.derive(stopped)
+
+    assert draft["needs_input"] == 1
+    step = draft["steps"][0]
+    assert step["needs_input"], "the missing parameter is not named"
+    assert "destination" in step["needs_input"]
+    assert "0 needing input" not in draft["notes"]
+
+
+def test_missing_parameters_reports_exactly_the_absent_ones():
+    """The check itself, without a recording: absent and empty both count."""
+    from jarvis.core.recorder import missing_parameters
+
+    assert missing_parameters("copy_file", {"source": "/a"}) == ["destination"]
+    assert missing_parameters("copy_file", {"source": "/a", "destination": ""}) == ["destination"]
+    assert missing_parameters("copy_file", {"source": "/a", "destination": "/b"}) == []
+    assert missing_parameters("write_file", {"path": "/a", "content": "x"}) == []
+    assert missing_parameters("not_a_tool", {}) == []
+
+def test_an_optional_tool_default_does_not_make_a_step_incomplete(recorder):
+    """A step the tool can run as captured must review as runnable.
+
+    `write_file` declares `mode` in its parameter schema but does not require
+    it: the tool applies `overwrite` when it is absent. The native editor read
+    the schema's declared fields as required, so a demonstration that never
+    chose a mode showed "needs mode" beside a picker already displaying
+    "overwrite" -- asking for a value that existed. Whether a field is required
+    is the registry's answer, and the draft must give the same one.
+    """
+    from jarvis.api.app import get_core
+
+    recorder.start()
+    recorder.capture("write_file", {"path": "/tmp/report.md", "content": "# hi\n"},
+                     label="Write the report")
+    draft = recorder.derive(recorder.stop())
+
+    assert draft["needs_input"] == 0
+    assert "needs_input" not in draft["steps"][0]
+
+    # And the tool really does accept it: the optional parameter is genuinely
+    # optional, so this is a fact about the tool rather than a lenient check.
+    spec = get_core().tools.get("write_file")
+    assert "mode" in spec.parameters, "mode should still be offered"
+    assert "mode" not in spec.required_parameters, "mode must not be required"
+
+def test_a_write_and_copy_produce_conditions_that_can_actually_be_checked(recorder):
+    """The draft must name outcomes an observer can re-read, not just steps.
+
+    A recorded automation used to reach the runner with no acceptance
+    conditions, so `Mission.verdict()` had nothing to check and every replay
+    finished `partially_completed` no matter what it did. The recorder knows
+    what each step was asked to produce, so it can state that as a condition --
+    as long as the condition is one an independent observer can check.
+    """
+    recorder.start()
+    recorder.capture("write_file", {"path": "/tmp/report.md", "content": "# hi\n"},
+                     label="Write the report")
+    recorder.capture("copy_file", {"source": "/tmp/report.md",
+                                   "destination": "/tmp/report-copy.md"},
+                     label="Copy it")
+    draft = recorder.derive(recorder.stop())
+
+    by_kind = {c["verifier"]["kind"]: c for c in draft["conditions"]}
+    assert set(by_kind) == {"file_contains", "file_identical"}
+    assert by_kind["file_contains"]["verifier"]["path"] == "/tmp/report.md"
+    assert by_kind["file_contains"]["verifier"]["needle"] == "# hi\n"
+    assert by_kind["file_identical"]["verifier"]["source"] == "/tmp/report.md"
+
+    # Every condition is attached to the step that claims to establish it, and
+    # no step claims more than one.
+    claimed = [s["satisfies"] for s in draft["steps"] if s.get("satisfies")]
+    assert sorted(claimed) == sorted(c["condition_id"] for c in draft["conditions"])
+
+
+def test_no_condition_is_invented_for_a_step_nothing_can_check(recorder):
+    """A step whose effect does not persist gets no condition.
+
+    `open_url` opens something; nothing on disk afterwards says whether it
+    worked. Claiming a condition for it would either pass vacuously or fail the
+    mission for something nobody can observe.
+    """
+    recorder.start()
+    recorder.capture("open_url", {"url": "https://example.com"}, label="Open it")
+    draft = recorder.derive(recorder.stop())
+
+    assert draft["conditions"] == []
+    assert "satisfies" not in draft["steps"][0]
+    assert "0 checkable outcome(s)" in draft["notes"]
+
+
+def test_an_incomplete_step_offers_no_condition(recorder):
+    """A step that cannot run establishes nothing, so it claims nothing."""
+    recorder.start()
+    recorder.capture("copy_file", {"source": "/tmp/a.txt"}, label="Copy it")
+    draft = recorder.derive(recorder.stop())
+
+    assert draft["conditions"] == []
+    assert draft["needs_input"] == 1
+
+
+def test_empty_content_offers_no_condition(recorder):
+    """Empty content would make "contains" vacuously true, proving nothing."""
+    from jarvis.core.recorder import _acceptance_for
+
+    assert _acceptance_for("write_file", {"path": "/tmp/a", "content": ""}) is None
+    assert _acceptance_for("write_file", {"path": "", "content": "x"}) is None
+    assert _acceptance_for("move_file", {"source": "/a", "destination": "/b"}) is None
+
+def test_a_value_supplied_in_review_can_create_a_checkable_outcome(recorder):
+    """Filling in a missing parameter must also establish what to verify.
+
+    A `copy_file` captured without a destination has no checkable outcome, so the
+    first draft offers no condition. Once the person supplies the destination,
+    there *is* something to check -- the destination holds the source's bytes --
+    and the replay must be verified against it. Re-deriving from the raw
+    recording instead left the step with no condition, so every such replay
+    finished unverified however well it worked.
+    """
+    recorder.start()
+    recorder.capture("copy_file", {"source": "/tmp/a.txt"}, label="Copy it")
+    recorder.stop()
+
+    before = recorder.derive()
+    assert before["conditions"] == []
+    assert before["needs_input"] == 1
+
+    after = recorder.derive(reviewed=[{
+        "index": 0, "tool": "copy_file", "title": "Copy it",
+        "params": {"source": "/tmp/a.txt", "destination": "/tmp/b.txt"}}])
+
+    assert after["needs_input"] == 0
+    assert [c["verifier"]["kind"] for c in after["conditions"]] == ["file_identical"]
+    assert after["steps"][0]["satisfies"] == after["conditions"][0]["condition_id"]
+
+
+def test_review_keeps_recorded_values_it_does_not_mention(recorder):
+    """A correction is a correction, not a replacement of the whole step."""
+    recorder.start()
+    recorder.capture("write_file", {"path": "/tmp/a", "content": "original"},
+                     label="Write it")
+    recorder.stop()
+
+    draft = recorder.derive(reviewed=[{"index": 0, "params": {"content": "edited"}}])
+    assert draft["steps"][0]["params"] == {"path": "/tmp/a", "content": "edited"}
+    # The condition follows the value, so it checks what will actually be written.
+    assert draft["conditions"][0]["verifier"]["needle"] == "edited"
+
+
+def test_review_honours_the_order_the_person_chose(recorder):
+    """Reordering in the editor must be the order the replay runs in."""
+    recorder.start()
+    recorder.capture("read_file", {"path": "/tmp/a"}, label="First")
+    recorder.capture("read_file", {"path": "/tmp/b"}, label="Second")
+    recorder.stop()
+
+    draft = recorder.derive(reviewed=[{"index": 1, "params": {"path": "/tmp/b"}},
+                                      {"index": 0, "params": {"path": "/tmp/a"}}])
+    assert [s["title"] for s in draft["steps"]] == ["Second", "First"]
+    assert [s["params"]["path"] for s in draft["steps"]] == ["/tmp/b", "/tmp/a"]
+
+
+def test_a_review_that_does_not_cover_every_step_is_refused(recorder):
+    """Partial reviews are refused rather than guessed at."""
+    from jarvis.core.recorder import RecordingError
+
+    recorder.start()
+    recorder.capture("read_file", {"path": "/tmp/a"}, label="First")
+    recorder.capture("read_file", {"path": "/tmp/b"}, label="Second")
+    recorder.stop()
+
+    with pytest.raises(RecordingError) as exc:
+        recorder.derive(reviewed=[{"index": 0, "params": {"path": "/tmp/a"}}])
+    assert "cover every step" in str(exc.value)
+
+
+def test_a_review_cannot_change_what_was_demonstrated(recorder):
+    """A review supplies values and order, not a different action."""
+    from jarvis.core.recorder import RecordingError
+
+    recorder.start()
+    recorder.capture("read_file", {"path": "/tmp/a"}, label="Read it")
+    recorder.stop()
+
+    with pytest.raises(RecordingError) as exc:
+        recorder.derive(reviewed=[{"index": 0, "tool": "delete_file",
+                                   "params": {"path": "/tmp/a"}}])
+    assert "not replace what was demonstrated" in str(exc.value)
+
+
+def test_a_step_that_becomes_incomplete_in_review_loses_its_claim(recorder):
+    """Clearing a reviewed value must not leave a condition behind."""
+    recorder.start()
+    recorder.capture("copy_file", {"source": "/tmp/a", "destination": "/tmp/b"},
+                     label="Copy it")
+    recorder.stop()
+
+    draft = recorder.derive(reviewed=[{
+        "index": 0, "params": {"source": "/tmp/a", "destination": ""}}])
+    assert draft["conditions"] == []
+    assert "satisfies" not in draft["steps"][0]
+    assert draft["needs_input"] == 1

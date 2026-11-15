@@ -1,5 +1,5 @@
 {
-  "updated": "2026-11-15T18:40:00+00:00",
+  "updated": "2026-11-15",
   "version": 1,
   "note": "Durable task queue for the autodev supervisor. Statuses: pending, ready, running, completed, failed, blocked, skipped. A task is completed only when its acceptance criteria are met AND evidence is recorded. Priority: lower = sooner. Mirror of docs/PROJECT_ROADMAP.md.",
   "tasks": {
@@ -1766,6 +1766,36 @@
         "2026-11-15 LIMIT: synthetic input is impossible here (CGPreflightPostEventAccess=false, AXIsProcessTrusted=false), so no click reached any control. The forms were driven through the API, not typed into."
       ],
       "notes": "Routes: POST /intelligence/recordings, /recordings/steps, /recordings/stop, /recordings/draft, GET /recordings/current."
+    },
+    "V12-1-verified-automations": {
+      "title": "V12: a recorded automation reaches a verified outcome, not just a run",
+      "status": "completed",
+      "priority": 0,
+      "acceptance": [
+        "a recorded draft names what a replay will be checked against, or says there is nothing to check",
+        "a value supplied in the editor produces the condition it makes possible",
+        "a condition stores its own declarative verifier, so a run does not depend on the caller re-sending it",
+        "a review identifies steps by recorded position, so reordering cannot swap one step's parameters onto another's claim",
+        "a review cannot change what was demonstrated, only the values and the order",
+        "a partial or malformed review is refused rather than partially applied",
+        "a step whose value is cleared in review loses the condition it can no longer support",
+        "the required-field rule in the client matches the tool registry, including optional fields with defaults",
+        "a disabled primary action reads as disabled rather than as a dimmed call to action",
+        "the full journey completes: draft, review, run, approve each gate, independently verified outcome"
+      ],
+      "evidence": [
+        "2026-11-15: derive() now emits `conditions` and per-step `satisfies`. Before this a recorded automation always finished partially_completed because Mission.verdict() had no condition to check.",
+        "2026-11-15: POST /intelligence/recordings/draft accepts the review and re-derives conditions from the merged values (jarvis/core/recorder.py _apply_review).",
+        "2026-11-15: a condition stores its declarative verifier spec as JSON at creation; MissionRunner._verify_all builds the observer from it when the caller supplies none (jarvis/core/mission_runner.py _verifier_from_spec).",
+        "2026-11-15: Verifiers.file_identical added -- destination bytes equal source bytes, both read after the fact; missing destination FAILED, missing source UNKNOWN.",
+        "2026-11-15: optional-with-default fields (write_file mode) no longer counted as missing; recorder mirror pinned to the registry by test_the_recorder_knows_every_required_parameter_the_registry_does plus test_an_optional_tool_default_does_not_make_a_step_incomplete.",
+        "2026-11-15: VPrimaryButtonStyle draws disabled as a neutral fill with a border instead of an emerald fill at 40% opacity.",
+        "2026-11-15 PASS (level 7, backend journey): draft -> supply destination -> reviewed draft yields file_contains + file_identical -> mission -> two approval gates -> state=completed, C1 verified, C2 verified, copy byte-identical. Driven over HTTP on :8798 against /tmp/vantage_probe2.",
+        "2026-11-15 PASS: 105 passed across test_recorder, test_mission_runner, test_mission_contracts, test_missions_api, test_demo_a_file_mission, test_phase10_verification_authority. swift build clean."
+      ],
+      "blocked_or_unverified": [
+        "NOT VERIFIED (level 5-6): the native editor was never driven by a real click -- AXIsProcessTrusted() is false on this machine, so synthetic events are dropped. The journey above mirrors the Swift calls step for step but does not prove the controls."
+      ]
     }
   }
 }
