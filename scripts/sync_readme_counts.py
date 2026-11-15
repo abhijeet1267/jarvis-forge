@@ -42,6 +42,10 @@ def module_count() -> int:
     return len(list((REPO / "tests").glob("*.py")))
 
 
+def jarvis_module_count() -> int:
+    return len(list((REPO / "jarvis").rglob("*.py")))
+
+
 def main() -> int:
     body = README.read_text(encoding="utf-8")
     original = body
@@ -51,6 +55,17 @@ def main() -> int:
     body = re.sub(r"\d+ collected", f"{tests} collected", body)
     body = re.sub(r"\d+ test modules", f"{modules} test modules", body)
     body = re.sub(r"tests/\s+\d+ modules", f"tests/         {modules} modules", body)
+
+    # The ownership doc publishes the Python module count, and a test enforces
+    # it -- the same recurring-red-suite problem the README counts had.
+    jarvis = jarvis_module_count()
+    ownership = REPO / "docs" / "FILE_OWNERSHIP.md"
+    if ownership.is_file():
+        doc = ownership.read_text(encoding="utf-8")
+        updated = re.sub(r"\d+ Python modules", f"{jarvis} Python modules", doc)
+        if updated != doc:
+            ownership.write_text(updated, encoding="utf-8")
+            print(f"FILE_OWNERSHIP updated: {jarvis} Python modules")
 
     if body == original:
         print(f"README already current: {tests} collected, {modules} modules")
