@@ -101,6 +101,42 @@ def build_router(require_auth) -> APIRouter:
                                 detail="undo requires approved=true")
         return ParallelWorld(guard=file_guard).undo(journal, approved=True)
 
+    @router.post("/scan")
+    async def scan_folder(body: Dict[str, Any] = Body(None)) -> Dict[str, Any]:
+        """Report duplicates and large files under a folder. Read-only.
+
+        Bounded in depth and file count, and it does not follow symlinked
+        directories -- a link is not a subtree the person selected.
+        """
+        from ..core.smartfiles import scan
+
+        body = body or {}
+        path = str(body.get("path") or "").strip()
+        if not path:
+            raise HTTPException(status_code=422, detail="a folder path is required")
+        try:
+            return scan(path)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc))
+
+    @router.post("/organize-plan")
+    async def organize_plan_route(body: Dict[str, Any] = Body(None)) -> Dict[str, Any]:
+        """Propose moving loose files into type folders.
+
+        The operations come back in the apply route's shape, so the client
+        previews and approves them there rather than through a second path.
+        """
+        from ..core.smartfiles import organize_plan
+
+        body = body or {}
+        path = str(body.get("path") or "").strip()
+        if not path:
+            raise HTTPException(status_code=422, detail="a folder path is required")
+        try:
+            return organize_plan(path, by=str(body.get("by") or "type"))
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc))
+
     @router.get("/recovery")
     async def file_recovery_report() -> Dict[str, Any]:
         """Interrupted transactions and what a restart can honestly conclude.

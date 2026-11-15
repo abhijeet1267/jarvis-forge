@@ -1816,4 +1816,49 @@ extension APIModels {
     struct MissionLease: Codable {
         let lease_id: String
     }
+
+    // MARK: - Smart Files
+
+    struct FolderScanRequest: Codable {
+        let path: String
+    }
+
+    struct FolderScan: Codable {
+        let root: String
+        let file_count: Int
+        let truncated: Bool
+        let duplicate_groups: [DuplicateGroup]
+        let reclaimable_bytes: Int
+        let largest: [LargeFile]
+        let unreadable: [String]
+        let note: String
+    }
+
+    struct DuplicateGroup: Codable {
+        let sha256: String
+        let size: Int
+        let keep: String
+        let copies: [String]
+        let wasted_bytes: Int
+    }
+
+    struct LargeFile: Codable {
+        let path: String
+        let size: Int
+        let name: String
+    }
+
+    struct OrganizePlan: Codable {
+        let root: String
+        let operations: [OrganizeMove]
+        let summary: String
+        let applicable: Bool
+    }
+
+    struct OrganizeMove: Codable {
+        let op: String?
+        let path: String?
+        let destination: String?
+        let reason: String?
+    }
 }
