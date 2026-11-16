@@ -25,6 +25,7 @@ from . import (
     coding,
     design,
     desktop,
+    desktop_native,
     email,
     files,
     google_tasks,
@@ -87,6 +88,7 @@ def _all_specs():
         *websearch.SPECS,
         *persistence.SPECS,
         *desktop.SPECS,
+        *desktop_native.SPECS,
         *browser_tools.SPECS,
     ]
 

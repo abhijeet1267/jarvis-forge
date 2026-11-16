@@ -112,6 +112,27 @@ Ranked; details + acceptance criteria in `docs/PROJECT_ROADMAP.md`.
 
 ## 4. Pre-existing uncommitted work (NOT mine — preserved)
 
+**2026-11-16:** the tree started this session **clean** (`git status --short`
+empty). During the session a **second Claude session titled "Jarvis Forge
+setup"** was writing to this same checkout concurrently. It owns, and I did not
+touch: `jarvis/tools/desktop_native.py`, `jarvis/desktop/`,
+`jarvis/tools/__init__.py` (registers `desktop_native.SPECS` — the registry
+went 181 → 196 tools), `native/desktop_executor/main.swift`,
+`tools/input_probe/main.swift`, `tests/test_desktop_native.py`.
+
+Two consequences worth knowing when reading this file:
+
+- A full-suite run during my work reported 6 failures; 3 were mine (fixed
+  below) and 3 were **not reproducible in a fresh run** — they are the
+  signature of a tree being edited mid-run, not of a defect.
+- `test_phase52_...::test_the_two_capabilities_this_phase_added_are_there`
+  fails because the README publishes **181 tools** while the registry now
+  reports **196**. That is the other session's tool registration outrunning its
+  README edit, not a provider defect; I left both the tools and that README
+  line alone.
+
+The earlier note below describes the 2026-10-16 run.
+
 The tree started this run with **128 modified + 69 untracked files**
 (~14,122 insertions / 10,723 deletions vs HEAD), plus 69 unpushed commits.
 The WIP in `jarvis/api/app.py` is a coherent **session-revocation hardening**
@@ -3815,3 +3836,240 @@ interactions; CI) are named rather than absorbed.
 - **Demo D** needs a device or emulator.
 - Nothing is pushed; CI has never run on this work.
 - The Swift XCTest target has not been executed locally.
+
+---
+
+## Update — 2026-11-16 (the Text & Chat tab now actually drives Command Center)
+
+**Reported symptom:** "the cmd centre is not working properly and its maximum
+req are failing."
+
+### Root cause (measured, not inferred)
+
+The macOS Command Center, the `/command` route and the app's client were all
+working. The defect was a **split configuration**:
+
+| Path | Read its provider from | Read its key from |
+| --- | --- | --- |
+| `/command` → chat | `settings.ai_provider` (default `openai`) | `JARVIS_LLM_API_KEY`, else `vantage.ai.<provider>` |
+| Text & Chat tab | `provider_categories["text"]` | `vantage.ai.category.text` |
+
+`provider_categories` was imported by exactly four API routes and
+`category_checks.py` — nothing in `config.py`, `selection.py`, `router.py` or
+`orchestrator.py`. So the tab declared *"Command Center answers, conversation
+and reasoning"*, its Test button returned `ok:true` in 5.5 s, and the chat path
+still computed `llm_enabled: False` and answered every sentence from the rule
+planner.
+
+Reproduced with the real client against the live backend:
+
+```
+aiAvailable : false     provider : openai     model : rules
+reply : …'I would need an AI provider for that one.'
+```
+
+### Fix
+
+- `jarvis/config.py` — `_overlay_text_category()` applies the saved Text & Chat
+  category to `ai_provider`, `llm_model`, `llm_base_url`, and the role models
+  (`llm_fast_model`/`llm_reasoning_model`, which otherwise stay `gpt-4o-mini`/`o4-mini` — names the gateway answers with **404**; both measured).
+  An exported `JARVIS_*` variable still wins. An unconfigured tab changes nothing.
+- `jarvis/gateway/selection.py` — `stored_key()` falls back to
+  `vantage.ai.category.text`, **only** when the category names that same
+  provider, so a 9Router key is never sent to OpenAI.
+- The tab's off switch means "this tab configures nothing": the overlay returns
+  early rather than writing `ai_enabled: false`, so the switch is reversible and
+  switching off Text & Chat cannot disable embeddings or vision.
+
+### Model choice (measured)
+
+Benchmarked 8 candidates on the live 9router gateway, then soaked the best two
+with 20 concurrent calls each.
+
+| Model | Result | Avg | Max |
+| --- | --- | --- | --- |
+| **`qoder`** (chosen) | 20/20 | 1.1 s | 1.7 s |
+| `modelscope` | 20/20 | 1.0 s | 1.7 s |
+| `ali/qwen3.8-flash` | 8/8 | 1.7 s | 2.1 s |
+| `van` | 6/6 | 8.4 s | **34.2 s** |
+| `ag/claude-sonnet-4-6` | 6/6 | 2.7 s | **25.2 s** |
+| `zen/openai/gpt-4o-mini` | 0/3 | — | 503 |
+| `cu/claude-sonnet-5-5-low` | 0/3 | — | 400 |
+| `groq/…llama-4-maverick` | 0/3 | — | 503 |
+
+`qoder` is a gateway-side **combo** (provider-side fallback), 262 144 context,
+384 000 max output, tools + vision + search. It passed a tool-call shape check
+(`get_weather({"city":"Paris"})`), arithmetic, instruction-following and
+multi-step reasoning. `modelscope` is an equivalent second choice.
+
+### Live verification
+
+- `GET /health` → `llm_enabled: true`, `provider_paths.chat: 9router`.
+- `POST /command` → `model_used: "9router:qoder"`, 3 245 ms, real prose.
+- Real `ConversationService` + `APIClient` → `model 9router:qoder`, 3 579 ms.
+- Deterministic intents still stay deterministic (`"what time is it"` →
+  `model=rules`, 7 ms) — the model is not put in front of what rules answer faster.
+
+### Tests
+
+- New `tests/test_text_category_drives_chat.py` — **10 passed**.
+- `test_provider_categories` + `test_ai_chat_provider_path` +
+  `test_provider_config_isolation` + `test_provider_architecture` — **52 passed, 1 skipped** (the skip is the optional live-key test).
+- `test_env_example_is_loadable` — 7 passed (a new `Settings` field was reverted
+  rather than editing the example file around it).
+- `test_r108_readme_counts_are_true` — 3 passed (README counts re-measured to
+  237 modules / 4 466 collected after this file was added).
+
+### Not done
+
+- The macOS `.app` was **not** rebuilt: the fix is entirely backend-side and the
+  installed binary (2026-11-15 15:59) already matches its sources.
+- The backend was restarted by hand to load the new model; the running process is
+  `run.py serve --port 8765 --host 127.0.0.1` (not under the app's supervision).
+- The 429s I observed came from a synthetic 140-request flood (burst 120).
+  Realistic usage — 12 concurrent screen loads and 60 polls over 30 s — returned
+  **100 % 200**, so the security limit was left alone.
+
+### Follow-up defect found while testing (fixed)
+
+A real second bug, found by trying a conversational follow-up:
+
+> "What **time** should I leave if the trip takes 45 minutes?" → *"It is 17:36
+> on Monday, 16 November 2026."*
+
+`planner._time` matched the bare alternative `the time`, so any sentence
+containing those two words was routed to `get_time` — including a follow-up
+whose answer needed the conversation context the model had. The rule now
+declines when the sentence is about a **planned** time (`should`/`will`/`can`/
+`to leave`/`to arrive`/…), the same shape as the existing
+"what is the date of my meeting" guard.
+
+Verified: 5 clock questions still reach `get_time`; 5 departure-time questions
+no longer do (`tests/test_text_category_drives_chat.py`, 8 new cases).
+`test_phase52`, `test_voice` and `test_phase91_voice_agent_integration` — 142
+passed, 1 skipped (`test_phase52` also carries the unrelated 181-vs-196 failure
+described above).
+
+## Update — 2026-11-16 (V14: real desktop control — measured, not claimed)
+
+This phase set out to make Vantage physically operate macOS. It produced a real
+executor, real tools, a real screen, and one capability that genuinely works —
+plus a precise, measured account of why the rest cannot on this machine.
+
+### The measurement that decided the design
+
+Read fresh from a newly compiled binary on this machine:
+
+| Check | Value |
+|---|---|
+| `CGPreflightPostEventAccess()` | **false** |
+| `AXIsProcessTrusted()` | **false** |
+| `CGPreflightScreenCaptureAccess()` | **true** |
+
+Then measured, not assumed:
+
+- `CGEvent.post` with post-event access **false** returns **no error and does
+  nothing**. A pointer move posted that way left `CGEvent(source:)?.location`
+  unchanged at (607,731) → (607,731). This silent no-op is why the executor never
+  treats "the call returned" as evidence.
+- `CGWarpMouseCursorPosition` **does** move the real pointer: observed
+  (701,718) → (731,748), confirmed by readback, then restored.
+- `osascript ... click at {x,y}` exits **1**:
+  `osascript is not allowed assistive access (-25211)`. The pre-existing
+  AppleScript `click_desktop` correctly reported this as a failure — it was not
+  lying, it simply could not click.
+
+So the capability is split, and the whole implementation reports which half is
+available rather than implying both are.
+
+### What was built
+
+- **`native/desktop_executor/main.swift`** — a compiled Swift executor
+  implementing pointer move, click/double/right, drag, scroll, unicode typing,
+  key + modifiers, app/window focus, Accessibility tree inspection, AXPress,
+  element reading, and a `verify_change` observer. Every operation returns a
+  structured status; `verified` is only used where a readback actually confirms
+  the outcome.
+- **`jarvis/desktop/executor.py`** — the Python bridge. It runs the helper and
+  passes its JSON through verbatim; an unparseable answer becomes `unknown`, and
+  a missing binary becomes `permission_required`, never a silent success.
+- **`jarvis/tools/desktop_native.py`** — 15 registered tools with real risk
+  tiers: four READ, one LOW, one EXTERNAL (pointer move — visible, so not a
+  read), nine DESTRUCTIVE confirmation-gated (click, double, right, drag, scroll,
+  type, key, shortcut, press_element).
+- **`jarvis/api/desktop_routes.py`** — the authenticated `/desktop` surface,
+  mounted in the existing app. No second server.
+- **`macos/.../DesktopControlView.swift`** — the Desktop Control screen, first in
+  the Mac sidebar group. It disables a control whose capability is missing and
+  says why, names the executable the permission applies to, and colours
+  `performed_unverified` amber, never green.
+- **`tests/test_desktop_native.py`** — 23 tests.
+- **`benchmarks/v14_desktop/`** — the acceptance run and its README.
+
+### Defects found and fixed while doing it
+
+1. **`CGGetActiveDisplayList` returns 0 on this machine** while
+   `CGGetOnlineDisplayList` returns the real display and `CGMainDisplayID`
+   reports 1352x878. Coordinate validation built on the empty list refused
+   **every** coordinate with "not on any display" — a validation bug wearing the
+   costume of a safety feature. Switched to the online list, with the main
+   display as a fallback. Pinned by
+   `test_a_valid_on_screen_point_is_not_refused`.
+2. **The desktop HTTP surface bypassed the Control Tower.** It called the
+   executor directly, so a human takeover stopped the mission runner while a
+   click from this surface still went through. Measured in the acceptance run: a
+   pointer move succeeded *during* a takeover. The routes now call `admit()` and
+   return **409** with the tower's own reason. Verified live and pinned by
+   `test_a_takeover_refuses_a_desktop_action_from_the_http_surface`.
+3. **My own `fail()` call left the message field empty.** `fail()` carries its
+   reason in `error`, not `message`, so every refusal rendered as a blank row in
+   the first smoke test. Fixed in `_finish`.
+
+### Acceptance results (real run, live backend)
+
+| Demo | Status | Level |
+|---|---|---|
+| A — move the cursor | **VERIFIED** | 3 — pointer moved, readback confirmed |
+| B — click a button | **PERMISSION BLOCKED** | 1 |
+| C — type into TextEdit | **PERMISSION BLOCKED** | 1 |
+| D — scroll | **PERMISSION BLOCKED** | 1 |
+| E — double/right click | **PERMISSION BLOCKED** | 1 |
+| F — drag and drop | **PERMISSION BLOCKED** | 1 |
+| G — keyboard shortcut | **PERMISSION BLOCKED** | 1 |
+| H — multi-step mission | **PARTIALLY VERIFIED** | 3 — the move step ran through the real mission gate and verified; the type step stopped on the missing permission |
+| I — permission refusal | **VERIFIED** | names the executable and the fix; target untouched |
+| J — human takeover | **VERIFIED** | a move during takeover returns HTTP 409 |
+
+Level 1 = the request reached the executor. Level 2 = a system event was posted.
+Level 3 = the target UI actually changed, observed.
+
+### What is NOT done, and why
+
+- **No click, keystroke, scroll or drag has executed on this machine.** Post-event
+  access is not granted to the executor, so each refuses *before* acting. The
+  code path is complete and will report `performed_unverified` — never
+  `verified` — until a separate observation confirms the target changed.
+- **Accessibility targeting is implemented but untestable here.** `inspect`,
+  `press_element`, `read_element` and `verify_change` all refuse with the
+  executable named, because `AXIsProcessTrusted()` is false for it.
+- **Granting the permission is a user action.** `vantage-desktop request_access`
+  shows macOS's own prompt; the person must approve it in System Settings. I did
+  not click that dialog or edit TCC, and the grant did not appear on its own.
+- **A rebuilt binary can be a different identity**, so a grant may not follow a
+  rebuild to a new path. `build.sh` writes to a fixed location for this reason.
+- **The Vantage.app bundle was not granted or re-signed this session.** The
+  executor is what holds (or lacks) the permission, and it names itself in every
+  result.
+
+### Test health
+
+Targeted suites: **108 passed, 7 skipped** across `test_desktop_native`,
+`test_phase93_desktop_control`, `test_phase61_desktop_control_that_asks_before_it_touches`,
+`test_phase25_desktop_truth`, the two doc-count guards, `test_no_duplicate_routes`,
+`test_reality_hud` and `test_control_tower`. The 7 skips are the pre-existing
+acceptance tests that require Accessibility — they skip honestly rather than
+faking a pass. `swift build` is clean for the app.
+
+README counts re-measured after adding 15 tools: **49 of 196** confirmation-gated,
+tiers read 97 · low 51 · external 22 · destructive 23 · physical 3; 238 test
+modules · 4498 collected; 219.6k versioned lines.

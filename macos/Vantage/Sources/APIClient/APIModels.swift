@@ -2817,3 +2817,58 @@ extension APIModels {
         }
     }
 }
+
+// MARK: - Desktop control
+
+extension APIModels {
+    /// One executor result. `status` is the vocabulary the native tool uses, and
+    /// `performed_unverified` is deliberately distinct from `verified`: it means
+    /// an event was accepted but no outcome was observed.
+    struct DesktopResult: Codable {
+        let status: String
+        let reason: String
+        var cursor_before: DesktopPoint?
+        var cursor_after: DesktopPoint?
+        var display_id: Int?
+        var needs: String?
+        var operation: String?
+    }
+
+    struct DesktopPoint: Codable {
+        let x: Double
+        let y: Double
+    }
+
+    /// The capability posture: four separately-granted permissions, read from
+    /// macOS for the executor binary specifically.
+    struct DesktopPosture: Codable {
+        let can_move_cursor: Bool?
+        let can_click: Bool?
+        let can_type: Bool?
+        let can_read_ui: Bool?
+        let screen_capture: Bool?
+        let accessibility: Bool?
+        let post_events: Bool?
+        // These came back empty or absent on a partial answer; a non-optional
+        // field made the whole posture fail to decode instead of showing what
+        // was readable.
+        let process_name: String?
+        let executable: String?
+        let subject_note: String?
+        let note: String?
+
+        var canMoveCursor: Bool { can_move_cursor ?? false }
+        var canClick: Bool { can_click ?? false }
+        var canType: Bool { can_type ?? false }
+        var canReadUI: Bool { can_read_ui ?? false }
+
+        /// The rows the screen draws, in the order a person would ask about them.
+        var capabilityRows: [(String, Bool)] {
+            [("Move the cursor", canMoveCursor),
+             ("Click and drag", canClick),
+             ("Type and press keys", canType),
+             ("Read the interface", canReadUI),
+             ("Capture the screen", screen_capture ?? false)]
+        }
+    }
+}

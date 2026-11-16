@@ -707,6 +707,13 @@ from .reality_routes import build_router as _build_reality_router  # noqa: E402
 
 app.include_router(_build_reality_router(require_auth))
 
+# Real desktop control: pointer, keyboard and Accessibility through the native
+# executor. The routes call the registered tools, so they pass the same gate a
+# mission does rather than opening a second door.
+from .desktop_routes import build_router as _build_desktop_router  # noqa: E402
+
+app.include_router(_build_desktop_router(require_auth))
+
 _core: Optional[JarvisCore] = None
 _voice = None
 

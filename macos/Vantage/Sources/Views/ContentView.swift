@@ -109,6 +109,7 @@ struct ContentView: View {
             case .evolution:    SkillEvolutionView()
             case .passports:    CapabilityPassportsView()
             case .reality:      RealityHUDView()
+            case .desktop:      DesktopControlView()
             case .goals:        GoalGuardView()
             case .doctor:       ProjectDoctorView()
             case .planner:      PlannerView()
@@ -162,7 +163,7 @@ private struct VantageSidebar: View {
                     group("Workspace", [.today, .home, .briefing, .planner, .workspaces, .command])
                     group("Capture & Documents", [.capture, .documents])
                     group("Connections", [.connections, .google, .mcp, .automation])
-                    group("Mac", [.reality, .control, .tower, .missions, .recovery, .flows, .studio, .shadow, .steer, .operator_])
+                    group("Mac", [.desktop, .reality, .control, .tower, .missions, .recovery, .flows, .studio, .shadow, .steer, .operator_])
                     group("Automate", [.skills, .evolution, .passports])
                     group("People & Work", [.work, .people])
                     group("Configure", [.providers, .capabilities, .devices, .preferences, .settings])
@@ -380,7 +381,7 @@ private struct StatusFooter: View {
 // MARK: - Navigation model
 
 enum NavItem: String, Identifiable, CaseIterable {
-    case today, home, missions, smartfiles, parallelworld, safety, skills, evolution, passports, reality, goals, doctor, planner, operator_, control, flows, work, people, connections, workspaces, studio, shadow, steer, tower, recovery, egress, autonomy, assurance, undo,
+    case today, home, missions, desktop, smartfiles, parallelworld, safety, skills, evolution, passports, reality, goals, doctor, planner, operator_, control, flows, work, people, connections, workspaces, studio, shadow, steer, tower, recovery, egress, autonomy, assurance, undo,
          google, mcp, automation, command, providers, capabilities, devices, approvals,
          activity, memory, settings
     // Phase 3
@@ -393,6 +394,7 @@ enum NavItem: String, Identifiable, CaseIterable {
         case .today: return "Today"
         case .home: return "Home"
         case .missions: return "Mission Control"
+        case .desktop: return "Desktop Control"
         case .smartfiles: return "Smart Files"
         case .parallelworld: return "ParallelWorld"
         case .safety: return "Safety Center"
@@ -442,6 +444,7 @@ enum NavItem: String, Identifiable, CaseIterable {
         case .today: return "sun.horizon.fill"
         case .home: return "house.fill"
         case .missions: return "target"
+        case .desktop: return "cursorarrow.and.square.on.square.dashed"
         case .smartfiles: return "folder.badge.gearshape"
         case .parallelworld: return "rectangle.split.3x1"
         case .safety: return "lock.shield"
