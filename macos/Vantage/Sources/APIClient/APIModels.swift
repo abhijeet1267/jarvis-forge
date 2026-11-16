@@ -2164,6 +2164,85 @@ extension APIModels {
         let note: String
     }
 
+    // MARK: - Reality HUD
+
+    /// One picture of the machine, from sources that stay honest when they fail.
+    struct RealityHUD: Codable {
+        let read_at: Double
+        let permissions: Permissions
+        let workers: Workers
+        let takeover: Takeover
+        let honest: String
+
+        struct Permissions: Codable {
+            struct Row: Codable, Identifiable {
+                let capability: String
+                let label: String
+                let status: String
+                let explanation: String
+
+                var id: String { capability }
+            }
+
+            let rows: [Row]
+            let usable: [String]
+            /// Whether these values describe Vantage.app or the process that asked.
+            let about_bundled_host: Bool
+            let note: String
+            let readable: Bool
+        }
+
+        struct Workers: Codable {
+            struct Row: Codable, Identifiable {
+                let worker: String
+                let state: String
+                let in_flight: Int
+                let calls_made: Int
+                let calls_refused: Int
+                let failures: Int
+                let paused_by: String
+                let paused_reason: String
+                let last_tool: String
+
+                var id: String { worker }
+            }
+
+            let workers: [Row]
+            let running: Int
+            let paused: Int
+            let stopped: Int
+            let refused_total: Int
+        }
+
+        struct Takeover: Codable {
+            let held: Bool
+            let held_workers: [String]
+            let reason: String
+            let enforced_at: String
+            /// What a takeover cannot do — rendered, so the caveat is never lost.
+            let cannot: String
+        }
+    }
+
+    struct TakeoverResult: Codable {
+        let paused: [String]
+        let already_paused_by_someone_else: [String]
+        let reason: String
+        let effect: String
+        let cannot: String
+    }
+
+    struct ReleaseResult: Codable {
+        struct Left: Codable {
+            let worker: String
+            let why: String
+        }
+
+        let resumed: [String]
+        let left_paused: [Left]
+        let note: String
+    }
+
     struct SkillRunRequest: Codable {
         let available_capabilities: [String]
         let allowed_scope: [String]

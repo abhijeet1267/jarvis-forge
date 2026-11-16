@@ -108,6 +108,7 @@ struct ContentView: View {
             case .skills:       SkillsLibraryView()
             case .evolution:    SkillEvolutionView()
             case .passports:    CapabilityPassportsView()
+            case .reality:      RealityHUDView()
             case .goals:        GoalGuardView()
             case .doctor:       ProjectDoctorView()
             case .planner:      PlannerView()
@@ -161,7 +162,7 @@ private struct VantageSidebar: View {
                     group("Workspace", [.today, .home, .briefing, .planner, .workspaces, .command])
                     group("Capture & Documents", [.capture, .documents])
                     group("Connections", [.connections, .google, .mcp, .automation])
-                    group("Mac", [.control, .tower, .missions, .recovery, .flows, .studio, .shadow, .steer, .operator_])
+                    group("Mac", [.reality, .control, .tower, .missions, .recovery, .flows, .studio, .shadow, .steer, .operator_])
                     group("Automate", [.skills, .evolution, .passports])
                     group("People & Work", [.work, .people])
                     group("Configure", [.providers, .capabilities, .devices, .preferences, .settings])
@@ -379,7 +380,7 @@ private struct StatusFooter: View {
 // MARK: - Navigation model
 
 enum NavItem: String, Identifiable, CaseIterable {
-    case today, home, missions, smartfiles, parallelworld, safety, skills, evolution, passports, goals, doctor, planner, operator_, control, flows, work, people, connections, workspaces, studio, shadow, steer, tower, recovery, egress, autonomy, assurance, undo,
+    case today, home, missions, smartfiles, parallelworld, safety, skills, evolution, passports, reality, goals, doctor, planner, operator_, control, flows, work, people, connections, workspaces, studio, shadow, steer, tower, recovery, egress, autonomy, assurance, undo,
          google, mcp, automation, command, providers, capabilities, devices, approvals,
          activity, memory, settings
     // Phase 3
@@ -402,6 +403,7 @@ enum NavItem: String, Identifiable, CaseIterable {
         case .skills: return "Skills Library"
         case .evolution: return "Skill Evolution"
         case .passports: return "Capability Passports"
+        case .reality: return "Reality HUD"
         case .goals: return "GoalGuard"
         case .doctor: return "Project Doctor"
         case .planner: return "Planner"
@@ -450,6 +452,7 @@ enum NavItem: String, Identifiable, CaseIterable {
         case .skills: return "square.stack.3d.up"
         case .evolution: return "wand.and.stars"
         case .passports: return "person.text.rectangle"
+        case .reality: return "rectangle.inset.filled.on.rectangle"
         case .goals: return "eye"
         case .doctor: return "stethoscope"
         case .planner: return "calendar.day.timeline.left"

@@ -701,6 +701,12 @@ from .passport_routes import build_router as _build_passport_router  # noqa: E40
 
 app.include_router(_build_passport_router(require_auth))
 
+# Reality HUD + human takeover: what this Mac looks like now, and a pause that
+# refuses the next dispatch.
+from .reality_routes import build_router as _build_reality_router  # noqa: E402
+
+app.include_router(_build_reality_router(require_auth))
+
 _core: Optional[JarvisCore] = None
 _voice = None
 

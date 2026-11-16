@@ -3495,3 +3495,69 @@ entry saying the passport was produced, and records `"grants": "nothing"`.
   and, when the log held at least that many rows, a note saying the counts cover
   the most recent of them rather than all of history. Pinned by
   `test_a_truncated_log_window_is_stated_not_presented_as_a_total`.
+
+## Update — 2026-11-16 (V12 phase 12: Reality HUD + Human Takeover)
+
+**What it is.** One screen that says what is really happening on this Mac, and one
+control that genuinely stops the agents — not a badge that redraws.
+
+**The HUD** assembles the picture from sources that are already honest. Permissions
+come from `PermissionStatusService`, which preflights the real macOS APIs and
+returns `UNKNOWN` when it cannot ask — and states whether the values describe
+Vantage.app or the process that asked. Workers come from the Control Tower with
+the refusal counters *it* keeps, so a "blocked" number moves only when a call was
+actually refused.
+
+**The takeover** reuses the one control enforced at a dispatch boundary: the
+tower's pause gate, which every tool call passes through. The screen states what
+it cannot do in the backend's own words — it cannot freeze a call already inside a
+handler, only refuse the next dispatch. There is no pointer control, no synthetic
+input and no capture anywhere in the module; a takeover here hands the machine
+back by stopping what the agents would do next.
+
+**Added / changed**
+
+- `jarvis/core/reality_hud.py` — `snapshot` (permissions with their caveat,
+  workers with refusals, the takeover gate's own state), `take_over`, `release_all`.
+  `release_all` resumes only workers whose pause this module set (`paused_by ==
+  "operator"` **and** the takeover reason), because a pause a person set by hand
+  looks identical if you only read `paused`.
+- `jarvis/api/reality_routes.py` — `GET /reality`, `POST /reality/takeover`,
+  `POST /reality/release`. The tower is the process-wide singleton, deliberately:
+  a fresh instance would pause workers nobody dispatches through.
+- `macos/…/RealityHUDView.swift` — the takeover card (with its limitation), the
+  permission table with per-state colouring and the "read by another process"
+  warning, worker rows with in-flight and refused counts. First entry in `Mac`.
+
+**Evidence**
+
+- `tests/test_reality_hud.py` — **15 passed**, including the measurement that
+  separates a takeover from a badge: `tower.admit("write_file")` succeeds, a
+  takeover runs, and the next `admit` raises `WorkerRefusal` naming the takeover —
+  plus `test_release_leaves_a_hand_set_pause_alone` and
+  `test_the_module_never_drives_the_screen` (no `osascript`, `CGEvent`,
+  `cliclick`, `screencapture`). `tests/test_control_tower.py` still passes
+  (32 passed together with the new file).
+- **Level 7, live (probe backend, real mission engine):** `POST /reality/takeover`
+  paused **17** workers → a real skill run then failed with
+  `laptop is paused (human takeover: …); the next call is refused`, and the HUD
+  reported `paused: 17, refused: 1, held: true`. `POST /reality/release` resumed
+  17 and left 0 paused → the same skill run then proceeded
+  (`partially_completed`). That is the whole point measured end to end: taken over
+  refuses real work, released lets it run.
+- **Level 4, rendered** (`/tmp/vantage_shots/reality1.png`): the takeover card,
+  the permission table showing `screen_recording GRANTED`, `accessibility
+  REQUIRES_MANUAL_SYSTEM_SETTINGS`, `microphone NOT_DETERMINED`, `automation
+  UNKNOWN`, and the honest note that these were read by code outside the bundle.
+- Both Swift targets build clean.
+
+**NOT verified**
+
+- **Level 5–6:** "Take over now" and "Hand control back" were exercised over HTTP
+  against the live backend, not by a physical click.
+- **`about_bundled_host` is `false` here** — the probe runs the backend from the
+  repo, not from Vantage.app, so these permission values describe that caller.
+  They are *not* a measurement of the shipped app's permissions; the screen says
+  so itself rather than hiding it.
+- A worker paused by hand is faithfully left paused, so "Hand control back" after
+  a takeover can legitimately resume fewer workers than were paused.

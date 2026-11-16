@@ -2097,6 +2097,35 @@
         "NOT VERIFIED (level 5-6): 'Record in audit log' exercised over HTTP, not by a physical click.",
         "Attribution is by tool ownership; a tool two workers could both own would be double-counted. No such tool exists today -- the assumption is stated, not hidden."
       ]
+    },
+    "V12-12-reality-hud-human-takeover": {
+      "title": "V12: Reality HUD + Human Takeover -- what is really on this Mac, and a pause that bites",
+      "status": "completed",
+      "priority": 2,
+      "acceptance": [
+        "permissions are preflighted from the real macOS APIs and stay UNKNOWN when they cannot be asked",
+        "the HUD says whether the values describe Vantage.app or another process",
+        "worker state and refusal counts come from the tower, not from inference",
+        "a takeover pauses every running worker and the next dispatch is actually refused",
+        "the takeover states what it cannot do (no interruption of an in-flight handler)",
+        "release resumes only what the takeover paused, never a hand-set pause",
+        "the module drives no pointer, injects no input, captures nothing"
+      ],
+      "evidence": [
+        "2026-11-16: jarvis/core/reality_hud.py -- snapshot/take_over/release_all with the tower's own refusal counters and the permission service's caveat.",
+        "2026-11-16: jarvis/api/reality_routes.py -- GET /reality, POST /reality/takeover, POST /reality/release, using the process-wide tower singleton.",
+        "2026-11-16: macos RealityHUDView.swift + first entry in the Mac sidebar group.",
+        "2026-11-16 PASS: tests/test_reality_hud.py 15 passed -- incl. test_the_next_dispatch_is_refused_after_a_takeover, test_release_leaves_a_hand_set_pause_alone, test_the_module_never_drives_the_screen.",
+        "2026-11-16 PASS: tests/test_reality_hud.py + tests/test_control_tower.py + tests/test_no_duplicate_routes.py 32 passed.",
+        "2026-11-16 PASS (level 7, live): takeover paused 17 workers -> a real skill run failed with 'laptop is paused (human takeover ...)'; HUD showed paused 17 / refused 1 / held true; release resumed 17 and the run then proceeded.",
+        "2026-11-16 PASS (level 4, rendered): Reality HUD on the live backend with real permission states and the 'read by another process' warning.",
+        "2026-11-16 PASS: swift build clean for app and harness."
+      ],
+      "blocked_or_unverified": [
+        "NOT VERIFIED (level 5-6): Take over / Hand control back exercised over HTTP, not by a physical click.",
+        "about_bundled_host is false for the probe backend: these permission values describe the repo process, not Vantage.app. The screen states this; it is not a measurement of the shipped app.",
+        "A worker paused by hand is left paused on release, so Resume may legitimately affect fewer workers than the takeover paused."
+      ]
     }
   }
 }
