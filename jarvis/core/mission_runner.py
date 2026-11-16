@@ -262,6 +262,15 @@ def _verifier_from_spec(spec: str, condition_id: str) -> Optional[Verifier]:
     if kind == "file_identical":
         return Verifiers.file_identical(
             str(parsed.get("path") or ""), str(parsed.get("source") or ""), condition_id)
+    # Effects that are not files -- a page, a command, a process, a port, the
+    # frontmost app. These observers read the world and never the executor's
+    # message, and an address the egress firewall refuses is UNKNOWN rather than
+    # a pass. Resolved by name, so a condition cannot name a callable.
+    from .outcome_assurance import KINDS as _ASSURANCE_KINDS
+    from .outcome_assurance import verifier_from_spec as _assurance_verifier
+
+    if kind in _ASSURANCE_KINDS:
+        return _assurance_verifier(spec, condition_id)
     return None
 
 

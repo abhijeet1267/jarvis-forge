@@ -1981,6 +1981,33 @@
         "The dial is applied in PermissionEngine.evaluate. Paths that decide without calling it (if any) are not covered; the engine is the only authoriser by design, but that is asserted from the code, not swept.",
         "Level 4's extra room is the permission engine's existing standing-grant rule; the dial does not add a second auto-execute path."
       ]
+    },
+    "V12-8-outcome-assurance": {
+      "title": "V12: Outcome Assurance -- observe the world beyond the filesystem",
+      "status": "completed",
+      "priority": 1,
+      "acceptance": [
+        "a success condition can be about a page, a command, a process, a port or the frontmost app",
+        "every observer reads the world, never the executor's message",
+        "a check that could not run is UNKNOWN, never a pass",
+        "an address the egress firewall refuses is UNKNOWN, not a failure",
+        "the command observer runs only allowlisted argv, never arbitrary programs",
+        "a condition names an observer by kind as data; no callable can be smuggled in",
+        "the mission runner resolves the new kinds through its existing _verifier_from_spec"
+      ],
+      "evidence": [
+        "2026-11-16: jarvis/core/outcome_assurance.py added -- KINDS (url_body,url_status,command_output,process_running,port_listening,app_frontmost), Observation, observer_for_spec, verifier_from_spec, ALLOWED_COMMANDS (absolute paths).",
+        "2026-11-16: jarvis/core/mission_runner.py -- _verifier_from_spec falls through to the assurance kinds; unknown kind still returns None -> UNKNOWN.",
+        "2026-11-16: jarvis/api/assurance_routes.py -- GET /assurance (kinds + rule), POST /assurance/observe (runs one observation).",
+        "2026-11-16 PASS: tests/test_outcome_assurance.py 25 passed -- incl. test_an_unlisted_command_is_refused_not_run, test_a_refused_address_is_unknown_not_failed, test_the_verifier_never_crashes_on_an_observer_error, test_a_mission_verifies_a_process_condition_end_to_end, test_the_runner_resolves_an_assurance_kind.",
+        "2026-11-16 PASS (level 7, live :8798): port 8798 'verified 127.0.0.1:8798 accepts a connection'; port 1 'failed refused'; collect.example.net 'unknown the egress firewall refused the check'; command rm -rf / 'unknown not an allowlisted command'.",
+        "2026-11-16 PASS (level 4, rendered): OutcomeAssuranceView shows the rule, a live VERIFIED port observation, and all six kinds with what each carries."
+      ],
+      "blocked_or_unverified": [
+        "NOT VERIFIED (level 5-6): the Observe button was exercised over HTTP; the screen's live run is the same route, but no physical click drove it.",
+        "app_frontmost depends on Accessibility permission; without it the observer reports UNKNOWN, never a guess. Not exercised with permission granted here.",
+        "url_status reports 200 for any body-less success and the raised code for an HTTPError; a non-HTTP status failure mode other than a connection error is UNKNOWN."
+      ]
     }
   }
 }

@@ -1745,6 +1745,32 @@ extension APIModels {
         let params: [String: String]
     }
 
+    // MARK: - Outcome Assurance
+
+    struct AssuranceKind: Codable, Identifiable {
+        let kind: String
+        let question: String
+        let carries: String
+
+        var id: String { kind }
+    }
+
+    struct AssuranceKinds: Codable {
+        let kinds: [AssuranceKind]
+        /// "An observer reads the world, never the executor's message..."
+        let rule: String
+    }
+
+    /// `POST /assurance/observe`. One observation against the world, run now.
+    struct AssuranceObservation: Codable {
+        let status: String      // verified | failed | unknown
+        let detail: String
+    }
+
+    struct AssuranceObserveRequest: Codable {
+        let spec: String        // JSON, as the mission store holds it
+    }
+
     // MARK: - Live Mission Steering
 
     /// A proposed replacement for the un-run remainder of a plan.

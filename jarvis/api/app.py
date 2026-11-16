@@ -680,6 +680,11 @@ from .autonomy_routes import build_router as _build_autonomy_router  # noqa: E40
 
 app.include_router(_build_autonomy_router(require_auth))
 
+# Outcome Assurance: what can be verified beyond the filesystem, read-only.
+from .assurance_routes import build_router as _build_assurance_router  # noqa: E402
+
+app.include_router(_build_assurance_router(require_auth))
+
 _core: Optional[JarvisCore] = None
 _voice = None
 

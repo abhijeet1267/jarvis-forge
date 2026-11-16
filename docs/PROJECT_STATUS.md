@@ -3205,3 +3205,67 @@ ceiling sentence, and a live preview of `delete_file` reading
 synthetic clicks are dropped here). Paths that decide without calling
 `PermissionEngine.evaluate` would not see the dial — the engine is the only
 authoriser by design, but that is asserted from the code rather than swept.
+
+## Update — 2026-11-16 (V12 phase 8: Outcome Assurance — verify the world, not just files)
+
+**The gap.** The mission runner already verified a job by re-reading the world
+after the steps ran — but every observer it had was a *file* observer (contains a
+needle, hashes to a value, is absent, matches another file). An effect anywhere
+else — a page answered, a command exited cleanly, a process is up, a port is
+listening, an app is in front — could only be recorded UNKNOWN. UNKNOWN is
+honest, but it was the whole answer whenever the thing being verified was not a
+file, which is most real work.
+
+**What was added.** `jarvis/core/outcome_assurance.py` adds six observers, and
+`_verifier_from_spec` now falls through to them for a condition's `kind`:
+
+| kind | question | what it carries |
+|---|---|---|
+| `url_body` | does this page's body contain (or no longer contain) this text? | a GET |
+| `url_status` | is the HTTP status one of these codes? | a GET |
+| `command_output` | does this allowlisted command exit 0 and say this? | one of `echo`, `git_status`, `ls`, `test_file`, `uname` |
+| `process_running` | is this process in the table (or gone)? | a `ps` read |
+| `port_listening` | does this local port accept a connection? | a loopback connect |
+| `app_frontmost` | is this application in front (or not)? | one System Events query, permission-gated |
+
+**The three rules every observer keeps.**
+1. **It reads the world, never the executor's message** — it is handed a URL, an
+   argv, a process name, and reports only what it now sees.
+2. **It never guesses** — a timeout, a missing binary or a permissions error is
+   UNKNOWN with the reason, never VERIFIED from a non-answer. "The check could
+   not run" and "the check ran and the world is wrong" stay different sentences.
+3. **It cannot be an execution path** — the command observer runs only
+   allowlisted absolute-path argv; an unknown command is refused, not guessed at.
+   `rm -rf /` comes back *"not an allowlisted command; an observer will not run
+   arbitrary programs."*
+
+**Compounds with phase 6.** An `url` observation goes through the egress
+firewall, so an address this Mac may not contact is **UNKNOWN** with the
+firewall's reason — reporting FAILED would blame the mission for the firewall's
+decision, and VERIFIED would invent a reading.
+
+**Surfaces.** `jarvis/api/assurance_routes.py` (`GET /assurance`,
+`POST /assurance/observe`) and `OutcomeAssuranceView.swift` under **Oversight**,
+which lists the kinds and runs one observation live.
+
+**Evidence.** `tests/test_outcome_assurance.py` **25 passed**, including
+`test_a_refused_address_is_unknown_not_failed`,
+`test_an_unlisted_command_is_refused_not_run`,
+`test_the_verifier_never_crashes_on_an_observer_error`, and
+`test_a_mission_verifies_a_process_condition_end_to_end` (a real mission whose
+condition is "launchd is running" verifies VERIFIED through the runner's own
+resolver). Both Swift targets build clean; mission suites 81 passed.
+
+**Live, level 7 (isolated `:8798`).** `port_listening:8798` → `verified
+127.0.0.1:8798 accepts a connection`; `port_listening:1` → `failed … Connection
+refused`; a blocked `collect.example.net` URL → `unknown the egress firewall
+refused the check`; `command_output rm -rf /` → `unknown … not an allowlisted
+command`.
+
+**Rendered, level 4.** The screen shows the rule, a live `VERIFIED` port
+observation, and all six kinds with what each one is allowed to carry.
+
+**NOT verified.** The Observe button was exercised over HTTP (the screen's live
+run is the same route); no physical click drove it. `app_frontmost` depends on
+Accessibility permission and reports UNKNOWN without it — not exercised with
+permission granted here.
