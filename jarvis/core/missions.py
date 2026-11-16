@@ -547,17 +547,26 @@ class MissionService:
         return [_from_row(r) for r in rows]
 
     def incomplete_missions(self, limit: int = 50) -> List[Mission]:
-        """Missions that were mid-flight when the process stopped.
+        """Missions that a relaunch should surface: work that did not finish.
 
         This is what makes a relaunch resume rather than replay: the caller can
         see exactly which missions were interrupted and in which state, instead
         of treating every stored mission as new.
+
+        ``AWAITING_APPROVAL`` and ``BLOCKED`` are included because they are
+        unfinished work with an outstanding decision -- one is waiting on a
+        person's answer, the other stopped on a refusal they need to see. A list
+        of only the states with a handler running would hide the parked mission
+        whose answer was never given, which is the one most in need of surfacing.
+        Each row carries its own state, so the caller can tell them apart.
         """
         rows = self.db.query(
-            "SELECT * FROM missions WHERE state IN (?, ?, ?, ?) "
+            "SELECT * FROM missions WHERE state IN (?, ?, ?, ?, ?, ?) "
             "ORDER BY updated_at DESC LIMIT ?",
             (MissionState.RUNNING.value, MissionState.VERIFYING.value,
-             MissionState.RECOVERING.value, MissionState.PAUSED.value, limit))
+             MissionState.RECOVERING.value, MissionState.PAUSED.value,
+             MissionState.AWAITING_APPROVAL.value, MissionState.BLOCKED.value,
+             limit))
         return [_from_row(r) for r in rows]
 
 

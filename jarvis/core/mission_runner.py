@@ -29,6 +29,7 @@ What the runner refuses to do is as important as what it does:
 from __future__ import annotations
 
 import hashlib
+import json
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
@@ -345,6 +346,7 @@ class MissionRunner:
                 self.service.mark_step(mission_id, step.step_id, status="failed",
                                        detail=f"not executed: {intent_refusal}",
                                        actor=actor)
+                self._record_refusal(mission, step, "intent", intent_refusal)
                 return self.service.transition(
                     mission_id, MissionState.BLOCKED, actor=actor,
                     reason=f"step {step.step_id} was refused: {intent_refusal}")
@@ -402,6 +404,7 @@ class MissionRunner:
 
                     self.service.mark_step(mission_id, step.step_id, status="failed",
                                            detail=f"not executed: {reason}", actor=actor)
+                    self._record_refusal(mission, step, "permission", reason)
                     return self.service.transition(
                         mission_id, MissionState.BLOCKED, actor=actor,
                         reason=f"step {step.step_id} was refused: {reason}")
@@ -670,6 +673,41 @@ class MissionRunner:
                 status=result.status, observation=result.observation,
                 evidence_id=evidence_id, actor=actor)
         return mission
+
+    def _record_refusal(self, mission: Mission, step, why_kind: str,
+                        reason: str) -> str:
+        """Write a refused step to the audit log and return its id.
+
+        A refusal that exists only on the mission row is invisible to everything
+        that reads the audit chain -- passports count refusals from there, and a
+        person reviewing "what did it try" has no entry to find. Recording it
+        here is the durable half of "the denial was recorded".
+
+        Returns "" when no audit log is attached or the write failed. The
+        mission is already marked failed by the caller either way: a lost audit
+        write must not turn a refusal into a pass.
+        """
+        if self._audit is None:
+            return ""
+        try:
+            record = self._audit.record(
+                intent=f"refuse mission {mission.mission_id} step {step.step_id}",
+                tool=step.tool or "mission_step",
+                target=json.dumps(step.params or {}, sort_keys=True),
+                risk="read",
+                result="denied",
+                detail={
+                    "mission_id": mission.mission_id,
+                    "step_id": step.step_id,
+                    "refused_by": why_kind,
+                    "reason": reason,
+                },
+            )
+            return str(getattr(record, "log_id", "") or "")
+        except Exception as exc:
+            log.info("could not record a refusal",
+                     extra_fields={"error": str(exc)[:120]})
+            return ""
 
     def _record_evidence(self, mission: Mission, condition, result: Verification) -> str:
         """Write the observation to the hash-chained audit log and return its id.

@@ -71,6 +71,10 @@ GOALS_FILE_NAME = "goals.json"
 #: Detail text is for a person reading a screen or a log line, not an archive.
 MAX_DETAIL_LENGTH = 500
 
+#: How many recent looks one goal keeps. Enough to show a break and its repair;
+#: small enough that a goal checked every minute for a year stays a small file.
+MAX_HISTORY = 50
+
 
 class GoalStoreError(ValueError):
     """The goals file cannot be read or does not hold the expected shape.
@@ -107,6 +111,11 @@ class Goal:
     #: "verified"; an "unknown" (could not look) leaves it untouched because
     #: silence is not evidence either way.
     consecutive_failures: int = 0
+    #: The most recent looks, newest last. ``last_result`` answers "is it
+    #: healthy now"; this answers "did it ever break, and when" -- without it a
+    #: failure followed by a recovery leaves no evidence the failure happened.
+    #: Bounded by ``MAX_HISTORY`` so the file cannot grow without limit.
+    history: List[Dict[str, Any]] = field(default_factory=list)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -123,6 +132,7 @@ class Goal:
             "last_detail": self.last_detail,
             "run_count": self.run_count,
             "consecutive_failures": self.consecutive_failures,
+            "history": [dict(item) for item in self.history],
         }
 
     def public(self) -> Dict[str, Any]:
@@ -151,6 +161,8 @@ def _goal_from_dict(raw: Dict[str, Any]) -> Goal:
         last_detail=str(raw.get("last_detail") or ""),
         run_count=int(raw.get("run_count") or 0),
         consecutive_failures=int(raw.get("consecutive_failures") or 0),
+        history=[dict(item) for item in (raw.get("history") or [])
+                 if isinstance(item, dict)][-MAX_HISTORY:],
     )
 
 
@@ -389,6 +401,14 @@ class GoalStore:
             elif result == "verified":
                 failures = 0
             entry["consecutive_failures"] = failures
+
+            history = entry.get("history")
+            if not isinstance(history, list):
+                history = []
+            history.append({"result": result,
+                            "detail": str(detail or "")[:MAX_DETAIL_LENGTH],
+                            "at": moment})
+            entry["history"] = history[-MAX_HISTORY:]
 
             block[goal_id] = entry
             data["goals"] = block

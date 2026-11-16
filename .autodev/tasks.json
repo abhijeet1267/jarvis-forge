@@ -218,7 +218,7 @@
       "updated": "2026-10-21T09:47:32.145785+00:00",
       "evidence": [
         "Every skip names an external prerequisite (grouped by cause: playwright not installed, Pillow not installed, qrcode not installed, macOS-only desktop tests, no Vantage.app in dist/, no physical device, no real API key, mic permission)",
-        "Clean full suite 2026-10-21 (nothing else running): 2822 passed / 33 skipped / 0 failed (174s) — .venv/bin/python -m pytest -q -p no:cacheprovider",
+        "Clean full suite 2026-10-21 (nothing else running): 2822 passed / 33 skipped / 0 failed (174s) \u2014 .venv/bin/python -m pytest -q -p no:cacheprovider",
         "The 5 OCR failures seen in one run were a 45s timeout under concurrent Gradle load, not a defect: clean run is green, and test_vision.py is 49/49."
       ]
     },
@@ -314,7 +314,7 @@
         "QR/manual entry -> POST /companion/pairing-redeem",
         "scoped token stored (EncryptedSharedPreferences, already done)",
         "OkHttp CertificatePinner on served fingerprint",
-        "allowed paths 200 / denied 403 / expired+reused codes fail — verified against a real gateway"
+        "allowed paths 200 / denied 403 / expired+reused codes fail \u2014 verified against a real gateway"
       ],
       "blockers": [
         "needs R1.3 (a running gateway) to verify end-to-end"
@@ -346,7 +346,7 @@
         "legacy installers/android/ retired or clearly marked"
       ],
       "blockers": [
-        "Android SDK / gradle availability in this environment is unverified — may be BLOCKED on toolchain"
+        "Android SDK / gradle availability in this environment is unverified \u2014 may be BLOCKED on toolchain"
       ],
       "files": [
         "installers/build_release.sh:93",
@@ -454,7 +454,7 @@
       "max_attempts": 3,
       "updated": "2026-10-21T09:33:01.098016+00:00",
       "evidence": [
-        "jarvis/tools/base.py ok() defaults to Verification.UNKNOWN (not SUCCESS) — verified in source 2026-10-21. Write-side tools either observe the effect before claiming success (open_application reads the process table, write_file reads the file back) or return unverified()/UNKNOWN. Pinned by test_phase10_verification_authority, test_phase11_write_file, test_home."
+        "jarvis/tools/base.py ok() defaults to Verification.UNKNOWN (not SUCCESS) \u2014 verified in source 2026-10-21. Write-side tools either observe the effect before claiming success (open_application reads the process table, write_file reads the file back) or return unverified()/UNKNOWN. Pinned by test_phase10_verification_authority, test_phase11_write_file, test_home."
       ]
     },
     "R3.1-macos-lifecycle": {
@@ -474,7 +474,7 @@
       "evidence": [
         "audit 2026-10-16: no terminationHandler; SIGTERM to /usr/bin/env",
         "ContentView.onDisappear no longer kills the backend; connect() is idempotent; SIGINT escalation to the Python child. 2026-10-21 live check: 3 cold launches each produced a window and a live backend connection; backend killed -> app alive -> backend restarted -> app reconnected (GET /health 200).",
-        "2026-10-21: fixed a P0 — the app could launch with ZERO windows (scene never activated, so .task never ran and it never connected). Root cause: stale per-bundle-id app state. Fix in VantageApp.swift (ApplePersistenceIgnoreState/NSQuitAlwaysKeepsWindows registered before AppKit restores state)."
+        "2026-10-21: fixed a P0 \u2014 the app could launch with ZERO windows (scene never activated, so .task never ran and it never connected). Root cause: stale per-bundle-id app state. Fix in VantageApp.swift (ApplePersistenceIgnoreState/NSQuitAlwaysKeepsWindows registered before AppKit restores state)."
       ],
       "attempts": 0,
       "max_attempts": 3,
@@ -516,7 +516,7 @@
       "max_attempts": 2,
       "updated": "2026-10-21T09:33:01.098016+00:00",
       "evidence": [
-        "HomeView/ProvidersView/SettingsView render a distinct per-section error state with Retry instead of an empty list; SectionPresentationTests.swift covers the mapping. 2026-10-21: verified live — app exercised against a stopped and a restarted backend."
+        "HomeView/ProvidersView/SettingsView render a distinct per-section error state with Retry instead of an empty list; SectionPresentationTests.swift covers the mapping. 2026-10-21: verified live \u2014 app exercised against a stopped and a restarted backend."
       ]
     },
     "R3.4-version-plist": {
@@ -534,7 +534,7 @@
       "max_attempts": 1,
       "updated": "2026-10-21T09:33:01.098016+00:00",
       "evidence": [
-        "macos/Vantage/Sources/Views/SettingsView.swift:392 appVersion reads Bundle.main.infoDictionary[\"CFBundleShortVersionString\"] (falls back to \"dev\") — not hardcoded"
+        "macos/Vantage/Sources/Views/SettingsView.swift:392 appVersion reads Bundle.main.infoDictionary[\"CFBundleShortVersionString\"] (falls back to \"dev\") \u2014 not hardcoded"
       ]
     },
     "R3.5-url-encoding": {
@@ -1309,7 +1309,7 @@
       "priority": 1,
       "depends_on": [],
       "acceptance": [
-        "owner decision: gate (dangerous — refuses a working provider) vs delete"
+        "owner decision: gate (dangerous \u2014 refuses a working provider) vs delete"
       ],
       "blockers": [
         "Owner-gated architectural choice. The safe reporting half is done (R6.4a2). Wiring can_handle_request as a live gate would refuse a working provider (r88 pins it returns False for the live 9router model). Deleting the tracked module or the owner's untracked providers.py.multimodal copy is not an agent decision."
@@ -1353,8 +1353,8 @@
       "evidence": {
         "date": "2026-10-23",
         "iteration": 82,
-        "lifecycle": "IntegrationHarness/run_lifecycle_check.sh — 12/12 checks against REAL BackendManager + real local backend",
-        "command_center": "IntegrationHarness/run_command_center_check.sh — 17/17 against REAL ConversationService/APIClient",
+        "lifecycle": "IntegrationHarness/run_lifecycle_check.sh \u2014 12/12 checks against REAL BackendManager + real local backend",
+        "command_center": "IntegrationHarness/run_command_center_check.sh \u2014 17/17 against REAL ConversationService/APIClient",
         "seam": "JARVIS_BACKEND_PORT (production default 8765 unchanged)",
         "suite": "non-OCR 3220 passed / 0 failed (310 s) incl. tests/test_r96_macos_integration_harness.py; OCR 81/81 in isolation"
       }
@@ -1373,14 +1373,14 @@
       "evidence": {
         "date": "2026-10-23",
         "iteration": "81 loop",
-        "email": "r95 (17 tests) — file routes decline email organize honestly (backend has no op)",
-        "calendar": "r90 (5 new tests) — file routes defer to calendar rule (backend has cancel_event); container-exclusion shared",
+        "email": "r95 (17 tests) \u2014 file routes decline email organize honestly (backend has no op)",
+        "calendar": "r90 (5 new tests) \u2014 file routes defer to calendar rule (backend has cancel_event); container-exclusion shared",
         "suite": "non-OCR full 3217 passed / 0 failed (272.69 s); OCR cluster 12/12 in isolation",
-        "calendar+design+paper+schedule+workspace": "r90 (13 total deferral tests) — file routes defer to the domain rule via _names_a_domain_thing"
+        "calendar+design+paper+schedule+workspace": "r90 (13 total deferral tests) \u2014 file routes defer to the domain rule via _names_a_domain_thing"
       }
     },
     "R-release-macos-dmg-artifact": {
-      "title": "macOS DMG ships which artifact — native SwiftUI GUI (com.jarvisforge.vantage) vs Tk launcher (com.jarvisforge.app)?",
+      "title": "macOS DMG ships which artifact \u2014 native SwiftUI GUI (com.jarvisforge.vantage) vs Tk launcher (com.jarvisforge.app)?",
       "status": "blocked",
       "priority": 2,
       "depends_on": [],
@@ -1388,7 +1388,7 @@
         "owner chooses; then build_dmg.sh packages that bundle and the docs/RELEASE_AND_BUILD.md table is updated"
       ],
       "blockers": [
-        "OWNER DECISION (documented open in docs/RELEASE_AND_BUILD.md): the DMG currently packages the Tk-launcher bundle (dist/Vantage.app, com.jarvisforge.app, built by build_app.py). The intended macOS GUI is the native SwiftUI app (macos/Vantage/Vantage.app, com.jarvisforge.vantage, built by assemble_app.sh). Two bundles by design. Not a defect — a product decision about which one ships."
+        "OWNER DECISION (documented open in docs/RELEASE_AND_BUILD.md): the DMG currently packages the Tk-launcher bundle (dist/Vantage.app, com.jarvisforge.app, built by build_app.py). The intended macOS GUI is the native SwiftUI app (macos/Vantage/Vantage.app, com.jarvisforge.vantage, built by assemble_app.sh). Two bundles by design. Not a defect \u2014 a product decision about which one ships."
       ],
       "evidence": {
         "date": "2026-10-23",
@@ -1409,7 +1409,7 @@
       "evidence": {
         "date": "2026-10-24",
         "iteration": "fast-build",
-        "note": "3222→3272 suite; r97 16, r98 6 browser, planner-native.png",
+        "note": "3222\u21923272 suite; r97 16, r98 6 browser, planner-native.png",
         "suite": "3272 passed / 0 failed (non-OCR)"
       }
     },
@@ -1523,7 +1523,7 @@
       }
     },
     "E9-cross-app-research": {
-      "title": "Connected goal workflow: goal → ordered dependency-linked tasks (no calendar write)",
+      "title": "Connected goal workflow: goal \u2192 ordered dependency-linked tasks (no calendar write)",
       "status": "completed",
       "priority": 3,
       "depends_on": [],
@@ -1625,7 +1625,7 @@
       ],
       "evidence": [
         "BackendManager.startBackend replaced `env uv run uvicorn ...` (ignored run.py: port refusal, LAN host, HTTPS) with backendInterpreter()+run.py serve+--host from the same lan_mode switch; bindHost(interpreter) checked in a compiled harness (5/5).",
-        "backend_lifecycle._startup_failure_reason surfaces the launcher sentence (e.g. single-instance claim) — verified live against the refused-start path; 4 new tests.",
+        "backend_lifecycle._startup_failure_reason surfaces the launcher sentence (e.g. single-instance claim) \u2014 verified live against the refused-start path; 4 new tests.",
         "macOS Makefile install target no longer `rm -rf /Applications/Vantage.app`; it calls installers/macos/install_app.sh (backup, atomic swap, verify). Verified: backup created, install verified."
       ],
       "attempts": 1,
@@ -1670,7 +1670,7 @@
         "Fixed tooling: run_lifecycle_check.sh no longer mutates the tracked fixture (was making the live backend report stale); run_command_center_check.sh now enumerates Sources/ (17/17 passed).",
         "Focused backend regression 131 passed.",
         "Release build clean; bundle assembled; codesign verified; installed via installers/macos/install_app.sh with backup; installed app launches, attaches to backend pid 86594, one listener, no duplicate.",
-        "BLOCKED: window ops cannot be exercised — AXIsProcessTrusted false and screen locked. Buttons disabled with the reason shown."
+        "BLOCKED: window ops cannot be exercised \u2014 AXIsProcessTrusted false and screen locked. Buttons disabled with the reason shown."
       ],
       "attempts": 1,
       "max_attempts": 3
@@ -1702,7 +1702,7 @@
         "Backend focused 43 passed; broad non-OCR 3637 passed / 21 skipped / 0 failed.",
         "Release build clean; bundle 11 MB codesign valid; installed with backup 20261028-171857; installed app attached to backend pid 59871, one listener, no duplicate spawn.",
         "Palette window probe: repeated show keeps ONE panel, dismiss hides, reopening reuses it.",
-        "NOT VERIFIED: the physical Option-Space press — screen locked, no global key events reach any process."
+        "NOT VERIFIED: the physical Option-Space press \u2014 screen locked, no global key events reach any process."
       ],
       "attempts": 1,
       "max_attempts": 3
@@ -1742,7 +1742,7 @@
       "max_attempts": 3
     },
     "V10-1-automation-studio": {
-      "title": "V10: Automation Studio — record a demonstration, review the draft, save and run it",
+      "title": "V10: Automation Studio \u2014 record a demonstration, review the draft, save and run it",
       "status": "completed",
       "priority": 0,
       "acceptance": [
@@ -2126,6 +2126,85 @@
         "about_bundled_host is false for the probe backend: these permission values describe the repo process, not Vantage.app. The screen states this; it is not a measurement of the shipped app.",
         "A worker paused by hand is left paused on release, so Resume may legitimately affect fewer workers than the takeover paused."
       ]
+    },
+    "V12-13-end-to-end-demos": {
+      "title": "V12: the ten end-to-end demonstrations (A-J), run against a live backend",
+      "status": "completed",
+      "priority": 2,
+      "acceptance": [
+        "each demo runs against a live backend with disposable resources",
+        "an approval-gated demo applies nothing until the approval is given",
+        "a crash-and-relaunch demo recovers the mission without replaying completed work",
+        "an out-of-scope attempt is refused, mutates nothing, and is recorded",
+        "a takeover pauses real workers and a real dispatch is then refused",
+        "each demo is reported at its actual evidence level, with the levels not reached named"
+      ],
+      "evidence": [
+        "2026-11-16 PASS (level 7): Demo A -- mission parked with README byte-identical, then approved -> completed/verified, proof claim supported with evidence_id, undo row reversible.",
+        "2026-11-16 PASS (level 7): Demo B -- service killed -> observed 'unknown unreachable'; tournament ranked candidates; restarted -> endpoint 200 'healthy'; history verified->unknown->verified.",
+        "2026-11-16 PASS (level 7): Demo C -- backend SIGKILLed mid-plan, relaunched, mission listed by /missions/interrupted, resumed without rewriting first.txt (mtime unchanged), completed/verified.",
+        "2026-11-16 BLOCKED: Demo D -- no Android device or emulator. Protocol-level: test_phase97 + test_phone_self_approval_guard + test_phase71 41 passed, 1 skipped.",
+        "2026-11-16 PASS (level 7): Demo E -- out-of-scope step refused by intent at preview and at run; outside file unchanged; refusal written to the audit chain as result=denied.",
+        "2026-11-16 PASS (level 7): Demo F -- undeclared hosts refused, loopback allowed; redaction masked bare keys, key=value pairs and whole-body api_key/password; email left intact with privacy mode off.",
+        "2026-11-16 PASS (level 7): Demo G -- read_file CONFIRM at level 0 and EXECUTE at level 1; real run parked at 0 and completed/verified at 1; level 99 refused 422.",
+        "2026-11-16 PASS (level 7): Demo H -- exact restore verified by sha256; hand edit after the action -> conflicted and 409, human edit preserved.",
+        "2026-11-16 PASS (level 7): Demo I -- uncheckable condition removed, checkable kept, risk raised; old versions retained; new version completed/verified; lab then proposed nothing.",
+        "2026-11-16 PASS (level 7): Demo J -- takeover paused 17 workers; a real step refused naming the takeover; refused_total 1; release resumed 17 and the step then ran.",
+        "2026-11-16 PASS: docs/PROJECT_STATUS.md carries the demo records, the completion matrix and the defects found."
+      ],
+      "blocked_or_unverified": [
+        "NOT VERIFIED (level 5-6): no physical clicks. Every control was exercised over HTTP against the live backend.",
+        "Demo D physical-device verification is outstanding (no device, no emulator).",
+        "The egress firewall is destination-based; payload redaction is a caller step, not part of check()."
+      ]
+    },
+    "V12-13a-refusals-reach-the-audit-chain": {
+      "title": "A refused mission step is written to the hash-chained audit log, not only the mission row",
+      "status": "completed",
+      "priority": 2,
+      "acceptance": [
+        "an intent refusal and a permission refusal both write a denied record",
+        "the record names the mission, the step and which check refused it",
+        "a failed audit write does not convert the refusal into a pass"
+      ],
+      "evidence": [
+        "2026-11-16: jarvis/core/mission_runner.py -- MissionRunner._record_refusal writes result=denied with refused_by and step_id, called from both refusal paths.",
+        "2026-11-16 PASS: tests/test_mission_runner.py 30 passed incl. test_a_refused_step_is_written_to_the_audit_chain.",
+        "2026-11-16 PASS (live): Demo E denial appears as LOG-... 'refuse mission MIS-... step s2' result=denied."
+      ],
+      "blocked_or_unverified": []
+    },
+    "V12-13b-parked-missions-surface-after-a-restart": {
+      "title": "A mission parked on an approval is listed by /missions/interrupted after a restart",
+      "status": "completed",
+      "priority": 2,
+      "acceptance": [
+        "AWAITING_APPROVAL and BLOCKED missions are surfaced as unfinished work",
+        "each row carries its own state so the caller can tell them apart",
+        "a completed mission is not listed"
+      ],
+      "evidence": [
+        "2026-11-16: jarvis/core/missions.py -- incomplete_missions() now selects AWAITING_APPROVAL and BLOCKED as well.",
+        "2026-11-16 PASS: test_demo_a_file_mission.py + test_missions_api.py 32 passed incl. test_a_mission_parked_on_an_approval_is_surfaced_after_a_restart and test_a_completed_mission_is_not_listed_as_incomplete.",
+        "2026-11-16 PASS (live): Demo C after the fix reports 'interrupted missions: 33, our mission is listed: True' where it was 0 before."
+      ],
+      "blocked_or_unverified": []
+    },
+    "V12-13c-goal-history-survives-recovery": {
+      "title": "A goal keeps a bounded record of recent looks, so a repaired failure stays visible",
+      "status": "completed",
+      "priority": 2,
+      "acceptance": [
+        "record_observation appends to a history, not only to last_*",
+        "the history is bounded by MAX_HISTORY",
+        "an older goals.json without a history still parses"
+      ],
+      "evidence": [
+        "2026-11-16: jarvis/core/goalguard.py -- Goal.history, MAX_HISTORY = 50, parsed and written by GoalStore.",
+        "2026-11-16 PASS: tests/test_goalguard.py 23 passed incl. test_a_failure_survives_the_recovery_that_follows_it and test_the_observation_history_is_bounded.",
+        "2026-11-16 PASS (live): Demo B shows history verified | unknown (connection refused) | verified with last_result verified."
+      ],
+      "blocked_or_unverified": []
     }
   }
 }

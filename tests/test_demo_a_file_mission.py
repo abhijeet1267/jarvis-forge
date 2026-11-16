@@ -226,3 +226,44 @@ def test_a_running_mission_is_listed_as_interrupted_after_a_restart(service):
 
     assert mission.mission_id in ids
     assert reopened.get(mission.mission_id).state == MissionState.RUNNING.value
+
+def test_a_mission_parked_on_an_approval_is_surfaced_after_a_restart(service):
+    """The relaunch must show the work waiting on a person, not only the work
+    that was running. A parked approval is unfinished, and its answer is
+    exactly what a person needs to be reminded of after a crash."""
+    from jarvis.core.missions import MissionService, MissionState
+    from jarvis.db.database import get_db
+
+    mission = service.create("needs a decision", conditions=[{"statement": "x"}],
+                             steps=[{"title": "step", "tool": "write_file"}])
+    service.transition(mission.mission_id, MissionState.PLANNED)
+    service.transition(mission.mission_id, MissionState.AWAITING_APPROVAL)
+
+    reopened = MissionService(get_db())
+    rows = [m for m in reopened.incomplete_missions()
+            if m.mission_id == mission.mission_id]
+
+    assert rows, "a mission parked on an approval was not surfaced"
+    assert rows[0].state == MissionState.AWAITING_APPROVAL.value
+
+def test_a_completed_mission_is_not_listed_as_incomplete(service):
+    """Including parked states must not pull in finished work."""
+    from jarvis.core.missions import ConditionStatus, MissionService, MissionState
+    from jarvis.db.database import get_db
+
+    mission = service.create("done", conditions=[{"statement": "x"}],
+                             steps=[{"title": "step", "tool": "read_file"}])
+    service.transition(mission.mission_id, MissionState.PLANNED)
+    service.transition(mission.mission_id, MissionState.RUNNING)
+    # Completion is reached through verification, never straight from running:
+    # that is the state machine refusing "it ran, therefore it worked".
+    service.transition(mission.mission_id, MissionState.VERIFYING)
+    condition_id = mission.conditions[0].condition_id
+    service.record_condition(mission.mission_id, condition_id,
+                             status=ConditionStatus.VERIFIED,
+                             observation="checked by the test")
+    service.transition(mission.mission_id, MissionState.COMPLETED)
+
+    reopened = MissionService(get_db())
+    ids = [m.mission_id for m in reopened.incomplete_missions()]
+    assert mission.mission_id not in ids

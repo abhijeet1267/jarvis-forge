@@ -288,7 +288,7 @@ def issue_passport(worker: str, *, registry=None, audit=None) -> Dict[str, Any]:
         tool="",
         target=str(worker),
         risk="read",
-        result="ok",
+        result="success",
         detail={
             "tools": len(passport.tools),
             "gated": len(passport.gated_tools),

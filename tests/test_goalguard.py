@@ -361,3 +361,47 @@ def test_a_violation_list_includes_unknown_not_only_failed():
     violations = violation_outcome(outcomes)
     ids = [v["goal_id"] for v in violations]
     assert ids == ["b", "c"]
+
+def test_a_failure_survives_the_recovery_that_follows_it(tmp_path):
+    """`last_result` says it is healthy now; it must not say it always was.
+
+    Before this, a goal that broke and was then repaired left a record reading
+    "verified" with no trace of the failure -- the run_count moved, but nothing
+    said *what* happened. A person reviewing "did the service break" needs the
+    break, not just the final state.
+    """
+    from jarvis.core.goalguard import GoalStore
+
+    store = GoalStore(tmp_path / "goals.json")
+    goal = store.add({"kind": "http", "target": "http://127.0.0.1:9/x",
+                      "interval_seconds": 60})
+
+    store.record_observation(goal.goal_id, result="verified", detail="HTTP 200",
+                             now=100.0)
+    store.record_observation(goal.goal_id, result="failed", detail="HTTP 503",
+                             now=200.0)
+    store.record_observation(goal.goal_id, result="verified", detail="HTTP 200",
+                             now=300.0)
+
+    shown = store.get(goal.goal_id)
+    assert shown.last_result == "verified"
+    assert [h["result"] for h in shown.history] == ["verified", "failed", "verified"]
+    failed = [h for h in shown.history if h["result"] == "failed"]
+    assert failed and failed[0]["detail"] == "HTTP 503"
+
+def test_the_observation_history_is_bounded(tmp_path):
+    """A goal checked every minute for a year must not become a huge file."""
+    from jarvis.core.goalguard import MAX_HISTORY, GoalStore
+
+    store = GoalStore(tmp_path / "goals.json")
+    goal = store.add({"kind": "http", "target": "http://127.0.0.1:9/x",
+                      "interval_seconds": 60})
+
+    for i in range(MAX_HISTORY + 10):
+        store.record_observation(goal.goal_id, result="verified",
+                                 detail=f"look {i}", now=float(i))
+
+    shown = store.get(goal.goal_id)
+    assert len(shown.history) == MAX_HISTORY
+    # The newest look is kept; the oldest are the ones dropped.
+    assert shown.history[-1]["detail"] == f"look {MAX_HISTORY + 9}"

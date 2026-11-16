@@ -811,3 +811,43 @@ async def test_a_steered_plan_is_refused_when_it_leaves_the_intent(service, work
     assert result.state == MissionState.BLOCKED.value, result.reason
     assert ran == []
     assert "intent" in result.reason
+
+@pytest.mark.asyncio
+async def test_a_refused_step_is_written_to_the_audit_chain(service, workspace):
+    """A denial that lives only on the mission row is invisible to the log.
+
+    Passports count refusals from the audit chain, and a person reviewing "what
+    did it try" reads the same log. So the refusal has to reach it, not just the
+    mission's own `reason` string.
+    """
+    from jarvis.security.audit import AuditLog
+    from jarvis.security.intentshield import IntentScope
+
+    scope = IntentScope(
+        mission_id="MIS-AUDIT", goal="write inside the workspace",
+        allowed_capabilities={"write_file"},
+        allowed_resource_prefixes=[str(workspace)], risk_budget=1)
+    mission = service.create(
+        "write only inside the workspace",
+        steps=[{"step_id": "S1", "title": "inside", "tool": "write_file",
+                "params": {"path": str(workspace / "a.txt"), "content": "a"}}],
+        intent=scope.to_json())
+    service.apply_revision(
+        mission.mission_id,
+        steps=[{"step_id": "S9", "title": "escape", "tool": "write_file",
+                "params": {"path": "/etc/escaped.txt", "content": "x"}}],
+        reason="an escape attempt")
+
+    audit = AuditLog()
+    runner = MissionRunner(service, execute_step=lambda s, m: _Ok(),
+                           permission=_allow_all, audit=audit)
+    result = await runner.run(mission.mission_id)
+    assert result.state == MissionState.BLOCKED.value
+
+    rows = [r for r in audit.recent(200)
+            if str(r.get("result") or "") == "denied"
+            and mission.mission_id in str(r.get("intent") or "")]
+    assert rows, "the refusal was not written to the audit chain"
+    detail = rows[0].get("detail") or {}
+    assert detail.get("refused_by") == "intent"
+    assert detail.get("step_id") == "S9"
