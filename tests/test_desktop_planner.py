@@ -99,12 +99,34 @@ def test_a_drag_is_one_step_with_all_four_points():
 @pytest.mark.parametrize("utterance", [
     "move the cursor to 40000 300",
     "click at 400 32001",
-    "drag from -1 100 to 300 300",
+    "drag from 100 100 to 300 40000",
 ])
 def test_a_point_outside_the_range_is_refused_with_no_steps(utterance):
+    """A number no screen could hold is a question, not a step."""
     result = plan_desktop(utterance)
     assert result.steps == []
-    assert result.clarification and "32000" in result.clarification
+    assert result.clarification
+    assert "implausibly far" in result.clarification.lower()
+
+
+@pytest.mark.parametrize("utterance,keys,point", [
+    ("move the cursor to -1 100", ("x", "y"), (-1.0, 100.0)),
+    ("drag from -1 100 to 300 300", ("from_x", "from_y"), (-1.0, 100.0)),
+])
+def test_a_negative_coordinate_is_a_valid_point_on_a_left_hand_display(
+        utterance, keys, point):
+    """Negative global x is a real place: a monitor left of the primary one.
+
+    The planner used to refuse every negative coordinate, which meant a
+    perfectly valid click on a second display could not be planned at all. The
+    planner is a pure function with no display list, so it must accept a
+    plausible negative point and let the acting tool check it against the real
+    geometry.
+    """
+    result = plan_desktop(utterance)
+    assert result.clarification is None, result.clarification
+    params = result.steps[0].params
+    assert (params[keys[0]], params[keys[1]]) == point
 
 
 # -- scrolling ----------------------------------------------------------------

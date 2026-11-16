@@ -334,12 +334,16 @@ def test_a_point_off_every_display_is_refused(registry, ctx):
     if not posture.get("displays"):
         pytest.skip("no display reported")
 
-    # Inside the tool's own MAX_COORDINATE, but outside every display: this is
-    # the case the display check exists for. A value above MAX_COORDINATE is
-    # caught earlier, by the range guard, which is a different refusal.
+    # Inside the sanity ceiling, but outside every display: this is the case the
+    # display check exists for. It is now refused by the shared coordinate parser
+    # before the executor is invoked at all, which is stricter than before — the
+    # executor used to be called and then answer `blocked`. What must not change
+    # is the invariant: the move is refused, and the refusal names the geometry.
     result = _call(registry, ctx, "desktop_move_pointer", x=31_000, y=31_000)
-    detail = (getattr(result, "output", None) or {}).get("desktop_result", {})
-    assert detail.get("status") == "blocked", detail
+    assert result.ok is False
+    text = str(result.message or result.error)
+    assert "display" in text.lower(), text
+    assert "31000" in text or "31,000" in text, text
 
 
 # -- a takeover must stop this surface too -----------------------------------

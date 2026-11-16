@@ -25,6 +25,7 @@ from typing import Any, Dict, Optional
 from fastapi import APIRouter, Body, Depends, HTTPException
 
 from ..desktop import executor
+from ..desktop.coordinates import CoordinateError, Screen, parse_drag, parse_point
 
 
 #: The tools whose dispatch must pass the Control Tower's pause gate. A move is
@@ -43,6 +44,26 @@ _GATED_TOOLS = {
     # released buttons would be acting on the machine while somebody else has it.
     "release-input": "desktop_release_input",
 }
+
+
+def _screen() -> Screen:
+    """The display geometry the executor reports, for validating a point."""
+    posture = executor.permissions()
+    raw = posture.get("displays")
+    return Screen.from_bounds(raw if isinstance(raw, list) else None)
+
+
+def _point(x: Any, y: Any, *, subject: str = "That point") -> tuple:
+    """Validate a screen point, or raise HTTP 422 with the reason.
+
+    The routes used to do no bounds checking at all: `nan` and `inf` parsed
+    through `float()` and reached the native executor. Anything that can move
+    the real pointer goes through this one function.
+    """
+    try:
+        return parse_point(x, y, screen=_screen(), subject=subject)
+    except CoordinateError as refusal:
+        raise HTTPException(status_code=422, detail=str(refusal)) from None
 
 
 def _admit(action: str) -> None:
@@ -106,10 +127,8 @@ def build_router(require_auth) -> APIRouter:
         """Move the real pointer. Verified by reading its position back."""
         _admit("move")
         body = body or {}
-        x, y = body.get("x"), body.get("y")
-        if x is None or y is None:
-            raise HTTPException(status_code=422, detail="a move needs x and y")
-        return executor.move(float(x), float(y),
+        px, py = _point(body.get("x"), body.get("y"))
+        return executor.move(px, py,
                              smooth=bool(body.get("smooth")),
                              duration_ms=int(body.get("duration_ms") or 0))
 
@@ -118,10 +137,8 @@ def build_router(require_auth) -> APIRouter:
         """Post one click. Returns performed-unverified unless a caller verifies."""
         _admit("click")
         body = body or {}
-        x, y = body.get("x"), body.get("y")
-        if x is None or y is None:
-            raise HTTPException(status_code=422, detail="a click needs x and y")
-        return executor.click(float(x), float(y),
+        px, py = _point(body.get("x"), body.get("y"))
+        return executor.click(px, py,
                               button=str(body.get("button") or "left"),
                               count=int(body.get("count") or 1))
 
@@ -129,10 +146,8 @@ def build_router(require_auth) -> APIRouter:
     async def scroll(body: Dict[str, Any] = Body(None)) -> Dict[str, Any]:
         _admit("scroll")
         body = body or {}
-        x, y = body.get("x"), body.get("y")
-        if x is None or y is None:
-            raise HTTPException(status_code=422, detail="a scroll needs x and y")
-        return executor.scroll(float(x), float(y),
+        px, py = _point(body.get("x"), body.get("y"))
+        return executor.scroll(px, py,
                                lines=int(body.get("lines") or 3),
                                horizontal=bool(body.get("horizontal")))
 
@@ -141,10 +156,10 @@ def build_router(require_auth) -> APIRouter:
         _admit("drag")
         body = body or {}
         try:
-            args = [float(body[key]) for key in ("from_x", "from_y", "to_x", "to_y")]
-        except (KeyError, TypeError, ValueError):
-            raise HTTPException(status_code=422,
-                                detail="a drag needs from_x, from_y, to_x and to_y")
+            args = parse_drag(body.get("from_x"), body.get("from_y"),
+                              body.get("to_x"), body.get("to_y"), screen=_screen())
+        except CoordinateError as refusal:
+            raise HTTPException(status_code=422, detail=str(refusal)) from None
         return executor.drag(*args, duration_ms=int(body.get("duration_ms") or 400))
 
     @router.post("/type")

@@ -17,7 +17,8 @@ import re
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
 
-from ..tools.desktop_native import MAX_COORDINATE, MAX_TEXT_CHARS
+from ..desktop.coordinates import MAX_COORDINATE, CoordinateError, parse_point
+from ..tools.desktop_native import MAX_TEXT_CHARS
 
 __all__ = ["DesktopPlan", "PlannedStep", "plan_desktop"]
 
@@ -290,12 +291,18 @@ def _coords(text: str, expect: int) -> Optional[Point]:
 
 
 def _out_of_bounds(point: Point, subject: str) -> Optional[DesktopPlan]:
-    x, y = point
-    if 0 <= x <= MAX_COORDINATE and 0 <= y <= MAX_COORDINATE:
-        return None
-    return _ask(f"{subject} ({_fmt(x)}, {_fmt(y)}) is outside the "
-                f"0-{MAX_COORDINATE} range this desktop tool accepts; give a "
-                "point inside that range.")
+    """The planner's own range check, delegating to the shared parser.
+
+    The planner has no display geometry of its own — it is a pure function — so
+    this applies the parser's sanity ceiling and leaves the real display check to
+    the tool that acts. It exists so a nonsensical number is refused at plan time
+    with the same wording every other door uses, rather than at dispatch.
+    """
+    try:
+        parse_point(point[0], point[1], subject=subject)
+    except CoordinateError as refusal:
+        return _ask(str(refusal))
+    return None
 
 
 def _clean_app(text: str) -> str:
@@ -337,12 +344,13 @@ def _context_point(ctx: Dict[str, Any]) -> Optional[Point]:
     if isinstance(raw, dict):
         raw = (raw.get("x"), raw.get("y"))
     try:
-        x, y = float(raw[0]), float(raw[1])
-    except (TypeError, ValueError, IndexError, KeyError):
+        # A caller-supplied point is a hint, not an action: an out-of-range one
+        # is simply not usable, which is `None` rather than a refusal. It still
+        # goes through the shared parser, so a NaN from context cannot reach a
+        # step and it can still be negative (a display left of the primary one).
+        return parse_point(raw[0], raw[1])
+    except CoordinateError:
         return None
-    if not (0 <= x <= MAX_COORDINATE and 0 <= y <= MAX_COORDINATE):
-        return None
-    return (x, y)
 
 
 def _strip_outer_quotes(text: str) -> str:

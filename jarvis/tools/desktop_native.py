@@ -28,10 +28,13 @@ Three rules this module keeps, and why each one matters:
 
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Tuple
 
 from ..core.models import RiskLevel, ToolSpec
 from ..desktop import executor
+from ..desktop.coordinates import (
+    CoordinateError, Screen, parse_drag, parse_point,
+)
 from ..logging_setup import get_logger
 from .base import ToolContext, fail, ok, unverified
 
@@ -40,6 +43,39 @@ log = get_logger("tools.desktop_native")
 #: Coordinates are validated before anything is sent. A screen is a finite
 #: place, and a value outside it is a bug or an injection attempt.
 MAX_COORDINATE = 32000
+
+
+def _screen() -> Optional[Screen]:
+    """The display geometry the executor reports, or None when it cannot say.
+
+    Asked on demand rather than cached: a monitor can be plugged in or removed
+    between two actions, and a stale display list would refuse a point that is
+    now perfectly valid.
+    """
+    try:
+        posture = executor.permissions()
+    except Exception:
+        return None
+    raw = posture.get("displays")
+    if not isinstance(raw, list):
+        return None
+    return Screen.from_bounds(raw)
+
+
+def _validated_point(x: Any, y: Any) -> Tuple[float, float]:
+    """Validate a screen point against real display geometry.
+
+    Raises :class:`CoordinateError` carrying the sentence to show. Every
+    coordinate-taking tool calls this, so a malformed value is refused in the
+    same words no matter which door it came through.
+    """
+    return parse_point(x, y, screen=_screen())
+
+
+def _validated_drag(from_x: Any, from_y: Any, to_x: Any, to_y: Any
+                    ) -> Tuple[float, float, float, float]:
+    return parse_drag(from_x, from_y, to_x, to_y, screen=_screen())
+
 
 #: One keystroke call carries at most this much text: an unbounded payload
 #: makes a governed action behave like a pipe into the focused application.
@@ -112,11 +148,12 @@ async def desktop_move_pointer(ctx: ToolContext, x: Optional[float] = None,
         return fail("desktop_move_pointer",
                     "A pointer move needs both an x and a y coordinate.",
                     device=ctx.device_id)
-    if not (0 <= float(x) <= MAX_COORDINATE and 0 <= float(y) <= MAX_COORDINATE):
-        return fail("desktop_move_pointer",
-                    f"({x}, {y}) is outside any screen this build will write to.",
-                    device=ctx.device_id)
-    result = executor.move(float(x), float(y), smooth=bool(smooth),
+    try:
+        px, py = _validated_point(x, y)
+    except CoordinateError as refusal:
+        return fail("desktop_move_pointer", str(refusal), device=ctx.device_id,
+                    detail=refusal.detail)
+    result = executor.move(px, py, smooth=bool(smooth),
                            duration_ms=max(0, min(5000, int(duration_ms or 0))))
     return _finish("desktop_move_pointer", result, ctx,
                    f"Moved the pointer to ({x}, {y})")
@@ -129,7 +166,12 @@ async def desktop_click(ctx: ToolContext, x: Optional[float] = None,
     if x is None or y is None:
         return fail("desktop_click", "A click needs both an x and a y coordinate.",
                     device=ctx.device_id)
-    result = executor.click(float(x), float(y), button=button, count=1)
+    try:
+        px, py = _validated_point(x, y)
+    except CoordinateError as refusal:
+        return fail("desktop_click", str(refusal), device=ctx.device_id,
+                    detail=refusal.detail)
+    result = executor.click(px, py, button=button, count=1)
     return _finish("desktop_click", result, ctx,
                    f"Clicked at ({x}, {y})")
 
@@ -141,7 +183,12 @@ async def desktop_double_click(ctx: ToolContext, x: Optional[float] = None,
         return fail("desktop_double_click",
                     "A double-click needs both an x and a y coordinate.",
                     device=ctx.device_id)
-    result = executor.click(float(x), float(y), button="left", count=2)
+    try:
+        px, py = _validated_point(x, y)
+    except CoordinateError as refusal:
+        return fail("desktop_double_click", str(refusal), device=ctx.device_id,
+                    detail=refusal.detail)
+    result = executor.click(px, py, button="left", count=2)
     return _finish("desktop_double_click", result, ctx,
                    f"Double-clicked at ({x}, {y})")
 
@@ -153,7 +200,12 @@ async def desktop_right_click(ctx: ToolContext, x: Optional[float] = None,
         return fail("desktop_right_click",
                     "A right-click needs both an x and a y coordinate.",
                     device=ctx.device_id)
-    result = executor.click(float(x), float(y), button="right", count=1)
+    try:
+        px, py = _validated_point(x, y)
+    except CoordinateError as refusal:
+        return fail("desktop_right_click", str(refusal), device=ctx.device_id,
+                    detail=refusal.detail)
+    result = executor.click(px, py, button="right", count=1)
     return _finish("desktop_right_click", result, ctx,
                    f"Right-clicked at ({x}, {y})")
 
@@ -170,7 +222,12 @@ async def desktop_drag(ctx: ToolContext, from_x: Optional[float] = None,
         return fail("desktop_drag",
                     "A drag needs from_x, from_y, to_x and to_y. Missing: "
                     + ", ".join(missing), device=ctx.device_id)
-    result = executor.drag(float(from_x), float(from_y), float(to_x), float(to_y),
+    try:
+        fx, fy, tx, ty = _validated_drag(from_x, from_y, to_x, to_y)
+    except CoordinateError as refusal:
+        return fail("desktop_drag", str(refusal), device=ctx.device_id,
+                    detail=refusal.detail)
+    result = executor.drag(fx, fy, tx, ty,
                            duration_ms=max(50, min(8000, int(duration_ms or 400))))
     return _finish("desktop_drag", result, ctx,
                    f"Dragged from ({from_x}, {from_y}) to ({to_x}, {to_y})")
@@ -187,7 +244,12 @@ async def desktop_scroll(ctx: ToolContext, x: Optional[float] = None,
     if bounded == 0:
         return fail("desktop_scroll", "A scroll of zero lines would do nothing.",
                     device=ctx.device_id)
-    result = executor.scroll(float(x), float(y), lines=bounded,
+    try:
+        px, py = _validated_point(x, y)
+    except CoordinateError as refusal:
+        return fail("desktop_scroll", str(refusal), device=ctx.device_id,
+                    detail=refusal.detail)
+    result = executor.scroll(px, py, lines=bounded,
                              horizontal=bool(horizontal))
     return _finish("desktop_scroll", result, ctx,
                    f"Scrolled {bounded} line(s) at ({x}, {y})")
