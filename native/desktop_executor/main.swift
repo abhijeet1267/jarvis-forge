@@ -1112,13 +1112,41 @@ func typingRefusal() -> String {
     return ""
 }
 
-func opType(text: String) -> Never {
-    requirePostEvents("typing")
+func opType(text: String, expectApp: String) -> Never {
     guard !text.isEmpty else { Emit.out(.blocked, "there was no text to type") }
     let refusal = typingRefusal()
     if !refusal.isEmpty {
         Emit.out(.blocked, "I did not type: \(refusal).", ["guard": "sensitive-focus"])
     }
+
+    // Typing goes to whatever macOS has focused, so a caller that resolved a
+    // target has to be able to say which application that was. Without this
+    // check a window can lose focus between the click that aimed at it and the
+    // keystrokes that were meant for it, and the text lands in something else.
+    // Applied here, before `requirePostEvents`, so a wrong focus is reported as
+    // a wrong focus rather than as a permission problem.
+    if !expectApp.isEmpty {
+        let front = NSWorkspace.shared.frontmostApplication
+        let frontName = (front?.localizedName ?? "")
+        let frontBundle = (front?.bundleIdentifier ?? "")
+        let needle = expectApp.lowercased()
+        let matches = frontName.lowercased().contains(needle)
+            || frontBundle.lowercased().contains(needle)
+        guard matches else {
+            Emit.out(.target_stale,
+                     "the frontmost application is \(frontName.isEmpty ? "not readable" : frontName), "
+                     + "not \(expectApp); nothing was typed. Re-focus the target before typing.",
+                     ["expected_application": expectApp,
+                      "frontmost_after": frontName,
+                      "frontmost_bundle": frontBundle,
+                      "staleness_check": "frontmost_application"])
+        }
+    }
+
+    // Only now ask for the permission to post. A wrong focus is knowable without
+    // it, so reporting "permission_required" for a window the caller never meant
+    // would hide the more useful answer.
+    requirePostEvents("typing")
 
     // Unicode injection: set the keyboard event's unicode payload rather than
     // mapping characters to keycodes. This respects any layout and types
@@ -1134,9 +1162,12 @@ func opType(text: String) -> Never {
     usleep(10_000)
     up.post(tap: .cghidEventTap)
     usleep(60_000)
+    let front = NSWorkspace.shared.frontmostApplication?.localizedName ?? ""
     Emit.out(.performed_unverified,
-             "\(text.count) character(s) typed at the focused field. Whether they appeared is read separately.",
-             ["length": text.count])
+             "\(text.count) character(s) typed at the focused field of "
+             + "\(front.isEmpty ? "an unreadable application" : front). "
+             + "Whether they appeared is read separately.",
+             ["length": text.count, "typed_into": front])
 }
 
 func opKey(key: String, modifiers: [String]) -> Never {
@@ -1455,7 +1486,7 @@ case "scroll":
     guard let x = num("x"), let y = num("y") else { failUsage("scroll needs x= and y=") }
     opScroll(x: x, y: y, lines: int("lines", 3), horizontal: str("horizontal") == "true")
 case "type":
-    opType(text: str("text"))
+    opType(text: str("text"), expectApp: str("expect_app"))
 case "key":
     opKey(key: str("key"), modifiers: list("modifiers"))
 case "focus":

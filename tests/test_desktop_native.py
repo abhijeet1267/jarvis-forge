@@ -459,3 +459,39 @@ def test_a_window_list_without_screen_recording_is_a_refusal(stub, registry, ctx
     result = _call(registry, ctx, "desktop_windows")
     assert result.ok is False
     assert "Screen Recording" in str(result.message or result.error)
+
+
+# -- typing must reach the app that was aimed at, or nothing -------------------
+
+def test_typing_at_the_wrong_application_is_refused_not_typed(stub, registry, ctx):
+    """Keystrokes go wherever macOS has focus.
+
+    Between the click that aimed at a window and the typing, focus can move. The
+    executor compares the frontmost application with the expected one and refuses
+    rather than typing into something nobody named.
+    """
+    _, make, mp = stub
+    mp.setattr(desktop_native.executor, "type_text", make({
+        "status": "target_stale",
+        "reason": "the frontmost application is Safari, not TextEdit; nothing "
+                  "was typed.",
+        "expected_application": "TextEdit",
+        "frontmost_after": "Safari",
+    }))
+    result = _call(registry, ctx, "desktop_type_text", text="hello",
+                   expect_app="TextEdit")
+    assert result.ok is False
+    text = str(result.message or result.error)
+    assert "Safari" in text
+    assert "TextEdit" in text
+
+
+def test_the_expected_application_reaches_the_executor(stub, registry, ctx):
+    """A parameter that is accepted but not passed is a lie about safety."""
+    calls, make, mp = stub
+    mp.setattr(desktop_native.executor, "type_text", make({
+        "status": "permission_required", "reason": "no post-event access"}))
+    _call(registry, ctx, "desktop_type_text", text="hi", expect_app="TextEdit")
+    assert calls, "the executor was never called"
+    _args, kwargs = calls[-1]
+    assert kwargs.get("expect_app") == "TextEdit", kwargs

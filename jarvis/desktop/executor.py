@@ -225,8 +225,18 @@ def scroll(x: float, y: float, *, lines: int = 3,
 
 # -- keyboard -----------------------------------------------------------------
 
-def type_text(text: str, *, cancel_file: Optional[str] = None) -> Dict[str, Any]:
+def type_text(text: str, *, cancel_file: Optional[str] = None,
+              expect_app: str = "") -> Dict[str, Any]:
+    """Type at the focused field, optionally refusing if the wrong app has focus.
+
+    `expect_app` is what makes typing safe to aim: the keystrokes go wherever
+    macOS has focus, and between the click that aimed at a window and the typing,
+    focus can move. The executor checks it before asking for permission, so a
+    wrong focus is reported as a wrong focus rather than as a permission problem.
+    """
     args = [f"text={text}"]
+    if expect_app:
+        args.append(f"expect_app={expect_app}")
     if cancel_file:
         args += ["--cancel-file", cancel_file]
     return _run("type", args)

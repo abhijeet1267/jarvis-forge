@@ -259,7 +259,8 @@ async def desktop_scroll(ctx: ToolContext, x: Optional[float] = None,
 
 # -- keyboard -----------------------------------------------------------------
 
-async def desktop_type_text(ctx: ToolContext, text: str = "", **_: Any) -> Any:
+async def desktop_type_text(ctx: ToolContext, text: str = "",
+                            expect_app: str = "", **_: Any) -> Any:
     """Type into the focused field through real keyboard events."""
     if not text:
         return fail("desktop_type_text", "There was no text to type.",
@@ -268,7 +269,7 @@ async def desktop_type_text(ctx: ToolContext, text: str = "", **_: Any) -> Any:
         return fail("desktop_type_text",
                     f"That is {len(text)} characters; one call carries at most "
                     f"{MAX_TEXT_CHARS}.", device=ctx.device_id)
-    result = executor.type_text(text)
+    result = executor.type_text(text, expect_app=expect_app)
     return _finish("desktop_type_text", result, ctx,
                    f"Typed {len(text)} character(s) into the focused field")
 
