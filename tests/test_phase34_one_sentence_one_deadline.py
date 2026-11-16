@@ -221,9 +221,19 @@ def test_no_papers_are_invented_when_the_clock_runs_out(core, monkeypatch, arxiv
     import asyncio
     from jarvis.core.models import CommandRequest
     import jarvis.research.sources as sources
+    from jarvis.research import papers as papers_module
 
     monkeypatch.setattr(sources, "ARXIV_ENDPOINT", arxiv_trickler.url)
     monkeypatch.setattr(sources, "REQUEST_TIMEOUT", 1.0)
+    # The store is session-wide, so a paper another test filed under "agents"
+    # makes the *local* fallback answer and this assertion fail -- measured: it
+    # failed in the full run and passed alone, and a seeded paper reproduces it.
+    # The property under test is that a source going quiet invents nothing, not
+    # that the shelf is empty, so start from an empty shelf rather than from
+    # whatever the rest of the session left behind.
+    monkeypatch.setattr(papers_module.PaperStore, "search",
+                        lambda self, query, limit=10: [])
+    monkeypatch.setattr(papers_module.PaperStore, "all", lambda self, limit=500: [])
     result = asyncio.run(core.handle(CommandRequest(
         text="search papers about growing agents", source="phase34")))
     # The honest outcome is a result set with nothing invented in it. A local shelf
