@@ -2022,6 +2022,84 @@ extension APIModels {
         let last_duration_s: Double?
     }
 
+    // MARK: - Skill Evolution Lab
+
+    /// What the lab may change, what it refuses to change, and why.
+    struct EvolutionLab: Codable {
+        let min_runs: Int
+        let can_change: [String]
+        let will_not_change: [String]
+        let note: String
+    }
+
+    /// A proposed next version derived from recorded runs.
+    ///
+    /// `manifest` is nil when nothing should change — the reason is in `notes`,
+    /// never an invented improvement.
+    struct EvolutionProposal: Codable {
+        let skill_id: String
+        let from_version: Int
+        let reasons: [String]
+        let changes: [String]
+        let notes: [String]
+        let manifest: EvolutionManifest?
+        let changes_anything: Bool
+        let evidence: EvolutionEvidence?
+
+        /// The measured counters the proposal was derived from — never a score.
+        struct EvolutionEvidence: Codable {
+            let runs: Int
+            let verified_successes: Int
+            let failures: Int
+            let unknowns: Int
+            /// nil with no runs recorded; the view never prints 0% for it.
+            let success_rate: Double?
+            let last_verdict: String?
+        }
+
+        struct EvolutionManifest: Codable {
+            let skill_id: String
+            let name: String?
+            let risk: Int?
+            let steps: [Step]?
+            let verification: [Check]?
+
+            struct Step: Codable {
+                let tool: String?
+                let satisfies: String?
+            }
+
+            struct Check: Codable {
+                let condition_id: String?
+                let kind: String?
+            }
+        }
+    }
+
+    struct EvolutionAccept: Codable {
+        let version: Int
+        let note: String
+    }
+
+    /// What each condition of the skill's last run actually observed.
+    struct EvolutionObservations: Codable {
+        struct Condition: Codable, Identifiable {
+            let condition_id: String
+            let statement: String
+            let verifier: String
+            let status: String
+            let observation: String
+
+            var id: String { condition_id }
+        }
+
+        let skill_id: String
+        let mission_id: String
+        let observations: [Condition]
+        let runs: Int
+        let note: String
+    }
+
     struct SkillRunRequest: Codable {
         let available_capabilities: [String]
         let allowed_scope: [String]

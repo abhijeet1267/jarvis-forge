@@ -690,6 +690,12 @@ from .undo_routes import build_router as _build_undo_router  # noqa: E402
 
 app.include_router(_build_undo_router(require_auth))
 
+# Skill Evolution Lab: propose the next version of a skill from its recorded
+# runs, and store it only when a person accepts it.
+from .skill_evolution_routes import build_router as _build_evolution_router  # noqa: E402
+
+app.include_router(_build_evolution_router(require_auth))
+
 _core: Optional[JarvisCore] = None
 _voice = None
 

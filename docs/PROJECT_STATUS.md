@@ -3337,3 +3337,90 @@ recorded value, not because anything claimed success.
   restoring a tree byte-for-byte is not a claim this makes.
 - Blobs are not pruned; the store grows with the files it captures. Retention is
   a follow-up, and the disk cost is real.
+
+## Update — 2026-11-16 (V12 phase 10: Skill Evolution Lab)
+
+**What it is.** A skill that has run has evidence, and keeping it by hand throws
+that evidence away. The lab reads a skill's recorded runs and proposes its *next
+version* — and the design question that makes it safe is not "what should change"
+but "what is this allowed to change".
+
+**The answer is a closed set that only narrows.** The lab can remove, and it can
+tighten. It cannot add a step, add a capability, add a scope prefix, lower a risk
+tier or relax a precondition, because each of those would turn a proposal derived
+from history into a wider permission than the one that was saved. A proposal is a
+return value; storing it is a separate, explicit act that makes a new version and
+keeps the old one.
+
+**Added / changed**
+
+- `jarvis/core/skill_evolution.py` — `propose_evolution` (reasons, changes, notes,
+  the proposed manifest, and the measured counters behind it), `interpret_run`
+  (what each condition of the last run actually observed), `describe_lab`.
+  `MIN_RUNS_FOR_EVOLUTION = 3`: one demonstration is a demo, not evidence.
+- `jarvis/api/skill_evolution_routes.py` — `GET /skill-evolution`,
+  `GET /skill-evolution/{id}`, `GET …/observations`, `POST …/accept`. The accept
+  route with **no body** re-derives the proposal server-side, so the version
+  written is exactly the one the lab showed rather than a lossy client echo.
+- `macos/Vantage/Sources/Views/SkillEvolutionView.swift` — the rule (can / will
+  not), the skill list with measured counts, the proposal with its reasons and
+  evidence, the last run's per-condition observations, and one "Store as next
+  version" button. New `Automate` sidebar group beside Skills Library.
+
+**What it proposes, and nothing else**
+
+1. Remove a condition whose `kind` no observer in this build can resolve — it
+   could only ever be recorded `unknown`.
+2. Remove a step that existed solely to satisfy such a condition (only when it
+   claims no surviving condition).
+3. Raise the declared risk to what the steps' tools actually cost, read from the
+   frozen `ToolSpec` in the registry. A PHYSICAL tool (4) cannot be expressed in a
+   manifest capped at 3, so the tier is capped **and the gap is stated** rather
+   than hidden.
+4. Report an out-of-scope path and an undeclared capability as **notes** — never
+   applied, because that is widening.
+
+**Evidence**
+
+- `tests/test_skill_evolution.py` — **26 passed**. The load-bearing ones are
+  negative: `test_a_proposal_never_adds_a_step_capability_or_scope`,
+  `test_a_scope_gap_is_reported_never_filled`,
+  `test_the_risk_tier_is_only_ever_raised`,
+  `test_an_understated_risk_is_never_lowered`,
+  `test_proposing_does_not_change_the_stored_skill`.
+- **Level 7, live (probe backend `:8798`, real mission engine):** stored
+  `notes-health` with one checkable and one uncheckable condition; three real
+  runs → `partially_completed` / `partial` each time, with `C1` VERIFIED
+  (`"/tmp/vantage_demo/notes.md contains 'status: ready' (sha256:3a32e28874afea65,
+  22 bytes)"`) and `C2` UNKNOWN ("a check of kind 'the_vibes_are_right' is not one
+  this system performs"). The lab proposed removing `C2`; accepted → v2; **the
+  next real run went `completed` / `verified`**, where every prior run was
+  `partial`. That is the loop closing: a proposal from history, applied, and a
+  genuinely different outcome measured afterwards.
+- **Level 4, rendered** (`/tmp/vantage_shots/evolution4.png`): the rule card, three
+  skills with measured counts, a live proposal whose change and note both read
+  correctly, and the evidence row `3 runs / 0 verified / 3 not verified / 0
+  unknown / partial`.
+- Both Swift targets build clean.
+
+**Two defects the live run found, both fixed**
+
+- The note said "the runs' own notes say what broke" about runs that had parked
+  awaiting approval — the recorded note says only that the run is parked. It now
+  says what was recorded and no more.
+- The store counts `partial` as a failure (only `ok and verdict == "verified"` is
+  a success), so a plan whose one real condition passed every time read as
+  "3/3 failed — a skill that does not work", while the change being proposed was
+  the cause. The note now recognises that case and says **run the new version
+  before concluding otherwise**, which is what the live run then did.
+
+**NOT verified**
+
+- **Level 5–6:** "Store as next version" was exercised over HTTP, not by a
+  physical click.
+- The lab proposes no edit to a step's *params*. A skill whose steps name stale
+  paths will keep naming them; that is an edit, and widening is not the only risk
+  — a silent rewrite of what a step does is the other.
+- Evolving a skill that has never run is refused by design (below the run floor),
+  so the feature does nothing on a fresh install until something has actually run
+  three times.

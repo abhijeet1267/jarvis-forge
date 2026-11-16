@@ -2038,6 +2038,36 @@
         "A permanent delete of a *directory* is not captured (restoring a whole tree byte for byte is not a claim made) and shows irreversible.",
         "Blobs are not yet pruned; the store grows with the files it captures. Retention is a follow-up."
       ]
+    },
+    "V12-10-skill-evolution-lab": {
+      "title": "V12: Skill Evolution Lab -- the next version of a skill, derived from its runs",
+      "status": "completed",
+      "priority": 1,
+      "acceptance": [
+        "a proposal comes from recorded runs, never from a model",
+        "the lab can only remove or tighten: no added step, capability, scope or lowered risk",
+        "proposing writes nothing; storing is a separate explicit act that keeps the old version",
+        "a condition no observer can resolve is proposed for removal, with the reason",
+        "a step that only served such a condition is removed, but never one serving a surviving condition",
+        "declared risk is raised to what the registry says the tools cost, capped at the manifest limit",
+        "an out-of-scope path or missing capability is reported as a note, never applied",
+        "accepting with no body stores exactly what the lab showed",
+        "a skill below the run floor gets no proposal"
+      ],
+      "evidence": [
+        "2026-11-16: jarvis/core/skill_evolution.py -- propose_evolution (closed narrowing action set), interpret_run (per-condition observations), describe_lab; MIN_RUNS_FOR_EVOLUTION=3.",
+        "2026-11-16: jarvis/api/skill_evolution_routes.py -- GET /skill-evolution, GET /{id}, GET /{id}/observations, POST /{id}/accept (no-body re-derives server-side; 409 when nothing is proposed; 422 for another skill's manifest).",
+        "2026-11-16: macos SkillEvolutionView.swift + new Automate sidebar group beside Skills Library.",
+        "2026-11-16 PASS: tests/test_skill_evolution.py 26 passed -- incl. test_a_proposal_never_adds_a_step_capability_or_scope, test_a_scope_gap_is_reported_never_filled, test_the_risk_tier_is_only_ever_raised, test_proposing_does_not_change_the_stored_skill, test_accepting_with_no_body_stores_what_the_lab_proposed.",
+        "2026-11-16 PASS (level 7, live): 3 real runs of notes-health -> partially_completed/partial (C1 VERIFIED, C2 UNKNOWN); proposal removed C2; accept -> v2; the next real run -> completed/verified.",
+        "2026-11-16 PASS (level 4, rendered): Skill Evolution screen on the live backend showing the rule, the skill list with measured counts, a live proposal, and its evidence row.",
+        "2026-11-16 PASS: swift build clean for both the app and the render harness."
+      ],
+      "blocked_or_unverified": [
+        "NOT VERIFIED (level 5-6): Store as next version was exercised over HTTP, not by a physical click.",
+        "The lab does not edit a step's params -- a stale path stays stale, because silently rewriting what a step does is its own risk. Named, not claimed.",
+        "No pruning of old skill versions; every accepted evolution adds one."
+      ]
     }
   }
 }
