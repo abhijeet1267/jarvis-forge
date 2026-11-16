@@ -1568,6 +1568,51 @@ extension APIModels {
         let mission_state: String
     }
 
+    // MARK: - Agent Control Tower
+
+    struct Worker: Codable, Identifiable {
+        let name: String
+        let state: String
+        let tools: [String]
+        let tool_count: Int
+        let call_budget: Int?
+        let calls_made: Int
+        let calls_refused: Int
+        let failures: Int
+        let remaining_budget: Int?
+        let last_call_at: Double?
+        let last_duration_ms: Int?
+        let last_tool: String?
+        let last_error: String?
+        let in_flight: Int
+        let paused_by: String?
+        let paused_reason: String?
+
+        var id: String { name }
+    }
+
+    struct TowerSnapshot: Codable {
+        struct Summary: Codable {
+            let total: Int
+            let running: Int
+            let paused: Int
+            let budget_exhausted: Int
+            let stopped: Int
+            let calls_made: Int
+            let calls_refused: Int
+        }
+
+        let workers: [Worker]
+        let summary: Summary
+        /// The boundary note: a pause takes effect at the next dispatch, not
+        /// mid-call. Shown so the screen never implies pre-emption it cannot do.
+        let note: String
+    }
+
+    struct BudgetRequest: Codable {
+        let budget: Int?
+    }
+
     // MARK: - Live Mission Steering
 
     /// A proposed replacement for the un-run remainder of a plan.

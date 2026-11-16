@@ -49,18 +49,37 @@ class Agent(ABC):
                 device=action.device,
             )
 
+        # The Control Tower's gate. Every tool call in the system funnels through
+        # here -- the chat path, the mission runner and the recovery retry all
+        # call `agent.execute` -- so this is the one place a pause, a stop or an
+        # exhausted budget can actually stop a dispatch. A worker the tower does
+        # not know about is not gated, which keeps a bare test agent working.
+        from ..core.control_tower import ControlTower, WorkerRefusal
+
+        tower = ControlTower.get()
+        try:
+            tower.admit(action.tool)
+        except WorkerRefusal as refusal:
+            return fail(action.tool, refusal.reason, device=action.device)
+
         started = time.perf_counter()
+        result: Optional[ActionResult] = None
         try:
             result = await handler(ctx, **action.params)
         except TypeError as exc:
             # Bad parameters should surface as a clean failure, not a crash.
-            return fail(action.tool, f"invalid parameters: {exc}", device=action.device)
+            result = fail(action.tool, f"invalid parameters: {exc}", device=action.device)
         except Exception as exc:  # pragma: no cover - defensive
             log.info(
                 "tool raised",
                 extra_fields={"tool": action.tool, "error": str(exc)},
             )
-            return fail(action.tool, f"{action.tool} raised: {exc}", device=action.device)
+            result = fail(action.tool, f"{action.tool} raised: {exc}", device=action.device)
+        finally:
+            elapsed_ms = int((time.perf_counter() - started) * 1000)
+            tower.settle(action.tool, ok=bool(result and result.ok),
+                         duration_ms=elapsed_ms,
+                         error=str(getattr(result, "error", "") or ""))
 
         result.duration_ms = int((time.perf_counter() - started) * 1000)
         result.finished_at = result.finished_at

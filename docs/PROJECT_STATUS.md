@@ -2933,3 +2933,64 @@ S2/S3 editable, and Apply neutral-disabled until Preview has run.
 The intent check is only as strong as the intent recorded at creation — a mission created with
 no intent is gated by the permission engine alone, and the code says so rather than implying
 otherwise.
+
+## Update — 2026-11-16 (V12 phase 4: Agent Control Tower)
+
+Seventeen agents existed and nothing showed them together; there was no way to
+pause one short of stopping the backend. The Control Tower is that surface, and it
+is wired into the one funnel every tool call passes through, so its controls
+actually stop work rather than redraw a badge.
+
+**What was built**
+
+- `jarvis/core/control_tower.py` — `ControlTower`, a process singleton of
+  `Worker`s. Each worker reports `idle | running | paused | budget_exhausted |
+  stopped`. `running` is true only while a call is genuinely inside it (an
+  in-flight count), not a timer. A worker has an optional **call budget** that
+  bounds an agent that would otherwise loop.
+- The gate is `ControlTower.admit(tool)`, called from `Agent.execute` — the one
+  place the chat path, the mission runner and the recovery retry all dispatch
+  through. A paused, stopped or out-of-budget worker is refused with a reason, and
+  **the handler never runs**.
+- `GET /control-tower`, and `POST /agents/{name}/{pause,resume,cancel,budget}`.
+  Read and control only; the tower never dispatches a tool, so it cannot become a
+  second, ungated way to run things.
+- `ControlTowerView` — every worker with its state, tool count, counters and
+  Pause/Resume/Stop. Sidebar entry under MAC.
+
+**The honest boundary, stated on screen.** A pause or stop takes effect at the
+**next dispatch**, not inside a call already running: Python cannot pre-empt a
+thread, and killing the process to interrupt one tool would stop everything else
+with it. The screen shows this note verbatim rather than implying instantaneous
+control it does not have. A *stop* (cancel) is distinct from a pause — a cancelled
+worker does not resume on its own, so nobody is surprised by an agent returning.
+
+**Defect caught by an existing guard.** The tower's first read endpoint was
+`GET /agents`, which already exists in `app.py:5976` as the capability listing.
+`test_no_duplicate_routes` failed loudly — Starlette keeps only the first
+registration, so the tower would have been invisible. Moved to `GET
+/control-tower`; the controls stay under `/agents/{name}/...` where the subject
+matches.
+
+**Evidence.** `test_control_tower.py` **14 passed**, including
+`test_a_paused_worker_refuses_and_the_tool_is_never_called`,
+`test_a_worker_reads_running_only_while_a_call_is_inside_it`, and
+`test_a_stopped_worker_does_not_resume`. Both Swift targets build clean; README and
+`FILE_OWNERSHIP` counts updated (228 test modules, 4273 collected, 229 Python
+modules) and their guards pass.
+
+**Live, level 7 (isolated `:8798`).** With the **email** worker paused, a real
+`POST /command` "read my latest email" replied *"email is paused (checking an inbox
+rule); the next call is refused until it resumes."* After resume the same command
+reached the real tool (*"I found no messages."*). With the **car** budget at 0,
+"unlock my car" replied *"car has used its budget of 0 call(s); raise the budget to
+let it run again."* The mission path is the same: a mission step needing the paused
+worker failed with the pause as its reason and the file was never written.
+
+**Rendered, level 4.** 17 workers, email paused with its reason and a Resume
+button, car "out of budget · 0/0 calls".
+
+**NOT verified.** No control was set by a real click (controls were driven over
+HTTP; synthetic clicks are dropped here). Counters are per-process and reset on
+restart — they count calls *this* process made, and no cross-restart history is
+claimed.

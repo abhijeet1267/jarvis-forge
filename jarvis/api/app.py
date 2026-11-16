@@ -659,6 +659,12 @@ from .workspace_routes import build_router as _build_workspace_router  # noqa: E
 
 app.include_router(_build_workspace_router(require_auth))
 
+# Agent Control Tower: what the workers can do, what they are doing, and a stop
+# that is enforced at the next dispatch boundary.
+from .agent_routes import build_router as _build_agent_router  # noqa: E402
+
+app.include_router(_build_agent_router(require_auth))
+
 _core: Optional[JarvisCore] = None
 _voice = None
 

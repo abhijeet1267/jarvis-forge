@@ -121,6 +121,13 @@ class JarvisCore:
         self.classifier = RiskClassifier(paranoid=self.settings.paranoid)
         self.policy = PermissionEngine(self.tools, self.devices, self.classifier)
         self.agents: Dict[str, Agent] = build_agents(self.tools)
+        # Populate the Control Tower from the agents just built, so a pause set
+        # through the API gates the same worker the pipeline dispatches to. Read
+        # from the registry's own `agent` field rather than a second mapping.
+        from .control_tower import ControlTower
+
+        self.control_tower = ControlTower.get()
+        self.control_tower.register_from_registry(self.tools)
         self.planner = RulePlanner(self.tools, self.apps)
         # R2.3: the model may *propose* an action the rules could not route. The
         # proposal is validated here and then runs through the same permission

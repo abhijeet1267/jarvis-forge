@@ -1859,6 +1859,38 @@
         "NOT VERIFIED (level 5-6): no revision was committed by clicking Preview then Apply; the flow was driven over HTTP. Synthetic clicks are dropped (AXIsProcessTrusted() false).",
         "NOT VERIFIED: the intent check is only as good as the intent recorded at creation. A mission created without a steerable intent (no steps, or an empty intent) records none, and then only the permission engine gates it -- that is stated in the code and is not a claim of safety."
       ]
+    },
+    "V12-4-agent-control-tower": {
+      "title": "V12: Agent Control Tower -- real worker state and an enforced stop",
+      "status": "completed",
+      "priority": 0,
+      "acceptance": [
+        "the tower lists every worker from the registry's own agent field, with the tools each owns",
+        "a worker reads running only while a call is genuinely inside it, and idle after",
+        "pausing a worker makes its next dispatch fail with the pause as its reason, and the tool is never called",
+        "resuming lets the next call through",
+        "an exhausted call budget refuses further calls until the budget is raised",
+        "a stopped worker does not resume, so a person is not surprised by an agent returning",
+        "the control is wired into Agent.execute, the one funnel every tool call passes through",
+        "the boundary note states that a pause takes effect at the next dispatch, not mid-call",
+        "the read endpoint does not shadow the existing GET /agents listing"
+      ],
+      "evidence": [
+        "2026-11-16: jarvis/core/control_tower.py added -- ControlTower singleton, Worker with idle/running/paused/budget_exhausted/stopped, admit/settle/release gate, register_from_registry reading the registry's agent field.",
+        "2026-11-16: Agent.execute now calls ControlTower.admit before dispatch and settle after; a WorkerRefusal becomes a refused ActionResult. This is the one funnel the chat path, mission runner and recovery retry all use.",
+        "2026-11-16: jarvis/api/agent_routes.py added -- GET /control-tower, POST /agents/{name}/{pause,resume,cancel,budget}. Reads/controls only; never dispatches.",
+        "2026-11-16: JarvisCore registers its workers with the tower at construction (jarvis/core/orchestrator.py), so a pause gates the same worker the pipeline dispatches to.",
+        "2026-11-16 PASS: tests/test_control_tower.py 14 passed -- incl. test_a_paused_worker_refuses_and_the_tool_is_never_called, test_a_worker_reads_running_only_while_a_call_is_inside_it, test_a_stopped_worker_does_not_resume.",
+        "2026-11-16 PASS (level 7, backend journey, live :8798): with the email worker paused, POST /command 'read my latest email' replied 'email is paused (checking an inbox rule); the next call is refused until it resumes.' After resume the same command reached the real tool ('I found no messages.'). With the car budget at 0, 'unlock my car' replied 'car has used its budget of 0 call(s)'.",
+        "2026-11-16 PASS (level 7, mission path, TestClient): a mission whose step needs the paused laptop worker failed with 'laptop is paused (checking); the next call is refused until it resumes' and the file was never written.",
+        "2026-11-16 PASS (level 4, rendered): ControlTowerView shows 17 workers, email paused with its reason and a Resume button, car out of budget '0/0 calls'. Both Swift targets build clean.",
+        "2026-11-16: no-duplicate-routes test caught the tower's GET /agents shadowing the existing capability listing at app.py:5976; the read endpoint moved to GET /control-tower. README/FILE_OWNERSHIP counts updated (228 test modules, 4273 collected, 229 Python modules)."
+      ],
+      "blocked_or_unverified": [
+        "NOT VERIFIED (level 5-6): no pause was set by clicking Pause in ControlTowerView; controls were driven over HTTP. Synthetic clicks are dropped (AXIsProcessTrusted() false).",
+        "KNOWN LIMITATION, stated on screen and in the module docstring: a pause or stop takes effect at the next dispatch boundary. A call already inside a tool handler runs to completion -- Python cannot pre-empt a thread and killing the process to interrupt one tool would stop everything else.",
+        "NOT VERIFIED: counters are per-process and reset on restart (they count calls this process made). No cross-restart history is claimed."
+      ]
     }
   }
 }

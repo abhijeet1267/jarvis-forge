@@ -39,7 +39,7 @@ measurement spent closing that gap, in the ledger and on the screen.
 | **Ledger**      | `action_logs` hash-chained + `audit.jsonl` append-only, `verify_chain()`                                                                                                                                   |
 | **Edge**        | token file `0600` · constant-time compare · same-origin · Host allowlist · 600/min                                                                                                                         |
 | **Surface**     | web dashboard · phone client page over the LAN · voice (macOS `say` + on-device STT) · watch queue · device pairing · macOS permission status · optional authenticated relay (proven locally, not off-LAN) |
-| **Size**        | 78.4k lines of versioned Python/HTML/JS/Swift · 43.9k shipped (`jarvis/`+`dashboard/`+`app/`) · 33.3k tests · 225 test modules                                                                             |
+| **Size**        | 78.4k lines of versioned Python/HTML/JS/Swift · 43.9k shipped (`jarvis/`+`dashboard/`+`app/`) · 33.9k tests · 228 test modules                                                                             |
 | **Final audit** | `VANTAGE_FINAL_ACCEPTANCE_REPORT.md` — the verdicts kept separate: implemented · verified · blocked · not measured · unknown · yours to decide                                                             |
 
 ---
@@ -565,7 +565,7 @@ jarvis/
                host's answer returned unchanged — proven on loopback, never claimed off-LAN
   gateway/     provider-neutral model gateway: OpenAI and Gemini wire shapes behind one selection
                point, each answer naming its vendor and model; no vendor call has been made here
-tests/         225 modules · 4193 collected · includes the shipped page JS, run by Node
+tests/         228 modules · 4273 collected · includes the shipped page JS, run by Node
 dashboard/     index.html control panel · planner.html daily plan, tasks, schedules, attention ·
                operator.html run apps/documents/sites, contacts + call briefs, post drafts ·
                work.html workspaces + workflow jobs · phone.html the LAN phone client
