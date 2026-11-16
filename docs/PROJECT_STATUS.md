@@ -3424,3 +3424,74 @@ keeps the old one.
 - Evolving a skill that has never run is refused by design (below the run floor),
   so the feature does nothing on a fresh install until something has actually run
   three times.
+
+## Update — 2026-11-16 (V12 phase 11: Capability Passports)
+
+**What it is.** A worker's standing, expressed as something checkable rather than
+something claimed. A passport answers three questions from data the system
+already keeps: what the registry *gives* this worker (tools, cost, confirmation
+gate), what the hash-chained audit log says it *did* (counts by risk tier,
+approvals, refusals), and — the line most useful and most often missing — what it
+**holds but has never touched**.
+
+**The property that makes it safe: a passport is a record, never a credential.**
+Nothing reads it to authorize anything; the permission engine decides every call
+as before. The single write (`POST /passports/{worker}/issue`) appends an audit
+entry saying the passport was produced, and records `"grants": "nothing"`.
+
+**Added / changed**
+
+- `jarvis/core/passports.py` — `build_passport` (tools by cost, gated set,
+  exercised/never-used split, counts by risk, audit-chain verdict, notes),
+  `list_passports`, `issue_passport`. No aggregate score anywhere: a "trust
+  rating" would be the one figure on the screen nobody could verify.
+- `jarvis/api/passport_routes.py` — `GET /passports`, `GET /passports/{worker}`,
+  `POST /passports/{worker}/issue`.
+- `macos/…/CapabilityPassportsView.swift` — the passport with its counts, the
+  per-risk tally, a tools table marking never-used entries, an audit-chain badge,
+  the authority line rendered verbatim from the API, and the worker list. New
+  entry in the `Automate` group.
+- **A real defect found and fixed in the audit ledger:** the confirmed-execution
+  audit site wrote `risk="confirmed"`. A workflow state was sitting in the risk
+  column, so a passport counting actions by tier reported `confirmed: 1` as if it
+  were a kind of risk, and the actual tier of a confirmed write was
+  unrecoverable from the ledger. It now records the real tier from the stored
+  confirmation, with `confirmation=True` carrying the "was confirmed" fact it was
+  always meant to. Pinned by
+  `test_a_confirmed_action_is_audited_with_its_real_risk_tier`.
+
+**Evidence**
+
+- `tests/test_passports.py` — **21 passed**, including the negative ones:
+  `test_issuing_a_passport_does_not_change_what_the_gate_decides` (the same
+  action evaluated before and after a passport is built and issued → identical
+  decision and reason), `test_a_passport_states_that_it_grants_nothing`,
+  `test_an_unknown_worker_is_an_error_not_an_empty_passport`,
+  `test_rows_for_another_workers_tool_are_ignored`. That first test replaced an
+  earlier version that merely grepped the policy module for the word "passport"
+  — a grep passes on an import that never runs.
+- `tests/test_phase10_confirmation_revalidation.py` — 12 passed (the risk-tier
+  test above plus the existing revalidation suite).
+- **Level 7, live** (probe backend): `GET /passports` returned all 17 workers;
+  `laptop` reported 49 tools / 26 gated / 3 exercised / 4 actions
+  (`read: 3`, `confirmed: 1` **before** the fix — which is what exposed it) and
+  `evidence: {intact: true, checked: 11, breaks: 0}`.
+- **Level 4, rendered** (`/tmp/vantage_shots/passports1.png`): the automation
+  worker's passport with 4 tools, 1 gated, 0 exercised, the "held but never used,
+  and not read-only: n8n__notify" note, the never-used markers on every tool, and
+  "audit chain verified · 11 records".
+- Both Swift targets build clean.
+
+**NOT verified**
+
+- **Level 5–6:** "Record in audit log" was exercised over HTTP, not by a physical
+  click.
+- Attribution is **by tool ownership**: an audit row is credited to the worker
+  whose spec owns that tool. Rows for tools no worker owns are left out. A tool
+  two workers could both own would be double-counted — no such tool exists today,
+  and that is the assumption, stated rather than hidden.
+- ~~The audit log is read with a 2000-row window and the page did not say so.~~
+  **fixed**: the passport now carries `window {rows_read, rows_limit, complete}`
+  and, when the log held at least that many rows, a note saying the counts cover
+  the most recent of them rather than all of history. Pinned by
+  `test_a_truncated_log_window_is_stated_not_presented_as_a_total`.

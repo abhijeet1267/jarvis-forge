@@ -2100,6 +2100,70 @@ extension APIModels {
         let note: String
     }
 
+    // MARK: - Capability Passports
+
+    /// One worker's standing: what it holds, has done, and never touched.
+    ///
+    /// `authority` is always present and always says the same thing — this is a
+    /// record, not a credential — so no screen can render it without the caveat.
+    struct WorkerPassport: Codable {
+        struct Tool: Codable, Identifiable {
+            let tool: String
+            let risk: String
+            let risk_value: Int
+            let requires_confirmation: Bool
+            let reversible: Bool
+            let devices: [String]
+
+            var id: String { tool }
+        }
+
+        let worker: String
+        let tools: [Tool]
+        let gated_tools: [String]
+        let never_used: [String]
+        let exercised: [String]
+        let actions_by_risk: [String: Int]
+        let actions_total: Int
+        let confirmations: Int
+        let refusals: Int
+        let evidence: Evidence
+        /// How many audit rows the counts were read over, and whether that was all.
+        let window: Window?
+        let notes: [String]
+        let authority: String
+
+        struct Window: Codable {
+            let rows_read: Int
+            let rows_limit: Int
+            let complete: Bool
+        }
+
+        struct Evidence: Codable {
+            let intact: Bool
+            let checked: Int
+            let breaks: Int
+            let error: String?
+        }
+    }
+
+    struct PassportSummary: Codable, Identifiable {
+        let worker: String
+        let tools: Int?
+        let gated: Int?
+        let never_used: Int?
+        let actions_total: Int?
+        let evidence_intact: Bool?
+        let error: String?
+
+        var id: String { worker }
+    }
+
+    struct PassportList: Codable {
+        let workers: [PassportSummary]
+        let note: String
+    }
+
     struct SkillRunRequest: Codable {
         let available_capabilities: [String]
         let allowed_scope: [String]

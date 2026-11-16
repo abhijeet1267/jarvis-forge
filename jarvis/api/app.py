@@ -696,6 +696,11 @@ from .skill_evolution_routes import build_router as _build_evolution_router  # n
 
 app.include_router(_build_evolution_router(require_auth))
 
+# Capability Passports: a worker's standing as a record. Grants nothing.
+from .passport_routes import build_router as _build_passport_router  # noqa: E402
+
+app.include_router(_build_passport_router(require_auth))
+
 _core: Optional[JarvisCore] = None
 _voice = None
 

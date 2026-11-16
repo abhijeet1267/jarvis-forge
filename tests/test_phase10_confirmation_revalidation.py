@@ -211,3 +211,28 @@ async def test_unknown_confirmation_id_runs_nothing(core, tmp_path):
     assert response.actions == []
     assert victim.exists()
     assert "no record" in response.reply
+
+async def test_a_confirmed_action_is_audited_with_its_real_risk_tier(core, engine, tmp_path):
+    """The risk column holds a risk, not a workflow state.
+
+    The confirmed-execution audit site wrote ``risk="confirmed"``, so the ledger
+    had a tier called "confirmed" and the actual risk of a confirmed write was
+    unrecoverable from it. Found while building Capability Passports, which
+    counts actions by tier: a worker's passport reported ``confirmed: 1`` as if
+    that were a kind of risk. ``confirmation=True`` is the flag for "confirmed";
+    the risk column carries the tier.
+    """
+    victim = _victim(tmp_path)
+    cid = await _confirm_deletion(core, victim)
+
+    response = await core.resolve_confirmation(cid, True, session_id="laptop",
+                                               approver_session="laptop")
+    assert response.decision is PolicyDecision.EXECUTE
+
+    rows = [r for r in core.audit.recent(20) if r.get("tool") == "delete_file"]
+    confirmed = [r for r in rows if r.get("confirmation")]
+    assert confirmed, rows
+    tiers = {str(r.get("risk")) for r in confirmed}
+    assert "confirmed" not in tiers, tiers
+    # delete_file is DESTRUCTIVE; the ledger must say so.
+    assert "destructive" in tiers, tiers

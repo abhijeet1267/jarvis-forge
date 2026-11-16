@@ -31,6 +31,7 @@ from ..registry.devices import get_device_registry
 from ..registry.tools import ToolRegistry
 from ..security.audit import AuditLog
 from ..security.policy import PermissionEngine
+from .models import RiskLevel
 from ..security.providers import CapabilityRegistry, CapabilityType
 from ..security.risk import RiskClassifier
 from ..tools import build_default_registry
@@ -1819,7 +1820,14 @@ class JarvisCore:
             intent=record["tool"],
             tool=record["tool"],
             target=json.dumps(record["params"], default=str),
-            risk="confirmed",
+            # The tier of the action that actually ran, read from the stored
+            # confirmation. This said "confirmed" -- a workflow state sitting in
+            # the risk column -- so a passport counting actions by risk reported
+            # one called "confirmed", and the real tier of a confirmed write
+            # was unrecoverable from the ledger. The confirmation flag is
+            # already the `confirmation=True` field below; the risk column is
+            # for risk.
+            risk=self.classifier.risk_label(RiskLevel(record["risk"])),
             confirmation=True,
             # From verification, not `.ok` -- this is the second audit site and
             # Phase 10 P0-1 fixed only the first one, so every confirmed action

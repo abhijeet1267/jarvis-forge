@@ -1,7 +1,7 @@
 # VANTAGE — File Ownership & Module Boundaries
 
 Which module owns each responsibility, and which files are safe to change together.
-Derived from the source (re-measured 2026-11-16; 241 Python modules, import graph measured with
+Derived from the source (re-measured 2026-11-16; 243 Python modules, import graph measured with
 `/tmp/dep_analysis.py` — see the method note at the bottom).
 
 > **Rule of thumb:** change inside one owning module at a time. If a change needs two

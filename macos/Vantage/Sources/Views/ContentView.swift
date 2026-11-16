@@ -107,6 +107,7 @@ struct ContentView: View {
             case .undo:         UndoMapView()
             case .skills:       SkillsLibraryView()
             case .evolution:    SkillEvolutionView()
+            case .passports:    CapabilityPassportsView()
             case .goals:        GoalGuardView()
             case .doctor:       ProjectDoctorView()
             case .planner:      PlannerView()
@@ -161,7 +162,7 @@ private struct VantageSidebar: View {
                     group("Capture & Documents", [.capture, .documents])
                     group("Connections", [.connections, .google, .mcp, .automation])
                     group("Mac", [.control, .tower, .missions, .recovery, .flows, .studio, .shadow, .steer, .operator_])
-                    group("Automate", [.skills, .evolution])
+                    group("Automate", [.skills, .evolution, .passports])
                     group("People & Work", [.work, .people])
                     group("Configure", [.providers, .capabilities, .devices, .preferences, .settings])
                     group("Trust & Privacy", [.safety, .egress, .autonomy])
@@ -378,7 +379,7 @@ private struct StatusFooter: View {
 // MARK: - Navigation model
 
 enum NavItem: String, Identifiable, CaseIterable {
-    case today, home, missions, smartfiles, parallelworld, safety, skills, evolution, goals, doctor, planner, operator_, control, flows, work, people, connections, workspaces, studio, shadow, steer, tower, recovery, egress, autonomy, assurance, undo,
+    case today, home, missions, smartfiles, parallelworld, safety, skills, evolution, passports, goals, doctor, planner, operator_, control, flows, work, people, connections, workspaces, studio, shadow, steer, tower, recovery, egress, autonomy, assurance, undo,
          google, mcp, automation, command, providers, capabilities, devices, approvals,
          activity, memory, settings
     // Phase 3
@@ -400,6 +401,7 @@ enum NavItem: String, Identifiable, CaseIterable {
         case .undo: return "Undo Map"
         case .skills: return "Skills Library"
         case .evolution: return "Skill Evolution"
+        case .passports: return "Capability Passports"
         case .goals: return "GoalGuard"
         case .doctor: return "Project Doctor"
         case .planner: return "Planner"
@@ -447,6 +449,7 @@ enum NavItem: String, Identifiable, CaseIterable {
         case .undo: return "arrow.uturn.backward"
         case .skills: return "square.stack.3d.up"
         case .evolution: return "wand.and.stars"
+        case .passports: return "person.text.rectangle"
         case .goals: return "eye"
         case .doctor: return "stethoscope"
         case .planner: return "calendar.day.timeline.left"
