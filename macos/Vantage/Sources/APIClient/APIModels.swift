@@ -2907,6 +2907,12 @@ extension APIModels {
         let subject_note: String?
         let note: String?
 
+        /// The nested capability map the route also sends. Preferred over the
+        /// flat fields above because it is the one the route composes from the
+        /// three real switches, and because an absent key is meaningful (nil =
+        /// "the backend did not say") where a missing flat Bool is not.
+        var capabilities: DesktopCapabilityMap?
+
         var canMoveCursor: Bool { can_move_cursor ?? false }
         var canClick: Bool { can_click ?? false }
         var canType: Bool { can_type ?? false }
@@ -2919,6 +2925,78 @@ extension APIModels {
              ("Type and press keys", canType),
              ("Read the interface", canReadUI),
              ("Capture the screen", screen_capture ?? false)]
+        }
+    }
+
+    struct DesktopCapabilityMap: Codable {
+        let move_cursor: Bool?
+        let click: Bool?
+        let type: Bool?
+        let read_ui: Bool?
+        let screen_capture: Bool?
+    }
+}
+
+// MARK: - Desktop capability states
+
+/// The state of one desktop capability, as the screen must show it.
+///
+/// Five states rather than a Bool, because "no" is three different answers with
+/// three different fixes: a permission the person can grant, a capability this
+/// build does not have, and an answer the backend did not give. A screen that
+/// collapsed them into a red dot would send somebody to System Settings over a
+/// missing binary.
+enum DesktopCapabilityState: String {
+    case available = "AVAILABLE"
+    case permissionRequired = "PERMISSION_REQUIRED"
+    case unsupported = "UNSUPPORTED"
+    case unknown = "UNKNOWN"
+    case error = "ERROR"
+
+    /// Only an explicit `true` from the backend may produce this.
+    var isAvailable: Bool { self == .available }
+}
+
+extension APIModels {
+    /// The seven capability rows the Desktop Control screen draws.
+    ///
+    /// Seven, though macOS grants three: the person asking "can it click?" and
+    /// "can it read my UI?" is asking two different questions with two different
+    /// switches, and a screen that merged them would be the badge-that-lies. The
+    /// subtitle on the shared ones says which switch feeds them.
+    enum DesktopCapabilityRow: String, CaseIterable, Identifiable {
+        case cursorMovement
+        case inputEvents
+        case keyboardInput
+        case accessibility
+        case windowObservation
+        case screenCapture
+        case automation
+
+        var id: String { rawValue }
+
+        static var all: [DesktopCapabilityRow] { allCases }
+
+        var title: String {
+            switch self {
+            case .cursorMovement: return "Cursor movement"
+            case .inputEvents: return "Input events"
+            case .keyboardInput: return "Keyboard input"
+            case .accessibility: return "Accessibility"
+            case .windowObservation: return "Window observation"
+            case .screenCapture: return "Screen capture"
+            case .automation: return "Automation (combined)"
+            }
+        }
+
+        /// Shown beside the title when the state comes from a shared switch, so
+        /// nobody concludes that two rows mean two grants to give.
+        var subtitle: String? {
+            switch self {
+            case .windowObservation: return "(uses screen capture)"
+            case .automation: return "(all of the above)"
+            default: return nil
+            }
         }
     }
 }

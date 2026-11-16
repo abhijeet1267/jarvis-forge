@@ -186,8 +186,22 @@ def move(x: float, y: float, *, smooth: bool = False,
     return _run("move", args, timeout=MOVE_TIMEOUT_S)
 
 
-def click(x: float, y: float, *, button: str = "left", count: int = 1) -> Dict[str, Any]:
-    return _run("click", [f"x={x}", f"y={y}", f"button={button}", f"count={int(count)}"])
+def click(x: float, y: float, *, button: str = "left", count: int = 1,
+          expect_window_id: Optional[int] = None,
+          expect_pid: Optional[int] = None) -> Dict[str, Any]:
+    """Post a click, optionally refusing if the intended window has moved.
+
+    The expectation is what makes a resolved target safe to act on: between
+    resolving a window and clicking it, the window can move or close, and a
+    coordinate click would then land on whatever is beneath. The executor checks
+    it before posting; passing nothing keeps the old behaviour.
+    """
+    args = [f"x={x}", f"y={y}", f"button={button}", f"count={int(count)}"]
+    if expect_window_id is not None:
+        args.append(f"--expect-window-id={int(expect_window_id)}")
+    if expect_pid is not None:
+        args.append(f"--expect-pid={int(expect_pid)}")
+    return _run("click", args)
 
 
 def drag(from_x: float, from_y: float, to_x: float, to_y: float,

@@ -48,6 +48,7 @@ enum Status: String {
     case permission_required   // the OS will not accept this from this process
     case target_not_found
     case target_ambiguous
+    case target_stale          // the intended target moved or changed owner since it was resolved
     case timed_out
     case cancelled
     case unknown
@@ -424,7 +425,17 @@ func opReleaseAll() -> Never {
 /// ad-hoc signature state, and the revision it was built from. Reporting an
 /// identity that was assembled by hand instead would be exactly the fabricated
 /// permission claim this campaign forbids.
-func opIdentity() -> Never {
+struct IdentityReport {
+    let executable: String
+    let bundleID: String
+    let bundlePath: String
+    let version: String
+    let signing: String
+}
+
+/// The one identity lookup, shared by `identity` and `capabilities` so the two
+/// can never answer differently about the same binary.
+func readIdentity() -> IdentityReport {
     let exe = Bundle.main.executablePath
         ?? CommandLine.arguments.first
         ?? ""
@@ -449,7 +460,6 @@ func opIdentity() -> Never {
         }
     }
 
-    let fm = FileManager.default
     var signing = "not reported"
     let identity = Process()
     identity.executableURL = URL(fileURLWithPath: "/usr/bin/codesign")
@@ -473,20 +483,28 @@ func opIdentity() -> Never {
             signing = "unsigned or unreadable signature"
         }
     }
+    return IdentityReport(executable: exe, bundleID: bundleID, bundlePath: bundlePath,
+                          version: version, signing: signing)
+}
+
+func opIdentity() -> Never {
+    let identity = readIdentity()
+    let exe = identity.executable
+    let fm = FileManager.default
 
     // The facts go in the reason, not only in the payload: a caller that shows
     // the sentence and drops the JSON would otherwise present "identity read
     // from this process" with nothing in it, which is a claim with no subject.
     Emit.out(.verified,
              "\(ProcessInfo.processInfo.processName) at \(exe), bundle "
-             + "\(bundleID.isEmpty ? "(none)" : bundleID), signed \(signing).", [
+             + "\(identity.bundleID.isEmpty ? "(none)" : identity.bundleID), signed \(identity.signing).", [
         "executable": exe,
         "process_name": ProcessInfo.processInfo.processName,
         "pid": ProcessInfo.processInfo.processIdentifier,
-        "bundle_id": bundleID,
-        "bundle_path": bundlePath,
-        "bundle_version": version,
-        "signing": signing,
+        "bundle_id": identity.bundleID,
+        "bundle_path": identity.bundlePath,
+        "bundle_version": identity.version,
+        "signing": identity.signing,
         "executable_exists": fm.fileExists(atPath: exe),
         "executable_sha256": sha256OfFile(exe),
         // Stated because it is the thing a person needs before granting: an
@@ -506,7 +524,29 @@ func sha256OfFile(_ path: String) -> String {
     return digest.map { String(format: "%02x", $0) }.joined()
 }
 
-/// Every on-screen window, in global top-left coordinates.
+/// One on-screen window, as the window server reports it.
+struct WindowInfo {
+    let owner: String
+    let windowID: Int
+    let title: String
+    let bounds: CGRect          // global points, top-left origin
+    let layer: Int
+    let alpha: Double
+    let onScreen: Bool
+    let pid: Int
+
+    var json: [String: Any] {
+        ["owner": owner, "window_id": windowID, "title": title,
+         "x": bounds.origin.x, "y": bounds.origin.y,
+         "width": bounds.width, "height": bounds.height,
+         "layer": layer, "alpha": alpha, "on_screen": onScreen, "pid": pid]
+    }
+}
+
+/// Every on-screen window, in global top-left coordinates. `nil` means the
+/// window list could not be read at all (no Screen Recording, or the server
+/// returned nothing) — which a staleness check must report as `unknown` rather
+/// than treating as "no windows", because the two mean different things.
 ///
 /// This is the window-relative half of the one coordinate system the tools use
 /// (V15 §10). It needs only screen-recording access, which is the permission a
@@ -516,6 +556,30 @@ func sha256OfFile(_ path: String) -> String {
 /// The window server reports bounds in points with a top-left origin, matching
 /// CGEvent space directly. Nothing here converts, because every conversion that
 /// has been needed so far has been a chance to mirror a coordinate.
+func readOnScreenWindows() -> [WindowInfo]? {
+    guard CGPreflightScreenCaptureAccess() else { return nil }
+    let options: CGWindowListOption = [.optionOnScreenOnly, .excludeDesktopElements]
+    guard let raw = CGWindowListCopyWindowInfo(options, kCGNullWindowID)
+            as? [[String: Any]] else { return nil }
+    var result: [WindowInfo] = []
+    for entry in raw {
+        // Bounds come as a CFDictionary under the "kCGWindowBounds" key; a window
+        // without one is not measurable and is skipped rather than reported at 0,0.
+        guard let dict = entry[kCGWindowBounds as String] as? [String: Any],
+              let rect = CGRect(dictionaryRepresentation: dict as CFDictionary) else { continue }
+        result.append(WindowInfo(
+            owner: (entry[kCGWindowOwnerName as String] as? String) ?? "",
+            windowID: (entry[kCGWindowNumber as String] as? Int) ?? 0,
+            title: (entry[kCGWindowName as String] as? String) ?? "",
+            bounds: rect,
+            layer: (entry[kCGWindowLayer as String] as? Int) ?? 0,
+            alpha: (entry[kCGWindowAlpha as String] as? Double) ?? 1,
+            onScreen: (entry[kCGWindowIsOnscreen as String] as? Bool) ?? false,
+            pid: (entry[kCGWindowOwnerPID as String] as? Int) ?? 0))
+    }
+    return result
+}
+
 func opWindows(application: String) -> Never {
     guard CGPreflightScreenCaptureAccess() else {
         Emit.out(.permission_required,
@@ -523,38 +587,16 @@ func opWindows(application: String) -> Never {
                  + "granted it to this executable (\(ProcessInfo.processInfo.processName)).",
                  ["permissions": permissionSnapshot(), "needs": "screen_capture"])
     }
-    let options: CGWindowListOption = [.optionOnScreenOnly, .excludeDesktopElements]
-    guard let raw = CGWindowListCopyWindowInfo(options, kCGNullWindowID)
-            as? [[String: Any]] else {
+    guard let all = readOnScreenWindows() else {
         Emit.out(.failed, "the window server returned no window list")
     }
     let needle = application.lowercased()
-    var windows: [[String: Any]] = []
-    for entry in raw {
-        let owner = (entry[kCGWindowOwnerName as String] as? String) ?? ""
-        let bundle = (entry[kCGWindowOwnerName as String] as? String) ?? ""
-        if !needle.isEmpty,
-           !owner.lowercased().contains(needle),
-           !bundle.lowercased().contains(needle) { continue }
-        // Bounds come as a CFDictionary under the "kCGWindowBounds" key; a window
-        // without one is not measurable and is skipped rather than reported at 0,0.
-        guard let dict = entry[kCGWindowBounds as String] as? [String: Any],
-              let rect = CGRect(dictionaryRepresentation: dict as CFDictionary) else { continue }
-        let layer = (entry[kCGWindowLayer as String] as? Int) ?? 0
-        // Layer 0 is the normal window plane; higher layers are menus, tooltips
-        // and overlays, which are real but not what "the app's window" means.
-        let alpha = (entry[kCGWindowAlpha as String] as? Double) ?? 1
-        windows.append([
-            "owner": owner,
-            "window_id": (entry[kCGWindowNumber as String] as? Int) ?? 0,
-            "title": (entry[kCGWindowName as String] as? String) ?? "",
-            "x": rect.origin.x, "y": rect.origin.y,
-            "width": rect.width, "height": rect.height,
-            "layer": layer, "alpha": alpha,
-            "on_screen": (entry[kCGWindowIsOnscreen as String] as? Bool) ?? false,
-            "pid": (entry[kCGWindowOwnerPID as String] as? Int) ?? 0,
-        ])
-    }
+    // Layer 0 is the normal window plane; higher layers are menus, tooltips
+    // and overlays, which are real but not what "the app's window" means. They
+    // are still reported (the field is present) — the filter is the caller's.
+    let windows = all.filter { w in
+        needle.isEmpty || w.owner.lowercased().contains(needle)
+    }.map { $0.json }
     let front = NSWorkspace.shared.frontmostApplication
     Emit.out(.verified,
              "read \(windows.count) window(s)"
@@ -575,6 +617,96 @@ func opPermissions() -> Never {
     body["can_type"] = CGPreflightPostEventAccess()
     body["can_read_ui"] = AXIsProcessTrusted()
     Emit.out(.verified, "permission posture read from macOS", body)
+}
+
+/// What every operation needs, in one place so the report cannot drift from the
+/// gates the operations actually call.
+///
+/// `gate` is the permission without which the operation always refuses.
+/// `alsoRequires` is a conditional extra: `click --expect-*` additionally needs
+/// the window list to check the target, and `focus window=` needs Accessibility
+/// to find the window by title.
+struct OpGate {
+    let gate: String                 // none | accessibility | post_events | screen_capture
+    var alsoRequires: [String] = []
+    var note: String = ""
+}
+
+let operationGates: [String: OpGate] = [
+    "capabilities":   OpGate(gate: "none"),
+    "permissions":    OpGate(gate: "none"),
+    "identity":       OpGate(gate: "none"),
+    "request_access": OpGate(gate: "none",
+                             note: "asks macOS to show its own prompt; grants nothing by itself"),
+    "move":           OpGate(gate: "none",
+                             note: "CGWarpMouseCursorPosition relocates the real pointer without post-event access"),
+    "windows":        OpGate(gate: "screen_capture"),
+    "click":          OpGate(gate: "post_events",
+                             alsoRequires: ["screen_capture"],
+                             note: "screen_capture only when --expect-window-id/--expect-pid/--expect-bounds is given"),
+    "drag":           OpGate(gate: "post_events",
+                             alsoRequires: ["screen_capture"],
+                             note: "screen_capture only when an --expect-* target is given (checked at the start point)"),
+    "scroll":         OpGate(gate: "post_events"),
+    "type":           OpGate(gate: "post_events"),
+    "key":            OpGate(gate: "post_events"),
+    "focus":          OpGate(gate: "none", alsoRequires: ["accessibility"],
+                             note: "accessibility only for window= (matching a window by title)"),
+    "inspect":        OpGate(gate: "accessibility"),
+    "read_element":   OpGate(gate: "accessibility"),
+    "press_element":  OpGate(gate: "accessibility"),
+    "verify_change":  OpGate(gate: "accessibility"),
+    "release_all":    OpGate(gate: "post_events"),
+]
+
+/// One JSON object answering "what can this build actually do right now".
+///
+/// The per-operation gate is the useful half: a single global yes/no hides that
+/// `move` and `windows` work while `click` does not.
+func opCapabilities() -> Never {
+    let granted: [String: Bool] = [
+        "none": true,
+        "accessibility": AXIsProcessTrusted(),
+        "post_events": CGPreflightPostEventAccess(),
+        "screen_capture": CGPreflightScreenCaptureAccess(),
+    ]
+    var ops: [String: Any] = [:]
+    for (name, gate) in operationGates {
+        let gateGranted = granted[gate.gate] ?? false
+        let extrasSatisfied = gate.alsoRequires.allSatisfy { granted[$0] ?? false }
+        ops[name] = [
+            "gate": gate.gate,
+            "gate_granted": gateGranted,
+            // "Usable now" means the always-required gate is on; the conditional
+            // extras are named separately because they only bind for some forms.
+            "usable_now": gateGranted,
+            "also_requires": gate.alsoRequires,
+            "conditional_extras_granted": extrasSatisfied,
+            "note": gate.note,
+        ]
+    }
+    let identity = readIdentity()
+    let name = ProcessInfo.processInfo.processName
+    Emit.out(.verified,
+             "\(name): accessibility \(granted["accessibility"] == true ? "on" : "off"), "
+             + "post_events \(granted["post_events"] == true ? "on" : "off"), "
+             + "screen_capture \(granted["screen_capture"] == true ? "on" : "off"); "
+             + "\(operationGates.count) operation(s) reported with their gates.", [
+        "executable": identity.executable,
+        "process_name": name,
+        "pid": ProcessInfo.processInfo.processIdentifier,
+        "bundle_id": identity.bundleID,
+        "bundle_path": identity.bundlePath,
+        "bundle_version": identity.version,
+        "signing": identity.signing,
+        "accessibility": granted["accessibility"] ?? false,
+        "post_events": granted["post_events"] ?? false,
+        "screen_capture": granted["screen_capture"] ?? false,
+        "displays": Coord.allBounds(),
+        "supported_operations": operationGates.keys.sorted(),
+        "operations": ops,
+        "subject_note": "permissions describe this executable only; a grant to Vantage.app does not apply here and vice versa",
+    ])
 }
 
 /// Ask macOS to show its own Accessibility prompt for this executable.
@@ -648,9 +780,162 @@ func opMove(x: Double, y: Double, smooth: Bool, durationMs: Int) -> Never {
              body)
 }
 
-func opClick(x: Double, y: Double, button: String, count: Int) -> Never {
-    requirePostEvents("clicking")
+// ---------------------------------------------------------------------------
+// Target staleness
+// ---------------------------------------------------------------------------
+
+/// What the caller believed about the target when it resolved it. Every field
+/// is optional; an empty expectation leaves an operation behaving exactly as it
+/// did before this check existed.
+struct TargetExpectation {
+    var windowID: Int?
+    var pid: Int?
+    var bounds: CGRect?
+
+    var isEmpty: Bool { windowID == nil && pid == nil && bounds == nil }
+}
+
+/// How far a window edge may drift before its target is called stale. The same
+/// 2-point tolerance the cursor readback uses: below this, a "move" is window
+/// server rounding, not a window that went somewhere else.
+let targetBoundsTolerance: Double = 2
+
+func rectJSON(_ r: CGRect) -> [String: Any] {
+    ["x": r.origin.x, "y": r.origin.y, "width": r.width, "height": r.height]
+}
+
+func rectText(_ r: CGRect) -> String {
+    "(\(r.origin.x), \(r.origin.y)) \(r.width)×\(r.height)"
+}
+
+func boundsDiffer(_ a: CGRect, _ b: CGRect, tolerance: Double) -> Bool {
+    abs(a.origin.x - b.origin.x) > tolerance
+        || abs(a.origin.y - b.origin.y) > tolerance
+        || abs(a.width - b.width) > tolerance
+        || abs(a.height - b.height) > tolerance
+}
+
+/// Refuse to post at a point whose target has moved, vanished or changed owner
+/// since the caller resolved it.
+///
+/// This runs BEFORE `requirePostEvents` on purpose: "the window is gone" is
+/// knowable without permission to post, and reporting the missing permission
+/// first would hide the more specific, more useful fact.
+///
+/// Returns the evidence of what was checked (empty when there was nothing to
+/// check). Every failure branch emits and exits without posting anything.
+/// An expectation that cannot be checked is reported as `unknown` and refused:
+/// a caller that asked for validation did not ask for a guess in its place.
+func requireFreshTarget(_ expectation: TargetExpectation, point: CGPoint,
+                        verb: String) -> [String: Any] {
+    guard !expectation.isEmpty else { return [:] }
+
+    var checked: [String: Any] = [
+        "point": ["x": point.x, "y": point.y],
+        "expected_window_id": expectation.windowID.map { $0 as Any } ?? NSNull(),
+        "expected_pid": expectation.pid.map { $0 as Any } ?? NSNull(),
+        "expected_bounds": expectation.bounds.map(rectJSON) ?? NSNull(),
+        "tolerance_points": targetBoundsTolerance,
+    ]
+
+    // Bounds with no window identity have no subject to compare against; they
+    // could describe any window on any display. Refuse rather than pick one.
+    if expectation.windowID == nil, expectation.pid == nil, let expected = expectation.bounds {
+        Emit.out(.unknown,
+                 "\(verb) was not attempted: --expect-bounds was given without "
+                 + "--expect-window-id or --expect-pid, so \(rectText(expected)) "
+                 + "cannot be compared with any particular window. Nothing was posted.",
+                 checked.merging(["staleness_check": "no_subject"]) { $1 })
+    }
+
+    guard let windows = readOnScreenWindows() else {
+        Emit.out(.unknown,
+                 "\(verb) was not attempted: the target could not be checked because "
+                 + "the on-screen window list is unreadable (Screen Recording is not "
+                 + "granted to this executable, or the window server returned nothing). "
+                 + "An unverifiable target is reported as unknown, never assumed fresh.",
+                 checked.merging(["staleness_check": "unavailable",
+                                  "permissions": permissionSnapshot()]) { $1 })
+    }
+
+    // A window id names exactly one window, so it is looked up by identity, not
+    // by coincidentally matching coordinates.
+    if let id = expectation.windowID {
+        guard let window = windows.first(where: { $0.windowID == id }) else {
+            Emit.out(.target_not_found,
+                     "the intended target window \(id) is not in the on-screen "
+                     + "window list any more; nothing was posted. Re-resolve the window "
+                     + "before acting.",
+                     checked.merging(["staleness_check": "window_missing",
+                                      "on_screen_window_count": windows.count]) { $1 })
+        }
+        checked["actual_bounds"] = rectJSON(window.bounds)
+        checked["owner"] = window.owner
+        checked["owner_pid"] = window.pid
+
+        // The same window number reused by a different process is a different
+        // target even though the id matched.
+        if let pid = expectation.pid, pid != window.pid {
+            Emit.out(.target_stale,
+                     "window \(id) still exists but is now owned by pid \(window.pid), "
+                     + "not the expected pid \(pid); nothing was posted.",
+                     checked.merging(["staleness_check": "owner_changed"]) { $1 })
+        }
+        if let expected = expectation.bounds,
+           boundsDiffer(window.bounds, expected, tolerance: targetBoundsTolerance) {
+            Emit.out(.target_stale,
+                     "window \(id) has moved or resized since it was resolved: "
+                     + "expected \(rectText(expected)), now \(rectText(window.bounds)); "
+                     + "the point (\(point.x), \(point.y)) would land on whatever is "
+                     + "beneath it, so nothing was posted.",
+                     checked.merging(["staleness_check": "bounds_moved"]) { $1 })
+        }
+        checked["window_checked"] = true
+    }
+
+    // The point must still be inside a window the expected process owns. This
+    // catches the common case where the window moved and the caller only knows
+    // the pid.
+    if let pid = expectation.pid {
+        let owned = windows.filter { $0.pid == pid && $0.bounds.contains(point) }
+        guard !owned.isEmpty else {
+            Emit.out(.target_stale,
+                     "the point (\(point.x), \(point.y)) is not inside any on-screen "
+                     + "window owned by pid \(pid); the window it was resolved from "
+                     + "has moved, resized or closed, so nothing was posted.",
+                     checked.merging(["staleness_check": "point_outside_pid"]) { $1 })
+        }
+        // With a pid but no window id, the bounds expectation is matched against
+        // a window of that pid that contains the point.
+        if expectation.windowID == nil, let expected = expectation.bounds {
+            let matches = owned.contains {
+                !boundsDiffer($0.bounds, expected, tolerance: targetBoundsTolerance)
+            }
+            guard matches else {
+                Emit.out(.target_stale,
+                         "no window owned by pid \(pid) that contains "
+                         + "(\(point.x), \(point.y)) has the expected bounds "
+                         + "\(rectText(expected)); nothing was posted.",
+                         checked.merging(["staleness_check": "bounds_moved",
+                                          "windows_at_point":
+                                            owned.map { rectJSON($0.bounds) }]) { $1 })
+            }
+        }
+        checked["pid_windows_at_point"] = owned.map { $0.windowID }
+        checked["pid_checked"] = true
+    }
+
+    checked["staleness_check"] = "fresh"
+    return checked
+}
+
+func opClick(x: Double, y: Double, button: String, count: Int,
+             expectation: TargetExpectation = TargetExpectation()) -> Never {
     let point = CGPoint(x: x, y: y)
+    // Before permission: staleness is a fact about the window server, not a
+    // privilege, and it is the more specific answer when both are missing.
+    let targetCheck = requireFreshTarget(expectation, point: point, verb: "clicking")
+    requirePostEvents("clicking")
     guard let display = Coord.displayContaining(point) else {
         Emit.out(.blocked, "the point (\(x), \(y)) is not inside any active display",
                  ["displays": Coord.allBounds()])
@@ -688,15 +973,23 @@ func opClick(x: Double, y: Double, button: String, count: Int) -> Never {
         usleep(40_000)
     }
     let after = cursorPosition()
+    var body: [String: Any] = [
+        "display_id": display, "count": count, "button": button,
+        "cursor_after": after.map { ["x": $0.x, "y": $0.y] } ?? NSNull(),
+    ]
+    if !expectation.isEmpty { body["target_check"] = targetCheck }
     Emit.out(.performed_unverified,
              "\(count)× \(button) click posted at (\(x), \(y)) on display \(display). The event was accepted; whether the target changed is read separately by a UI observation, never assumed here.",
-             ["display_id": display, "count": count, "button": button,
-              "cursor_after": after.map { ["x": $0.x, "y": $0.y] } ?? NSNull()])
+             body)
 }
 
-func opDrag(fromX: Double, fromY: Double, toX: Double, toY: Double, durationMs: Int) -> Never {
-    requirePostEvents("dragging")
+func opDrag(fromX: Double, fromY: Double, toX: Double, toY: Double, durationMs: Int,
+            expectation: TargetExpectation = TargetExpectation()) -> Never {
     let start = CGPoint(x: fromX, y: fromY), end = CGPoint(x: toX, y: toY)
+    // The expectation describes where the drag starts: a button under the
+    // pointer that has moved is exactly the target-not-found case.
+    let targetCheck = requireFreshTarget(expectation, point: start, verb: "dragging")
+    requirePostEvents("dragging")
     guard Coord.displayContaining(start) != nil, Coord.displayContaining(end) != nil else {
         Emit.out(.blocked, "the drag has an endpoint outside every active display",
                  ["displays": Coord.allBounds()])
@@ -741,10 +1034,14 @@ func opDrag(fromX: Double, fromY: Double, toX: Double, toY: Double, durationMs: 
     }
     up.post(tap: .cghidEventTap)
     usleep(60_000)
+    var body: [String: Any] = [
+        "from": ["x": fromX, "y": fromY], "to": ["x": toX, "y": toY],
+        "cursor_after": cursorPosition().map { ["x": $0.x, "y": $0.y] } ?? NSNull(),
+    ]
+    if !expectation.isEmpty { body["target_check"] = targetCheck }
     Emit.out(.performed_unverified,
              "drag posted from (\(fromX), \(fromY)) to (\(toX), \(toY)) with the button released at the end. Whether the target accepted the drop is read separately.",
-             ["from": ["x": fromX, "y": fromY], "to": ["x": toX, "y": toY],
-              "cursor_after": cursorPosition().map { ["x": $0.x, "y": $0.y] } ?? NSNull()])
+             body)
 }
 
 func opScroll(x: Double, y: Double, lines: Int, horizontal: Bool) -> Never {
@@ -1022,29 +1319,55 @@ func opVerifyChange(application: String, keyword: String, role: String,
 
 func failUsage(_ message: String) -> Never {
     Emit.out(.blocked, message, [
-        "operations": ["permissions", "request_access", "move", "click", "drag", "scroll", "type",
-                       "key", "focus", "inspect", "read_element", "press_element",
-                       "verify_change", "release_all"],
-        "usage": "vantage-desktop <operation> key=value ... [--cancel-file <path>]",
+        "operations": ["permissions", "capabilities", "request_access", "identity", "windows",
+                       "move", "click", "drag", "scroll", "type", "key", "focus", "inspect",
+                       "read_element", "press_element", "verify_change", "release_all"],
+        "usage": "vantage-desktop <operation> key=value ... [--cancel-file <path>] "
+               + "[--expect-window-id <int>] [--expect-pid <int>] [--expect-bounds <x,y,w,h>]",
     ])
 }
 
 let argv = Array(CommandLine.arguments.dropFirst())
 
-// `--cancel-file <path>` may sit anywhere, including before the operation, so
-// it is stripped before the operation and the key=value pairs are read. It is
-// pulled out rather than left in `params` because a path containing "=" would
-// otherwise be split into a bogus parameter.
+// `--cancel-file <path>` and the target expectations may sit anywhere, including
+// before the operation, so each is stripped before the operation and the
+// key=value pairs are read. They are pulled out rather than left in `params`
+// because a value containing "=" (a bounds list can) would otherwise be split
+// into a bogus parameter.
 var positional: [String] = []
 var cancelFilePath: String?
+var expectWindowID: Int?
+var expectPID: Int?
+var expectBounds: CGRect?
 var i = 0
+
+/// The value of `--name <v>` or `--name=<v>`, or nil if the token is neither.
+/// `tokensUsed` is 2 for the space-separated form and 1 for the `=` form, so the
+/// loop advances by exactly the tokens consumed. A named option with no value
+/// is a usage error, never a silently ignored token.
+func optionValue(_ token: String, _ next: String?, name: String,
+                 tokensUsed: inout Int) -> String? {
+    if token == "--\(name)" {
+        guard let next else { failUsage("--\(name) needs a value") }
+        tokensUsed = 2
+        return next
+    }
+    let prefix = "--\(name)="
+    if token.hasPrefix(prefix) {
+        tokensUsed = 1
+        return String(token.dropFirst(prefix.count))
+    }
+    return nil
+}
+
 while i < argv.count {
     let token = argv[i]
+    let next = i + 1 < argv.count ? argv[i + 1] : nil
+    var consumed = 0
+
     if token == "--cancel-file" {
-        guard i + 1 < argv.count else {
-            failUsage("--cancel-file needs a path")
-        }
-        cancelFilePath = argv[i + 1]
+        guard let next else { failUsage("--cancel-file needs a path") }
+        cancelFilePath = next
         i += 2
         continue
     }
@@ -1053,10 +1376,39 @@ while i < argv.count {
         i += 1
         continue
     }
+    if let value = optionValue(token, next, name: "expect-window-id", tokensUsed: &consumed) {
+        guard let id = Int(value) else {
+            failUsage("--expect-window-id needs an integer, got \(value)")
+        }
+        expectWindowID = id
+        i += consumed
+        continue
+    }
+    if let value = optionValue(token, next, name: "expect-pid", tokensUsed: &consumed) {
+        guard let pid = Int(value) else {
+            failUsage("--expect-pid needs an integer, got \(value)")
+        }
+        expectPID = pid
+        i += consumed
+        continue
+    }
+    if let value = optionValue(token, next, name: "expect-bounds", tokensUsed: &consumed) {
+        let parts = value.split(separator: ",", omittingEmptySubsequences: false)
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+        guard parts.count == 4, let x = Double(parts[0]), let y = Double(parts[1]),
+              let w = Double(parts[2]), let h = Double(parts[3]) else {
+            failUsage("--expect-bounds needs x,y,w,h in global points, got \(value)")
+        }
+        expectBounds = CGRect(x: x, y: y, width: w, height: h)
+        i += consumed
+        continue
+    }
     positional.append(token)
     i += 1
 }
 Cancellation.path = cancelFilePath
+let expectation = TargetExpectation(windowID: expectWindowID, pid: expectPID,
+                                    bounds: expectBounds)
 
 guard let op = positional.first else {
     failUsage("no operation was named")
@@ -1077,6 +1429,7 @@ func list(_ key: String) -> [String] {
 
 switch op {
 case "permissions":   opPermissions()
+case "capabilities":  opCapabilities()
 case "identity":      opIdentity()
 case "windows":       opWindows(application: str("application"))
 case "request_access": opRequestAccess()
@@ -1089,13 +1442,15 @@ case "click":
     guard let x = num("x"), let y = num("y") else {
         failUsage("click needs x= and y= in global display points")
     }
-    opClick(x: x, y: y, button: str("button", "left"), count: int("count", 1))
+    opClick(x: x, y: y, button: str("button", "left"), count: int("count", 1),
+            expectation: expectation)
 case "drag":
     guard let fx = num("from_x"), let fy = num("from_y"),
           let tx = num("to_x"), let ty = num("to_y") else {
         failUsage("drag needs from_x=, from_y=, to_x=, to_y=")
     }
-    opDrag(fromX: fx, fromY: fy, toX: tx, toY: ty, durationMs: int("duration_ms", 400))
+    opDrag(fromX: fx, fromY: fy, toX: tx, toY: ty, durationMs: int("duration_ms", 400),
+           expectation: expectation)
 case "scroll":
     guard let x = num("x"), let y = num("y") else { failUsage("scroll needs x= and y=") }
     opScroll(x: x, y: y, lines: int("lines", 3), horizontal: str("horizontal") == "true")

@@ -161,6 +161,7 @@ async def desktop_move_pointer(ctx: ToolContext, x: Optional[float] = None,
 
 async def desktop_click(ctx: ToolContext, x: Optional[float] = None,
                         y: Optional[float] = None, button: str = "left",
+                        expect_window_id: Optional[int] = None,
                         **_: Any) -> Any:
     """Post one real mouse click. DESTRUCTIVE: needs confirmation."""
     if x is None or y is None:
@@ -171,7 +172,8 @@ async def desktop_click(ctx: ToolContext, x: Optional[float] = None,
     except CoordinateError as refusal:
         return fail("desktop_click", str(refusal), device=ctx.device_id,
                     detail=refusal.detail)
-    result = executor.click(px, py, button=button, count=1)
+    result = executor.click(px, py, button=button, count=1,
+                            expect_window_id=expect_window_id)
     return _finish("desktop_click", result, ctx,
                    f"Clicked at ({x}, {y})")
 

@@ -307,6 +307,166 @@ record("T10 stop and takeover", "VERIFIED" if stopped else "FAILED", 1,
        f"a move during takeover returned HTTP {during_code}; release resumed "
        f"{len(released.get('resumed', []))} worker(s)")
 
+# -- T11: invalid coordinates move nothing -------------------------------------
+def pointer():
+    st, posture = call("GET", "/desktop")
+    cursor = posture.get("cursor") or {}
+    return (cursor.get("x"), cursor.get("y"))
+
+
+# Settle the pointer first. T10 above ends with a *successful* move, and reading
+# the position without placing it first measured that move, not the refusal --
+# which reported T11 FAILED for a guard that was working.
+settle = call("POST", "/desktop/move", {"x": 420, "y": 320})
+time.sleep(0.15)
+before_ptr = pointer()
+bad_code, bad = call("POST", "/desktop/move", {"x": "336", "y": "not_a_number"})
+nan_code, nan = call("POST", "/desktop/move", {"x": "nan", "y": 300})
+after_ptr = pointer()
+refused = bad_code == 422 and nan_code == 422
+
+# Whether the pointer stayed put is only evidence if nothing *else* is moving it.
+# This machine's cursor is being driven by someone or something while the suite
+# runs -- measured: three consecutive reads gave 1300.3, 1304.0, 1308.4 with no
+# call in between. So a difference here does not prove the refusal moved it.
+probe_before = pointer()
+time.sleep(0.25)
+probe_after = pointer()
+externally_moving = probe_before != probe_after
+
+if externally_moving:
+    unmoved = None
+    verdict_note = ("the pointer is being moved by something outside this run, so "
+                    "its position cannot witness the refusal; the HTTP refusal "
+                    "below is the whole evidence")
+else:
+    unmoved = before_ptr == after_ptr and before_ptr[0] is not None
+    verdict_note = f"the pointer stayed at {before_ptr}"
+
+ok11 = refused and (unmoved is not False)
+record("T11 invalid coordinates",
+       "VERIFIED" if ok11 else "FAILED", 3 if (ok11 and unmoved) else 2 if ok11 else 1,
+       f"HTTP {bad_code} for 'not_a_number' and {nan_code} for 'nan'; {verdict_note}; "
+       f"reason: {str(bad.get('detail'))[:60]}")
+
+# -- T12: a denied permission sends nothing and names the gate -----------------
+st, posture = call("GET", "/desktop")
+caps = posture.get("capabilities") or {}
+if caps.get("click"):
+    record("T12 permission denied", "NOT RUN", 0,
+           "input permission IS granted here, so there is no denial to describe")
+else:
+    code, denied = call("POST", "/desktop/click", {"x": 500, "y": 330})
+    reason = str(denied.get("reason") or denied.get("detail") or "")
+    names_binary = "vantage-desktop" in reason or "VantageDesktopDev" in reason
+    says_switch = "Accessibility" in reason
+    ok12 = denied.get("status") == "permission_required" and names_binary and says_switch
+    record("T12 permission denied",
+           "VERIFIED" if ok12 else "PARTIAL", 3 if ok12 else 2,
+           f"status={denied.get('status')}, names the executable={names_binary}, "
+           f"names the switch={says_switch}")
+
+# -- T13: a stale target is refused, not clicked -------------------------------
+st, windows = call("GET", "/desktop/windows?application=TextEdit")
+live = (windows.get("windows") or [])
+bogus = 999_999
+code13, stale = call("POST", "/desktop/click",
+                     {"x": 500, "y": 330, "expect_window_id": bogus})
+if stale.get("status") in ("target_not_found", "target_stale"):
+    # And prove the check is not refusing everything: a real window id from the
+    # live list must get past the staleness check itself.
+    real_id = live[0]["window_id"] if live else None
+    if real_id is not None:
+        _, real = call("POST", "/desktop/click",
+                       {"x": 500, "y": 330, "expect_window_id": real_id})
+        passed_check = real.get("status") != "target_stale" \
+            and real.get("status") != "target_not_found"
+        record("T13 stale target", "VERIFIED" if passed_check else "FAILED",
+               3 if passed_check else 2,
+               f"window id {bogus} refused as {stale.get('status')} with nothing "
+               f"posted; the live window {real_id} passed the staleness check "
+               f"(then answered {real.get('status')})")
+    else:
+        record("T13 stale target", "VERIFIED", 3,
+               f"window id {bogus} refused as {stale.get('status')} with nothing posted")
+elif stale.get("status") == "permission_required":
+    record("T13 stale target", "PARTIAL", 2,
+           "the staleness expectation did not reach the executor; the click was "
+           "refused on permission first")
+else:
+    record("T13 stale target", "NOT RUN", 1,
+           f"executor answered {stale.get('status')}; stale-target support not present")
+
+# -- T14: an automation replays as real native calls ---------------------------
+# Recorded through the studio, then run through the mission path. Without input
+# permission the replay stops at the first actuation, which is the honest result.
+st, rec = call("POST", "/intelligence/recordings", {"name": "v15 replay"})
+st, step1 = call("POST", "/intelligence/recordings/steps", {
+    "kind": "desktop_move_pointer", "params": {"x": 420, "y": 320},
+    "label": "move the pointer"})
+st, draft = call("POST", "/intelligence/recordings/stop", {})
+reviewed = [{"index": 0, "params": {"x": 420, "y": 320}}]
+st, derived = call("POST", "/intelligence/recordings/draft", {
+    "reviewed": reviewed, "name": "v15 replay"})
+draft_steps = derived.get("steps") or []
+if not draft_steps:
+    record("T14 automation replay", "FAILED", 1,
+           f"the draft was empty: {str(derived.get('detail'))[:80]}")
+else:
+    st, replay_mission = call("POST", "/missions", {
+        "request": "replay the recorded pointer workflow",
+        "conditions": [], "steps": draft_steps})
+    if st != 200:
+        record("T14 automation replay", "FAILED", 1,
+               str(replay_mission.get("detail"))[:90])
+    else:
+        rid = replay_mission["mission_id"]
+        st, ran = call("POST", f"/missions/{rid}/run", {})
+        # A mission above a read does not approve itself -- that is the autonomy
+        # rule, not a defect. Drive the approval the way a person would, so what
+        # this measures is the replay rather than the approval gate.
+        import re as _re2
+        for _ in range(6):
+            if ran.get("state") != "awaiting_approval":
+                break
+            conf = None
+            for s in ran.get("steps", []):
+                m = _re2.search(r"confirmation\s+(\S+)", str(s.get("detail", "")))
+                if m:
+                    conf = m.group(1)
+            if not conf:
+                break
+            st, ran = call("POST", f"/missions/{rid}/run",
+                           {"approval": {"confirmation_id": conf}})
+        ok_steps = [s for s in ran.get("steps", []) if s["status"] == "done"]
+        record("T14 automation replay",
+               "VERIFIED" if ok_steps else "FAILED", 3 if ok_steps else 1,
+               f"a recorded workflow replayed through the mission runner: "
+               f"{len(ok_steps)} of {len(draft_steps)} step(s) done; "
+               f"state={ran.get('state')}")
+
+# -- T15: coordinates stay correct across the whole display --------------------
+st, posture = call("GET", "/desktop")
+displays = posture.get("displays") or []
+targets = []
+for d in displays:
+    cx = float(d["x"]) + float(d["width"]) / 2
+    cy = float(d["y"]) + float(d["height"]) / 2
+    targets.append((cx, cy))
+legs_ok = True
+detail15 = []
+for (cx, cy) in targets:
+    st, moved = call("POST", "/desktop/move", {"x": cx, "y": cy})
+    after = moved.get("cursor_after") or {}
+    ok = (moved.get("status") == "verified"
+          and abs(after.get("x", -1) - cx) <= 2 and abs(after.get("y", -1) - cy) <= 2)
+    legs_ok = legs_ok and ok
+    detail15.append(f"({cx:.0f},{cy:.0f})->({after.get('x')},{after.get('y')})")
+record("T15 multi-display", "VERIFIED" if legs_ok else "FAILED",
+       3 if legs_ok else 1,
+       f"{len(displays)} display(s); centre of each reached and read back: "
+       + "; ".join(detail15))
+
 # -- the report ----------------------------------------------------------------
 print("\n" + "=" * 78)
 print("SUMMARY")

@@ -138,9 +138,13 @@ def build_router(require_auth) -> APIRouter:
         _admit("click")
         body = body or {}
         px, py = _point(body.get("x"), body.get("y"))
+        # A caller that resolved a window can pass its id, and the executor
+        # refuses rather than clicking wherever the window used to be.
+        expect = body.get("expect_window_id", body.get("expectWindowId"))
         return executor.click(px, py,
                               button=str(body.get("button") or "left"),
-                              count=int(body.get("count") or 1))
+                              count=int(body.get("count") or 1),
+                              expect_window_id=int(expect) if expect is not None else None)
 
     @router.post("/scroll")
     async def scroll(body: Dict[str, Any] = Body(None)) -> Dict[str, Any]:

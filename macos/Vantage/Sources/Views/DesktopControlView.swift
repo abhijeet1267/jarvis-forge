@@ -88,16 +88,20 @@ struct DesktopControlView: View {
                 Spacer()
                 Text(p.process_name ?? "").font(V.Font.mono).foregroundColor(V.textTertiary)
             }
-            ForEach(p.capabilityRows, id: \.0) { row in
+            ForEach(APIModels.DesktopCapabilityRow.all, id: \.id) { row in
+                let state = capabilityState(row, p)
                 HStack(spacing: V.Space.s) {
-                    Image(systemName: row.1 ? "checkmark.circle.fill" : "xmark.circle.fill")
+                    Image(systemName: stateSymbol(state))
                         .font(.system(size: 11))
-                        .foregroundColor(row.1 ? V.success : V.warning)
-                    Text(row.0).font(V.Font.label).foregroundColor(V.text)
-                    Spacer()
-                    if !row.1 {
-                        Text("not granted").font(V.Font.caption).foregroundColor(V.warning)
+                        .foregroundColor(stateColor(state))
+                    Text(row.title).font(V.Font.label).foregroundColor(V.text)
+                    if let why = row.subtitle {
+                        Text(why).font(V.Font.caption).foregroundColor(V.textTertiary)
                     }
+                    Spacer()
+                    Text(state.rawValue)
+                        .font(V.Font.mono)
+                        .foregroundColor(stateColor(state))
                 }
                 .padding(.vertical, 1)
             }
@@ -325,6 +329,75 @@ struct DesktopControlView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(V.surfaceAlt)
         .clipShape(RoundedRectangle(cornerRadius: V.Radius.card))
+    }
+
+    /// One capability's state, derived only from what the backend said.
+    ///
+    /// The rule that matters: `AVAILABLE` requires an explicit `true`. Anything
+    /// the backend did not report is `UNKNOWN`, never a cheerful default. A
+    /// refused capability with no executable path is `UNSUPPORTED` -- there is
+    /// nothing for macOS to grant -- which is a different problem from a
+    /// permission the person can give.
+    private func capabilityState(_ row: APIModels.DesktopCapabilityRow,
+                                 _ p: APIModels.DesktopPosture) -> DesktopCapabilityState {
+        let noIdentity = (p.executable ?? "").isEmpty
+
+        if row == .automation {
+            guard let map = p.capabilities else { return .unknown }
+            let parts = [map.move_cursor, map.click, map.type, map.read_ui,
+                         map.screen_capture]
+            if parts.contains(where: { $0 == nil }) { return .unknown }
+            if parts.allSatisfy({ $0 == true }) { return .available }
+            return noIdentity ? .unsupported : .permissionRequired
+        }
+
+        guard let value = capabilityValue(row, p) else { return .unknown }
+        if value { return .available }
+        return noIdentity ? .unsupported : .permissionRequired
+    }
+
+    private func capabilityValue(_ row: APIModels.DesktopCapabilityRow,
+                                 _ p: APIModels.DesktopPosture) -> Bool? {
+        // The nested map is the coherent answer; the flat snapshot is the
+        // fallback for an older backend. If neither says anything, the answer is
+        // nil, which becomes UNKNOWN rather than false.
+        if let map = p.capabilities {
+            switch row {
+            case .cursorMovement: return map.move_cursor
+            case .inputEvents: return map.click
+            case .keyboardInput: return map.type
+            case .accessibility: return map.read_ui
+            case .windowObservation, .screenCapture: return map.screen_capture
+            case .automation: return nil
+            }
+        }
+        switch row {
+        case .cursorMovement: return p.can_move_cursor
+        case .inputEvents: return p.can_click
+        case .keyboardInput: return p.can_type
+        case .accessibility: return p.can_read_ui
+        case .windowObservation, .screenCapture: return p.screen_capture
+        case .automation: return nil
+        }
+    }
+
+    private func stateSymbol(_ state: DesktopCapabilityState) -> String {
+        switch state {
+        case .available: return "checkmark.circle.fill"
+        case .permissionRequired: return "lock.circle.fill"
+        case .unsupported: return "minus.circle"
+        case .unknown: return "questionmark.circle"
+        case .error: return "exclamationmark.triangle.fill"
+        }
+    }
+
+    private func stateColor(_ state: DesktopCapabilityState) -> Color {
+        switch state {
+        case .available: return V.success
+        case .permissionRequired: return V.warning
+        case .unsupported, .unknown: return V.textTertiary
+        case .error: return V.danger
+        }
     }
 
     private func legLine(_ leg: APIModels.DesktopProbeLeg) -> String {
