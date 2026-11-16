@@ -112,7 +112,7 @@ have surfaced.
 | `tests/test_missions_api.py` | 30 passed |
 | `tests/test_phase28_reading_is_not_writing.py` | 33 passed |
 | `test_phase41/39/51/52`, `test_r43_browser_slice` | 166 passed |
-| Full suite | see `docs/PROJECT_STATUS.md` — the current figure is recorded there |
+| Full suite (once, after source froze) | **5 failed, 4542 passed, 30 skipped** in 545 s — all five were published-count guards made stale by this campaign's additions; each corrected to the measured value and re-run green |
 
 The published tool count moved 196 → 200; the test that pins README against the
 live registry caught the drift, which is why it exists.

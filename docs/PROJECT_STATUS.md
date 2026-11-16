@@ -4268,6 +4268,31 @@ run and by `tests/test_missions_api.py`.
 Published tool count corrected 196 → 200 and pinned by
 `test_phase52::test_the_two_capabilities_this_phase_added_are_there`.
 
+### The full regression, and the five failures it found
+
+The suite was run once after the source settled: **5 failed, 4542 passed, 30
+skipped in 545 s** (`.venv/bin/python -m pytest -q -p no:cacheprovider`, exit 1).
+
+All five were count-consistency guards, and all five were *true claims made
+false* by this campaign's additions — not flaky, not unrelated:
+
+| Guard | Said | Tree |
+|---|---|---|
+| `test_phase25::test_the_readme_counts_the_gated_tools_out_of_the_whole` | 49 of 196 | 50 of 200 |
+| `test_phase25::test_the_readme_counts_the_risk_tiers_it_ships` | 97/52/21/23/3 | 99/53/21/24/3 |
+| `test_r108::test_the_readme_test_module_count_is_real` | 238 modules | 239 |
+| `test_r108::test_the_readme_collected_count_matches_a_real_collection` | 4499 | 4577 |
+| `test_r109::test_the_module_count_matches_the_tree` | 249 modules | 250 |
+
+Two new desktop reads, two new test modules, and making the desktop actuation
+kinds recordable moved each of them. Every one was corrected to the measured
+value and each guard re-run green (`27 passed`, then `79 passed` including the
+phase52 tool-count pin, plus `54 passed` across the neighbouring count tests).
+None was weakened, skipped, or made to stop asserting.
+
+This is the guards working exactly as intended: a published count is a number a
+reader quotes to somebody else, so a stale one is a false claim.
+
 ### Still blocked, and exactly what would unblock it
 
 - **Post-event access** for `native/desktop_executor/VantageDesktopDev.app`. The
