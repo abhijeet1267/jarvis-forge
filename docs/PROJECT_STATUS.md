@@ -4304,3 +4304,60 @@ reader quotes to somebody else, so a stale one is a false claim.
 - **T9's save step has never run.** The plan includes `cmd+s`, but saving to a
   named path means driving the save panel, which needs the same post-event access.
   No file has been produced by typing.
+
+## Update — 2026-11-16 (V16: one coordinate parser, stale-target refusals, a takeover that lets go)
+
+The V16 campaign's measured state. The central acceptance gate — the TextEdit GUI
+mission — is still blocked at the same permission, and this section says so rather
+than dressing the partial result as a pass. What did change is real, and each item
+below was verified by running it.
+
+### Three copies of one check had drifted apart
+
+Coordinate validation existed in three places with three different behaviours.
+Measured on the baseline: `/desktop/move` performed **no** bounds check, so `nan`
+and `inf` reached the native executor; the tool and the planner each re-tested
+`0 <= x <= 32000`; and both rejected **every** negative coordinate, which is a
+valid point on a display placed left of the primary one.
+
+`jarvis/desktop/coordinates.py` is now the only place a point is judged, and it
+judges against real display geometry rather than a magic range. Every door — the
+HTTP routes, the tool registry, the planner, and through them the studio and the
+manual UI — uses it. NaN, infinity, empty strings, booleans and non-numbers are
+each refused with a sentence that says what was wrong.
+
+### A click that names its target
+
+A click can now carry the id of the window it was resolved against. If that window
+has closed or moved more than two points, the click is refused with
+`target_not_found`/`target_stale` **before** anything is posted. Typing does the
+same with the frontmost application. Both checks run before the permission
+request, because a stale target is knowable without permission — reporting
+`permission_required` for a window the caller never meant would hide the more
+useful answer.
+
+### A takeover that lets go
+
+`take_over` paused every worker and stopped there. Pausing stops the *next*
+dispatch; it did nothing about a drag already in progress with the mouse button
+down, so a person grabbing the mouse to stop a runaway drag would find their own
+pointer still dragging. It now releases whatever the executor holds and reports
+the result. On this machine that release is refused for the same reason everything
+else is, and the report says `permission_required` rather than claiming success.
+
+### Acceptance, measured
+
+**7 verified · 1 partial · 7 permission-blocked · 0 failed** across T1–T15.
+T10 and T11 moved from level 1 to level 3; T1, T12, T13, T14, T15 are level 3.
+The seven blocked demonstrations are blocked because `CGPreflightPostEventAccess()`
+is false, and no click, keystroke, scroll or drag has ever executed here.
+
+### A disagreement worth recording
+
+Two specialist workers were started in isolated worktrees. Both worktrees were cut
+from a base that predated the desktop subsystem, so the SwiftUI worker built
+against files that did not exist there and duplicated models that already exist in
+this checkout. Its five-state capability derivation was sound and was taken into
+the real view by hand; the duplicate definitions were discarded. The native
+worker's output was rebuilt and run before being accepted. This is recorded because
+reporting it as a clean parallel integration would be false.
