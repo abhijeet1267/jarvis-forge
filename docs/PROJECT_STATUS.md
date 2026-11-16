@@ -4154,3 +4154,114 @@ granted to `vantage-desktop`, and a freshly compiled binary is not trusted eithe
 Only the refusal path — exit 2, nothing attempted — is verified. The script exists
 so that the grant, when given, produces a Level-3 answer in one command; it is not
 evidence that a click has happened.
+
+## Update — 2026-11-16 (V15: real desktop automation, and what this machine refuses)
+
+The V15 campaign asks for real native mouse, keyboard and Accessibility control.
+This section records what was measured, and what the machine permits. It is
+short on purpose: the acceptance table is the result, and everything below is
+either how a number was obtained or what is still blocked.
+
+### The permission split, measured
+
+Three switches, granted separately. `native/desktop_executor/vantage-desktop
+permissions` reports them; the values below are from that command on this tree.
+
+| Switch | Value | Gates |
+|---|---|---|
+| `CGPreflightPostEventAccess()` | **false** | every click, keystroke, scroll, drag |
+| `AXIsProcessTrusted()` | **false** | reading and pressing UI elements |
+| `CGPreflightScreenCaptureAccess()` | **true** | window bounds, and cursor warping |
+
+`CGWarpMouseCursorPosition` needs only screen-recording, so the real pointer
+moves and can be read back. `CGEvent.post` needs post-event access, so nothing
+that lands on a target can run. That is the whole reason the cursor demo is a
+Level-3 result while the eight actuation demos beside it are blocked.
+
+### T1–T10, from `benchmarks/v15_desktop/acceptance.py`
+
+Levels: 1 the request reached the executor · 2 a real event was posted · 3 the
+target actually changed, observed. Only 3 is proof an action worked.
+
+| Demo | Result | Level |
+|---|---|---|
+| T1 cursor | VERIFIED | 3 — per-leg target vs readback |
+| T2 left click | PERMISSION BLOCKED | 1 |
+| T3 double click | PERMISSION BLOCKED | 1 |
+| T4 right click | PERMISSION BLOCKED | 1 |
+| T5 typing | PERMISSION BLOCKED | 1 |
+| T6 shortcut | PERMISSION BLOCKED | 1 |
+| T7 scroll | PERMISSION BLOCKED | 1 |
+| T8 drag | PERMISSION BLOCKED | 1 |
+| T9 TextEdit mission | PARTIALLY VERIFIED | 3 — S1 opened TextEdit, S2 moved the real pointer and verified it, S3 stopped on post-event access |
+| T10 stop and takeover | VERIFIED | 1 — HTTP 409 during takeover |
+
+**2 verified, 1 partial, 7 permission blocked, 0 failed.** No click, keystroke,
+scroll or drag has ever executed on this machine. That is stated as a limit, not
+hidden behind a passing test count.
+
+### What was built, and what it proved
+
+- **Chained planning (V15 §16).** `jarvis/desktop/planner.py` used to handle one
+  operation. It now splits a sentence on genuine instruction boundaries and plans
+  every clause in order. The never-invent-a-target rule survived the change and is
+  what makes it correct: "click there" takes the point an earlier step of the same
+  request named and is a question with no such step; a quoted comma stays text;
+  "click 400 300 and 410 310" is one malformed click, not two. Measured:
+  `POST /missions/plan` returns the demonstration as five ordered, dependency-
+  chained steps, and an ambiguous request as zero steps plus a question.
+- **Window geometry without Accessibility.** The `windows` op reads the window
+  server with only screen-recording. Measured: TextEdit at (273, 208) 656×422, in
+  the same global points a click accepts.
+- **Identity, read from the process.** `identity` reports the executable, bundle
+  id, signature state and SHA-256. It says plainly that an ad-hoc signature does
+  not survive a rebuild, because that is what a person needs before granting.
+- **Dev app bundle (V15 §24).** `make_dev_app.sh` wraps the executor in
+  `VantageDesktopDev.app` (`com.jarvisforge.vantage.desktopdev`, version 15.0) so
+  there is a stable, findable thing to grant. It grants nothing itself. There is
+  no Developer ID on this machine (measured: `security find-identity -v -p
+  codesigning` reports 0 valid identities), so the signature is ad-hoc — recorded
+  as a limitation rather than papered over.
+- **The probe fixture now publishes what four demos need.** `context_menu_openings`
+  (`NSMenuDelegate.menuWillOpen`), `selection_length`/`field_text_length`
+  (`NSTextViewDelegate`), `scroll_offset` (real clip-view bounds), and
+  `dropped_item`/`drop_count` (drop provider completion). Each was cross-checked by
+  driving the fixture's own AppKit callbacks; none is invented. They read zero
+  without a grant, which is the correct reading.
+- **The Desktop Control screen shows evidence, not conclusions.** The probe's
+  per-leg target-and-readback decodes and renders. A typo in the coordinate field
+  used to send the real pointer to (0, 0); it is now refused.
+
+### A defect the demonstration found
+
+TextEdit was not in the app catalog (`jarvis/registry/apps.py`), so the required
+demonstration could not open the application it names — `open_application`
+answered "I could not find an application matching 'TextEdit'". Registered now,
+with "text editor" as its alias and "editor" deliberately left to VS Code, since
+an alias shared by two apps makes resolution order-dependent. Guarded by the T9
+run and by `tests/test_missions_api.py`.
+
+### Tests, measured on this tree
+
+| File | Result |
+|---|---|
+| `tests/test_desktop_planner.py` | **58 passed** |
+| `tests/test_desktop_native.py` | **29 passed** |
+| `tests/test_phase28_reading_is_not_writing.py` | **33 passed** (ledger 49 → 51; the invariant-asserting line above the pinned count is unchanged) |
+| `tests/test_missions_api.py` | **30 passed** |
+| `test_phase41`, `test_phase52`, `test_phase39`, `test_phase51`, `test_r43_browser_slice` | **166 passed** (before the fix: 165 passed, 1 failed — that one pinned README's tool count against the live registry and caught 196 vs 200) |
+
+Published tool count corrected 196 → 200 and pinned by
+`test_phase52::test_the_two_capabilities_this_phase_added_are_there`.
+
+### Still blocked, and exactly what would unblock it
+
+- **Post-event access** for `native/desktop_executor/VantageDesktopDev.app`. The
+  grant is the person's to make: `vantage-desktop request_access` shows macOS's own
+  prompt, or drag the bundle into System Settings → Privacy & Security →
+  Accessibility. It cannot be scripted, and this session did not attempt to.
+- **Accessibility**, needed only for reading and pressing UI elements by label.
+  T2–T8 need only post-event access; AX is for the semantic path.
+- **T9's save step has never run.** The plan includes `cmd+s`, but saving to a
+  named path means driving the save panel, which needs the same post-event access.
+  No file has been produced by typing.

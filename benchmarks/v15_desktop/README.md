@@ -33,7 +33,7 @@ that an action worked.
 | T6 — shortcut | PERMISSION BLOCKED | 1 |
 | T7 — scroll | PERMISSION BLOCKED | 1 |
 | T8 — drag | PERMISSION BLOCKED | 1 |
-| T9 — TextEdit mission | **PARTIALLY VERIFIED** | 3 — the move step ran and verified; the type step stopped on permission |
+| T9 — TextEdit mission | **PARTIALLY VERIFIED** | 3 — S1 opened TextEdit, S2 moved the real pointer and verified it, S3 (click) stopped on post-event access |
 | T10 — stop and takeover | **VERIFIED** | 1 — a move during takeover returns HTTP 409 |
 
 **2 verified, 1 partial, 7 permission blocked, 0 failed.**
@@ -85,10 +85,14 @@ fixed location.
   but it has never been exercised end to end.
 - **Cancellation is implemented but unexercised live** — the permission gate
   refuses a drag before the loop that checks the cancel flag begins.
-- **T4, T6, T7 and T8 would be Level 2 at best even with the grant**: the fixture
-  does not publish the state those demos need (chosen menu item, text selection,
-  scroll offset, dropped item). Making them Level 3 requires extending the fixture,
-  not the executor.
-- **TextEdit is not opened or driven.** T9 runs a two-step mission whose move step
-  is real; the typing step cannot run without the grant, and the save step does not
-  exist yet.
+- **T4, T6, T7 and T8 now have Level-3 observables waiting for the grant.** The
+  probe publishes `context_menu_openings` (from `menuWillOpen`), `selection_length`
+  vs `field_text_length` (from `NSTextViewDelegate`), `scroll_offset` (the real
+  clip-view bounds origin), and `dropped_item`/`drop_count` (from the drop
+  provider's load completion). Each was cross-checked by driving the fixture's own
+  AppKit callbacks directly; none is a guess. They read zero here because no event
+  was posted, which is the correct reading, not a missing feature.
+- **T9 stops at the click.** The plan is five steps from the real planner
+  (`open_application` → move → click → type → cmd+s); the first two run and verify.
+  The save step is planned but the save *panel* has never been driven, so no file
+  has been produced by typing.

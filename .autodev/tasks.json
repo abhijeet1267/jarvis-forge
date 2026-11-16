@@ -2363,7 +2363,7 @@
   },
   "V15-desktop-automation": {
    "title": "V15 P0: real desktop automation, measured end to end (T1-T10)",
-   "status": "running",
+   "status": "blocked",
    "priority": 0,
    "acceptance": [
     "A real system pointer, click, keyboard, scroll and drag are each executed by a native process, not a Python shim",
@@ -2398,6 +2398,17 @@
       "T4/T6/T7/T8 observables depend on the probe fixture publishing them (in progress).",
       "TextEdit has not been driven by real input; only focus was verified (frontmost_after=TextEdit)."
      ]
+    },
+    {
+     "date": "2026-11-16",
+     "T1": "VERIFIED level 3 \u2014 4-leg probe, each move confirmed by pointer readback",
+     "T2-T8": "PERMISSION BLOCKED level 1 \u2014 CGPreflightPostEventAccess()=false. Level-3 observables now exist in the fixture (context_menu_openings, selection_length/field_text_length, scroll_offset, dropped_item/drop_count) and read zero without an event, which is the correct reading.",
+     "T9": "PARTIALLY VERIFIED level 3 \u2014 POST /missions/plan planned 5 chained steps from the sentence; S1 open_application opened TextEdit, S2 moved the real pointer and verified it, S3 stopped on post-event access",
+     "T10": "VERIFIED \u2014 a move during takeover returns HTTP 409",
+     "defect_found": "TextEdit was absent from jarvis/registry/apps.py, so the required demonstration could not open the application it names. Registered with 'text editor' alias; 'editor' left to VS Code.",
+     "tests": "test_desktop_planner 58 passed; test_desktop_native 29 passed; test_phase28 33 passed; test_missions_api 30 passed; phase41/39/51/52/r43 166 passed. Published tool count 196 -> 200, pinned by test_phase52.",
+     "verdict": "2 verified, 1 partial, 7 permission blocked, 0 failed. No click, keystroke, scroll or drag has ever executed on this machine.",
+     "blocked_on": "Post-event access for native/desktop_executor/VantageDesktopDev.app \u2014 a person's grant, not scriptable. Accessibility is needed only for the semantic AX path."
     }
    ]
   }
