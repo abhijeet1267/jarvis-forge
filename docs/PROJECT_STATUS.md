@@ -4381,3 +4381,14 @@ Each was corrected to the measured value and the four files that pin them
 re-ran green (**79 passed**). None was weakened or skipped. These are the same
 guards that caught the drift twice in V15; they exist so a published number
 cannot quietly become false.
+
+### Final regression — clean at the frozen revision
+
+**4583 passed, 30 skipped, 0 failed, exit 0** in 533 s at revision `1bb09ab`
+(`.venv/bin/python -m pytest -q -p no:cacheprovider`).
+
+This is the run the V15 report could not honestly claim: the count guards were
+corrected first, then the whole suite was re-run at the corrected revision rather
+than the old result being restated. The 30 skips are the pre-existing
+prerequisite-gated tests (Accessibility, Playwright browsers, microphone) that skip
+honestly rather than passing on a mock.
