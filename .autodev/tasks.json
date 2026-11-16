@@ -2281,10 +2281,12 @@
       "evidence": [
         "2026-11-16: jarvis/api/desktop_routes.py mounted in jarvis/api/app.py; macos/Vantage/Sources/Views/DesktopControlView.swift + nav entry.",
         "2026-11-16 PASS (level 4, rendered): the screen shows Move the cursor granted, Click/Type/Read not granted, the executable path, and the subject note.",
-        "2026-11-16 PASS: swift build clean."
+        "2026-11-16 PASS: swift build clean.",
+        "2026-11-16 PASS (level 4, rendered against a current backend): the screen shows Move the cursor and Capture the screen granted, Click and drag / Type and press keys / Read the interface 'not granted' in amber, names the executable path and the subject note, and disables Click/Double/Right/Type/Shortcut while keeping Move cursor enabled."
       ],
       "blocked_or_unverified": [
-        "No physical click on any control was made; the screen was rendered and its HTTP calls exercised."
+        "No physical click on any control was made; the screen was rendered and its HTTP calls exercised.",
+        "An earlier render showed 404 because the desktop backend process on :8765 started at 17:30, before the route existed; a restarted backend serves the route and the same screen renders with real posture. Noted because a stale local server can make a new route look missing."
       ]
     },
     "V14-4-display-enumeration-defect": {

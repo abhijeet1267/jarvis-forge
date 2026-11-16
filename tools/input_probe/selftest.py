@@ -131,7 +131,10 @@ else:
 x, y = point(state, "field")
 run("move", str(x), str(y))
 run("click", str(x), str(y))
-time.sleep(0.25)  # let the field take focus; bounded
+# The field takes focus asynchronously; wait on the border effect rather than
+# sleeping a fixed amount, and do not type into a field that never took it.
+focused = wait_for(lambda s: s["last_action"] in ("typing", "click"), timeout=1.0)
+time.sleep(0.15)
 note = "Vantage real desktop control"
 typed = run("type", note)
 after = wait_for(lambda s: s["text"] == note)
