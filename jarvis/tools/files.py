@@ -399,6 +399,21 @@ async def write_file(
         return fail("write_file", f"Could not read {target} to append to it: {exc}",
                     device=ctx.device_id)
 
+    # Capture the bytes this write is about to replace, so the Temporal Undo Map
+    # has a real pre-image rather than a claim that one could be made. Read
+    # *before* the write (for overwrite, the old contents are what a person would
+    # want back). A write that captures its own pre-image is the only file effect
+    # the map can restore byte for byte.
+    before_sha256 = ""
+    if mode == "overwrite" and existed_before:
+        try:
+            from ..core.undo_map import get_undo_map
+
+            before_sha256 = get_undo_map().store.capture_before(str(target))
+        except Exception as exc:  # a missing pre-image must not block the write
+            log.info("pre-image not captured",
+                     extra_fields={"path": str(target), "error": str(exc)})
+
     payload = (before + content.encode("utf-8")) if mode == "append" else content.encode("utf-8")
 
     try:
@@ -449,6 +464,10 @@ async def write_file(
         created=not existed_before,
         mode=mode,
         size=len(written),
+        # What the undo map needs: the hash of the bytes that were replaced (empty
+        # when the file was created) and of what is there now.
+        before_sha256=before_sha256,
+        after_sha256=hashlib.sha256(written).hexdigest(),
     )
 
 
@@ -525,6 +544,19 @@ async def delete_file(ctx: ToolContext, path: str = "", permanent: bool = False)
         )
 
     if permanent or not ctx.settings.trash_on_delete:
+        # A permanent delete of a single file is the one destructive action an
+        # undo can honour -- but only if the bytes are captured first. Capture
+        # before unlinking; a directory's tree is not captured (restoring a whole
+        # tree byte for byte is not a claim this project will make).
+        before_sha256 = ""
+        if target.is_file():
+            try:
+                from ..core.undo_map import get_undo_map
+
+                before_sha256 = get_undo_map().store.capture_before(str(target))
+            except Exception as exc:
+                log.info("pre-image not captured",
+                         extra_fields={"path": str(target), "error": str(exc)})
         try:
             if target.is_dir():
                 shutil.rmtree(target)
@@ -534,11 +566,14 @@ async def delete_file(ctx: ToolContext, path: str = "", permanent: bool = False)
             return fail("delete_file", f"Delete failed: {exc}", device=ctx.device_id)
         return ok(
             "delete_file",
-            f"Permanently deleted {target.name}.",
+            f"Permanently deleted {target.name}."
+            + (" Its contents were captured, so it can be put back." if before_sha256 else ""),
             device=ctx.device_id,
             path=str(target),
             permanent=True,
             verified=not target.exists(),
+            before_sha256=before_sha256,
+            undo_kind="restore" if before_sha256 else "none",
         )
 
     # Default: move to Trash so the action stays reversible.

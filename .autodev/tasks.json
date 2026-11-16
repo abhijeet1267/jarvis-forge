@@ -2008,6 +2008,36 @@
         "app_frontmost depends on Accessibility permission; without it the observer reports UNKNOWN, never a guess. Not exercised with permission granted here.",
         "url_status reports 200 for any body-less success and the raised code for an HTTPError; a non-HTTP status failure mode other than a connection error is UNKNOWN."
       ]
+    },
+    "V12-9-temporal-undo-map": {
+      "title": "V12: Temporal Undo Map -- what changed, and what can honestly be taken back",
+      "status": "completed",
+      "priority": 1,
+      "acceptance": [
+        "every file effect that lands is recorded with the bytes it replaced",
+        "an undo restores the pre-image and verifies its hash before writing",
+        "an effect that has no inverse (email, message, payment, physical) is marked irreversible, never offered a button",
+        "an undo refuses when the file has changed since the effect (no clobbering newer work)",
+        "an undo of a created file removes it",
+        "undo is itself recorded, and an undo of an undo is a separate visible act",
+        "a permanent delete of a file captures its bytes so it can be restored",
+        "the map is fed by Agent.execute, the single funnel, not by a screen"
+      ],
+      "evidence": [
+        "2026-11-16: jarvis/core/undo_map.py added -- UndoStore (content-addressed blobs + JSON index), classify (reversible/irreversible/conflicted/undone/unknown), UndoMap.timeline/summary/undo, UndoError.",
+        "2026-11-16: jarvis/agents/base.py -- _record_undo after a successful action, reading before/after hashes from result.output; bookkeeping never fails a real action.",
+        "2026-11-16: jarvis/tools/files.py -- write_file captures the pre-image before overwriting (overwrite mode); delete_file with permanent=True captures a file's bytes before unlinking; both return before_sha256/after_sha256/undo_kind in output.",
+        "2026-11-16: jarvis/api/undo_routes.py -- GET /undo (timeline + summary), POST /undo/{id} (409 on refusal). No bulk undo.",
+        "2026-11-16 PASS: tests/test_undo_map.py 22 passed -- incl. test_undo_refuses_after_the_file_changed, test_undo_restores_the_previous_bytes, test_a_sent_email_is_irreversible, test_a_permanent_delete_with_a_pre_image_is_reversible, test_a_real_write_file_records_an_undoable_entry (end-to-end through Agent.execute).",
+        "2026-11-16 PASS (level 7, live core): real write_file via core.agents['laptop'].execute -> verified True, entry 'reversible'; UndoMap.undo -> 'restored ... to the 17 bytes it held before'; file back to 'ORIGINAL CONTENT'.",
+        "2026-11-16 PASS (level 4, rendered): UndoMapView on the live backend -- counts by state and the timeline showing the write_file as undone with its undo row beneath it; fixed so an undo row reads 'undo' rather than an unclassified 'unknown'."
+      ],
+      "blocked_or_unverified": [
+        "NOT VERIFIED (level 5-6): the Undo button was exercised through the core API and over HTTP, not by a physical click.",
+        "copy_file/move_file are declared reversible by tool name but do not yet capture a pre-image of the destination; an undo of one would restore only if a pre-image exists. Named as the next widening rather than claimed.",
+        "A permanent delete of a *directory* is not captured (restoring a whole tree byte for byte is not a claim made) and shows irreversible.",
+        "Blobs are not yet pruned; the store grows with the files it captures. Retention is a follow-up."
+      ]
     }
   }
 }

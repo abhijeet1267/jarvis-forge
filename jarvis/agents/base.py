@@ -83,7 +83,43 @@ class Agent(ABC):
 
         result.duration_ms = int((time.perf_counter() - started) * 1000)
         result.finished_at = result.finished_at
+
+        # Record the effect in the Temporal Undo Map, but only for a file action
+        # that actually succeeded. The pre-image is captured *now* -- for a write
+        # that has already landed it is too late, so this records what the tool
+        # reported changing and the current hash; the tool itself captures the
+        # bytes it is about to overwrite (see `jarvis/tools/files.py`). A failed
+        # action changed nothing and is not recorded as if it had.
+        if result.ok:
+            try:
+                self._record_undo(action, result)
+            except Exception as exc:  # never let bookkeeping fail a real action
+                log.info("undo record skipped",
+                         extra_fields={"tool": action.tool, "error": str(exc)})
+
         return result
+
+    def _record_undo(self, action: PlannedAction, result: ActionResult) -> None:
+        """Add one entry to the undo map for a file effect that landed."""
+        from ..core.undo_map import TOOL_EFFECTS, get_undo_map
+
+        spec = self.registry.get(action.tool)
+        kind = TOOL_EFFECTS.get(action.tool)
+        if kind is None or spec is None:
+            return
+        path = str(action.params.get("path") or action.params.get("destination") or "")
+        if not path:
+            return
+        output = result.output if isinstance(result.output, dict) else {}
+        kind = str(output.get("undo_kind") or kind)
+        get_undo_map().store.record(
+            tool=action.tool,
+            path=path,
+            before_sha256=str(output.get("before_sha256") or ""),
+            after_sha256=str(output.get("after_sha256") or ""),
+            undo_kind=kind,
+            note=str(output.get("undo_note") or ""),
+        )
 
 
 class ToolAgent(Agent):

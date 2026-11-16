@@ -685,6 +685,11 @@ from .assurance_routes import build_router as _build_assurance_router  # noqa: E
 
 app.include_router(_build_assurance_router(require_auth))
 
+# Temporal Undo Map: the timeline of effects and a real, single undo.
+from .undo_routes import build_router as _build_undo_router  # noqa: E402
+
+app.include_router(_build_undo_router(require_auth))
+
 _core: Optional[JarvisCore] = None
 _voice = None
 

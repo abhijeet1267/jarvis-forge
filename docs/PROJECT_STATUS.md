@@ -3269,3 +3269,71 @@ observation, and all six kinds with what each one is allowed to carry.
 run is the same route); no physical click drove it. `app_frontmost` depends on
 Accessibility permission and reports UNKNOWN without it — not exercised with
 permission granted here.
+
+## Update — 2026-11-16 (V12 phase 9: Temporal Undo Map)
+
+**What it is.** One timeline of the effects that landed, and for each an honest
+answer to "can I take that back?". The design decision that carries the feature:
+the map is drawn from a **captured pre-image**, not from what a tool reported.
+`write_file` reads the file's bytes into a content-addressed store *before* it
+overwrites; the entry is reversible because those bytes exist and hash to the
+recorded value, not because anything claimed success.
+
+**Added / changed**
+
+- `jarvis/core/undo_map.py` — `UndoStore` (blobs keyed by sha256 + a JSON index,
+  atomic writes), `classify()` (reversible / irreversible / conflicted / undone /
+  unknown), `UndoMap.timeline/summary/undo`, `UndoError`. `TOOL_EFFECTS` lists
+  outbound and physical tools *explicitly* as `none` so a new path cannot be
+  assumed reversible by default; `IRREVERSIBLE_RISK = {destructive, physical}`
+  overrides the table.
+- `jarvis/tools/files.py` — `write_file` captures the pre-image in overwrite mode
+  and returns `before_sha256`/`after_sha256`; `delete_file` with `permanent=True`
+  captures a file's bytes before unlinking.
+- `jarvis/agents/base.py` — `_record_undo` after a successful action, reading the
+  hashes from `result.output`. Bookkeeping never fails the real action.
+- `jarvis/api/undo_routes.py` — `GET /undo?limit=60`, `POST /undo/{entry_id}`
+  (409 with the refusal reason). Deliberately no bulk undo.
+- `macos/Vantage/Sources/Views/UndoMapView.swift` — counts by state, the timeline,
+  and an Undo button **only** on a row whose state is `reversible`; every other
+  row prints its state and the sentence saying why.
+
+**Three refusals that make it honest, each with a test**
+
+- Undoing over somebody's newer edit is refused ("has changed since this action"),
+  and the newer text stays on disk — `test_undo_refuses_after_the_file_changed`.
+- An irreversible effect is refused with its reason; no silent no-op —
+  `test_undo_refuses_an_irreversible_entry` (a sent email "cannot be un-sent").
+- A missing or mismatched pre-image is refused rather than written —
+  `test_undo_refuses_when_the_pre_image_is_missing`.
+
+**Evidence**
+
+- `tests/test_undo_map.py` — **22 passed**. Includes a real `write_file` driven
+  through `Agent.execute` (the single funnel) whose undo puts the original bytes
+  back (`test_a_real_write_file_records_an_undoable_entry`).
+- **Level 7, live core (`/tmp/undo_demo.py`, isolated `JARVIS_HOME`):**
+  `WRITE ok=True verified=True`; file on disk `'REPLACED CONTENT\n'`; entries
+  `[('reversible','write_file'), ('undo','undo'), ('undone','write_file')]`;
+  `UNDO: restored /tmp/vantage_demo/demo.txt to the 17 bytes it held before`;
+  `FILE after undo: 'ORIGINAL CONTENT\n'`.
+- **Level 4, rendered** against the live `:8798` backend: counts by state and the
+  timeline. The first render caught a real flaw — undo's own records appeared as
+  `unknown` ("the map will not guess that it is reversible") beneath every real
+  entry. `classify()` now returns state `undo` with "this is a reversal of the
+  entry below it; it is not itself an effect to undo"; re-rendered and pinned by
+  `test_an_undo_entry_is_marked_as_a_reversal_not_an_unknown_effect`.
+- Both Swift targets build clean.
+
+**NOT verified**
+
+- **Level 5–6:** the Undo button was exercised through the core API and over
+  HTTP, not by a physical click.
+- `copy_file`/`move_file`/`rename_file` are declared reversible *by tool name*
+  but do not yet capture the destination's pre-image; an undo of one restores
+  only when a pre-image exists, otherwise it refuses. Named as the next widening,
+  not claimed as working.
+- A permanent delete of a **directory** is not captured and shows irreversible —
+  restoring a tree byte-for-byte is not a claim this makes.
+- Blobs are not pruned; the store grows with the files it captures. Retention is
+  a follow-up, and the disk cost is real.

@@ -1771,6 +1771,38 @@ extension APIModels {
         let spec: String        // JSON, as the mission store holds it
     }
 
+    // MARK: - Temporal Undo Map
+
+    /// One recorded effect and whether it can honestly be reversed.
+    struct UndoEntry: Codable, Identifiable {
+        let entry_id: String
+        let tool: String
+        let path: String
+        let state: String       // reversible | irreversible | conflicted | undone | unknown
+        let why: String
+        let undo_kind: String
+        let created_at: Double
+        let undone_at: Double
+        let current_sha256: String
+
+        var id: String { entry_id }
+    }
+
+    struct UndoTimeline: Codable {
+        let counts: [String: Int]
+        let total: Int
+        /// The rule: reversible only when the bytes exist; egress has no inverse.
+        let note: String
+        let entries: [UndoEntry]
+    }
+
+    struct UndoResult: Codable {
+        let entry_id: String
+        let restored: String
+        let undo_entry: String
+        let verified_sha256: String
+    }
+
     // MARK: - Live Mission Steering
 
     /// A proposed replacement for the un-run remainder of a plan.

@@ -104,6 +104,7 @@ struct ContentView: View {
             case .egress:       EgressFirewallView()
             case .autonomy:     AutonomyControlView()
             case .assurance:    OutcomeAssuranceView()
+            case .undo:         UndoMapView()
             case .skills:       SkillsLibraryView()
             case .goals:        GoalGuardView()
             case .doctor:       ProjectDoctorView()
@@ -162,7 +163,7 @@ private struct VantageSidebar: View {
                     group("People & Work", [.work, .people])
                     group("Configure", [.providers, .capabilities, .devices, .preferences, .settings])
                     group("Trust & Privacy", [.safety, .egress, .autonomy])
-                    group("Oversight", [.assurance, .approvals, .activity, .memory])
+                    group("Oversight", [.assurance, .undo, .approvals, .activity, .memory])
                 }
                 .padding(.horizontal, V.Space.s)
                 .padding(.vertical, V.Space.m)
@@ -375,7 +376,7 @@ private struct StatusFooter: View {
 // MARK: - Navigation model
 
 enum NavItem: String, Identifiable, CaseIterable {
-    case today, home, missions, smartfiles, parallelworld, safety, skills, goals, doctor, planner, operator_, control, flows, work, people, connections, workspaces, studio, shadow, steer, tower, recovery, egress, autonomy, assurance,
+    case today, home, missions, smartfiles, parallelworld, safety, skills, goals, doctor, planner, operator_, control, flows, work, people, connections, workspaces, studio, shadow, steer, tower, recovery, egress, autonomy, assurance, undo,
          google, mcp, automation, command, providers, capabilities, devices, approvals,
          activity, memory, settings
     // Phase 3
@@ -394,6 +395,7 @@ enum NavItem: String, Identifiable, CaseIterable {
         case .egress: return "Egress Firewall"
         case .autonomy: return "Autonomy Control"
         case .assurance: return "Outcome Assurance"
+        case .undo: return "Undo Map"
         case .skills: return "Skills Library"
         case .goals: return "GoalGuard"
         case .doctor: return "Project Doctor"
@@ -439,6 +441,7 @@ enum NavItem: String, Identifiable, CaseIterable {
         case .egress: return "arrow.up.right.circle"
         case .autonomy: return "dial.medium"
         case .assurance: return "checkmark.seal"
+        case .undo: return "arrow.uturn.backward"
         case .skills: return "square.stack.3d.up"
         case .goals: return "eye"
         case .doctor: return "stethoscope"
