@@ -4361,3 +4361,23 @@ this checkout. Its five-state capability derivation was sound and was taken into
 the real view by hand; the duplicate definitions were discarded. The native
 worker's output was rebuilt and run before being accepted. This is recorded because
 reporting it as a clean parallel integration would be false.
+
+### The frozen regression, and its three failures
+
+Run once at revision `85dd1ca`: **3 failed, 4580 passed, 30 skipped in 544 s**
+(`.venv/bin/python -m pytest -q -p no:cacheprovider`, exit 1).
+
+All three were published-count guards, made stale by this campaign's own
+additions — one new module (`jarvis/desktop/coordinates.py`) and one new test
+file:
+
+| Guard | Said | Tree |
+|---|---|---|
+| `test_r108::test_the_readme_test_module_count_is_real` | 239 modules | 240 |
+| `test_r108::test_the_readme_collected_count_matches_a_real_collection` | 4577 | 4613 |
+| `test_r109::test_the_module_count_matches_the_tree` | 250 modules | 251 |
+
+Each was corrected to the measured value and the four files that pin them
+re-ran green (**79 passed**). None was weakened or skipped. These are the same
+guards that caught the drift twice in V15; they exist so a published number
+cannot quietly become false.
