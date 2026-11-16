@@ -427,3 +427,98 @@ def test_a_step_that_becomes_incomplete_in_review_loses_its_claim(recorder):
     assert draft["conditions"] == []
     assert "satisfies" not in draft["steps"][0]
     assert draft["needs_input"] == 1
+
+
+def test_the_swift_automation_kinds_match_the_recorder():
+    """The macOS app offers exactly the kinds the server accepts.
+
+    Two hand-written lists in two languages. A kind only in Swift is rejected
+    at capture time, after the person has built the step; a kind only in Python
+    cannot be authored at all. This is the drift that produces "the studio says
+    it saved it but the draft came back empty".
+    """
+    import re
+    from pathlib import Path
+
+    from jarvis.core.recorder import SUPPORTED_KINDS
+
+    swift = (Path(__file__).resolve().parents[1]
+             / "macos" / "Vantage" / "Sources" / "APIClient" / "APIModels.swift")
+    text = swift.read_text()
+    block = re.search(r"static let names = \[(.*?)\]", text, re.S)
+    assert block, "AutomationKinds.names is gone from APIModels.swift"
+    offered = set(re.findall(r'"([a-z_]+)"', block.group(1)))
+
+    assert offered == set(SUPPORTED_KINDS), (
+        f"swift only: {sorted(offered - set(SUPPORTED_KINDS))}; "
+        f"python only: {sorted(set(SUPPORTED_KINDS) - offered)}")
+
+
+def test_every_offered_automation_kind_has_a_parameter_form_in_swift():
+    """A selectable kind with no fields produces a step with nothing in it."""
+    import re
+    from pathlib import Path
+
+    from jarvis.core.recorder import SUPPORTED_KINDS
+
+    swift = (Path(__file__).resolve().parents[1]
+             / "macos" / "Vantage" / "Sources" / "APIClient" / "APIModels.swift")
+    text = swift.read_text()
+    # Each kind must appear in a `case` of `fields(for:)`, either alone or in a
+    # comma-separated list.
+    # A `case` label list may wrap over several lines, so match the labels up to
+    # the colon and flatten whitespace before splitting on commas.
+    covered: set = set()
+    for match in re.finditer(r"case\s+([^:]+?):\s*\n\s*return \[", text, re.S):
+        labels = " ".join(match.group(1).split())
+        covered |= {k.strip().strip('"') for k in labels.split(",") if k.strip()}
+    missing = sorted(set(SUPPORTED_KINDS) - covered)
+    assert not missing, f"these kinds have no field form: {missing}"
+
+
+# -- a typed value is inspected, not just its parameter name -------------------
+
+@pytest.mark.parametrize("text", [
+    "password=hunter2",
+    "token: abc123",
+    "my api_key = sk-live-whatever",
+    "cvv: 123",
+])
+def test_a_secret_pasted_into_a_typed_field_is_not_stored(recorder, text):
+    """`desktop_type_text` types whatever is in `text`.
+
+    The name-only check inspected the parameter *name* ("text"), found it
+    innocent, and stored the value -- which would replay the secret on every run
+    and leave it in the draft in plain text. Measured before the fix: a capture
+    with `{"text": "password=hunter2"}` succeeded.
+    """
+    recorder.start()
+    step = recorder.capture("desktop_type_text", {"text": text}, label="type")
+    assert step.skipped is True
+    assert step.params == {}, "the value reached the stored step"
+    assert "sensitive" in (step.skip_reason or "")
+
+
+@pytest.mark.parametrize("text", [
+    "Hello from Vantage",
+    "the token expired, please renew",
+    "note: remember the meeting",
+])
+def test_ordinary_typed_text_is_still_recorded(recorder, text):
+    """Mentioning a credential is not pasting one.
+
+    A bare word match would refuse "the token expired" -- a document about a
+    problem, not a secret -- and make the recorder useless for notes.
+    """
+    recorder.start()
+    step = recorder.capture("desktop_type_text", {"text": text}, label="type")
+    assert step.skipped is False
+    assert step.params["text"] == text
+
+
+def test_the_sensitive_value_never_appears_in_the_skip_reason(recorder):
+    """The reason names the parameter, never the value."""
+    recorder.start()
+    step = recorder.capture("desktop_type_text", {"text": "password=hunter2"},
+                            label="type")
+    assert "hunter2" not in (step.skip_reason or "")

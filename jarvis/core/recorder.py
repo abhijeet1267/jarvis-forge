@@ -58,6 +58,14 @@ SUPPORTED_KINDS = (
     "write_file", "read_file", "delete_file",
     "open_application", "open_url", "run_allowlisted_command",
     "move_file", "copy_file",
+    # Real desktop actions (V15 §15). A recording that demonstrates pointer work
+    # has to be able to replay it, so the actuation tools a person actually uses
+    # are recordable. Each still goes through the permission engine and its own
+    # confirmation on replay: being recordable is not being pre-approved.
+    "desktop_click", "desktop_double_click", "desktop_right_click",
+    "desktop_move_pointer", "desktop_drag", "desktop_scroll",
+    "desktop_type_text", "desktop_press_key", "desktop_shortcut",
+    "desktop_focus_window", "desktop_press_element",
 )
 
 #: The parameters each supported tool requires, mirroring the registered
@@ -83,6 +91,20 @@ REQUIRED_PARAMETERS: Dict[str, tuple] = {
     "run_allowlisted_command": ("command",),
     "move_file": ("source", "destination"),
     "copy_file": ("source", "destination"),
+    # Mirrors the registry's required parameters for the desktop tools added
+    # above; ``test_the_recorder_knows_every_required_parameter_the_registry_does``
+    # fails if either side moves without the other.
+    "desktop_click": ("x", "y"),
+    "desktop_double_click": ("x", "y"),
+    "desktop_right_click": ("x", "y"),
+    "desktop_move_pointer": ("x", "y"),
+    "desktop_drag": ("from_x", "from_y", "to_x", "to_y"),
+    "desktop_scroll": ("x", "y"),
+    "desktop_type_text": ("text",),
+    "desktop_press_key": ("key",),
+    "desktop_shortcut": ("key", "modifiers"),
+    "desktop_focus_window": (),
+    "desktop_press_element": ("keyword",),
 }
 
 
@@ -289,16 +311,38 @@ class Recording:
         }
 
 
+#: Parameters whose *name* says nothing about sensitivity but whose *value* is
+#: typed into whatever is focused. For these, the value itself is inspected --
+#: `desktop_type_text(text="password=hunter2")` was accepted by the name-only
+#: check, which inspected "text" and found it innocent.
+_VALUE_IS_TYPED = frozenset({"text", "content", "value"})
+
+
 def _looks_sensitive(params: Dict[str, Any]) -> Optional[str]:
     """The name of a sensitive parameter, or None.
 
-    Only the *name* is inspected, and only the name is reported back: a
-    sensitive value must not reach a log, a file, or an error message.
+    Only the *name* is reported back: a sensitive value must not reach a log, a
+    file, or an error message.
+
+    A typed parameter is the exception to name-only inspection. When the value
+    is going to be sent as keystrokes, what it contains matters as much as what
+    the field is called: a recording that stored `text="password=hunter2"` would
+    replay the password on every run, and it would sit in the draft in plain
+    text. The value is *inspected* here and never included in the result.
     """
-    for key in params:
-        lowered = str(key).lower()
-        if any(hint in lowered for hint in _SENSITIVE_HINTS):
+    for key, value in params.items():
+        name = str(key).lower()
+        if any(hint in name for hint in _SENSITIVE_HINTS):
             return str(key)
+        if name in _VALUE_IS_TYPED and isinstance(value, str):
+            lowered = value.lower()
+            # `key=value` and `key: value` are the shapes a secret is pasted in.
+            # A bare word match would refuse "the token expired" as a note, and
+            # that is a document about a problem, not a credential.
+            for hint in _SENSITIVE_HINTS:
+                if f"{hint}=" in lowered or f"{hint}:" in lowered \
+                        or f"{hint} =" in lowered or f"{hint} :" in lowered:
+                    return str(key)
     return None
 
 

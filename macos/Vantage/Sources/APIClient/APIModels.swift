@@ -2774,9 +2774,19 @@ extension APIModels {
     /// tools, so a drift between the two is a test failure rather than a
     /// silently unrunnable step.
     enum AutomationKinds {
+        /// Must match `jarvis/core/recorder.py`'s `SUPPORTED_KINDS`: a kind
+        /// here that the server does not support is rejected when the step is
+        /// captured, and one the server supports but this list omits cannot be
+        /// authored at all. The desktop kinds are the V15 §15 additions; each is
+        /// still confirmed on replay, so offering them grants nothing.
         static let names = ["write_file", "read_file", "delete_file",
                             "open_application", "open_url",
-                            "run_allowlisted_command", "move_file", "copy_file"]
+                            "run_allowlisted_command", "move_file", "copy_file",
+                            "desktop_click", "desktop_double_click",
+                            "desktop_right_click", "desktop_move_pointer",
+                            "desktop_drag", "desktop_scroll", "desktop_type_text",
+                            "desktop_press_key", "desktop_shortcut",
+                            "desktop_focus_window", "desktop_press_element"]
 
         struct ParamField: Identifiable {
             let name: String
@@ -2810,6 +2820,36 @@ extension APIModels {
             case "move_file", "copy_file":
                 return [ParamField(name: "source", placeholder: "absolute path", isSensitive: false),
                         ParamField(name: "destination", placeholder: "absolute path",
+                                   isSensitive: false)]
+            // Desktop actions: the fields mirror each tool's own parameters, so a
+            // recorded step replays as the same call. Coordinates are typed
+            // rather than aimed: the screen being recorded is not the screen
+            // being authored on.
+            case "desktop_click", "desktop_double_click", "desktop_right_click",
+                 "desktop_move_pointer", "desktop_scroll":
+                return [ParamField(name: "x", placeholder: "global x", isSensitive: false),
+                        ParamField(name: "y", placeholder: "global y", isSensitive: false)]
+            case "desktop_drag":
+                return [ParamField(name: "from_x", placeholder: "start x", isSensitive: false),
+                        ParamField(name: "from_y", placeholder: "start y", isSensitive: false),
+                        ParamField(name: "to_x", placeholder: "end x", isSensitive: false),
+                        ParamField(name: "to_y", placeholder: "end y", isSensitive: false)]
+            case "desktop_type_text":
+                return [ParamField(name: "text", placeholder: "text to type",
+                                   isSensitive: false)]
+            case "desktop_press_key", "desktop_shortcut":
+                return [ParamField(name: "key", placeholder: "e.g. s", isSensitive: false),
+                        ParamField(name: "modifiers", placeholder: "e.g. cmd, shift",
+                                   isSensitive: false)]
+            case "desktop_focus_window":
+                return [ParamField(name: "application", placeholder: "e.g. TextEdit",
+                                   isSensitive: false),
+                        ParamField(name: "window", placeholder: "optional window title",
+                                   isSensitive: false)]
+            case "desktop_press_element":
+                return [ParamField(name: "application", placeholder: "e.g. TextEdit",
+                                   isSensitive: false),
+                        ParamField(name: "keyword", placeholder: "element label",
                                    isSensitive: false)]
             default:
                 return []
