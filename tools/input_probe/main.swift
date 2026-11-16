@@ -40,10 +40,14 @@ final class ProbeState: ObservableObject {
     ///
     /// Done with AppKit's own conversions rather than arithmetic: the window may
     /// have a title bar, may have been moved by the user, and the content view
-    /// may not sit at the window origin. Hand-rolling the flip is how a click
-    /// lands somewhere that is not the control — which is what the first
-    /// version of this function did (it reported x=60 for a control in a window
-    /// at x=120).
+    /// may not sit at the window origin.
+    ///
+    /// This is the second version. The first mirrored every target vertically --
+    /// measured, it put the first control at y=623.5 and the fifth at y=461 --
+    /// because it subtracted the content height from a coordinate that was
+    /// already flipped. A click derived from it would have landed outside the
+    /// window, and the selftest would have reported a permission failure for what
+    /// was really an arithmetic defect.
     func cgPoint(_ global: CGPoint) -> CGPoint {
         guard let win = window, let content = win.contentView else { return global }
         // NSHostingView is a flipped view: its bounds origin is the top-left
