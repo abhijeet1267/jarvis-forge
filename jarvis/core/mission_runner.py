@@ -193,6 +193,43 @@ def _parked_confirmation(detail: str) -> str:
     return match.group(1).rstrip(")").strip() if match else ""
 
 
+def _intent_refusal(mission: Mission, step, plan_revision: int) -> str:
+    """Why the mission's own intent refuses this step, or "" when it allows it.
+
+    A mission with no recorded intent returns "" here: the permission engine
+    still gates every step, and this is an additional refusal, never a
+    replacement. An intent that exists but will not parse refuses the step --
+    an authorization nobody can check is not an authorization.
+    """
+    raw = str(getattr(mission, "intent", "") or "")
+    if not raw:
+        return ""
+    from ..security.intentshield import IntentScope
+
+    import json
+
+    try:
+        scope = IntentScope.from_dict(json.loads(raw))
+    except (TypeError, ValueError) as exc:
+        return ("the mission's recorded intent could not be read, so no step "
+                f"can be checked against it: {exc}")
+
+    decision = scope.check_step(
+        step.tool or "", dict(step.params or {}), plan_revision=plan_revision,
+        risk=_stepped_risk(step))
+    if decision.allowed:
+        return ""
+    return f"refused by the mission's intent ({decision.violation}): {decision.reason}"
+
+def _stepped_risk(step) -> Optional[int]:
+    raw = (getattr(step, "params", None) or {}).get("risk")
+    if raw is None:
+        return None
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        return -1
+
 def _verifier_from_spec(spec: str, condition_id: str) -> Optional[Verifier]:
     """Build a verifier from a condition's stored declarative spec.
 
@@ -282,9 +319,26 @@ class MissionRunner:
 
         # A step that already finished is not repeated: resuming a mission must
         # not re-run a side effect that already happened.
+        revision = mission.plan_revision
+
         for step in mission.steps:
             if step.status in ("done", "skipped"):
                 continue
+
+            # The intent recorded for the original request is a second,
+            # independent refusal beside the permission engine: the engine asks
+            # "may this tool be used at all", the intent asks "was this what
+            # the person asked for". A plan revision is checked against the
+            # revision it belongs to, so a steered plan cannot reuse the old
+            # approval. Both must pass.
+            intent_refusal = _intent_refusal(mission, step, revision)
+            if intent_refusal:
+                self.service.mark_step(mission_id, step.step_id, status="failed",
+                                       detail=f"not executed: {intent_refusal}",
+                                       actor=actor)
+                return self.service.transition(
+                    mission_id, MissionState.BLOCKED, actor=actor,
+                    reason=f"step {step.step_id} was refused: {intent_refusal}")
 
             gate = self._gate(step, mission)
             if gate is not None and not gate.get("allowed", False):
@@ -524,7 +578,7 @@ class MissionRunner:
                 lease_id,
                 capability=step.tool or "",
                 resource=resource,
-                plan_revision=mission.version,
+                plan_revision=mission.plan_revision,
                 session_id=str((approval or {}).get("session_id") or ""),
             )
         except Exception as exc:      # LeaseRefusal and anything it wraps

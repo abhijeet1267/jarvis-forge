@@ -1825,6 +1825,40 @@
         "NOT VERIFIED (level 5-6): selecting a plan in ShadowMissionView was never driven by a real click. Synthetic events are dropped (AXIsProcessTrusted() false); the shadow-on-selection path was exercised over HTTP instead.",
         "NOT VERIFIED: no shadow has been run against a plan containing run_allowlisted_command that would actually change outside state -- those are reported not_simulated by construction, so there is nothing to observe."
       ]
+    },
+    "V12-3-live-steering": {
+      "title": "V12: Live Mission Steering -- change a running plan, never the past",
+      "status": "completed",
+      "priority": 0,
+      "acceptance": [
+        "a revision replaces the un-run remainder of a plan and moves plan_revision",
+        "a step that already ran keeps its tool, params and status through a revision",
+        "a revision cannot drop a completed step from the record",
+        "a revision that adds a step reports that a previous approval does not cover it",
+        "a revision is checked against the mission's recorded intent, not its own ambition",
+        "a proposed step outside the intent's resources, forbidden, or over the risk budget is named with its rule before it is applied",
+        "a steered plan that leaves the intent is refused at run time, before the step executes",
+        "a parked step whose shape is unchanged keeps its recorded confirmation id",
+        "a parked step whose shape changes loses the id and the mission returns to PLANNED",
+        "the preview is read-only: it commits no revision",
+        "an outcome receipt reports the plan revision, not the row-write version"
+      ],
+      "evidence": [
+        "2026-11-16: jarvis/core/steering.py added -- apply_revision, revision_summary, standing_effects, intent_refusals, steering_report. Pure logic; MissionService owns the write.",
+        "2026-11-16: missions table gained plan_revision and intent (jarvis/db/database.py migration); Mission model, to_dict, insert, _from_row all carry them. `_column` reads a not-yet-migrated row without crashing.",
+        "2026-11-16: MissionRunner._spend_lease was passing plan_revision=mission.version, so a lease stopped covering the plan as soon as the first step was marked done. It now passes mission.plan_revision.",
+        "2026-11-16: MissionRunner checks the recorded intent before the permission gate; a step outside it is refused with the violated rule and never executed. intent_refusal/_stepped_risk added.",
+        "2026-11-16: AWAITING_APPROVAL -> PLANNED transition added for the case a revision invalidated the parked answer.",
+        "2026-11-16: proofgraph.outcome_receipt reported plan_revision=mission.version; now plan_revision=mission.plan_revision with record_version alongside.",
+        "2026-11-16 PASS: tests/test_live_steering.py 24 passed; test_mission_runner 29 (3 new intent tests incl. a steered plan refused at run time); test_missions_api 24 (4 new steer tests); test_proofgraph 9. Related suites together 220 passed.",
+        "2026-11-16 PASS (level 7, backend journey, live :8798): a mission with S1 done was steered over HTTP -- revision 0->1, S3 dropped, S1 kept content byte-for-byte, already_done named S1's resource. A revision adding /etc/escaped.txt previewed as refused ('resource'); applied anyway (steer records, run gates); run left the mission BLOCKED-class refusal and /etc/escaped.txt was never created.",
+        "2026-11-16 PASS: steering an unchanged parked step kept its CONF id and stayed awaiting_approval; steering a changed parked step dropped the id and returned the mission to planned. Verified over HTTP.",
+        "2026-11-16 PASS (level 4, rendered): MissionSteeringView on the live backend shows the plan with S1 locked 'already ran' and its note, S2/S3 editable, Apply neutral-disabled until a Preview exists. Screen appears under the MAC group beside ShadowMission."
+      ],
+      "blocked_or_unverified": [
+        "NOT VERIFIED (level 5-6): no revision was committed by clicking Preview then Apply; the flow was driven over HTTP. Synthetic clicks are dropped (AXIsProcessTrusted() false).",
+        "NOT VERIFIED: the intent check is only as good as the intent recorded at creation. A mission created without a steerable intent (no steps, or an empty intent) records none, and then only the permission engine gates it -- that is stated in the code and is not a claim of safety."
+      ]
     }
   }
 }

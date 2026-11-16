@@ -707,3 +707,107 @@ def test_a_missing_destination_is_failed_and_a_missing_source_unknown(workspace)
     copy.write_text("x", encoding="utf-8")
     assert Verifiers.file_identical(str(copy), str(workspace / "gone.txt"), "C1")(
         mission).status == ConditionStatus.UNKNOWN
+
+
+# -- the mission's own intent is a second refusal ----------------------------
+
+@pytest.mark.asyncio
+async def test_a_step_outside_the_recorded_intent_is_refused_before_it_runs(
+        service, workspace):
+    """The permission engine may allow a tool; the intent asks whether the
+    person asked for it. Both must pass, and the intent refusal names the rule.
+    """
+    from jarvis.security.intentshield import IntentScope
+
+    scope = IntentScope(
+        mission_id="MIS-INTENT", goal="write inside the workspace",
+        allowed_capabilities={"write_file"},
+        allowed_resource_prefixes=[str(workspace)], risk_budget=1)
+
+    ran = []
+
+    async def executor(step, mission):
+        ran.append(step.step_id)
+        return _Ok()
+
+    mission = service.create(
+        "write inside the workspace",
+        steps=[{"step_id": "S1", "title": "outside", "tool": "write_file",
+                "params": {"path": "/etc/not-allowed", "content": "x"}}],
+        intent=scope.to_json())
+
+    runner = MissionRunner(service, execute_step=executor, permission=_allow_all)
+    result = await runner.run(mission.mission_id)
+
+    assert result.state == MissionState.BLOCKED.value, result.reason
+    assert ran == [], "a step the intent refuses was executed anyway"
+    assert "intent" in result.reason
+
+
+@pytest.mark.asyncio
+async def test_a_step_inside_the_intent_still_passes(service, workspace):
+    """The intent check must not refuse everything -- the guard has to have a
+    path that allows, or it would prove nothing."""
+    from jarvis.security.intentshield import IntentScope
+
+    target = workspace / "inside.txt"
+    scope = IntentScope(
+        mission_id="MIS-INTENT", goal="write inside the workspace",
+        allowed_capabilities={"write_file"},
+        allowed_resource_prefixes=[str(workspace)], risk_budget=1)
+
+    async def executor(step, mission):
+        Path(step.params["path"]).write_text("x", encoding="utf-8")
+        return _Ok()
+
+    mission = service.create(
+        "write inside the workspace",
+        conditions=[{"condition_id": "C1", "statement": "the file exists",
+                     "verifier": '{"kind": "file_contains", "path": "%s", '
+                                 '"needle": "x"}' % target}],
+        steps=[{"step_id": "S1", "title": "write", "tool": "write_file",
+                "params": {"path": str(target), "content": "x"}}],
+        intent=scope.to_json())
+
+    runner = MissionRunner(service, execute_step=executor, permission=_allow_all)
+    result = await runner.run(mission.mission_id)
+
+    assert result.state in (MissionState.COMPLETED.value,
+                            MissionState.PARTIALLY_COMPLETED.value), result.reason
+    assert target.exists()
+
+
+@pytest.mark.asyncio
+async def test_a_steered_plan_is_refused_when_it_leaves_the_intent(service, workspace):
+    """Steering must not be a way around the intent: a revision is checked at
+    run time, against the same recorded intent, not only in the preview."""
+    from jarvis.security.intentshield import IntentScope
+
+    scope = IntentScope(
+        mission_id="MIS-INTENT", goal="write inside the workspace",
+        allowed_capabilities={"write_file"},
+        allowed_resource_prefixes=[str(workspace)], risk_budget=1)
+    mission = service.create(
+        "write inside the workspace",
+        steps=[{"step_id": "S1", "title": "inside", "tool": "write_file",
+                "params": {"path": str(workspace / "a.txt"), "content": "a"}}],
+        intent=scope.to_json())
+
+    service.apply_revision(
+        mission.mission_id,
+        steps=[{"step_id": "S9", "title": "escape", "tool": "write_file",
+                "params": {"path": "/etc/escaped.txt", "content": "x"}}],
+        reason="an escape attempt")
+
+    ran = []
+
+    async def executor(step, mission):
+        ran.append(step.step_id)
+        return _Ok()
+
+    runner = MissionRunner(service, execute_step=executor, permission=_allow_all)
+    result = await runner.run(mission.mission_id)
+
+    assert result.state == MissionState.BLOCKED.value, result.reason
+    assert ran == []
+    assert "intent" in result.reason

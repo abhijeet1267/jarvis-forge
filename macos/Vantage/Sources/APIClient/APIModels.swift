@@ -1492,8 +1492,15 @@ extension APIModels {
         let conditions: [MissionCondition]?
         let steps: [MissionStep]?
         let condition_summary: [String: Int]?
+        /// Which revision of the plan this mission is on. It moves only when the
+        /// plan is steered, so it answers "is this still the plan that was
+        /// approved?" -- unlike `version`, which moves on every write. Optional
+        /// so a mission from an older backend still decodes.
+        let plan_revision: Int?
 
         var id: String { mission_id }
+
+        var revision: Int { plan_revision ?? 0 }
     }
 
     struct MissionCondition: Codable, Identifiable {
@@ -1510,6 +1517,9 @@ extension APIModels {
         let title: String
         let status: String
         let detail: String?
+        /// The tool this step calls. Optional so a step written by an older
+        /// server, or one the planner left without a tool, still decodes.
+        let tool: String?
         /// The tool call this step makes, as the server recorded it. Optional so
         /// a step written by an older server still decodes.
         let params: [String: String]?
@@ -1556,6 +1566,85 @@ extension APIModels {
         let note: String
         let mission_id: String
         let mission_state: String
+    }
+
+    // MARK: - Live Mission Steering
+
+    /// A proposed replacement for the un-run remainder of a plan.
+    struct SteerRequest: Codable {
+        struct Step: Codable {
+            let step_id: String
+            let title: String?
+            let tool: String?
+            let params: [String: String]?
+        }
+
+        let steps: [Step]
+        let reason: String
+    }
+
+    /// `POST /missions/{id}/steer/preview`. What a revision would change, before
+    /// anybody commits to it -- and what it cannot reach.
+    struct SteerPreview: Codable {
+        struct Effect: Codable, Identifiable {
+            let step_id: String
+            let title: String
+            let tool: String
+            let status: String
+            let resource: String
+            /// Always false on this server: a rule added now binds the future.
+            let reversible: Bool
+            let note: String
+
+            var id: String { step_id }
+        }
+
+        struct Refusal: Codable, Identifiable {
+            let step_id: String
+            let violation: String
+            let reason: String
+
+            var id: String { step_id + violation }
+        }
+
+        let mission_id: String
+        let from_revision: Int
+        let to_revision: Int
+        let steps: [String]
+        let added_step_ids: [String]
+        let removed_future_step_ids: [String]
+        let completed_step_ids: [String]
+        let new_tools: [String]
+        let already_done: [Effect]
+        let intent_refusals: [Refusal]
+        let requires_new_approval: Bool
+        let note: String
+    }
+
+    /// The `steering` object on a committed revision's reply.
+    struct SteeringReport: Codable {
+        struct Step: Codable, Identifiable {
+            let step_id: String
+            let title: String
+            let tool: String
+            let status: String
+
+            var id: String { step_id }
+        }
+
+        let plan_revision: Int
+        let steps: [Step]
+        let already_done: [SteerPreview.Effect]?
+        let intent_refusals: [SteerPreview.Refusal]?
+        let note: String
+    }
+
+    /// The mission plus what the steer did, as `POST /steer` returns it.
+    struct SteerResult: Codable {
+        let mission_id: String
+        let state: String
+        let plan_revision: Int
+        let steering: SteeringReport
     }
 
     struct MissionProof: Codable {

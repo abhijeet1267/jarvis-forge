@@ -341,3 +341,135 @@ def test_approving_a_parked_step_keeps_the_confirmation_the_runner_matches():
     assert match.group(1).rstrip(")") in (after["detail"] or ""), (
         "the approval removed the confirmation id, so a resume can never match "
         f"it: {after['detail']!r}")
+
+
+def test_a_steer_preview_reports_what_would_change_and_what_already_happened():
+    """The preview must answer both questions before anything is committed:
+    what the plan becomes, and what a change cannot reach."""
+    client = _client()
+    created = client.post("/missions", headers=HEADERS, json={
+        "request": "organize the sample project",
+        "steps": [
+            {"step_id": "S1", "title": "first", "tool": "write_file",
+             "params": {"path": "/tmp/work/a.txt", "content": "a"}},
+            {"step_id": "S2", "title": "second", "tool": "write_file",
+             "params": {"path": "/tmp/work/b.txt", "content": "b"}},
+        ],
+    })
+    assert created.status_code == 200, created.text
+    mission_id = created.json()["mission_id"]
+
+    preview = client.post(f"/missions/{mission_id}/steer/preview", headers=HEADERS,
+                          json={"steps": [{"step_id": "S1"},
+                                          {"step_id": "S3", "title": "third",
+                                           "tool": "write_file",
+                                           "params": {"path": "/tmp/work/c.txt"}}]})
+    assert preview.status_code == 200, preview.text
+    body = preview.json()
+    assert body["added_step_ids"] == ["S3"]
+    assert body["removed_future_step_ids"] == ["S2"]
+    assert body["to_revision"] == 1
+    # Nothing is committed by a preview.
+    fetched = client.get(f"/missions/{mission_id}", headers=HEADERS).json()
+    assert fetched["plan_revision"] == 0
+    assert len(fetched["steps"]) == 2
+
+
+def test_steering_over_http_moves_the_revision_and_keeps_the_record():
+    client = _client()
+    created = client.post("/missions", headers=HEADERS, json={
+        "request": "organize the sample project",
+        "steps": [{"step_id": "S1", "title": "first", "tool": "write_file",
+                   "params": {"path": "/tmp/work/a.txt", "content": "a"}}],
+    })
+    mission_id = created.json()["mission_id"]
+
+    steered = client.post(f"/missions/{mission_id}/steer", headers=HEADERS,
+                          json={"steps": [{"step_id": "S1"},
+                                          {"step_id": "S2", "title": "second",
+                                           "tool": "write_file",
+                                           "params": {"path": "/tmp/work/b.txt",
+                                                      "content": "b"}}],
+                                "reason": "the person added a second file"})
+    assert steered.status_code == 200, steered.text
+    body = steered.json()
+    assert body["plan_revision"] == 1
+    assert [s["step_id"] for s in body["steps"]] == ["S1", "S2"]
+    assert "steering" in body
+    assert body["steering"]["plan_revision"] == 1
+
+
+def test_a_steer_with_no_reason_is_refused_over_the_wire():
+    client = _client()
+    created = client.post("/missions", headers=HEADERS, json={
+        "request": "organize the sample project",
+        "steps": [{"step_id": "S1", "title": "first", "tool": "write_file"}],
+    })
+    mission_id = created.json()["mission_id"]
+
+    response = client.post(f"/missions/{mission_id}/steer", headers=HEADERS,
+                           json={"steps": [{"step_id": "S1"}], "reason": ""})
+    # 409 is an intentional choice for a state refusal, but a missing reason is
+    # a malformed request, so either is defensible -- what matters is that it
+    # did not silently apply.
+    assert response.status_code in (400, 409, 422), response.text
+    assert client.get(f"/missions/{mission_id}", headers=HEADERS
+                      ).json()["plan_revision"] == 0
+
+
+def test_a_steer_carries_an_intent_that_refuses_an_escape():
+    """A mission created with an explicit intent keeps it through a revision,
+    and the preview names the violation before the change is made."""
+    client = _client()
+    created = client.post("/missions", headers=HEADERS, json={
+        "request": "write inside the work folder",
+        "steps": [{"step_id": "S1", "title": "first", "tool": "write_file",
+                   "params": {"path": "/tmp/work/a.txt", "content": "a"}}],
+        "intent": {
+            "mission_id": "MIS-INTENT", "goal": "write inside the work folder",
+            "allowed_capabilities": ["write_file"],
+            "allowed_resource_prefixes": ["/tmp/work"],
+            "risk_budget": 2,
+        },
+    })
+    assert created.status_code == 200, created.text
+    mission_id = created.json()["mission_id"]
+    assert created.json()["intent"], "the intent was not recorded"
+
+    preview = client.post(f"/missions/{mission_id}/steer/preview", headers=HEADERS,
+                          json={"steps": [{"step_id": "S1"},
+                                          {"step_id": "S9", "title": "escape",
+                                           "tool": "write_file",
+                                           "params": {"path": "/etc/passwd"}}]})
+    assert preview.status_code == 200, preview.text
+    violations = {r["step_id"]: r["violation"]
+                  for r in preview.json()["intent_refusals"]}
+    assert violations == {"S9": "resource"}
+
+
+def test_an_auto_intent_covers_a_copy_destination_not_only_its_source():
+    """The scope derived from a plan must include every resource the plan names.
+    Deriving it from `path` alone left a copy's write target outside the scope
+    the very next check reads, so the mission would refuse its own plan."""
+    client = _client()
+    created = client.post("/missions", headers=HEADERS, json={
+        "request": "archive the notes folder",
+        "steps": [{"step_id": "S1", "title": "copy", "tool": "copy_file",
+                   "params": {"source": "/tmp/work/notes.txt",
+                              "destination": "/tmp/work/archive/notes.txt"}}],
+    })
+    assert created.status_code == 200, created.text
+    payload = created.json()
+    assert payload["intent"], "no intent was derived from the plan"
+
+    import json as _json
+    intent = _json.loads(payload["intent"])
+    assert "/tmp/work/notes.txt" in intent["allowed_resource_prefixes"]
+    assert "/tmp/work/archive/notes.txt" in intent["allowed_resource_prefixes"]
+
+    # And the plan is not refused by its own intent.
+    response = client.post(f"/missions/{payload['mission_id']}/steer/preview",
+                           headers=HEADERS,
+                           json={"steps": [{"step_id": "S1"}]})
+    assert response.status_code == 200, response.text
+    assert response.json()["intent_refusals"] == []

@@ -110,6 +110,7 @@ struct ContentView: View {
             case .workspaces:   WorkspacesView()
             case .studio:       AutomationStudioView()
             case .shadow:       ShadowMissionView()
+            case .steer:        MissionSteeringView()
             case .flows:        FlowsView(handoff: $flowDraftHandoff)
             case .work:         WorkView()
             case .people:       PeopleView()
@@ -152,7 +153,7 @@ private struct VantageSidebar: View {
                     group("Workspace", [.today, .home, .briefing, .planner, .workspaces, .command])
                     group("Capture & Documents", [.capture, .documents])
                     group("Connections", [.connections, .google, .mcp, .automation])
-                    group("Mac", [.control, .flows, .studio, .shadow, .operator_])
+                    group("Mac", [.control, .missions, .flows, .studio, .shadow, .steer, .operator_])
                     group("People & Work", [.work, .people])
                     group("Configure", [.providers, .capabilities, .devices, .preferences, .settings])
                     group("Oversight", [.approvals, .activity, .memory])
@@ -368,7 +369,7 @@ private struct StatusFooter: View {
 // MARK: - Navigation model
 
 enum NavItem: String, Identifiable, CaseIterable {
-    case today, home, missions, smartfiles, parallelworld, safety, skills, goals, doctor, planner, operator_, control, flows, work, people, connections, workspaces, studio, shadow,
+    case today, home, missions, smartfiles, parallelworld, safety, skills, goals, doctor, planner, operator_, control, flows, work, people, connections, workspaces, studio, shadow, steer,
          google, mcp, automation, command, providers, capabilities, devices, approvals,
          activity, memory, settings
     // Phase 3
@@ -393,6 +394,7 @@ enum NavItem: String, Identifiable, CaseIterable {
         case .workspaces: return "Workspaces"
         case .studio: return "Automation Studio"
         case .shadow: return "ShadowMission"
+        case .steer: return "Steering"
         case .flows: return "Flows"
         case .work: return "Work"
         case .people: return "People"
@@ -432,6 +434,7 @@ enum NavItem: String, Identifiable, CaseIterable {
         case .workspaces: return "square.grid.2x2.fill"
         case .studio: return "wand.and.stars"
         case .shadow: return "moon.stars"
+        case .steer: return "slider.horizontal.below.square.filled.and.square"
         case .flows: return "square.stack.3d.up"
         case .work: return "hammer.fill"
         case .people: return "person.2.fill"

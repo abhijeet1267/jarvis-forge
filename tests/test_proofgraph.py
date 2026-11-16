@@ -163,3 +163,21 @@ def test_a_receipt_names_evidence_it_cannot_resolve(service):
                               [_audit_row(mission.mission_id, "C1", "observed",
                                           log_id="LOG-a")])
     assert "unresolvable_evidence" in receipt
+
+
+def test_a_receipt_reports_the_plan_revision_not_the_row_version(service):
+    """A receipt is a record of a plan. `version` counts every write, so a
+    mission whose steps were marked done would report a revision it never had."""
+    from jarvis.core.proofgraph import outcome_receipt
+
+    mission = service.create("m", conditions=[{"statement": "x"}],
+                             steps=[{"step_id": "S1", "title": "t", "tool": "write_file"}])
+    service.mark_step(mission.mission_id, "S1", status="done")
+    service.mark_step(mission.mission_id, "S1", status="failed")
+    fresh = service.get(mission.mission_id)
+
+    receipt = outcome_receipt(fresh, [])
+    assert receipt["plan_revision"] == 0, (
+        "the plan was never steered, so its revision is 0")
+    assert receipt["record_version"] == fresh.version
+    assert receipt["plan_revision"] != receipt["record_version"]

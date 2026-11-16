@@ -2862,3 +2862,74 @@ change is unknown until they run."*; and the note *"Nothing was executed…"*.
 **NOT verified.** No click reached a control: selecting a plan was exercised over HTTP, not
 by a real click (`AXIsProcessTrusted()` is false on this machine, so synthetic events are
 dropped). The seam between the rendered screen and the backend call it makes is unproven.
+
+## Update — 2026-11-16 (V12 phase 3: Live Mission Steering)
+
+A running plan could be cancelled or left alone; there was nothing in between. Steering adds
+that middle: the un-run remainder of a plan can be replaced, while the record of what already
+happened stays exactly as it happened.
+
+**What was built**
+
+- `jarvis/core/steering.py` — `apply_revision`, `revision_summary`, `standing_effects`,
+  `intent_refusals`, `steering_report`. Pure logic: it takes a `Mission` and returns the
+  decision; `MissionService` owns every write, so there is still one place that decides what a
+  stored mission says.
+- `POST /missions/{id}/steer/preview` — what a revision would change, read-only. Names the
+  steps it adds, the un-run steps it drops, the completed steps that survive, every proposed
+  step the mission's **original intent** refuses, and whether the previous approval still
+  covers it.
+- `POST /missions/{id}/steer` — commits the revision, bumps `plan_revision`, and replies with a
+  `steering` report naming what already ran.
+- `MissionSteeringView` — plan editor seeded from the live mission; completed steps render
+  locked with "already ran", Apply stays disabled until a Preview exists for the plan on
+  screen. Sidebar entry under the MAC group.
+
+**The three refusals that make it honest**
+
+1. **A revision cannot undo finished work.** A completed step keeps its tool, params and
+   status; a revision that omits one is refused outright. Effects that already happened are
+   facts — what a new constraint does is stop *further* work, and the screen says so.
+2. **A steered plan is a new request.** Adding a step sets `requires_new_approval`, and the
+   run re-asks at the step that needs it. The mission's `IntentScope` is frozen at creation and
+   a revision is checked against *it* — not against the new plan's own ambition — so
+   `/etc/passwd`, `delete_file` and an over-budget risk are refused by name before anything
+   runs, and again at run time.
+3. **An approval is for one action.** Steering an unchanged parked step keeps its recorded
+   confirmation id. Steering a **changed** one drops it and returns the mission to `planned`,
+   so it cannot resume an approval given for a different action — or sit waiting on one that
+   can no longer be answered.
+
+**Defects found and fixed during the work**
+
+1. **A lease stopped covering the plan after the first step finished.** `_spend_lease` passed
+   `plan_revision=mission.version`, but `version` is the row-write counter and moves every
+   time a step is marked done. A plan with two steps could never spend a multi-step lease.
+   That is precisely the distinction `plan_revision` now draws.
+2. **The receipt reported a revision that never happened.** `outcome_receipt` emitted
+   `plan_revision: mission.version`; a mission whose steps were marked done would claim
+   "revision 14" for an unsteered plan. Now `plan_revision` plus `record_version`.
+3. **A revision could leave a parked mission unapprovable.** Resetting a parked step's detail
+   wiped the confirmation id, so the state machine stayed in `awaiting_approval` with nothing
+   to approve. Fixed by keeping the id when the step is unchanged and adding the
+   `awaiting_approval → planned` edge for when it is not.
+
+**Evidence.** `test_live_steering.py` **24 passed** · `test_mission_runner.py` 29 (3 new intent
+tests, incl. a steered plan refused at run time) · `test_missions_api.py` 24 (4 new steer
+tests) · `test_proofgraph.py` 9. Related suites together: **220 passed, 0 failed**. Both Swift
+targets build clean.
+
+**Live backend journey, level 7 (HTTP, isolated `:8798`).** Steered a mission whose S1 had
+completed: revision 0→1, S3 dropped, S1's `content` param intact byte-for-byte, `already_done`
+naming `/tmp/vantage_probe2/plan.txt`. A revision adding an `/etc/escaped.txt` step previewed
+as `resource`-refused; applied anyway (steer records, the run gates); the run refused it and
+**the file was never created**. Steering an unchanged parked step kept its `CONF-…` id and
+stayed `awaiting_approval`; steering a changed one dropped the id and returned `planned`.
+
+**Rendered, level 4.** The screen shows the live plan with S1 locked and its "already ran" note,
+S2/S3 editable, and Apply neutral-disabled until Preview has run.
+
+**NOT verified.** No revision was committed by a real click; the flow was driven over HTTP.
+The intent check is only as strong as the intent recorded at creation — a mission created with
+no intent is gated by the permission engine alone, and the code says so rather than implying
+otherwise.

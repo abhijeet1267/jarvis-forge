@@ -461,3 +461,44 @@ def test_a_changed_plan_that_widens_scope_requires_new_approval():
     unchanged = scope_delta(old, old)
     assert unchanged["added_capabilities"] == []
     assert unchanged["added_resource_prefixes"] == []
+
+
+# -- every resource a step names is checked ----------------------------------
+
+def test_a_copy_destination_outside_the_scope_is_refused():
+    """A copy step's destination is its write target. Checking only `source`
+    and `path` let a copy write anywhere while the checked parameters sat inside
+    the scope."""
+    scope = IntentScope(mission_id="MIS-C",
+                        goal="copy inside the work folder",
+                        allowed_capabilities={"copy_file"},
+                        allowed_resource_prefixes=["/tmp/work"],
+                        plan_revision=0)
+    inside = "/tmp/work/a.txt"
+    outside = "/etc/evil.txt"
+
+    # Source inside, destination outside -- must be refused on the destination.
+    decision = scope.check_step("copy_file",
+                                {"source": inside, "destination": outside},
+                                plan_revision=0)
+    assert decision.allowed is False
+    assert decision.violation == "resource"
+    assert "destination" in decision.reason
+
+    # Both inside -- allowed.
+    ok = scope.check_step("copy_file",
+                          {"source": inside, "destination": "/tmp/work/b.txt"},
+                          plan_revision=0)
+    assert ok.allowed is True, ok.reason
+
+
+def test_a_key_parameter_outside_the_scope_is_refused():
+    """The built-in file tools name their operand `key`, not `path`."""
+    scope = IntentScope(mission_id="MIS-R", goal="read inside the work folder",
+                        allowed_capabilities={"read_file"},
+                        allowed_resource_prefixes=["/tmp/work"],
+                        plan_revision=0)
+    decision = scope.check_step("read_file", {"key": "/etc/passwd"},
+                                plan_revision=0)
+    assert decision.allowed is False
+    assert decision.violation == "resource"

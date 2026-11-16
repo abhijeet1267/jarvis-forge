@@ -72,8 +72,12 @@ TRANSITIONS: Dict[MissionState, frozenset] = {
     MissionState.PLANNED: frozenset({
         MissionState.AWAITING_APPROVAL, MissionState.RUNNING,
         MissionState.CANCELLED, MissionState.BLOCKED}),
+    # The BLOCKED edge is for a revision: a steered plan that invalidated the parked
+# answer must go back to PLANNED and ask again when it reaches the changed step,
+# rather than sit in AWAITING_APPROVAL on an answer that no longer applies.
     MissionState.AWAITING_APPROVAL: frozenset({
-        MissionState.RUNNING, MissionState.CANCELLED, MissionState.BLOCKED}),
+        MissionState.RUNNING, MissionState.CANCELLED, MissionState.BLOCKED,
+        MissionState.PLANNED}),
     # An approval discovered *during* execution (a step the gate marks CONFIRM)
     # parks the mission without unwinding it; the steps that already ran keep
     # their results and resume after the person answers.
@@ -192,6 +196,21 @@ class Mission:
     #: How many recovery attempts have been made; bounded by the runner.
     recovery_attempts: int = 0
     version: int = 1
+    #: Which revision of the plan this mission is on. It moves only when the
+    #: plan is steered, so it answers a different question from ``version``
+    #: (which moves on every write): "is this still the plan that was
+    #: approved?". A lease or an intent bound to an older revision stops
+    #: covering the plan.
+    plan_revision: int = 0
+    #: The IntentScope recorded for the original request, as JSON. Empty means
+    #: none was recorded; then intent-based checks do not run and the permission
+    #: engine alone decides.
+    intent: str = ""
+    #: Set by `steering.apply_revision` when the revision changed what a parked
+    #: step would do, so the approval recorded for it no longer applies. Read by
+    #: `MissionService.apply_revision` to move the mission out of
+    #: AWAITING_APPROVAL, so it does not wait on an answer that cannot be given.
+    approval_invalidated: bool = field(default=False, compare=False, repr=False)
 
     # -- derived views ------------------------------------------------------
     @property
@@ -237,6 +256,8 @@ class Mission:
             "reason": self.reason,
             "recovery_attempts": self.recovery_attempts,
             "version": self.version,
+            "plan_revision": self.plan_revision,
+            "intent": self.intent,
             "is_terminal": self.is_terminal,
             "condition_summary": self.condition_summary(),
             "verdict": self.verdict(),
@@ -266,6 +287,7 @@ class MissionService:
         scope: Optional[Dict[str, Any]] = None,
         conditions: Optional[List[Dict[str, Any]]] = None,
         steps: Optional[List[Dict[str, Any]]] = None,
+        intent: str = "",
         actor: str = "user",
     ) -> Mission:
         """Open a mission in DRAFT.
@@ -285,6 +307,7 @@ class MissionService:
             scope=dict(scope or {}),
             created_at=now,
             updated_at=now,
+            intent=str(intent or ""),
         )
         for raw in (conditions or []):
             mission.conditions.append(SuccessCondition(
@@ -320,8 +343,8 @@ class MissionService:
                 """INSERT INTO missions
                      (mission_id, request, outcome, state, scope, conditions, steps,
                       created_at, updated_at, evidence, reason, recovery_attempts,
-                      version, last_actor)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                      version, last_actor, plan_revision, intent)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     mission.mission_id, mission.request, mission.outcome, mission.state,
                     json.dumps(mission.scope), json.dumps([c.to_dict() for c in mission.conditions]),
@@ -329,6 +352,7 @@ class MissionService:
                     _iso(mission.created_at), _iso(mission.updated_at),
                     json.dumps(mission.evidence), mission.reason,
                     mission.recovery_attempts, mission.version, actor,
+                    mission.plan_revision, mission.intent,
                 ),
             )
 
@@ -429,6 +453,63 @@ class MissionService:
         return mission
 
     # -- persistence helpers ------------------------------------------------
+    def apply_revision(self, mission_id: str, *, steps: List[Dict[str, Any]],
+                       reason: str, actor: str = "user") -> Mission:
+        """Steer a mission onto a new plan revision, atomically.
+
+        The protocol itself lives in ``core.steering``; this method only owns
+        the write, so there is one place that decides what a stored mission
+        says. The ``version`` guard means a revision computed against a stale
+        plan -- the runner advanced a step in the meantime -- changes nothing
+        instead of overwriting newer state.
+        """
+        from .steering import apply_revision as _apply
+
+        mission = self.get(mission_id)
+        if mission is None:
+            raise MissionTransitionError(f"no mission {mission_id!r}")
+
+        _apply(mission, steps=steps, reason=reason)
+
+        self.db.execute(
+            """UPDATE missions
+                  SET steps = ?, plan_revision = ?, reason = ?, updated_at = ?,
+                      version = version + 1, last_actor = ?
+                WHERE mission_id = ? AND version = ?""",
+            (json.dumps([s.to_dict() for s in mission.steps]),
+             mission.plan_revision, mission.reason, _iso(time.time()),
+             actor, mission.mission_id, mission.version),
+        )
+        mission.version += 1
+        log.info("mission steered", extra_fields={
+            "mission_id": mission_id, "plan_revision": mission.plan_revision,
+            "actor": actor})
+
+        # A revision that invalidated the parked approval leaves the mission
+        # sitting in AWAITING_APPROVAL with an answer that no longer applies. The
+        # next `run` cannot resume it, so it has to go back to PLANNED and re-ask
+        # when it reaches the changed step.
+        if mission.approval_invalidated and \
+                MissionState(mission.state) is MissionState.AWAITING_APPROVAL:
+            mission = self.transition(
+                mission_id, MissionState.PLANNED, actor=actor,
+                reason="the revision changed what a parked step would do, so it "
+                       "must be approved again before it can run")
+        return mission
+
+    def record_intent(self, mission_id: str, intent_json: str) -> Mission:
+        """Store the IntentScope for a mission. Write-once in practice."""
+        mission = self.get(mission_id)
+        if mission is None:
+            raise MissionTransitionError(f"no mission {mission_id!r}")
+        self.db.execute(
+            "UPDATE missions SET intent = ?, updated_at = ?, version = version + 1 "
+            "WHERE mission_id = ? AND version = ?",
+            (str(intent_json), _iso(time.time()), mission_id, mission.version),
+        )
+        mission.intent = str(intent_json)
+        mission.version += 1
+        return mission
     def _persist_steps(self, mission: Mission, *, actor: str) -> None:
         self.db.execute(
             "UPDATE missions SET steps = ?, updated_at = ?, version = version + 1, "
@@ -536,9 +617,23 @@ def _from_row(row: Any) -> Mission:
         reason=str(row["reason"] or ""),
         recovery_attempts=int(row["recovery_attempts"] or 0),
         version=int(row["version"] or 1),
+        plan_revision=int(_column(row, "plan_revision") or 0),
+        intent=str(_column(row, "intent") or ""),
     )
     return mission
 
+
+def _column(row: Any, name: str, default: Any = None) -> Any:
+    """One column of a row, or ``default`` when the column is absent.
+
+    A row read before its migration has run is not a reason to crash the whole
+    mission list. ``sqlite3.Row`` raises `IndexError` for a missing key rather
+    than returning None, so the read is explicit here.
+    """
+    try:
+        return row[name]
+    except (IndexError, KeyError):
+        return default
 
 def _epoch(value: Any) -> float:
     from datetime import datetime

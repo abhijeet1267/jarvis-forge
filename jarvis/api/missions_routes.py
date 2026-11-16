@@ -68,6 +68,7 @@ def build_router(require_auth) -> APIRouter:
         service = _service()
 
         conditions = _conditions_with_stored_specs(body.get("conditions") or [])
+        intent = _intent_json(mission_id=None, request=request, body=body)
         try:
             mission = service.create(
                 request,
@@ -75,6 +76,7 @@ def build_router(require_auth) -> APIRouter:
                 scope=dict(body.get("scope") or {}),
                 conditions=conditions,
                 steps=list(body.get("steps") or []),
+                intent=intent,
             )
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc))
@@ -104,6 +106,60 @@ def build_router(require_auth) -> APIRouter:
         except ValueError:
             raise HTTPException(status_code=400, detail=f"unknown state {target!r}")
         return _dump(mission)
+
+    @router.post("/{mission_id}/steer")
+    async def steer_mission(mission_id: str,
+                            body: Dict[str, Any] = Body(None)) -> Dict[str, Any]:
+        """Replace the un-run remainder of a plan with a new one.
+
+        The reply is the mission as it now stands plus what the revision left
+        standing, so the caller does not have to guess whether a completed
+        step's effect survived the change -- it did, and the record says so.
+        """
+        from ..core.steering import steering_report
+
+        body = body or {}
+        steps = body.get("steps")
+        if not isinstance(steps, list) or not steps:
+            raise HTTPException(
+                status_code=422,
+                detail="a revision must carry a non-empty 'steps' list")
+
+        service = _service()
+        mission = service.get(mission_id)
+        if mission is None:
+            raise HTTPException(status_code=404, detail=f"no mission {mission_id!r}")
+
+        try:
+            mission = service.apply_revision(
+                mission_id, steps=steps,
+                reason=str(body.get("reason") or ""), actor="user")
+        except ValueError as exc:
+            raise HTTPException(status_code=409, detail=str(exc))
+
+        return _dump(mission) | {"steering": steering_report(mission)}
+
+    @router.post("/{mission_id}/steer/preview")
+    async def preview_steer(mission_id: str,
+                            body: Dict[str, Any] = Body(None)) -> Dict[str, Any]:
+        """What a revision would change, before anything is committed to it.
+
+        Read-only. Naming this separately is deliberate: a person should be able
+        to see that a change is refused by the mission's own intent, or that it
+        leaves an already-run step standing, without their exploration becoming
+        the decision.
+        """
+        from ..core.steering import revision_summary
+
+        body = body or {}
+        steps = body.get("steps")
+        if not isinstance(steps, list):
+            raise HTTPException(status_code=422,
+                                detail="'steps' must be a list of proposed steps")
+        mission = _service().get(mission_id)
+        if mission is None:
+            raise HTTPException(status_code=404, detail=f"no mission {mission_id!r}")
+        return revision_summary(mission, steps)
 
     @router.post("/{mission_id}/cancel")
     async def cancel_mission(mission_id: str) -> Dict[str, Any]:
@@ -437,6 +493,56 @@ def _audit():
 def _dump(mission) -> Dict[str, Any]:
     return mission.to_dict()
 
+
+def _intent_json(*, mission_id, request: str, body: Dict[str, Any]) -> str:
+    """The IntentScope for a new mission, as JSON, or "" when none was given.
+
+    Two ways to supply one: a fully-formed ``intent`` object (the client built
+    it from the person's own choices), or the bare minimum -- a goal and the
+    capabilities the plan names -- which the request itself produces. The
+    second exists so a mission created without an explicit scope is still
+    bounded by what it asked for rather than being unbounded by omission.
+
+    An intent that will not construct raises 422: recording an authorization
+    nobody can check is worse than refusing to create the mission.
+    """
+    from ..security.intentshield import IntentScope, RESOURCE_PARAMETER_KEYS
+
+    supplied = body.get("intent")
+    if isinstance(supplied, dict) and supplied:
+        data = dict(supplied)
+    else:
+        capabilities = sorted({str(s.get("tool") or "").strip()
+                               for s in (body.get("steps") or [])
+                               if str(s.get("tool") or "").strip()})
+        if not capabilities:
+            return ""
+        # Every resource the plan names, not only `path`: a copy step's
+        # destination is a write target, and deriving the scope from `path`
+        # alone would authorize the copy while declaring the destination
+        # outside the scope the next check sees.
+        prefixes = sorted({
+            str((s.get("params") or {}).get(key) or "").strip()
+            for s in (body.get("steps") or [])
+            for key in RESOURCE_PARAMETER_KEYS
+            if str((s.get("params") or {}).get(key) or "").strip()
+        })
+        data = {
+            "mission_id": "pending",
+            "goal": request,
+            "allowed_capabilities": capabilities,
+            "allowed_resource_prefixes": prefixes,
+            "risk_budget": int(body.get("risk_budget") or 2),
+        }
+
+    data["mission_id"] = str(data.get("mission_id") or "pending")
+    data["goal"] = str(data.get("goal") or request)
+    try:
+        scope = IntentScope.from_dict(data)
+    except (ValueError, TypeError) as exc:
+        raise HTTPException(status_code=422,
+                            detail=f"the mission's intent is not valid: {exc}")
+    return scope.to_json()
 
 def _gate_factory(core):
     """A gate that asks the real PermissionEngine about one mission step."""

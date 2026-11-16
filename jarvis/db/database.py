@@ -596,6 +596,17 @@ class Database:
                 "last_result": "TEXT DEFAULT ''",
                 "requires_confirmation": "INTEGER DEFAULT 0",
             },
+            # V12 phase 3. `version` is an optimistic-concurrency counter that
+            # moves on every write, including marking a step done, so it cannot
+            # answer "is this still the plan that was approved". `plan_revision`
+            # does: it changes only when the plan itself is steered, and a lease
+            # or an intent bound to an older revision stops covering the plan.
+            # `intent` holds the IntentScope recorded for the request; empty
+            # means none was recorded and intent-based checks do not run.
+            "missions": {
+                "plan_revision": "INTEGER DEFAULT 0",
+                "intent": "TEXT DEFAULT ''",
+            },
         }
         for table, columns in additions.items():
             try:

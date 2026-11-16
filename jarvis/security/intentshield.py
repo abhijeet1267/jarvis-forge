@@ -72,9 +72,18 @@ DEFAULT_FORBIDDEN_CAPABILITIES = frozenset({
     "delete_file", "publish", "network_send", "send_email", "send_to_device",
 })
 
-#: Step parameters that name a resource. The first three the planner uses; any
-#: key absent from a step is simply not a resource for that step.
-_RESOURCE_KEYS = ("path", "target", "source")
+#: Step parameters that name a resource. Every one a step carries must be
+#: inside the intent's prefixes. ``destination`` is here because a copy step's
+#: *write* target is the one that matters most: checking only ``path`` and
+#: ``source`` let a copy write anywhere while both of the checked parameters sat
+#: inside the scope. ``key`` covers the built-in file tools, which name their
+#: operand that way rather than ``path``.
+_RESOURCE_KEYS = ("path", "target", "source", "destination", "key")
+
+#: Public name for the same tuple, so a caller deriving a scope from a plan
+#: (the mission route does) uses one definition rather than a second copy that
+#: could drift from the one the check applies.
+RESOURCE_PARAMETER_KEYS = _RESOURCE_KEYS
 
 
 @dataclass(frozen=True)

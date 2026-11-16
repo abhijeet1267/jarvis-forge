@@ -248,7 +248,12 @@ def outcome_receipt(mission: Any, audit_rows: Optional[List[Dict[str, Any]]] = N
         "request": mission.request,
         "state": mission.state,
         "verdict": mission.verdict(),
-        "plan_revision": mission.version,
+        # Which plan this receipt describes. `version` is the row counter that
+        # moves on every write (each step marked done), so it is not the plan's
+        # revision and a receipt reporting it would claim a plan changed when it
+        # never did. `plan_revision` moves only when the plan is steered.
+        "plan_revision": getattr(mission, "plan_revision", 0),
+        "record_version": mission.version,
         "conditions": [
             {"condition_id": c.condition_id, "statement": c.statement,
              "status": c.status, "observation": c.observation,
