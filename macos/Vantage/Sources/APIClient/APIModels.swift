@@ -2832,6 +2832,16 @@ extension APIModels {
         var display_id: Int?
         var needs: String?
         var operation: String?
+        /// Per-leg evidence from `/desktop/probe`. Decoded rather than dropped:
+        /// the readback after each move is the whole proof that the pointer
+        /// really moved, so a screen that discarded it would be showing a
+        /// conclusion with the evidence filed off.
+        var legs: [DesktopProbeLeg]?
+    }
+
+    struct DesktopProbeLeg: Codable {
+        let target: [Double]
+        let observed: [Double]
     }
 
     struct DesktopPoint: Codable {

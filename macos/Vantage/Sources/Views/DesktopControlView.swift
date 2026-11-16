@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 /// Desktop Control: what Vantage can actually do to this Mac, and the controls
 /// that do it.
@@ -18,6 +19,7 @@ struct DesktopControlView: View {
     @State private var posture: APIModels.DesktopPosture?
     @State private var moveResult: APIModels.DesktopResult?
     @State private var actionResult: APIModels.DesktopResult?
+    @State private var actionTitle = "Action"
     @State private var loading = false
     @State private var working = false
     @State private var errorMessage: String?
@@ -51,6 +53,7 @@ struct DesktopControlView: View {
                     capabilityCard(posture)
                     pointerCard(posture)
                     keyboardCard(posture)
+                    recoveryCard(posture)
                     accessibilityCard(posture)
                 } else if !loading {
                     Text("The desktop capability could not be read.").font(V.Font.body)
@@ -58,13 +61,21 @@ struct DesktopControlView: View {
                 }
 
                 if let moveResult { resultCard(moveResult, title: "Pointer") }
-                if let actionResult { resultCard(actionResult, title: "Action") }
+                if let actionResult { resultCard(actionResult, title: actionTitle) }
             }
             .padding(V.Space.xl)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .background(V.background)
         .task { await load() }
+        .onReceive(NotificationCenter.default.publisher(for: .vantageDesktopPreviewResult)) { note in
+            // Only the headless render harness posts this, so a screenshot can
+            // show the probe's evidence without a person pressing the control.
+            if let injected = note.object as? APIModels.DesktopResult {
+                actionResult = injected
+                actionTitle = "Pointer test"
+            }
+        }
     }
 
     // MARK: - Capabilities
@@ -97,16 +108,54 @@ struct DesktopControlView: View {
             // debugging session.
             Text(p.subject_note ?? "").font(V.Font.caption).foregroundColor(V.textTertiary)
                 .fixedSize(horizontal: false, vertical: true)
+            // "Not granted" and "not built" are different problems with
+            // different fixes, and a person sent to System Settings over a
+            // missing binary has no grant to give.
+            if (p.executable ?? "").isEmpty {
+                Text("The desktop executor is not built, so there is nothing for "
+                     + "macOS to grant yet. Build it on this Mac with "
+                     + "native/desktop_executor/build.sh, then recheck.")
+                    .font(V.Font.caption).foregroundColor(V.warning)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                Text("A capability shown as not granted is a permission macOS "
+                     + "withholds from this executable; the executor itself is "
+                     + "built, so that is the only thing missing.")
+                    .font(V.Font.caption).foregroundColor(V.textTertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             if let exe = p.executable, !exe.isEmpty {
                 Text(exe).font(V.Font.mono).foregroundColor(V.textTertiary)
                     .lineLimit(1).truncationMode(.middle)
             }
-            if !p.canClick {
+            Divider().overlay(V.divider)
+            Text("SET UP").font(V.Font.caption).foregroundColor(V.textTertiary)
+            Text("The grant has to be made in System Settings by you: a program "
+                 + "cannot grant a permission to itself. These controls only read "
+                 + "the state, ask macOS to prompt, or open the right pane.")
+                .font(V.Font.caption).foregroundColor(V.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+            HStack(spacing: V.Space.s) {
+                Button("Check permissions") { Task { await load() } }
+                    .buttonStyle(VSecondaryButtonStyle())
+                    .disabled(loading || working)
+                Button("Recheck") { Task { await load() } }
+                    .buttonStyle(VSecondaryButtonStyle())
+                    .disabled(loading || working)
                 Button(working ? "Asking…" : "Request permission") {
                     Task { await requestAccess() }
                 }
                 .buttonStyle(VSecondaryButtonStyle())
                 .disabled(working)
+                Button("Open System Settings") { openAccessibilitySettings() }
+                    .buttonStyle(VSecondaryButtonStyle())
+                // The probe moves the pointer a bounded square and reads each
+                // position back, so it can be pressed on a machine in use and
+                // still answers "is the executor real?" rather than "is it
+                // allowed?" — the two questions this card exists to separate.
+                Button("Test pointer") { Task { await probe() } }
+                    .buttonStyle(VSecondaryButtonStyle())
+                    .disabled(working)
             }
         }
         .padding(V.Space.m)
@@ -188,6 +237,41 @@ struct DesktopControlView: View {
         .clipShape(RoundedRectangle(cornerRadius: V.Radius.card))
     }
 
+    // MARK: - Recovery
+
+    /// Enabled even without input permission on purpose: the person is the one
+    /// who noticed the stuck button, and refusing to let them ask would be
+    /// worse than the backend answering "needs a permission".
+    @ViewBuilder
+    private func recoveryCard(_ p: APIModels.DesktopPosture) -> some View {
+        VStack(alignment: .leading, spacing: V.Space.s) {
+            Text("RECOVERY").font(V.Font.caption).foregroundColor(V.textTertiary)
+            Text("Use this after a drag was cancelled or failed, or if the pointer "
+                 + "behaves as though a button is still held down.")
+                .font(V.Font.caption).foregroundColor(V.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+            HStack(spacing: V.Space.s) {
+                Button(working ? "Releasing…" : "Release held input") {
+                    Task { await releaseInput() }
+                }
+                .buttonStyle(VSecondaryButtonStyle())
+                .disabled(working)
+                Spacer()
+            }
+            if !p.canClick {
+                Text("This needs input permission to do anything; without it the "
+                     + "backend can only report that it cannot release what it "
+                     + "cannot press.")
+                    .font(V.Font.caption).foregroundColor(V.warning)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(V.Space.m)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(V.surface)
+        .clipShape(RoundedRectangle(cornerRadius: V.Radius.card))
+    }
+
     // MARK: - Accessibility
 
     @ViewBuilder
@@ -228,11 +312,27 @@ struct DesktopControlView: View {
                 Text("pointer (\(Int(before.x)), \(Int(before.y))) → (\(Int(after.x)), \(Int(after.y)))")
                     .font(V.Font.mono).foregroundColor(V.textTertiary)
             }
+            if let legs = r.legs, !legs.isEmpty {
+                // Each leg is a request and the position read back afterwards.
+                // Showing both is what lets a person see the pointer really went
+                // there, rather than reading a sentence that claims it did.
+                ForEach(Array(legs.enumerated()), id: \.offset) { _, leg in
+                    Text(legLine(leg)).font(V.Font.mono).foregroundColor(V.textTertiary)
+                }
+            }
         }
         .padding(V.Space.m)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(V.surfaceAlt)
         .clipShape(RoundedRectangle(cornerRadius: V.Radius.card))
+    }
+
+    private func legLine(_ leg: APIModels.DesktopProbeLeg) -> String {
+        let target = leg.target.count >= 2
+            ? "(\(Int(leg.target[0])), \(Int(leg.target[1])))" : "?"
+        let observed = leg.observed.count >= 2
+            ? "(\(Int(leg.observed[0])), \(Int(leg.observed[1])))" : "?"
+        return "asked \(target)  →  pointer read \(observed)"
     }
 
     private func symbol(_ status: String) -> String {
@@ -282,6 +382,7 @@ struct DesktopControlView: View {
             let r = try await api.post("/desktop/request-access", body: EmptyBody(),
                                        as: APIModels.DesktopResult.self)
             actionResult = r
+            actionTitle = "Request access"
             await load()
         } catch {
             errorMessage = error.localizedDescription
@@ -289,12 +390,63 @@ struct DesktopControlView: View {
         working = false
     }
 
+    /// Saves the person from hunting for the pane. Opening it grants nothing.
+    private func openAccessibilitySettings() {
+        let target = "x-apple.systempreferences:com.apple.preference.security"
+            + "?Privacy_Accessibility"
+        if let url = URL(string: target) {
+            NSWorkspace.shared.open(url)
+        } else {
+            errorMessage = "Could not open System Settings. Open Privacy & Security › "
+                + "Accessibility by hand."
+        }
+    }
+
+    private func probe() async {
+        working = true
+        do {
+            actionResult = try await api.post("/desktop/probe", body: EmptyBody(),
+                                              as: APIModels.DesktopResult.self)
+            actionTitle = "Pointer test"
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+        working = false
+    }
+
+    private func releaseInput() async {
+        working = true
+        do {
+            actionResult = try await api.post("/desktop/release-input", body: EmptyBody(),
+                                              as: APIModels.DesktopResult.self)
+            actionTitle = "Release input"
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+        working = false
+    }
+
+    /// The typed coordinate, or nil when it is not a number.
+    ///
+    /// `Double(xText) ?? 0` used to send a typo to (0, 0) — the top-left corner
+    /// of the screen — and move the real pointer there without a word. A
+    /// malformed field is a reason to refuse, not a coordinate to guess.
+    private func typedPoint() -> (x: Double, y: Double)? {
+        guard let x = Double(xText.trimmingCharacters(in: .whitespaces)),
+              let y = Double(yText.trimmingCharacters(in: .whitespaces)) else {
+            errorMessage = "The cursor position must be two numbers, one in each field."
+            return nil
+        }
+        return (x, y)
+    }
+
     private func move() async {
+        guard let point = typedPoint() else { return }
         working = true
         do {
             moveResult = try await api.post("/desktop/move",
-                                            body: PointBody(x: Double(xText) ?? 0,
-                                                            y: Double(yText) ?? 0, smooth: false,
+                                            body: PointBody(x: point.x,
+                                                            y: point.y, smooth: false,
                                                             durationMs: 0),
                                             as: APIModels.DesktopResult.self)
         } catch {
@@ -304,13 +456,15 @@ struct DesktopControlView: View {
     }
 
     private func click() async {
+        guard let point = typedPoint() else { return }
         working = true
         do {
             actionResult = try await api.post("/desktop/click",
-                                              body: ClickBody(x: Double(xText) ?? 0,
-                                                              y: Double(yText) ?? 0,
+                                              body: ClickBody(x: point.x,
+                                                              y: point.y,
                                                               button: "left", count: 1),
                                               as: APIModels.DesktopResult.self)
+            actionTitle = "Click"
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -318,13 +472,15 @@ struct DesktopControlView: View {
     }
 
     private func doubleClick() async {
+        guard let point = typedPoint() else { return }
         working = true
         do {
             actionResult = try await api.post("/desktop/click",
-                                              body: ClickBody(x: Double(xText) ?? 0,
-                                                              y: Double(yText) ?? 0,
+                                              body: ClickBody(x: point.x,
+                                                              y: point.y,
                                                               button: "left", count: 2),
                                               as: APIModels.DesktopResult.self)
+            actionTitle = "Double-click"
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -332,13 +488,15 @@ struct DesktopControlView: View {
     }
 
     private func rightClick() async {
+        guard let point = typedPoint() else { return }
         working = true
         do {
             actionResult = try await api.post("/desktop/click",
-                                              body: ClickBody(x: Double(xText) ?? 0,
-                                                              y: Double(yText) ?? 0,
+                                              body: ClickBody(x: point.x,
+                                                              y: point.y,
                                                               button: "right", count: 1),
                                               as: APIModels.DesktopResult.self)
+            actionTitle = "Right-click"
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -350,6 +508,7 @@ struct DesktopControlView: View {
         do {
             actionResult = try await api.post("/desktop/type", body: TextBody(text: typeText),
                                               as: APIModels.DesktopResult.self)
+            actionTitle = "Type"
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -365,6 +524,7 @@ struct DesktopControlView: View {
             actionResult = try await api.post("/desktop/key",
                                               body: KeyBody(key: shortcutKey, modifiers: mods),
                                               as: APIModels.DesktopResult.self)
+            actionTitle = "Shortcut"
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -377,3 +537,9 @@ private struct PointBody: Codable { let x: Double; let y: Double; let smooth: Bo
 private struct ClickBody: Codable { let x: Double; let y: Double; let button: String; let count: Int }
 private struct TextBody: Codable { let text: String }
 private struct KeyBody: Codable { let key: String; let modifiers: [String] }
+
+extension Notification.Name {
+    /// Posted only by the headless render harness, so a screenshot can show a
+    /// result the screen would otherwise need a person to press for.
+    static let vantageDesktopPreviewResult = Notification.Name("vantageDesktopPreviewResult")
+}
