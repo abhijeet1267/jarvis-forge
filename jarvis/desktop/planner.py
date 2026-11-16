@@ -47,6 +47,10 @@ _NAMED_KEYS = frozenset({
     "left", "right", "down", "up", "home", "end", "pageup", "pagedown",
 })
 
+#: Words that point at a coordinate already established in the same request.
+#: They never invent one: with no established point they produce a question.
+_DEICTIC_POINTS = frozenset({"there", "here"})
+
 _ELEMENT_NOUNS = r"(?:menu\s+item|button|link|tab|checkbox|item|field|cell|menu)"
 _ELEMENT = re.compile(
     r"^(?P<label>.+?)\s+" + _ELEMENT_NOUNS +
@@ -78,14 +82,188 @@ def plan_desktop(request: str, *, context: Optional[Dict[str, Any]] = None) -> D
     if not text:
         return _ask("What should I do on the desktop?")
     ctx = context or {}
+    clauses = _split_chain(text)
+    if len(clauses) <= 1:
+        return _plan_one(text, ctx)
+    return _plan_chain(clauses, ctx)
+
+
+def _plan_one(text: str, ctx: Dict[str, Any]) -> DesktopPlan:
     for matcher in (_plan_move, _plan_drag, _plan_click, _plan_scroll,
-                    _plan_type, _plan_press, _plan_focus, _plan_inspect):
+                    _plan_type, _plan_press, _plan_open, _plan_focus,
+                    _plan_inspect):
         plan = matcher(text, ctx)
         if plan is not None:
             return plan
     return _ask("I could not understand that desktop instruction. Name a point "
                 "('400 300'), a key ('cmd s'), an element ('the Save button in "
                 "Safari'), or an application to focus or read.")
+
+
+#: Words that can join two instructions, and the multi-word ones that mean the
+#: same thing. A connector only splits when what follows is a desktop
+#: instruction this planner owns — "and" inside a name or a sentence is not a
+#: boundary.
+_CONNECTORS = frozenset({"and", "then", "also"})
+_CONNECTOR_PHRASES = (("after", "that"), ("followed", "by"))
+
+#: Verbs that begin an instruction this planner can plan. Used only to decide
+#: whether a connector is a boundary; the matchers still do the parsing.
+_VERBS = ("move", "drag", "scroll", "type", "press", "click", "double-click",
+          "double click", "right-click", "right click", "focus", "switch",
+          "bring", "activate", "read", "inspect", "show", "list", "open",
+          "launch", "start")
+
+
+def _plan_chain(clauses: List[str], ctx: Dict[str, Any]) -> DesktopPlan:
+    """Plan every clause of a chained request, in the order it was spoken.
+
+    All-or-nothing on purpose: if any clause is a question, the whole request is
+    a question. Executing the first two clauses and stopping would leave the
+    person unable to tell which part ran.
+
+    A cursor point established by an earlier step is available to a later one —
+    "move the cursor to 412 336, then click there" clicks (412, 336), because
+    "there" is the point the person just named in the same plan, not an
+    invention.
+    """
+    point = _context_point(ctx)
+    steps: List[PlannedStep] = []
+    for clause in clauses:
+        plan = _plan_one(clause, {**ctx, "point": point})
+        if plan.clarification is not None:
+            return _ask(f"Nothing was planned, because one part of the request "
+                        f"was unclear ({clause!r}): {plan.clarification}")
+        for step in plan.steps:
+            if step.tool == "desktop_move_pointer":
+                point = (step.params["x"], step.params["y"])
+            steps.append(step)
+    return DesktopPlan(
+        steps=steps,
+        notes=[f"Read this request as {len(clauses)} instructions and planned "
+               "them in the order they were spoken."],
+    )
+
+
+def _words(text: str) -> List[Tuple[str, bool, int, int]]:
+    """Words with their source offsets, and whether each sits inside quotes.
+
+    The quoted flag is what keeps "type \"hello, world and goodbye\"" one
+    instruction: a comma or an "and" inside quotes is text being typed.
+    """
+    out: List[Tuple[str, bool, int, int]] = []
+    quote: Optional[str] = None
+    # A comma or semicolon ends a word whether or not a space follows it:
+    # "412 336, click" must yield "336" and "," as separate tokens, or the
+    # boundary scan never sees the comma at all.
+    for match in re.finditer(r"[^\s'\"\u2018\u2019\u201c\u201d,;]+|['\"\u2018\u2019\u201c\u201d,;]", text):
+        token = match.group()
+        if token in ",\u2018\u2019\u201c\u201d'\"":
+            if token in ",;":
+                out.append((token, quote is not None, match.start(), match.end()))
+            elif quote is None:
+                quote = token
+            elif quote == token or token in "\u2018\u2019\u201c\u201d":
+                quote = None
+            continue
+        out.append((token, quote is not None, match.start(), match.end()))
+    return out
+
+
+def _starts_instruction(words: List[Tuple[str, bool, int, int]], at: int) -> bool:
+    """True when the first instruction after a connector is one we can plan.
+
+    Leading connectors are skipped first, so "type hi then press enter" sees
+    "press enter" rather than "then press enter" — the version that did not skip
+    them could not split after a comma-then sequence.
+    """
+    while at < len(words):
+        value = words[at][0].lower()
+        if value in _CONNECTORS or _is_phrase(words, at, ("after", "that")) \
+                or _is_phrase(words, at, ("followed", "by")):
+            at += 2 if _is_phrase(words, at, ("after", "that")) \
+                or _is_phrase(words, at, ("followed", "by")) else 1
+            continue
+        break
+    if at >= len(words):
+        return False
+    first = words[at][0].lower()
+    if first in _VERBS:
+        return True
+    if " ".join(w[0].lower() for w in words[at:at + 2]) in _VERBS:
+        return True
+    # A click exempt from the verb list here is the deictic one: "click there"
+    # is a real instruction even though it has no coordinate of its own, and the
+    # chain supplies the point. Without this the boundary is rejected and
+    # "move …, click there" collapses into one unplannable clause.
+    return first == "click"
+
+
+def _is_phrase(words: List[Tuple[str, bool, int, int]], at: int,
+               phrase: Tuple[str, ...]) -> bool:
+    if at + len(phrase) > len(words):
+        return False
+    return all(not words[at + k][1] and words[at + k][0].lower() == want
+               for k, want in enumerate(phrase))
+
+
+def _split_chain(text: str) -> List[str]:
+    """Split a request into instruction clauses on genuine boundaries.
+
+    A single instruction returns as one clause covering the whole text, so the
+    non-chained path is untouched. Splitting happens only at a comma, semicolon,
+    or connector that is followed by an instruction this planner can plan;
+    everything else stays in the clause it belongs to. The clause keeps the text
+    exactly as written between its boundaries, which is what lets a ``type``
+    clause keep its quoted text word for word.
+    """
+    words = _words(text)
+    if not words:
+        return []
+    # Each boundary is two offsets: where the previous instruction stops, and
+    # where the next one starts. The connector words between them belong to
+    # neither clause -- "type hi then press enter" is "type hi" and "press
+    # enter", not "type hi then" (which would type the word "then").
+    cuts: List[Tuple[int, int]] = []
+    for i, (value, quoted, start, _) in enumerate(words):
+        if quoted:
+            continue
+        if not (value in (",", ";") or value.lower() in _CONNECTORS
+                or _is_phrase(words, i, ("after", "that"))
+                or _is_phrase(words, i, ("followed", "by"))):
+            continue
+        nxt = i + 1
+        while nxt < len(words):
+            word = words[nxt][0].lower()
+            if word in (",", ";") or word in _CONNECTORS:
+                nxt += 1
+            elif _is_phrase(words, nxt, ("after", "that")) \
+                    or _is_phrase(words, nxt, ("followed", "by")):
+                nxt += 2
+            else:
+                break
+        if nxt < len(words) and _starts_instruction(words, nxt):
+            cuts.append((start, words[nxt][2]))
+    if not cuts:
+        return [text]
+    # Keep the last boundary at each instruction start: a comma followed by
+    # "then" yields one cut, not two, and the comma is not left on the clause.
+    seen: dict = {}
+    for ends, begins in cuts:
+        seen[begins] = (ends, begins)
+    ordered = sorted(seen.values(), key=lambda pair: pair[1])
+
+    clauses: List[str] = []
+    offset = 0
+    for ends, begins in ordered:
+        clause = text[offset:ends].strip(" ,;\t\n")
+        if clause:
+            clauses.append(clause)
+        offset = begins
+    tail = text[offset:].strip(" ,;\t\n")
+    if tail:
+        clauses.append(tail)
+    return clauses
 
 
 # -- shared parsing -----------------------------------------------------------
@@ -293,6 +471,20 @@ def _plan_click(text: str, ctx: Dict[str, Any]) -> Optional[DesktopPlan]:
     if not rest:
         return _ask("Where should I click? Name a point such as '400 300', or a "
                     "labelled element such as 'the Save button in Safari'.")
+    # "click there" / "click here" names the point an earlier step of the same
+    # plan moved to. It is a reference to a coordinate the person gave, not an
+    # invented one -- but with no such step it is a question.
+    if rest.lower() in _DEICTIC_POINTS:
+        anchor = _context_point(ctx)
+        if anchor is None:
+            return _ask("Where should I click? 'there' does not name a point yet; "
+                        "give coordinates such as '400 300', or move the cursor "
+                        "first in the same request.")
+        x, y = anchor
+        return DesktopPlan(steps=[PlannedStep(
+            tool, {"x": x, "y": y},
+            f"{verb.replace('-', ' ').capitalize()} at ({_fmt(x)}, {_fmt(y)}), "
+            f"the point this request just named")])
     point = _coords(rest, 2)
     if point is not None:
         refusal = _out_of_bounds(point, "That click position")
@@ -378,6 +570,28 @@ def _plan_press(text: str, ctx: Dict[str, Any]) -> Optional[DesktopPlan]:
         return _ask("Which element should I press? Name its label, for example "
                     "'the Save button in Safari'.")
     return _key_plan(rest)
+
+
+def _plan_open(text: str, ctx: Dict[str, Any]) -> Optional[DesktopPlan]:
+    """Launch an application by name.
+
+    This is a real desktop precondition, not a web request: the step a person
+    needs before any pointer work is the application being open. It goes through
+    the same `open_application` tool the rest of the system uses, so it carries
+    that tool's risk and confirmation rather than a second path.
+    """
+    match = re.match(r"(?:open|launch|start)\s+(?:the\s+|a\s+|an\s+)?"
+                     r"(?P<app>.+?)\s*$", text, re.I)
+    if not match:
+        return None
+    app = _clean_app(match.group("app"))
+    if not app:
+        return _ask("Which application should I open?")
+    if not _looks_like_one_app(app):
+        return _ask(f"I read {app!r} as a single application name, and that looks "
+                    "like two instructions. Which application should I open?")
+    return DesktopPlan(steps=[PlannedStep(
+        "open_application", {"app": app}, f"Open {app}")])
 
 
 def _plan_focus(text: str, ctx: Dict[str, Any]) -> Optional[DesktopPlan]:

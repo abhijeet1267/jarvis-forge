@@ -174,6 +174,26 @@ def build_router(require_auth) -> APIRouter:
         return executor.focus_application(str(body.get("application") or ""),
                                           str(body.get("window") or ""))
 
+    @router.get("/identity")
+    async def identity() -> Dict[str, Any]:
+        """Which binary macOS is being asked about, and how it is signed.
+
+        Read-only, and the answer a person needs before granting anything: an
+        ad-hoc signature is not stable across rebuilds, so "I already granted
+        this" can be false after a build even at the same path.
+        """
+        return executor.identity()
+
+    @router.get("/windows")
+    async def windows(application: str = "") -> Dict[str, Any]:
+        """On-screen windows and their real global bounds. Read-only.
+
+        The cheapest true answer to "where is that window?", because the window
+        server needs only screen-recording access — a grant this machine already
+        has — rather than the post-event access a click needs.
+        """
+        return executor.windows(application)
+
     @router.get("/inspect")
     async def inspect(application: str = "", depth: int = 6) -> Dict[str, Any]:
         """Read an application's Accessibility tree. Read-only."""

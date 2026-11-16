@@ -145,14 +145,21 @@ if not CAN_POST or rx is None:
            "post-event access not granted" if not CAN_POST else "no 'right' target")
 else:
     before_r = probe_state().get("right_clicks", 0)
+    before_open = probe_state().get("context_menu_openings", 0)
     call("POST", "/desktop/click", {"x": rx, "y": ry, "button": "right"})
     time.sleep(0.6)
     got = probe_state().get("right_clicks", 0)
-    # The probe counts only when its context menu item is chosen; opening the
-    # menu is the observable part available to a synthetic click.
-    record("T4 right click", "PARTIALLY VERIFIED", 2,
-           f"a right-click was posted; the fixture's menu-item count is {got} "
-           f"(choosing the item is a second action)")
+    opened = probe_state().get("context_menu_openings", 0)
+    # The menu actually appearing is the outcome a right-click alone produces;
+    # choosing an item is a second action and is not claimed here.
+    if opened > before_open:
+        record("T4 right click", "VERIFIED", 3,
+               f"the context menu opened ({before_open} -> {opened}); the item "
+               f"count {before_r} -> {got} is a second action, not claimed")
+    else:
+        record("T4 right click", "FAILED", 2,
+               f"a right-click was posted but the menu never opened "
+               f"(openings stayed {before_open})")
 
 # -- T5: typing ----------------------------------------------------------------
 fx, fy = at("field")
@@ -173,32 +180,63 @@ else:
 if not CAN_POST:
     record("T6 shortcut", "PERMISSION BLOCKED", 1, "post-event access not granted")
 else:
+    sx, sy = at("shortcut_field")
+    if sx is not None:
+        call("POST", "/desktop/click", {"x": sx, "y": sy})
+        time.sleep(0.25)
     st, pressed = call("POST", "/desktop/key", {"key": "a", "modifiers": ["cmd"]})
-    record("T6 shortcut", "PARTIALLY VERIFIED", 2,
-           f"cmd+a was posted ({pressed.get('status')}); the selection it produces is "
-           f"visible on screen but not readable through this fixture")
+    time.sleep(0.35)
+    sel = probe_state().get("selection_length", 0)
+    length = probe_state().get("field_text_length", 0)
+    if length and sel == length:
+        record("T6 shortcut", "VERIFIED", 3,
+               f"cmd+a selected {sel} of {length} characters — the field's own "
+               f"reported selection, not an inference")
+    else:
+        record("T6 shortcut", "FAILED", 2,
+               f"cmd+a was posted ({pressed.get('status')}) but the selection reads "
+               f"{sel} of {length}")
 
 # -- T7: scroll ----------------------------------------------------------------
 if not CAN_POST:
     record("T7 scroll", "PERMISSION BLOCKED", 1, "post-event access not granted")
 else:
+    gx, gy = at("scroller")
     before_off = probe_state().get("scroll_offset", 0)
-    call("POST", "/desktop/scroll", {"x": cx or 300, "y": cy or 300, "lines": -5})
-    time.sleep(0.4)
-    record("T7 scroll", "PARTIALLY VERIFIED", 2,
-           f"a scroll was posted at the list; the fixture does not publish its "
-           f"offset (before: {before_off})")
+    call("POST", "/desktop/scroll",
+         {"x": gx if gx is not None else 300, "y": gy if gy is not None else 300,
+          "lines": -5})
+    time.sleep(0.5)
+    after_off = probe_state().get("scroll_offset", 0)
+    if after_off != before_off:
+        record("T7 scroll", "VERIFIED", 3,
+               f"the list's own clip-view offset {before_off} -> {after_off}")
+    else:
+        record("T7 scroll", "FAILED", 2,
+               f"a scroll was posted but the offset stayed {before_off}")
 
 # -- T8: drag ------------------------------------------------------------------
 if not CAN_POST:
     record("T8 drag", "PERMISSION BLOCKED", 1, "post-event access not granted")
 else:
+    sx, sy = at("drag_source")
+    dx2, dy2 = at("drop_target")
+    before_drop = probe_state().get("drop_count", 0)
     st, dragged = call("POST", "/desktop/drag",
-                       {"from_x": cx, "from_y": cy,
-                        "to_x": (cx or 0) + 80, "to_y": (cy or 0) + 60})
-    record("T8 drag", "PARTIALLY VERIFIED", 2,
-           f"a drag was posted ({dragged.get('status')}); the fixture has no drop "
-           f"target that publishes its received item")
+                       {"from_x": sx if sx is not None else cx,
+                        "from_y": sy if sy is not None else cy,
+                        "to_x": dx2 if dx2 is not None else (cx or 0) + 80,
+                        "to_y": dy2 if dy2 is not None else (cy or 0) + 60})
+    time.sleep(0.6)
+    drops = probe_state().get("drop_count", 0)
+    item = probe_state().get("dropped_item", "")
+    if drops > before_drop:
+        record("T8 drag", "VERIFIED", 3,
+               f"the drop target received {item!r} (drops {before_drop} -> {drops})")
+    else:
+        record("T8 drag", "FAILED", 2,
+               f"a drag was posted ({dragged.get('status')}) but nothing landed "
+               f"(drops stayed {before_drop})")
 
 # -- T9: the TextEdit mission --------------------------------------------------
 st, mission = call("POST", "/missions", {

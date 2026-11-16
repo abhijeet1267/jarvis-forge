@@ -376,3 +376,82 @@ def test_a_takeover_refuses_a_desktop_action_from_the_http_surface():
     # which is a different refusal and must not be a 409).
     resumed = client.post("/desktop/move", headers=headers, json={"x": 10, "y": 10})
     assert resumed.status_code in (200, 500, 503), resumed.status_code
+
+# -- identity and windows: two reads that need no input grant -----------------
+
+def test_identity_and_windows_are_reads_that_never_ask(registry):
+    """Neither posts an event, so neither may be gated behind a confirmation.
+
+    A person checking which binary macOS is being asked about, or where a window
+    is, must not have to answer a modal for it.
+    """
+    for name in ("desktop_identity", "desktop_windows"):
+        spec = registry.get(name)
+        assert spec.risk is RiskLevel.READ, name
+        assert spec.requires_confirmation is False, name
+
+def test_the_identity_reports_the_signature_state_and_the_caveat(stub, registry, ctx):
+    """An ad-hoc signature is not an identity macOS keeps across a rebuild.
+
+    A screen that said "signed" without that would send somebody to grant a
+    permission the next build no longer has.
+    """
+    _, make, mp = stub
+    mp.setattr(desktop_native.executor, "identity", make({
+        "status": "verified", "process_name": "vantage-desktop",
+        "executable": "/tmp/vantage-desktop",
+        "bundle_id": "com.jarvisforge.vantage.desktopdev",
+        "signing": "adhoc",
+        "grant_caveat": "a TCC grant follows this code identity"}))
+    result = _call(registry, ctx, "desktop_identity")
+    assert result.ok is True
+    # The facts travel in the payload the screen reads...
+    assert result.output["desktop_result"]["signing"] == "adhoc"
+    assert result.output["desktop_result"]["bundle_id"] == "com.jarvisforge.vantage.desktopdev"
+    # ...and the caveat travels with them, not only in a docstring.
+    assert "follows this code identity" in str(result.output.get("note", ""))
+
+def test_an_unreadable_identity_is_not_reported_as_verified(stub, registry, ctx):
+    """A read that did not work is a failure, not "ran, outcome unknown".
+
+    `unverified()` means the handler ran and the world's state is not known. A
+    failed read is the other thing: nothing was read at all.
+    """
+    _, make, mp = stub
+    mp.setattr(desktop_native.executor, "identity",
+               make({"status": "failed", "reason": "the executable could not be hashed"}))
+    result = _call(registry, ctx, "desktop_identity")
+    assert result.ok is False
+    text = str(result.message or result.error).lower()
+    assert "did not work" in text
+    assert "could not be hashed" in text
+
+def test_window_bounds_reach_the_caller_unchanged(stub, registry, ctx):
+    """The number a click is aimed at has to be the number the window server gave.
+
+    A tool that re-derived or re-rounded these would reintroduce exactly the
+    mirrored-coordinate defect the probe's own conversion already had once.
+    """
+    _, make, mp = stub
+    mp.setattr(desktop_native.executor, "windows", make({
+        "status": "verified",
+        "windows": [{"owner": "TextEdit", "title": "note.txt",
+                     "x": 273.0, "y": 208.0, "width": 656.0, "height": 422.0,
+                     "window_id": 19293, "layer": 0}],
+        "note": "bounds are global points, top-left origin"}))
+    result = _call(registry, ctx, "desktop_windows", application="TextEdit")
+    assert result.ok is True
+    windows = result.output["windows"]
+    assert windows == [{"owner": "TextEdit", "title": "note.txt",
+                        "x": 273.0, "y": 208.0, "width": 656.0, "height": 422.0,
+                        "window_id": 19293, "layer": 0}]
+
+def test_a_window_list_without_screen_recording_is_a_refusal(stub, registry, ctx):
+    _, make, mp = stub
+    mp.setattr(desktop_native.executor, "windows", make({
+        "status": "permission_required",
+        "reason": "listing windows needs Screen Recording access and macOS has "
+                  "not granted it to this executable"}))
+    result = _call(registry, ctx, "desktop_windows")
+    assert result.ok is False
+    assert "Screen Recording" in str(result.message or result.error)

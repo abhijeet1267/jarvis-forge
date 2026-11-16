@@ -209,7 +209,6 @@ def test_unrecognised_input_is_a_question_not_a_silent_empty_plan(utterance):
 
 @pytest.mark.parametrize("utterance", [
     "focus Safari and click Save",
-    "switch to TextEdit then type hello",
     "activate Mail and press the Send button",
 ])
 def test_a_chained_instruction_does_not_become_an_application_name(utterance):
@@ -217,8 +216,33 @@ def test_a_chained_instruction_does_not_become_an_application_name(utterance):
     tail of a compound sentence to the executor as an app name. Measured: "focus
     Safari and click Save" planned a focus of "Safari and click Save" with no
     clarification -- an invented target, which is the one thing this module must
-    never do."""
+    never do.
+
+    The response may be a question or a chain in which the later clause is the
+    thing that asks; what it must never be is a plan whose application name is
+    the rest of the sentence."""
     result = plan_desktop(utterance)
+    names = [s.params.get("application", "") for s in result.steps]
+    assert not any(" and " in n or " then " in n for n in names), names
+
+
+def test_a_chain_with_a_plannable_second_clause_plans_both_in_order():
+    """V15 §16: a multi-step mission is planned as steps, not refused.
+
+    "switch to TextEdit then type hello" is two instructions this planner owns,
+    so it is two steps in the order spoken -- not a question, and not an
+    application literally named "TextEdit then type hello"."""
+    result = plan_desktop("switch to TextEdit then type hello")
+    assert result.clarification is None, result.clarification
+    assert [s.tool for s in result.steps] == ["desktop_focus_window",
+                                              "desktop_type_text"]
+    assert result.steps[0].params["application"] == "TextEdit"
+    assert result.steps[1].params["text"] == "hello"
+
+
+def test_a_chain_whose_second_clause_is_ambiguous_plans_nothing():
+    """Half a plan is worse than a question: the person cannot tell what ran."""
+    result = plan_desktop("focus Safari and click Save")
     assert result.steps == [], result.steps
     assert result.clarification
 
@@ -236,3 +260,93 @@ def test_a_real_multi_word_application_name_is_still_accepted(name):
     step = only_step(result)
     assert step.tool == "desktop_focus_window"
     assert step.params["application"] == name
+
+
+# -- chained instructions (V15 §16) -------------------------------------------
+
+DEMO = ("Open TextEdit, move the cursor to 412 336, click there, "
+        "type 'Hello from Vantage', then press cmd+s")
+
+
+def test_the_full_demonstration_plans_five_steps_in_order():
+    """The sentence the campaign has to be able to carry out, end to end."""
+    result = plan_desktop(DEMO)
+    assert result.clarification is None, result.clarification
+    assert [s.tool for s in result.steps] == [
+        "open_application",
+        "desktop_move_pointer",
+        "desktop_click",
+        "desktop_type_text",
+        "desktop_shortcut",
+    ]
+    assert result.steps[0].params == {"app": "TextEdit"}
+    assert result.steps[3].params == {"text": "Hello from Vantage"}
+    assert result.steps[4].params == {"key": "s", "modifiers": ["cmd"]}
+
+
+def test_click_there_takes_the_point_the_request_just_named():
+    """`there` is a reference to a coordinate the person gave, not an invention.
+
+    Both the click and the move must carry the same numbers, and the plan must
+    say where they came from.
+    """
+    result = plan_desktop("move the cursor to 412 336, click there")
+    assert result.clarification is None, result.clarification
+    move, click = result.steps
+    assert (move.params["x"], move.params["y"]) == (412, 336)
+    assert (click.params["x"], click.params["y"]) == (412, 336)
+
+
+def test_click_there_with_no_earlier_point_is_a_question_not_a_guess():
+    """With nothing established, `there` names no point, and a coordinate must
+    never be invented for it."""
+    result = plan_desktop("click there")
+    assert result.steps == []
+    assert "there" in result.clarification.lower()
+
+
+def test_a_quoted_comma_and_conjunction_stay_one_instruction():
+    """`type "hello, world and goodbye"` is one clause; the punctuation is text."""
+    result = plan_desktop('type "hello, world and goodbye"')
+    assert [s.tool for s in result.steps] == ["desktop_type_text"]
+    assert result.steps[0].params["text"] == "hello, world and goodbye"
+
+
+def test_two_coordinates_joined_by_and_are_not_two_clicks():
+    """`click 400 300 and 410 310` is one malformed click, not two clicks."""
+    result = plan_desktop("click 400 300 and 410 310")
+    assert result.steps == []
+    assert result.clarification
+
+
+def test_connector_words_are_not_dragged_into_the_clause_before_them():
+    """`type hi then press enter` must type "hi", not "hi then"."""
+    result = plan_desktop("type hi then press enter")
+    assert result.clarification is None, result.clarification
+    assert [s.tool for s in result.steps] == ["desktop_type_text",
+                                              "desktop_press_key"]
+    assert result.steps[0].params["text"] == "hi"
+    assert result.steps[1].params["key"] == "enter"
+
+
+@pytest.mark.parametrize("utterance", [
+    "move the cursor to 10 10, click there, then type hello",
+    "open TextEdit, move the cursor to 10 10, click there, type hello, "
+    "then press cmd+s",
+])
+def test_three_or_more_clauses_are_all_planned_in_order(utterance):
+    result = plan_desktop(utterance)
+    assert result.clarification is None, result.clarification
+    tools = [s.tool for s in result.steps]
+    for name in ("desktop_move_pointer", "desktop_click", "desktop_type_text"):
+        assert name in tools
+    # Spoken order is preserved: the move precedes the click it establishes.
+    assert tools.index("desktop_move_pointer") < tools.index("desktop_click")
+
+
+def test_a_single_plain_instruction_plans_exactly_as_before():
+    """The chain path must not change the one-step answer at all."""
+    result = plan_desktop("move the cursor to 400 300")
+    assert len(result.steps) == 1
+    assert result.steps[0].tool == "desktop_move_pointer"
+    assert result.notes == []

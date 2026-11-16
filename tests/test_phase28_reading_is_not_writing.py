@@ -326,11 +326,12 @@ def test_the_sweep_is_measured_not_improvised(core):
     assert desktop_tools, "the desktop surface disappeared"
     assert set(desktop_tools) <= set(unreachable), \
         "a desktop tool acquired a sentence route; that is a design change, not a fix"
-    # 32 before the desktop surface, +17 desktop tools. Pinned so an unrelated
-    # new tool cannot drift in unnoticed, but not pinned per-tool: the assert
-    # above is what says "every desktop tool is unrouted", and it does not need
-    # editing every time one is added.
-    assert len(unreachable) == 49, sorted(set(unreachable) - set(desktop_tools))
+    # 32 before the desktop surface, +19 desktop tools (V15 added the identity
+    # and window reads). Pinned so an unrelated new tool cannot drift in
+    # unnoticed, but not pinned per-tool: the assert above is what says "every
+    # desktop tool is unrouted", and it does not need editing every time one is
+    # added.
+    assert len(unreachable) == 51, sorted(set(unreachable) - set(desktop_tools))
     assert "read_file" not in unreachable
 
 

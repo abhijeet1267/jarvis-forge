@@ -81,7 +81,7 @@ def _result_message(result: Dict[str, Any], acted_phrase: str) -> str:
 
 
 def _finish(tool: str, result: Dict[str, Any], ctx: ToolContext,
-            acted_phrase: str) -> Any:
+            acted_phrase: str, **extra: Any) -> Any:
     """Map an executor result onto the tool result type the registry expects."""
     status = str(result.get("status") or "unknown")
     message = _result_message(result, acted_phrase)
@@ -89,6 +89,7 @@ def _finish(tool: str, result: Dict[str, Any], ctx: ToolContext,
         "device": ctx.device_id,
         "desktop_status": status,
         "desktop_result": result,
+        **extra,
     }
     if status == "verified":
         return ok(tool, message, verified=True, **payload)
@@ -376,6 +377,32 @@ async def desktop_permissions(ctx: ToolContext, **_: Any) -> Any:
               **payload)
 
 
+async def desktop_windows(ctx: ToolContext, application: str = "", **_: Any) -> Any:
+    """List on-screen windows and their real global bounds.
+
+    The window-relative half of the coordinate system, and the cheapest one:
+    the window server answers with only screen-recording access, so a caller can
+    learn where a window is before asking the machine for anything it has not
+    granted. Bounds are global points — the same space a click accepts.
+    """
+    result = executor.windows(application)
+    return _finish("desktop_windows", result, ctx,
+                   f"Listed the windows of {application or 'every application'}",
+                   # Surfaced top-level as well as under `desktop_result`: these
+                   # bounds are what a caller aims a click at, and making it dig
+                   # through a wrapper to find them invites a re-derivation.
+                   windows=result.get("windows") or [])
+
+async def desktop_identity(ctx: ToolContext, **_: Any) -> Any:
+    """Report which binary macOS is being asked about, and how it is signed."""
+    result = executor.identity()
+    # `_finish` maps a failed read onto `fail`. An `unverified()` here would
+    # report ok=True for a failed read, because that helper means "ran, outcome
+    # unknown" — which is not the same as "the read did not work".
+    return _finish("desktop_identity", result, ctx,
+                   "Read the executor's identity",
+                   note=result.get("grant_caveat") or "")
+
 SPECS = [
     (
         ToolSpec(
@@ -390,6 +417,36 @@ SPECS = [
             tags=["system", "read", "desktop"],
         ),
         desktop_permissions,
+    ),
+    (
+        ToolSpec(
+            name="desktop_identity",
+            description=(
+                "Report which executable macOS is being asked about: its path, bundle "
+                "identifier, signing mode and hash, plus the live permission snapshot. "
+                "A grant is attached to a binary, so this is what makes a refusal "
+                "actionable. Read-only."
+            ),
+            risk=RiskLevel.READ,
+            parameters={},
+            tags=["system", "read", "desktop", "diagnostic"],
+        ),
+        desktop_identity,
+    ),
+    (
+        ToolSpec(
+            name="desktop_windows",
+            description=(
+                "List on-screen windows and their real global bounds in points: which "
+                "application owns each, its title, position, size and window id. Needs "
+                "only screen-recording access. Read-only — it is how a caller finds out "
+                "where a window is before aiming at it."
+            ),
+            risk=RiskLevel.READ,
+            parameters={"application": "string"},
+            tags=["system", "read", "desktop", "windows"],
+        ),
+        desktop_windows,
     ),
     (
         ToolSpec(

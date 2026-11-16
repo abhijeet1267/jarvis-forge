@@ -145,6 +145,79 @@ else:
     record("C type into a field", "FAILED",
            f"posted={typed.get('status')}, field reads {after['text']!r}")
 
+# -- D: right-click, and observe the menu open -------------------------------
+# `right_clicks` counts the menu *item* being chosen, which needs a second
+# action. `context_menu_openings` counts the menu actually appearing, which is
+# the observable a right-click alone produces -- so this reads that one and
+# does not claim more than it saw.
+x, y = point(state, "context_menu")
+before_open = read_state().get("context_menu_openings", 0)
+run("move", str(x), str(y))
+run("click", str(x), str(y), "--button", "right")
+after = wait_for(lambda s: s.get("context_menu_openings", 0) > before_open,
+                 timeout=2.0)
+if after.get("context_menu_openings", 0) > before_open:
+    record("D context menu", "VERIFIED",
+           f"the menu opened ({before_open} -> {after['context_menu_openings']}); "
+           "choosing an item is a separate action and is not claimed here")
+    run("key", "escape")   # dismiss the menu so later steps are not blocked
+else:
+    failures += 1
+    record("D context menu", "FAILED",
+           f"openings stayed {before_open} after a posted right-click")
+
+# -- F: a keyboard shortcut, proven by the selection it produces -------------
+# cmd+a is only *evidenced* if the field's selection actually grows to its
+# whole length. A modifier flag reaching nothing leaves selection at 0.
+x, y = point(state, "shortcut_field")
+run("move", str(x), str(y))
+run("click", str(x), str(y))
+time.sleep(0.2)
+before_sel = read_state()
+run("key", "a", "--modifiers", "cmd")
+time.sleep(0.3)
+after = read_state()
+sel, length = after.get("selection_length", 0), after.get("field_text_length", 0)
+if length and sel == length:
+    record("F shortcut cmd+a", "VERIFIED",
+           f"selection {sel} of {length} characters — every one selected")
+elif sel > before_sel.get("selection_length", 0):
+    record("F shortcut cmd+a", "PARTIAL",
+           f"selection grew {before_sel.get('selection_length', 0)} -> {sel} "
+           f"of {length}; not the whole field")
+else:
+    failures += 1
+    record("F shortcut cmd+a", "FAILED", f"selection stayed {sel} of {length}")
+
+# -- G: scroll, proven by the clip view's own offset -------------------------
+x, y = point(state, "scroller")
+before_off = read_state().get("scroll_offset", 0)
+run("move", str(x), str(y))
+run("scroll", str(x), str(y), "--lines", "-5")
+after = wait_for(lambda s: s.get("scroll_offset", 0) != before_off, timeout=2.0)
+if after.get("scroll_offset", 0) != before_off:
+    record("G scroll", "VERIFIED",
+           f"the list's own offset {before_off} -> {after['scroll_offset']}")
+else:
+    failures += 1
+    record("G scroll", "FAILED", f"the list's offset stayed {before_off}")
+
+# -- H: drag an item onto a target ------------------------------------------
+# The drop target publishes what it received, so a drag that never landed
+# leaves `dropped_item` empty rather than reporting success.
+src, dst = point(state, "drag_source"), point(state, "drop_target")
+before_drop = read_state().get("drop_count", 0)
+run("drag", str(src[0]), str(src[1]), str(dst[0]), str(dst[1]))
+after = wait_for(lambda s: s.get("drop_count", 0) > before_drop, timeout=2.0)
+if after.get("drop_count", 0) > before_drop:
+    record("H drag and drop", "VERIFIED",
+           f"the target received {after.get('dropped_item')!r} "
+           f"(drops {before_drop} -> {after['drop_count']})")
+else:
+    failures += 1
+    record("H drag and drop", "FAILED",
+           f"nothing landed; drops stayed {before_drop}")
+
 # -- A: move the cursor ------------------------------------------------------
 x, y = point(state, "checkbox")
 moved = run("move", str(x), str(y))

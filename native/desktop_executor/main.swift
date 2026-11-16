@@ -32,6 +32,7 @@
 import AppKit
 import ApplicationServices
 import CoreGraphics
+import CryptoKit
 
 // ---------------------------------------------------------------------------
 // Result plumbing
@@ -412,6 +413,157 @@ func opReleaseAll() -> Never {
              "mouse-up and modifier key-up events were posted at the current pointer position. Whether anything was actually held cannot be read back; callers treat this as recovery, not as evidence that a button was down.",
              ["released": released,
               "cursor": cursorPosition().map { ["x": $0.x, "y": $0.y] } ?? NSNull()])
+}
+
+/// Who this process actually is, so a permission grant can be described without
+/// guessing.
+///
+/// A TCC grant is attached to a code identity, and there is no API that reports
+/// "what macOS thinks I am". Everything here is read from the running process or
+/// from the file on disk: the executable path, the bundle it belongs to, its
+/// ad-hoc signature state, and the revision it was built from. Reporting an
+/// identity that was assembled by hand instead would be exactly the fabricated
+/// permission claim this campaign forbids.
+func opIdentity() -> Never {
+    let exe = Bundle.main.executablePath
+        ?? CommandLine.arguments.first
+        ?? ""
+    var bundleID = Bundle.main.bundleIdentifier ?? ""
+    var bundlePath = Bundle.main.bundlePath
+    var version = (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String) ?? ""
+
+    // A bare binary has no Info.plist of its own; look for the enclosing
+    // .app so the answer says "inside this bundle" rather than "nothing".
+    if bundleID.isEmpty {
+        var dir = URL(fileURLWithPath: exe).deletingLastPathComponent()
+        while dir.path != "/" {
+            if dir.pathExtension == "app" {
+                bundlePath = dir.path
+                if let plist = NSDictionary(contentsOf: dir.appendingPathComponent("Contents/Info.plist")) {
+                    bundleID = (plist["CFBundleIdentifier"] as? String) ?? ""
+                    version = (plist["CFBundleShortVersionString"] as? String) ?? ""
+                }
+                break
+            }
+            dir = dir.deletingLastPathComponent()
+        }
+    }
+
+    let fm = FileManager.default
+    var signing = "not reported"
+    let identity = Process()
+    identity.executableURL = URL(fileURLWithPath: "/usr/bin/codesign")
+    identity.arguments = ["-d", "--verbose=2", exe]
+    let pipe = Pipe()
+    identity.standardError = pipe
+    identity.standardOutput = FileHandle.nullDevice
+    if (try? identity.run()) != nil {
+        identity.waitUntilExit()
+        let text = String(data: pipe.fileHandleForReading.readDataToEndOfFile(),
+                          encoding: .utf8) ?? ""
+        // Only the two facts that decide whether a grant follows the binary:
+        // ad-hoc signatures are not stable across rebuilds, and a Team ID is
+        // what a Developer ID signature would carry.
+        if text.contains("Signature=adhoc") { signing = "adhoc" }
+        else if let range = text.range(of: "TeamIdentifier=") {
+            let tail = text[range.upperBound...].prefix(while: { $0 != "\n" })
+            signing = tail.trimmingCharacters(in: .whitespaces).isEmpty
+                ? "signed, no team" : "signed, team \(tail.trimmingCharacters(in: .whitespaces))"
+        } else if !text.isEmpty {
+            signing = "unsigned or unreadable signature"
+        }
+    }
+
+    // The facts go in the reason, not only in the payload: a caller that shows
+    // the sentence and drops the JSON would otherwise present "identity read
+    // from this process" with nothing in it, which is a claim with no subject.
+    Emit.out(.verified,
+             "\(ProcessInfo.processInfo.processName) at \(exe), bundle "
+             + "\(bundleID.isEmpty ? "(none)" : bundleID), signed \(signing).", [
+        "executable": exe,
+        "process_name": ProcessInfo.processInfo.processName,
+        "pid": ProcessInfo.processInfo.processIdentifier,
+        "bundle_id": bundleID,
+        "bundle_path": bundlePath,
+        "bundle_version": version,
+        "signing": signing,
+        "executable_exists": fm.fileExists(atPath: exe),
+        "executable_sha256": sha256OfFile(exe),
+        // Stated because it is the thing a person needs before granting: an
+        // ad-hoc signature is not an identity macOS will keep across a rebuild.
+        "grant_caveat": "a TCC grant follows this code identity. An ad-hoc signature "
+            + "is not stable across rebuilds, so rebuilding in place may require "
+            + "the grant again. Sign with a stable identity to avoid that.",
+        "permissions": permissionSnapshot(),
+    ])
+}
+
+func sha256OfFile(_ path: String) -> String {
+    guard let data = FileManager.default.contents(atPath: path) else { return "" }
+    // CryptoKit ships with macOS. A hand-rolled digest here would be exactly
+    // the "custom cryptography" the project forbids, for no gain.
+    let digest = SHA256.hash(data: data)
+    return digest.map { String(format: "%02x", $0) }.joined()
+}
+
+/// Every on-screen window, in global top-left coordinates.
+///
+/// This is the window-relative half of the one coordinate system the tools use
+/// (V15 §10). It needs only screen-recording access, which is the permission a
+/// cursor move already requires — so a caller can learn where a window really is
+/// on this machine without Accessibility, and can then aim a click at it.
+///
+/// The window server reports bounds in points with a top-left origin, matching
+/// CGEvent space directly. Nothing here converts, because every conversion that
+/// has been needed so far has been a chance to mirror a coordinate.
+func opWindows(application: String) -> Never {
+    guard CGPreflightScreenCaptureAccess() else {
+        Emit.out(.permission_required,
+                 "listing windows needs Screen Recording access and macOS has not "
+                 + "granted it to this executable (\(ProcessInfo.processInfo.processName)).",
+                 ["permissions": permissionSnapshot(), "needs": "screen_capture"])
+    }
+    let options: CGWindowListOption = [.optionOnScreenOnly, .excludeDesktopElements]
+    guard let raw = CGWindowListCopyWindowInfo(options, kCGNullWindowID)
+            as? [[String: Any]] else {
+        Emit.out(.failed, "the window server returned no window list")
+    }
+    let needle = application.lowercased()
+    var windows: [[String: Any]] = []
+    for entry in raw {
+        let owner = (entry[kCGWindowOwnerName as String] as? String) ?? ""
+        let bundle = (entry[kCGWindowOwnerName as String] as? String) ?? ""
+        if !needle.isEmpty,
+           !owner.lowercased().contains(needle),
+           !bundle.lowercased().contains(needle) { continue }
+        // Bounds come as a CFDictionary under the "kCGWindowBounds" key; a window
+        // without one is not measurable and is skipped rather than reported at 0,0.
+        guard let dict = entry[kCGWindowBounds as String] as? [String: Any],
+              let rect = CGRect(dictionaryRepresentation: dict as CFDictionary) else { continue }
+        let layer = (entry[kCGWindowLayer as String] as? Int) ?? 0
+        // Layer 0 is the normal window plane; higher layers are menus, tooltips
+        // and overlays, which are real but not what "the app's window" means.
+        let alpha = (entry[kCGWindowAlpha as String] as? Double) ?? 1
+        windows.append([
+            "owner": owner,
+            "window_id": (entry[kCGWindowNumber as String] as? Int) ?? 0,
+            "title": (entry[kCGWindowName as String] as? String) ?? "",
+            "x": rect.origin.x, "y": rect.origin.y,
+            "width": rect.width, "height": rect.height,
+            "layer": layer, "alpha": alpha,
+            "on_screen": (entry[kCGWindowIsOnscreen as String] as? Bool) ?? false,
+            "pid": (entry[kCGWindowOwnerPID as String] as? Int) ?? 0,
+        ])
+    }
+    let front = NSWorkspace.shared.frontmostApplication
+    Emit.out(.verified,
+             "read \(windows.count) window(s)"
+             + (application.isEmpty ? " on screen" : " for \(application)"),
+             ["windows": windows,
+              "screen_capture": true,
+              "frontmost_application": front?.localizedName ?? "",
+              "note": "bounds are global points, top-left origin — the same space "
+                    + "every click and move in this tool accepts."])
 }
 
 func opPermissions() -> Never {
@@ -925,6 +1077,8 @@ func list(_ key: String) -> [String] {
 
 switch op {
 case "permissions":   opPermissions()
+case "identity":      opIdentity()
+case "windows":       opWindows(application: str("application"))
 case "request_access": opRequestAccess()
 case "move":
     guard let x = num("x"), let y = num("y") else {

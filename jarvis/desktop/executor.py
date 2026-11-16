@@ -146,6 +146,29 @@ def permissions() -> Dict[str, Any]:
     return _run("permissions")
 
 
+def identity() -> Dict[str, Any]:
+    """Which code identity macOS is being asked about.
+
+    A permission grant is attached to a binary, and the binary on disk is not
+    always the one a person thinks they approved: an ad-hoc signature does not
+    survive a rebuild. Reading the executable path, bundle id and signature state
+    from the process that would be doing the acting is what makes a "not granted"
+    message actionable rather than vague.
+    """
+    return _run("identity")
+
+
+def windows(application: str = "") -> Dict[str, Any]:
+    """Every on-screen window and its real global bounds, with no Accessibility.
+
+    Needs only screen-recording, which is cheaper than the post-event access a
+    click needs. That makes it the honest way to answer "where is this window?"
+    before asking for anything the machine has not yet granted.
+    """
+    args = [f"application={application}"] if application else []
+    return _run("windows", args)
+
+
 def request_access() -> Dict[str, Any]:
     """Ask macOS to show its own Accessibility prompt. Grants nothing itself."""
     return _run("request_access")
