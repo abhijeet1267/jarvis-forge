@@ -2353,7 +2353,8 @@
         "2026-11-16: tools/input_probe/{main.swift,build.sh,selftest.py}.",
         "2026-11-16 PASS (measured): the probe reports window_frame_ns x=120 y=120 h=672, and targets ordered top-to-bottom click 252.5 < double 294.5 < right 340.5 < checkbox 379.8 < field 415.0, all inside the window.",
         "2026-11-16 DEFECT FOUND AND FIXED while building it: the first coordinate conversion mirrored every target vertically (it reported the first control at y=623.5, below the fifth at y=461). NSHostingView is already flipped, so the extra content-height subtraction was wrong. Now uses AppKit's own convert() chain.",
-        "2026-11-16 PASS: selftest exits 2 with 'PERMISSION BLOCKED' and attempts nothing."
+        "2026-11-16 PASS: selftest exits 2 with 'PERMISSION BLOCKED' and attempts nothing.",
+        "2026-11-16 PASS (re-verified after rebuild): targets click 252.5 < double 294.5 < right 340.5 < checkbox 379.8 < field 415.0, window at (120,120) h=672, primary 878. Ordering is correct and every target is inside the window."
       ],
       "blocked_or_unverified": [
         "The success path (exit 0) has never executed: no binary is trusted on this machine. Only the exit-2 branch is verified."
