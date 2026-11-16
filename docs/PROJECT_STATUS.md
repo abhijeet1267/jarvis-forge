@@ -4128,6 +4128,11 @@ This is **pre-existing**, not from V14: the file is untouched by those commits, 
 phase34 and its neighbours pass in order on the pre-V14 baseline (`871e21e`, 220
 passed). It is fixed here because it was the last red test.
 
+**Final full-suite state after every fix, measured end to end: 4469 passed, 30
+skipped, 0 failed in 517.52 s.** The 30 skips are the pre-existing
+prerequisite-gated tests (Accessibility, playwright browsers, microphone) that skip
+honestly rather than passing on a mock.
+
 ### Added after the first commit: a Level-3 harness, and a coordinate defect it caught
 
 `tools/input_probe/` is a disposable SwiftUI app that does nothing by itself, and
