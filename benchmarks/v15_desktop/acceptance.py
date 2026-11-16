@@ -303,9 +303,19 @@ st, taken = call("POST", "/reality/takeover", {})
 during_code, during = call("POST", "/desktop/move", {"x": 500, "y": 350})
 st, released = call("POST", "/reality/release")
 stopped = during_code == 409
-record("T10 stop and takeover", "VERIFIED" if stopped else "FAILED", 1,
-       f"a move during takeover returned HTTP {during_code}; release resumed "
-       f"{len(released.get('resumed', []))} worker(s)")
+# A takeover must also let go of anything held. On this machine the release is
+# refused for the same reason everything else is, and the honest check is that
+# the takeover *reported* it rather than claiming the button was released.
+held = taken.get("released_input") or {}
+reported = "status" in held
+ok10 = stopped and reported
+record("T10 stop and takeover", "VERIFIED" if ok10 else "FAILED", 3 if ok10 else 1,
+       f"a move during takeover returned HTTP {during_code}; "
+       f"{len(taken.get('paused', []))} worker(s) paused; held-input release "
+       f"reported '{held.get('status')}'"
+       + ("" if held.get("status") == "verified"
+          else " (refused, not silently claimed)") + "; "
+       f"release resumed {len(released.get('resumed', []))} worker(s)")
 
 # -- T11: invalid coordinates move nothing -------------------------------------
 def pointer():

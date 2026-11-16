@@ -183,16 +183,41 @@ def take_over(*, tower=None, reason: str = "") -> Dict[str, Any]:
             skipped.append({"worker": worker.name, "why": str(exc)})
 
     log.info("human takeover", extra_fields={"paused": paused, "already": already})
+
+    # Pausing stops the *next* dispatch. It does nothing about input that is
+    # already held: a drag in progress has the mouse button down, and a person
+    # who grabs the mouse to stop it would find their own pointer dragging
+    # something. Taking over therefore also releases whatever the executor is
+    # holding, and reports what that actually did rather than assuming.
+    released = _release_held_input()
+
     return {
         "paused": paused,
         "already_paused_by_someone_else": already,
         "skipped": skipped,
         "reason": text,
-        "effect": ("each paused worker now refuses its next dispatch, and the "
-                   "refusal is counted"),
+        "released_input": released,
+        "effect": ("each paused worker now refuses its next dispatch, and any "
+                   "mouse button or modifier the executor was holding is released"),
         "cannot": ("a call already inside a handler is not interrupted; the next "
                    "dispatch is what stops"),
     }
+
+
+def _release_held_input() -> Dict[str, Any]:
+    """Release any synthetic button or modifier, and say what happened.
+
+    Never raises: a takeover must complete even when the desktop executor is
+    missing or refuses. The result is reported either way, because a takeover
+    that silently failed to release a stuck button is the exact state this is
+    meant to prevent.
+    """
+    try:
+        from ..desktop import executor
+
+        return executor.release_all()
+    except Exception as exc:
+        return {"status": "failed", "reason": f"held input could not be released: {exc}"}
 
 
 def release_all(*, tower=None) -> Dict[str, Any]:

@@ -194,3 +194,35 @@ def test_takeover_and_release_over_http():
     finally:
         released = client.post("/reality/release", headers=headers).json()
     assert "resumed" in released
+
+def test_a_takeover_also_releases_whatever_input_is_held(tower):
+    """Pausing stops the next dispatch; it does nothing about a held button.
+
+    A drag in progress has the mouse button down. If taking over only paused
+    workers, a person grabbing the mouse to stop it would find their own pointer
+    dragging something. The takeover must release held input, and must report what
+    that actually did rather than assuming success.
+    """
+    result = take_over(tower=tower)
+    assert "released_input" in result, (
+        "a takeover reported nothing about the input it may have left held")
+    released = result["released_input"]
+    assert "status" in released
+    # On a machine without post-event access the release is *refused*, and that
+    # refusal must be visible rather than reported as a release that happened.
+    assert released["status"] in ("verified", "permission_required", "failed",
+                                  "performed_unverified", "timed_out"), released
+
+
+def test_a_failed_release_does_not_fail_the_takeover(tower):
+    """A takeover that raised would leave the machine in the state it exists to fix."""
+    import jarvis.core.reality_hud as hud
+
+    original = hud._release_held_input
+    hud._release_held_input = lambda: {"status": "failed", "reason": "executor missing"}
+    try:
+        result = take_over(tower=tower)
+    finally:
+        hud._release_held_input = original
+    assert len(result["paused"]) > 5
+    assert result["released_input"]["status"] == "failed"
