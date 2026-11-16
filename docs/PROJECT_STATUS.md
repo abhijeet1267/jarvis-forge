@@ -2994,3 +2994,70 @@ button, car "out of budget · 0/0 calls".
 HTTP; synthetic clicks are dropped here). Counters are per-process and reset on
 restart — they count calls *this* process made, and no cross-restart history is
 claimed.
+
+## Update — 2026-11-16 (V12 phase 5: Recovery Tournament — rank the repairs, with the reason)
+
+**What it is.** A failed call already triggers the recovery engine, which either
+retries, switches to a declared alternative, or gives up. The tournament makes
+that decision *inspectable before it is made*: for a given failure it lists every
+repair on the table, each marked safe or unsafe **with the rule that decided it**,
+and names the best safe one — or `null` when nothing is safe to try automatically.
+
+**Why it is not a chatbot guess.** `jarvis/core/recovery_tournament.py` asks the
+**live** `RecoveryEngine` — it does not carry its own opinion. `retry` is safe
+only when `engine.retry_policy(spec, result)` says so; alternatives come from the
+engine's own `ALTERNATIVES` map and are vouched for only if the tool is
+registered, not destructive, and carries no safety tag; an unparseable or
+unregistered tool is marked unsafe rather than assumed fine. Likelihood is read
+off declared properties (`looks_transient`, idempotency, risk) — never a
+confidence number invented to look decisive. A test pins the fallback policy to
+the engine's, so the two cannot drift.
+
+**"No recommendation" is an answer.** A destructive failure (e.g. `delete_file`
+with a permission error) returns `recommended: null` and the note *"No repair is
+safe to attempt automatically; this needs the person."* — rather than offering
+the least-bad option dressed up as safe.
+
+**Read-only by construction.** The route is `POST /recovery/tournament` and
+touches nothing — it does not run a repair, does not retry, does not write. It is
+a ranking. The screen says so: *"The ranking is a plan, not a proof; whether it
+worked is decided afterwards by the same independent check as any run."*
+
+**Surfaces.**
+- `jarvis/core/recovery_tournament.py` — `RecoveryTournament.evaluate()`,
+  `Candidate` (safety, safety_reason, likelihood, cost), `Tournament.recommended`
+  (excludes the ASK candidate so "ask a human" is never the silent default).
+- `jarvis/api/recovery_routes.py` — `POST /recovery/tournament` (auth-gated).
+- `RecoveryLabView.swift` (+ `recovery` NavItem, sidebar group MAC) — failure
+  list from `/failures`, auto-ranks the newest failure on open, each candidate
+  with a shield icon and its reason.
+
+**Evidence.** `tests/test_recovery_tournament.py` **17 passed**, including
+`test_a_destructive_tool_is_never_recommended_for_retry`,
+`test_the_default_policy_matches_the_recovery_engine`,
+`test_a_non_transient_error_is_not_overstated`. Both Swift targets build clean.
+
+**Live, level 7 (isolated `:8798`).**
+- `search_files` with `"spotlight is unavailable, try again"` →
+  `recommended: {kind: retry, rank: 0, safety: safe}`, note *"Best first attempt:
+  retry via search_files — the error looks transient and the tool is safe to
+  re-run."*
+- `delete_file` with `"permission denied"` → `recommended: null`, retry
+  `safety: unsafe` with reason *"it is a destructive action, and a retry could act
+  on a world you did not approve"*, note *"No repair is safe to attempt
+  automatically."*
+
+**Rendered, level 4.** Recovery Lab on the live backend lists two real failures
+from the Control Tower phase (`get_car_status` out of budget, `search_email`
+paused) and ranks the newest on open: **Retry** *safe · try first · cost "1 call;
+the first attempt's effect is known not to matter"*, then **Ask the person**
+*safe · cost "no calls; the person's time"*.
+
+**NOT verified.** No failure was picked by a real click — the newest is
+auto-selected on open and the ranking was exercised over HTTP (synthetic clicks
+are dropped here, `AXIsProcessTrusted()` false). The tournament is advisory: it
+ranks the best first move; it does not prove the move works, and the screen says
+so.
+
+**Counts.** 229 test modules · 4287 collected · 231 Python modules (`README.md`,
+`docs/FILE_OWNERSHIP.md`).

@@ -1891,6 +1891,33 @@
         "KNOWN LIMITATION, stated on screen and in the module docstring: a pause or stop takes effect at the next dispatch boundary. A call already inside a tool handler runs to completion -- Python cannot pre-empt a thread and killing the process to interrupt one tool would stop everything else.",
         "NOT VERIFIED: counters are per-process and reset on restart (they count calls this process made). No cross-restart history is claimed."
       ]
+    },
+    "V12-5-recovery-tournament": {
+      "title": "V12: Recovery Tournament -- rank the safe repairs, with the reason",
+      "status": "completed",
+      "priority": 1,
+      "acceptance": [
+        "for a failure the tournament lists every repair the recovery engine would consider",
+        "each candidate carries a safety verdict quoted from the rule that decided it",
+        "likelihood comes from declared properties (transient error, idempotent tool), not invented confidence",
+        "a destructive tool's retry is marked unsafe and never recommended",
+        "an unregistered alternative is not vouched for",
+        "'ask the person' is offered but is never the automatic recommendation",
+        "the recommended repair is null when nothing is safe, and the note says so",
+        "the ranking agrees with RecoveryEngine.retry_policy (pinned by a test)",
+        "the tournament is read-only: it never executes a repair"
+      ],
+      "evidence": [
+        "2026-11-16: jarvis/core/recovery_tournament.py added -- RecoveryTournament.evaluate reusing recovery.retry_policy, ALTERNATIVES, looks_transient; Candidate with safety/safety_reason/likelihood/cost; Tournament.recommended excludes 'ask'.",
+        "2026-11-16: jarvis/api/recovery_routes.py added -- POST /recovery/tournament, read-only, uses the live core.recovery engine and core.tools spec.",
+        "2026-11-16 PASS: tests/test_recovery_tournament.py 14 passed -- incl. test_a_destructive_tool_is_never_recommended_for_retry, test_the_default_policy_matches_the_recovery_engine, test_a_non_transient_error_is_not_overstated.",
+        "2026-11-16 PASS (level 7, live :8798): search_files with a transient error -> recommended retry, ranked 0, 'looks transient and the tool is safe to re-run'; delete_file -> recommended null, retry marked unsafe 'it is a destructive action', note 'No repair is safe to attempt automatically'.",
+        "2026-11-16 PASS (level 4, rendered): RecoveryLabView on the live backend lists two real failures (get_car_status, search_email) from the Control Tower phase and, on open, ranks the newest: retry get_car_status 'try first' safe, ask safe, with the note 'The ranking is a plan, not a proof'."
+      ],
+      "blocked_or_unverified": [
+        "NOT VERIFIED (level 5-6): no failure was selected by a click; the newest is auto-selected on open and the ranking was driven over HTTP. Synthetic clicks are dropped (AXIsProcessTrusted() false).",
+        "The tournament is advisory. It ranks which repair is the best first thing to try; whether it worked is decided by the runner's independent verifier, not by the ranking. This is stated on screen."
+      ]
     }
   }
 }

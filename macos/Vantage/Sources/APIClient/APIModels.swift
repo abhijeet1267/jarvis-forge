@@ -1568,6 +1568,49 @@ extension APIModels {
         let mission_state: String
     }
 
+    // MARK: - Recovery Tournament
+
+    /// A failed call from the failure ledger (`GET /failures`).
+    struct RecordedFailure: Codable, Identifiable {
+        let failure_id: String
+        let tool: String?
+        let error: String?
+        let recovered: Int?
+        let strategy: String?
+        let attempts: Int?
+        let note: String?
+        let created_at: String?
+
+        var id: String { failure_id }
+    }
+
+    /// `POST /recovery/tournament`. The ranked safe repairs for one failure.
+    struct TournamentReport: Codable {
+        struct Candidate: Codable, Identifiable {
+            let kind: String       // retry | alternative | ask
+            let tool: String
+            let safety: String     // safe | unsafe
+            let safety_reason: String
+            let likelihood: String
+            let cost: String
+            let rank: Int
+
+            var id: String { "\(kind):\(tool):\(rank)" }
+        }
+
+        let tool: String
+        let failure: String
+        let candidates: [Candidate]
+        /// The best *automatic* repair, or nil when nothing is safe.
+        let recommended: Candidate?
+        let note: String
+    }
+
+    struct TournamentRequest: Codable {
+        let tool: String
+        let error: String
+    }
+
     // MARK: - Agent Control Tower
 
     struct Worker: Codable, Identifiable {
