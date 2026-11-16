@@ -168,10 +168,14 @@ def click(x: float, y: float, *, button: str = "left", count: int = 1) -> Dict[s
 
 
 def drag(from_x: float, from_y: float, to_x: float, to_y: float,
-         *, duration_ms: int = 400) -> Dict[str, Any]:
-    return _run("drag", [f"from_x={from_x}", f"from_y={from_y}",
-                         f"to_x={to_x}", f"to_y={to_y}",
-                         f"duration_ms={int(duration_ms)}"])
+         *, duration_ms: int = 400,
+         cancel_file: Optional[str] = None) -> Dict[str, Any]:
+    args = [f"from_x={from_x}", f"from_y={from_y}",
+            f"to_x={to_x}", f"to_y={to_y}",
+            f"duration_ms={int(duration_ms)}"]
+    if cancel_file:
+        args += ["--cancel-file", cancel_file]
+    return _run("drag", args)
 
 
 def scroll(x: float, y: float, *, lines: int = 3,
@@ -184,8 +188,22 @@ def scroll(x: float, y: float, *, lines: int = 3,
 
 # -- keyboard -----------------------------------------------------------------
 
-def type_text(text: str) -> Dict[str, Any]:
-    return _run("type", [f"text={text}"])
+def type_text(text: str, *, cancel_file: Optional[str] = None) -> Dict[str, Any]:
+    args = [f"text={text}"]
+    if cancel_file:
+        args += ["--cancel-file", cancel_file]
+    return _run("type", args)
+
+
+def release_all() -> Dict[str, Any]:
+    """Release any synthetic button or modifier the executor left held.
+
+    Recovery, not a normal action: a drag that is cancelled or dies part-way can
+    leave the physical button logically down, and every later pointer action then
+    behaves as if a drag is in progress. Calling this costs nothing when nothing
+    is held.
+    """
+    return _run("release_all")
 
 
 def press_key(key: str, modifiers: Optional[List[str]] = None) -> Dict[str, Any]:

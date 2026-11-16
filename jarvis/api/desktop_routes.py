@@ -39,6 +39,9 @@ _GATED_TOOLS = {
     "key": "desktop_press_key",
     "press-element": "desktop_press_element",
     "focus": "desktop_focus_window",
+    # Recovery is gated too: it posts input events, and a takeover that still
+    # released buttons would be acting on the machine while somebody else has it.
+    "release-input": "desktop_release_input",
 }
 
 
@@ -186,6 +189,68 @@ def build_router(require_auth) -> APIRouter:
                                 detail="a semantic press needs the element's label")
         return executor.press_element(str(body.get("application") or ""), keyword,
                                       role=str(body.get("role") or ""))
+
+    @router.post("/probe")
+    async def probe() -> Dict[str, Any]:
+        """Move the pointer a bounded square and report the readback per leg.
+
+        Deliberately moves only: this is the "is this real?" control, so it must
+        be safe to press on a machine somebody is using.
+        """
+        _admit("move")
+        from ..desktop import executor as _executor
+
+        posture = _executor.permissions()
+        origin = posture.get("cursor") or {}
+        ox, oy = float(origin.get("x") or 0), float(origin.get("y") or 0)
+        legs, checked = [(ox + 40, oy), (ox + 40, oy + 40),
+                         (ox, oy + 40), (ox, oy)], []
+        for tx, ty in legs:
+            result = _executor.move(tx, ty)
+            if result.get("status") != "verified":
+                return {**result, "legs_checked": checked}
+            after = result.get("cursor_after") or {}
+            checked.append({"target": [tx, ty],
+                            "observed": [after.get("x"), after.get("y")]})
+        return {
+            "status": "verified",
+            "reason": (f"The pointer moved through {len(checked)} points and each move "
+                       f"was confirmed by reading its position back."),
+            "legs": checked,
+            "process_name": posture.get("process_name"),
+            "executable": posture.get("executable"),
+        }
+
+    @router.post("/release-input")
+    async def release_input() -> Dict[str, Any]:
+        """Release a synthetic button or modifier left held. Recovery only."""
+        _admit("release-input")
+        return executor.release_all()
+
+    @router.get("/plan")
+    async def plan(request: str = "", application: str = "",
+                   x: float = -1, y: float = -1) -> Dict[str, Any]:
+        """Turn a desktop instruction into typed operations, without acting.
+
+        The planner is the only path from a sentence to a desktop action, and it
+        never invents a target: an ambiguous request comes back as a
+        ``clarification`` with no steps.
+        """
+        from ..desktop.planner import plan_desktop
+
+        context: Dict[str, Any] = {}
+        if application:
+            context["application"] = application
+        if x >= 0 and y >= 0:
+            context["point"] = (x, y)
+        result = plan_desktop(request, context=context or None)
+        return {
+            "status": "verified",
+            "steps": [{"tool": s.tool, "params": s.params, "description": s.description}
+                      for s in result.steps],
+            "clarification": result.clarification,
+            "notes": result.notes,
+        }
 
     @router.get("/observe")
     async def observe(application: str = "", keyword: str = "",

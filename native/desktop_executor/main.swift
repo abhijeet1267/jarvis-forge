@@ -338,8 +338,81 @@ func resolveApplication(_ name: String) -> NSRunningApplication {
 }
 
 // ---------------------------------------------------------------------------
+// Cancellation
+// ---------------------------------------------------------------------------
+
+/// A caller creates the flag file to stop a gesture that is already moving.
+///
+/// Checking it is a `stat()`, so the answer is cached for 25ms: at a 12ms drag
+/// step an unthrottled check would add a syscall per step for no benefit, and
+/// 25ms is below the latency a person can tell apart from immediate.
+enum Cancellation {
+    nonisolated(unsafe) static var path: String?
+    private nonisolated(unsafe) static var lastCheck = Date.distantPast
+    private nonisolated(unsafe) static var cached = false
+
+    static func requested() -> Bool {
+        guard let path else { return false }
+        let now = Date()
+        if now.timeIntervalSince(lastCheck) < 0.025 { return cached }
+        lastCheck = now
+        // A flag file that cannot be stat'ed is treated as absent rather than
+        // as a cancellation: a cancellation must be as deliberate as the action.
+        cached = FileManager.default.fileExists(atPath: path)
+        return cached
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Operations
 // ---------------------------------------------------------------------------
+
+/// Posts an up event for every button and every modifier this tool can leave
+/// down. Shared by `release_all`, by a cancelled gesture, and by a drag whose
+/// own mouse-up could not be constructed, so recovery never needs a second
+/// invocation. Returns only the events that were actually constructed and
+/// posted; a caller reports that list rather than claiming a clean state.
+func releaseHeldInput() -> [String] {
+    var posted: [String] = []
+    let at = cursorPosition() ?? .zero
+    let buttons: [(CGEventType, CGMouseButton, String)] = [
+        (.leftMouseUp, .left, "left_button"),
+        (.rightMouseUp, .right, "right_button"),
+        (.otherMouseUp, .center, "other_button"),
+    ]
+    for (type, button, name) in buttons {
+        if let event = CGEvent(mouseEventSource: nil, mouseType: type,
+                               mouseCursorPosition: at, mouseButton: button) {
+            event.post(tap: .cghidEventTap)
+            posted.append(name)
+        }
+    }
+    // A modifier whose key-up was lost shows up as every later keystroke
+    // carrying its flag, so each one gets its own empty key-up.
+    let empty = [UniChar]()
+    for name in ["cmd", "shift", "option", "control"] {
+        guard let up = CGEvent(keyboardEventSource: nil, virtualKey: 0, keyDown: false) else {
+            continue
+        }
+        empty.withUnsafeBufferPointer { buffer in
+            up.keyboardSetUnicodeString(stringLength: 0, unicodeString: buffer.baseAddress)
+        }
+        up.flags = []
+        up.post(tap: .cghidEventTap)
+        posted.append(name)
+    }
+    usleep(20_000)
+    return posted
+}
+
+func opReleaseAll() -> Never {
+    requirePostEvents("releasing held input")
+    let released = releaseHeldInput()
+    Emit.out(.performed_unverified,
+             "mouse-up and modifier key-up events were posted at the current pointer position. Whether anything was actually held cannot be read back; callers treat this as recovery, not as evidence that a button was down.",
+             ["released": released,
+              "cursor": cursorPosition().map { ["x": $0.x, "y": $0.y] } ?? NSNull()])
+}
 
 func opPermissions() -> Never {
     var body = permissionSnapshot()
@@ -439,7 +512,13 @@ func opClick(x: Double, y: Double, button: String, count: Int) -> Never {
     let downType: CGEventType = button == "right" ? .rightMouseDown : .leftMouseDown
     let upType: CGEventType = button == "right" ? .rightMouseUp : .leftMouseUp
 
+    var postedCount = 0
     for _ in 0..<max(1, count) {
+        if Cancellation.requested() {
+            let released = releaseHeldInput()
+            Emit.out(.cancelled, "cancelled after starting; held input was released",
+                     ["posted_before_cancel": postedCount, "released_before_exit": released])
+        }
         guard let down = CGEvent(mouseEventSource: nil, mouseType: downType,
                                  mouseCursorPosition: point, mouseButton: cgButton),
               let up = CGEvent(mouseEventSource: nil, mouseType: upType,
@@ -453,6 +532,7 @@ func opClick(x: Double, y: Double, button: String, count: Int) -> Never {
         down.post(tap: .cghidEventTap)
         usleep(15_000)
         up.post(tap: .cghidEventTap)
+        postedCount += 1
         usleep(40_000)
     }
     let after = cursorPosition()
@@ -478,10 +558,19 @@ func opDrag(fromX: Double, fromY: Double, toX: Double, toY: Double, durationMs: 
     }
     down.post(tap: .cghidEventTap)
 
-    // The button is held across these moves. A failure anywhere below must
-    // still release it, or the desktop is left with a stuck button.
+    // The button is held from here on, so every exit below releases it. A
+    // `defer` cannot be that guarantee: Emit.out ends the process with exit(),
+    // and a deferred block does not run on that path (measured on this
+    // toolchain), so each terminal branch releases explicitly instead.
     let steps = max(4, min(40, durationMs / 12))
     for i in 1...steps {
+        if Cancellation.requested() {
+            let released = releaseHeldInput()
+            Emit.out(.cancelled, "cancelled after starting; held input was released",
+                     ["released": released,
+                      "from": ["x": fromX, "y": fromY], "to": ["x": toX, "y": toY],
+                      "cursor": cursorPosition().map { ["x": $0.x, "y": $0.y] } ?? NSNull()])
+        }
         let t = Double(i) / Double(steps)
         let p = CGPoint(x: start.x + (end.x - start.x) * t,
                         y: start.y + (end.y - start.y) * t)
@@ -492,9 +581,11 @@ func opDrag(fromX: Double, fromY: Double, toX: Double, toY: Double, durationMs: 
     }
     guard let up = CGEvent(mouseEventSource: nil, mouseType: .leftMouseUp,
                            mouseCursorPosition: end, mouseButton: .left) else {
-        // Nothing we can do but say so; the drag has already been released by
-        // the path above in the normal case.
-        Emit.out(.failed, "the drag completed but the mouse-up event could not be constructed; the button may be held")
+        // The specific up could not be built, so fall back to the recovery
+        // release rather than leaving the button down with only a message.
+        let released = releaseHeldInput()
+        Emit.out(.failed, "the drag completed but the mouse-up event could not be constructed; a recovery release was posted",
+                 ["released": released])
     }
     up.post(tap: .cghidEventTap)
     usleep(60_000)
@@ -526,9 +617,59 @@ func opScroll(x: Double, y: Double, lines: Int, horizontal: Bool) -> Never {
              ["lines": lines, "horizontal": horizontal])
 }
 
+/// Why the focused element must not receive synthetic characters, or "" if it may.
+///
+/// Typing goes to whatever macOS has focused, so the thing that decides whether a
+/// secret is at risk is the focus target, not the text. Read it before every
+/// typing operation rather than trusting the caller to have focused something
+/// safe: a mission can focus a field, and a later step has no idea what that was.
+///
+/// Deliberately narrow. A secure text field is unambiguous — macOS publishes it as
+/// its own role and never returns its value. The other two are judgement calls
+/// about applications that own the whole keyboard while they are frontmost, where
+/// "type into the focused field" would be answered by a permission sheet or a
+/// password prompt. Refusing those costs a person one manual step and is never
+/// wrong in a way that leaks anything.
+func typingRefusal() -> String {
+    guard AXIsProcessTrusted() else {
+        // Accessibility is not granted, so the focused element cannot be named.
+        // The executor already refuses typing for the same permission, so this
+        // path is unreachable in practice; it exists so that if input posting is
+        // ever granted alone, typing still does not proceed blind.
+        return ""
+    }
+    let systemWide = AXUIElementCreateSystemWide()
+    var focusedValue: CFTypeRef?
+    guard AXUIElementCopyAttributeValue(systemWide, kAXFocusedUIElementAttribute as CFString,
+                                        &focusedValue) == .success,
+          let focused = focusedValue else {
+        return ""
+    }
+    let element = focused as! AXUIElement
+    let described = describe(element, depth: 0, maxDepth: 0)
+    if (described["role"] as? String) == "AXSecureTextField" {
+        return "the focused element is a secure text field, which is exactly where a "
+            + "password would go; type into it yourself"
+    }
+    let front = NSWorkspace.shared.frontmostApplication
+    let frontName = (front?.localizedName ?? "").lowercased()
+    if (front?.bundleIdentifier ?? "") == "com.apple.SecurityAgent"
+        || frontName == "securityagent" || frontName == "security agent" {
+        return "macOS is showing an authorization prompt; it will not be typed into"
+    }
+    if (front?.bundleIdentifier ?? "") == "com.apple.loginwindow" {
+        return "the screen is locked or a login window is in front"
+    }
+    return ""
+}
+
 func opType(text: String) -> Never {
     requirePostEvents("typing")
     guard !text.isEmpty else { Emit.out(.blocked, "there was no text to type") }
+    let refusal = typingRefusal()
+    if !refusal.isEmpty {
+        Emit.out(.blocked, "I did not type: \(refusal).", ["guard": "sensitive-focus"])
+    }
 
     // Unicode injection: set the keyboard event's unicode payload rather than
     // mapping characters to keycodes. This respects any layout and types
@@ -731,18 +872,46 @@ func failUsage(_ message: String) -> Never {
     Emit.out(.blocked, message, [
         "operations": ["permissions", "request_access", "move", "click", "drag", "scroll", "type",
                        "key", "focus", "inspect", "read_element", "press_element",
-                       "verify_change"],
-        "usage": "vantage-desktop <operation> key=value ...",
+                       "verify_change", "release_all"],
+        "usage": "vantage-desktop <operation> key=value ... [--cancel-file <path>]",
     ])
 }
 
 let argv = Array(CommandLine.arguments.dropFirst())
-guard let op = argv.first else {
+
+// `--cancel-file <path>` may sit anywhere, including before the operation, so
+// it is stripped before the operation and the key=value pairs are read. It is
+// pulled out rather than left in `params` because a path containing "=" would
+// otherwise be split into a bogus parameter.
+var positional: [String] = []
+var cancelFilePath: String?
+var i = 0
+while i < argv.count {
+    let token = argv[i]
+    if token == "--cancel-file" {
+        guard i + 1 < argv.count else {
+            failUsage("--cancel-file needs a path")
+        }
+        cancelFilePath = argv[i + 1]
+        i += 2
+        continue
+    }
+    if token.hasPrefix("--cancel-file=") {
+        cancelFilePath = String(token.dropFirst("--cancel-file=".count))
+        i += 1
+        continue
+    }
+    positional.append(token)
+    i += 1
+}
+Cancellation.path = cancelFilePath
+
+guard let op = positional.first else {
     failUsage("no operation was named")
 }
 
 var params: [String: String] = [:]
-for pair in argv.dropFirst() {
+for pair in positional.dropFirst() {
     let parts = pair.split(separator: "=", maxSplits: 1)
     if parts.count == 2 { params[String(parts[0])] = String(parts[1]) }
 }
@@ -792,6 +961,8 @@ case "verify_change":
     guard !str("key").isEmpty else { failUsage("verify_change needs key= and value=") }
     opVerifyChange(application: str("application"), keyword: str("keyword"),
                    role: str("role"), expectedKey: str("key"), expectedValue: str("value"))
+case "release_all":
+    opReleaseAll()
 default:
     failUsage("unknown operation \(op)")
 }

@@ -307,6 +307,57 @@ async def desktop_verify_change(ctx: ToolContext, application: str = "",
                    f"Checked {keyword!r} for {key} = {value}")
 
 
+async def desktop_control_probe(ctx: ToolContext, **_: Any) -> Any:
+    """Move the pointer in a small, bounded square and report what moved back.
+
+    The "is this real?" test a person can run from the UI. It never clicks, types
+    or reads anything, so it is safe on any machine; what it answers is whether
+    the executor genuinely moves the system pointer, which is the one capability
+    this project has measured working. The readback per leg is the evidence — a
+    permission problem or a frozen pointer shows up as a mismatch, not as a
+    success sentence.
+    """
+    posture = executor.permissions()
+    if not posture.get("can_move_cursor"):
+        return fail("desktop_control_probe",
+                    f"Cursor movement is not available to {posture.get('process_name')}: "
+                    f"{posture.get('reason')}", device=ctx.device_id)
+    origin = posture.get("cursor") or {}
+    try:
+        ox, oy = float(origin.get("x", 0)), float(origin.get("y", 0))
+    except (TypeError, ValueError):
+        return fail("desktop_control_probe",
+                    "The executor did not report where the pointer is.",
+                    device=ctx.device_id)
+
+    # 40 points is visible on screen and small enough not to disturb anything.
+    legs = [(ox + 40, oy), (ox + 40, oy + 40), (ox, oy + 40), (ox, oy)]
+    checked = []
+    for tx, ty in legs:
+        result = executor.move(tx, ty)
+        if result.get("status") != "verified":
+            return unverified(
+                "desktop_control_probe",
+                f"The probe stopped at ({tx:.0f}, {ty:.0f}): {result.get('reason')}",
+                device=ctx.device_id, desktop_result=result, legs_checked=checked)
+        after = result.get("cursor_after") or {}
+        checked.append({"target": [tx, ty], "observed": [after.get("x"), after.get("y")]})
+    return ok("desktop_control_probe",
+              f"The pointer moved through {len(checked)} points and each move was "
+              f"confirmed by reading its position back. Real cursor control is working "
+              f"for {posture.get('process_name')}.",
+              device=ctx.device_id, verified=True, legs=checked,
+              desktop_result={"process_name": posture.get("process_name"),
+                              "executable": posture.get("executable")})
+
+
+async def desktop_release_input(ctx: ToolContext, **_: Any) -> Any:
+    """Release any synthetic button or modifier left held. Recovery only."""
+    result = executor.release_all()
+    return _finish("desktop_release_input", result, ctx,
+                   "Released any held mouse button and modifier")
+
+
 async def desktop_permissions(ctx: ToolContext, **_: Any) -> Any:
     """Report what macOS actually allows this executable to do, right now."""
     result = executor.permissions()
@@ -552,5 +603,42 @@ SPECS = [
             tags=["system", "read", "desktop", "verification"],
         ),
         desktop_verify_change,
+    ),
+    (
+        ToolSpec(
+            name="desktop_control_probe",
+            description=(
+                "Prove real cursor control: move the pointer a short bounded square and "
+                "report the position read back after each move. Moves only — never clicks, "
+                "types or reads — so it is safe to run on any machine."
+            ),
+            # LOW and ungated, matching desktop_move_pointer: it is the same act,
+            # four times, and refusing it behind a confirmation would make the one
+            # capability that works the hardest one to check.
+            risk=RiskLevel.LOW,
+            requires_confirmation=False,
+            reversible=True,
+            parameters={},
+            tags=["system", "desktop", "pointer", "diagnostic"],
+        ),
+        desktop_control_probe,
+    ),
+    (
+        ToolSpec(
+            name="desktop_release_input",
+            description=(
+                "Release any mouse button or modifier the executor left held after a "
+                "cancelled or failed drag. Recovery only; does nothing when nothing is held."
+            ),
+            # DESTRUCTIVE because it posts input events, and confirmation-gated for
+            # the same reason every other posting tool is -- even though the only
+            # thing it can do is undo a stuck state.
+            risk=RiskLevel.DESTRUCTIVE,
+            requires_confirmation=True,
+            reversible=True,
+            parameters={},
+            tags=["system", "desktop", "recovery"],
+        ),
+        desktop_release_input,
     ),
 ]

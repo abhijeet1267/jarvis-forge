@@ -323,10 +323,14 @@ def test_the_sweep_is_measured_not_improvised(core):
     # for the older hole; they are reachable through the API and the UI, which
     # is where somebody asking "what can you do to my Mac" looks.
     desktop_tools = sorted(n for n in core.tools.names() if n.startswith("desktop_"))
-    assert len(desktop_tools) == 15, desktop_tools
+    assert desktop_tools, "the desktop surface disappeared"
     assert set(desktop_tools) <= set(unreachable), \
         "a desktop tool acquired a sentence route; that is a design change, not a fix"
-    assert len(unreachable) == 47, unreachable
+    # 32 before the desktop surface, +17 desktop tools. Pinned so an unrelated
+    # new tool cannot drift in unnoticed, but not pinned per-tool: the assert
+    # above is what says "every desktop tool is unrouted", and it does not need
+    # editing every time one is added.
+    assert len(unreachable) == 49, sorted(set(unreachable) - set(desktop_tools))
     assert "read_file" not in unreachable
 
 
