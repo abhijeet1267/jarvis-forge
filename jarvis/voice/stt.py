@@ -393,6 +393,15 @@ class OpenAIWhisperSTT(STTBackend):
         url = self.settings.llm_base_url.rstrip("/") + "/audio/transcriptions"
         headers = {"Authorization": f"Bearer {self.settings.llm_api_key}"}
 
+        # Speech leaves the Mac on the same terms as a chat completion: it is a
+        # provider endpoint, so privacy mode refuses it before the audio is read.
+        from ..security.egress import EgressRefused, require
+
+        try:
+            require(url)
+        except EgressRefused as exc:
+            return STTResult(False, self.name, error=f"refused: {exc}")
+
         try:
             with audio_path.open("rb") as handle:
                 files = {"file": (audio_path.name, handle, "audio/wav")}

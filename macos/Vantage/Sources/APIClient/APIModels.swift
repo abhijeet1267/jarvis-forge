@@ -1656,6 +1656,95 @@ extension APIModels {
         let budget: Int?
     }
 
+    // MARK: - Privacy Egress Firewall
+
+    /// One declared destination and why it is reachable.
+    struct EgressDestination: Codable, Identifiable {
+        let host: String
+        let kind: String        // loopback | provider | lookup | service
+        let why: String
+        let private_ok: Bool
+
+        var id: String { host }
+    }
+
+    /// `GET /egress`. What this project may contact, and what the gate does not
+    /// cover -- the last field is the honest limit, shown on screen.
+    struct EgressPosture: Codable {
+        let privacy_mode: Bool
+        let enforced_at: String
+        let declared_hosts: Int
+        let by_kind: [String: Int]
+        let destinations: [EgressDestination]
+        let not_covered: String
+    }
+
+    /// `POST /egress/check`. Would a read to this address be allowed right now?
+    struct EgressVerdict: Codable {
+        let allowed: Bool
+        let host: String
+        let kind: String
+        let decision: String    // allowed | refused
+        let reason: String
+        let privacy_mode: Bool
+    }
+
+    struct EgressCheckRequest: Codable {
+        let url: String
+    }
+
+    // MARK: - Adaptive Autonomy Control
+
+    struct AutonomyLevel: Codable, Identifiable {
+        let level: Int
+        let name: String
+
+        var id: Int { level }
+    }
+
+    /// `GET /autonomy`. The dial's position, the levels it can hold, and the
+    /// ceiling no level crosses.
+    struct AutonomyPosture: Codable {
+        let level: Int
+        let level_name: String
+        let scope: String
+        let note: String
+        let updated_at: Double
+        let ceiling_risk: Int
+        let levels: [AutonomyLevel]
+        /// The sentence stating a destructive/physical action is never auto-run.
+        let ceiling: String
+    }
+
+    struct AutonomySetRequest: Codable {
+        let level: Int
+        let scope: String
+        let note: String
+    }
+
+    /// `POST /autonomy/preview`. What the classifier decided and what the dial
+    /// made of it -- the two kept separate so a person can see the dial's effect.
+    struct AutonomyPreview: Codable {
+        struct Verdict: Codable {
+            let decision: String
+            let reason: String
+        }
+
+        let tool: String
+        let risk: Int
+        let risk_label: String
+        let baseline: Verdict
+        let final: Verdict
+        let stricter: Bool
+        let level: Int
+    }
+
+    struct AutonomyPreviewRequest: Codable {
+        let tool: String
+        let level: Int
+        let params: [String: String]
+    }
+
     // MARK: - Live Mission Steering
 
     /// A proposed replacement for the un-run remainder of a plan.

@@ -101,6 +101,8 @@ struct ContentView: View {
             case .smartfiles:   SmartFilesView()
             case .parallelworld: ParallelWorldView()
             case .safety:       SafetyCenterView()
+            case .egress:       EgressFirewallView()
+            case .autonomy:     AutonomyControlView()
             case .skills:       SkillsLibraryView()
             case .goals:        GoalGuardView()
             case .doctor:       ProjectDoctorView()
@@ -158,6 +160,7 @@ private struct VantageSidebar: View {
                     group("Mac", [.control, .tower, .missions, .recovery, .flows, .studio, .shadow, .steer, .operator_])
                     group("People & Work", [.work, .people])
                     group("Configure", [.providers, .capabilities, .devices, .preferences, .settings])
+                    group("Trust & Privacy", [.safety, .egress, .autonomy])
                     group("Oversight", [.approvals, .activity, .memory])
                 }
                 .padding(.horizontal, V.Space.s)
@@ -371,7 +374,7 @@ private struct StatusFooter: View {
 // MARK: - Navigation model
 
 enum NavItem: String, Identifiable, CaseIterable {
-    case today, home, missions, smartfiles, parallelworld, safety, skills, goals, doctor, planner, operator_, control, flows, work, people, connections, workspaces, studio, shadow, steer, tower, recovery,
+    case today, home, missions, smartfiles, parallelworld, safety, skills, goals, doctor, planner, operator_, control, flows, work, people, connections, workspaces, studio, shadow, steer, tower, recovery, egress, autonomy,
          google, mcp, automation, command, providers, capabilities, devices, approvals,
          activity, memory, settings
     // Phase 3
@@ -387,6 +390,8 @@ enum NavItem: String, Identifiable, CaseIterable {
         case .smartfiles: return "Smart Files"
         case .parallelworld: return "ParallelWorld"
         case .safety: return "Safety Center"
+        case .egress: return "Egress Firewall"
+        case .autonomy: return "Autonomy Control"
         case .skills: return "Skills Library"
         case .goals: return "GoalGuard"
         case .doctor: return "Project Doctor"
@@ -429,6 +434,8 @@ enum NavItem: String, Identifiable, CaseIterable {
         case .smartfiles: return "folder.badge.gearshape"
         case .parallelworld: return "rectangle.split.3x1"
         case .safety: return "lock.shield"
+        case .egress: return "arrow.up.right.circle"
+        case .autonomy: return "dial.medium"
         case .skills: return "square.stack.3d.up"
         case .goals: return "eye"
         case .doctor: return "stethoscope"

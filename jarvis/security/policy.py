@@ -239,6 +239,18 @@ class PermissionEngine:
         # 4. Risk policy.
         decision, reason = self.classifier.decide(spec, action.params)
 
+        # 4b. The autonomy dial. It sits after the classifier and can only make
+        #     the verdict stricter, never looser -- so a low dial asks more, and
+        #     a high dial still cannot auto-execute a destructive action (the
+        #     ceiling is inside `AutonomyControl.apply`). A dial failure must not
+        #     widen anything, so a broken dial leaves the classifier's verdict.
+        try:
+            from .autonomy import get_autonomy
+
+            decision, reason = get_autonomy().apply(spec, action.params, decision, reason)
+        except Exception as exc:  # pragma: no cover - defensive
+            log.info("autonomy dial unavailable", extra_fields={"error": str(exc)})
+
         # 5. An explicit standing grant downgrades CONFIRM to EXECUTE for
         #    reversible actions the user has already approved once -- but never
         #    for actions that establish or change trust, and never when the

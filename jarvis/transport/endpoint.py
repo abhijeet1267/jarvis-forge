@@ -63,6 +63,13 @@ class DeviceEndpoint:
         """Ask JARVIS to pair. Grants nothing until the user approves."""
         import httpx
 
+        # Pairing is a network call to the backend; the egress firewall decides
+        # whether that address may be dialled, so an undeclared host is refused
+        # rather than attempted.
+        from ..security.egress import require
+
+        require(api_base)
+
         headers = {"X-JARVIS-Token": api_token} if api_token else {}
         async with httpx.AsyncClient(timeout=15.0) as client:
             response = await client.post(

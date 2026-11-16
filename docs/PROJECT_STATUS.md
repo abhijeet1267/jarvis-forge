@@ -3061,3 +3061,147 @@ so.
 
 **Counts.** 229 test modules · 4287 collected · 231 Python modules (`README.md`,
 `docs/FILE_OWNERSHIP.md`).
+
+## Update — 2026-11-16 (V12 phase 6: Privacy Egress Firewall — a gate, not a dashboard)
+
+**What it is.** Every outbound read in this backend already went through one
+function, `jarvis.net.http_read`. That makes it the right place for an egress
+gate, and this phase puts one there: a destination is reached because a **rule**
+admits it, and a refused host is refused *before a socket is opened* — so a
+blocked read costs nothing and cannot be mistaken for a network failure.
+
+**Declared, not guessed.** `jarvis/security/egress.py` lists the 21 hosts the
+source actually contacts, each with the reason it exists and its kind:
+
+| kind | count | privacy mode | why |
+|---|---|---|---|
+| `loopback` | 3 | always allowed | this Mac — the backend, dashboard and gateways |
+| `lookup` | 6 | allowed | Wikipedia, arXiv, a search index: carries the query only |
+| `service` | 8 | refused | a Google/GitHub account the person configured |
+| `provider` | 4 | refused | a model endpoint — the one path that carries the conversation |
+
+The distinction that matters: a **provider** call sends the person's own words
+off the machine, so privacy mode refuses it; a **lookup** sends only what the
+caller put in a query string, so it keeps working; **loopback** never leaves the
+machine at all. Refusing `127.0.0.1` would break the product to look strict, so
+the rule does not.
+
+**A refusal is its own failure.** The provider path catches `EgressRefused` as
+category `egress_refused`, not `network` — a person who turned privacy mode on
+must read "refused", not "could not be reached", or they will go hunting for a
+broken connection that is not there. A test pins this.
+
+**One rule, read live.** Privacy mode is read from settings on every check, so
+flipping the switch changes the answer on the *next* read without rebuilding the
+firewall. Verified: `api.openai.com` allowed with privacy off, refused under
+privacy mode, `en.wikipedia.org` still allowed under privacy mode.
+
+**The limit, shown rather than buried.** This gates reads that go through
+`jarvis.net.http_read`. Traffic from other applications on the Mac is outside
+this process and is not seen or controlled — the posture carries that sentence
+and the Trust & Privacy screen prints it verbatim.
+
+**Surfaces.**
+- `jarvis/security/egress.py` — `EgressFirewall.config`, `Destination`, `Verdict`,
+  `describe_firewall`.
+- `jarvis/net.py` — the gate in `http_read`; fails **closed** if it cannot decide.
+- `jarvis/api/egress_routes.py` — `GET /egress`, `POST /egress/check`. There is
+  deliberately **no route that widens the allowlist**: adding a host is a source
+  change a reviewer sees.
+- `EgressFirewallView.swift` + a new **Trust & Privacy** sidebar group (with the
+  existing Safety Center), because "what may leave this Mac" belongs beside
+  "what may change it".
+
+**Evidence.** `tests/test_egress_firewall.py` **28 passed**, including
+`test_a_refused_read_never_opens_a_socket` (a `urlopen` spy counts **0** calls),
+`test_privacy_mode_is_read_at_check_time`, and
+`test_a_provider_reports_an_egress_refusal_as_its_own_category`. Network
+regression sweep: **211 passed** across n8n, provider categories, timeout-gap,
+no-implicit-retry, Google, the phase-34 deadline and no-duplicate-routes.
+Both Swift targets build clean.
+
+**Live, level 7 (isolated `:8798`).** With privacy mode ON, a real
+`POST /command` "what is a train" still returned the Wikipedia answer — the
+lookup path works end to end under the gate — while `api.openai.com` was refused
+with its reason. A `collect.example.net` check was refused as undeclared.
+
+**Rendered, level 4.** Privacy mode on, 3/6/8/4 by kind, "enforced at
+jarvis.net.http_read", a live check of `example.com` REFUSED with its reason, and
+every provider host marked **blocked**.
+
+**NOT verified / not covered.**
+- The toggle and the Check button were driven over HTTP, not by a physical click
+  (synthetic clicks are dropped here).
+- The `httpx` call sites are now gated too (`egress.require` at the relay, the four
+  CalDAV clients, voice STT and the transport endpoint), and a refused CalDAV read
+  is classified `UNAVAILABLE` rather than a network error. A relative-import bug in
+  that gate (`...security` instead of `..security`) would have silently disabled all
+  four calendar guards; caught by the classifier test and fixed.
+- The **car/watch readers** open `urlopen` directly (an injectable opener), not
+  `http_read`, so they are **not** gated yet. Named here rather than claimed.
+- Other applications' traffic is outside this process. Stated on screen.
+
+## Update — 2026-11-16 (V12 phase 7: Adaptive Autonomy Control — one dial, with a ceiling)
+
+**What it is.** The permission engine already decided *may this run*, but from a
+fixed policy: level 2+ always confirms, and "paranoid" promoted everything to a
+confirmation. That is a setting, not a dial — you could not say "let this
+project's routine file moves run without asking for an afternoon" and have it
+mean anything narrower than "turn paranoid off everywhere."
+
+This is the dial, and it sits **between** the risk classifier and the final
+verdict. Five positions, from *Ask before everything* (0) to *Let a standing
+grant cover a low-risk repeat* (4), defaulting to 3 — today's behaviour, so
+nothing changes until somebody moves it.
+
+**It can only tighten.** `AutonomyControl.apply` is asked *after* the classifier
+and returns the stricter of the two verdicts. A mis-set level therefore cannot
+loosen a confirmation or turn a block into a run. Pinned by
+`test_the_dial_never_loosens_a_confirmation` and
+`test_the_dial_never_turns_a_block_into_an_execute`.
+
+**The ceiling.** Above `CEILING_RISK` (destructive) — so destructive **and**
+physical — no level auto-executes, ever. Level 4 is not a licence; it is a
+request that the floor stays where the policy put it. Verified live: `delete_file`
+previews `CONFIRM → CONFIRM` at level 4.
+
+**Scope narrows it.** A dial set to "ask before everything, but only under
+`~/Projects/lab`" leaves everything outside on the default. The rule is *every*
+path-like parameter must be under the prefix — a copy that reads inside but
+writes outside is an escape, not a scoped action, so one parameter cannot widen
+the dial (`test_a_copy_that_writes_outside_the_scope_is_not_scoped`).
+
+**Persisted like every other small store** — `autonomy.json` under
+`data_home()`, written atomically, and a corrupt file falls back to the safe
+default with a log line rather than silently forgetting.
+
+**Surfaces.**
+- `jarvis/security/autonomy.py` — `LEVELS`, `CEILING_RISK`, `AutonomyControl`.
+- `jarvis/security/policy.py` — step 4b in `evaluate`; a dial failure leaves the
+  classifier's verdict rather than widening.
+- `jarvis/api/autonomy_routes.py` — `GET /autonomy`, `POST /autonomy`,
+  `POST /autonomy/preview` (read-only; restores the setting after).
+- `AutonomyControlView.swift` in the **Trust & Privacy** group — the five
+  levels, the scope field, the ceiling statement, and a live preview showing the
+  classifier's verdict beside the dial's.
+
+**Evidence.** `tests/test_adaptive_autonomy.py` **20 passed**, including
+`test_a_destructive_action_is_never_auto_executed_at_any_level` (all five
+levels), `test_the_permission_engine_applies_the_dial` (a real
+`PermissionEngine.evaluate` verdict changed by the dial), and
+`test_the_preview_does_not_leave_the_dial_moved`. Both Swift targets build clean.
+
+**Live, level 7 (isolated `:8798`).** At level 0, a real `POST /command`
+"what is a train" **stopped and asked**: *"This needs your confirmation before I
+run it. Will do: ask_question on laptop_main."* At level 3 the same command
+answered. `search_files` previewed `EXECUTE → CONFIRM` at level 0 and
+`EXECUTE → EXECUTE` at level 3.
+
+**Rendered, level 4.** Five levels with 3 marked *current*, the scope field, the
+ceiling sentence, and a live preview of `delete_file` reading
+`CONFIRM → CONFIRM · risk 3 · destructive`.
+
+**NOT verified.** No level was moved by a physical click (driven over HTTP;
+synthetic clicks are dropped here). Paths that decide without calling
+`PermissionEngine.evaluate` would not see the dial — the engine is the only
+authoriser by design, but that is asserted from the code rather than swept.

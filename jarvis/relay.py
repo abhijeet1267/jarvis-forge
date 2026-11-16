@@ -343,6 +343,15 @@ class RelayService:
         """The only place the relay talks to anything, kept single so the timeout is stated once."""
         import httpx
 
+        # The relay reaches the laptop over the LAN. It is egress like any other:
+        # an undeclared peer must be refused rather than dialled.
+        from .security.egress import EgressRefused, require
+
+        try:
+            require(url)
+        except EgressRefused as exc:
+            raise RelayUnavailable(f"the egress firewall refused {url}: {exc}") from exc
+
         try:
             with httpx.Client(timeout=timeout) as client:
                 reply = client.request(method, url, headers=headers, content=content)

@@ -52,7 +52,7 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Sequence
 
 from ..logging_setup import get_logger
-from ..net import DeadlineExceeded, http_read
+from ..net import DeadlineExceeded, EgressRefused, http_read
 
 log = get_logger("gateway.providers")
 
@@ -244,6 +244,15 @@ class AIProvider:
             reply = ProviderReply(False, self.name, model,
                                   error=_redact(f"timeout: {exc}", self.api_key),
                                   notes={"category": "timeout"})
+        except EgressRefused as exc:
+            # The Privacy Egress Firewall refused the destination. This is *not*
+            # a network failure and must not be reported as one: a person who
+            # turned on privacy mode needs to read "refused", not "could not be
+            # reached", or they will go looking for a broken connection that is
+            # not there.
+            reply = ProviderReply(False, self.name, model,
+                                  error=_redact(str(exc), self.api_key),
+                                  notes={"category": "egress_refused"})
         except urllib.error.HTTPError as exc:
             detail = exc.read() if hasattr(exc, "read") else b""
             reply = ProviderReply(False, self.name, model,

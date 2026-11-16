@@ -670,6 +670,16 @@ from .recovery_routes import build_router as _build_recovery_router  # noqa: E40
 
 app.include_router(_build_recovery_router(require_auth))
 
+# Privacy Egress Firewall: which destinations are declared, read-only.
+from .egress_routes import build_router as _build_egress_router  # noqa: E402
+
+app.include_router(_build_egress_router(require_auth))
+
+# Adaptive Autonomy Control: the dial, its ceiling, and a read-only preview.
+from .autonomy_routes import build_router as _build_autonomy_router  # noqa: E402
+
+app.include_router(_build_autonomy_router(require_auth))
+
 _core: Optional[JarvisCore] = None
 _voice = None
 

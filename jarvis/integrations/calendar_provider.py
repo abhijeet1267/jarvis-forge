@@ -195,6 +195,21 @@ def classify_transport_error(exc: BaseException) -> ProviderStatus:
     text = str(exc)
     lowered = text.lower()
 
+    # A refusal from the egress firewall is not a transport failure. Telling the
+    # person the network had a problem when the read was *deliberately* blocked
+    # would send them debugging a connection that is fine -- the same mistake
+    # the provider path avoids by naming "egress_refused".
+    try:
+        from ..security.egress import EgressRefused
+
+        if isinstance(exc, EgressRefused):
+            # The read was blocked on purpose. UNAVAILABLE is the honest state:
+            # the provider cannot be read right now, and the detail carries the
+            # reason rather than implying the network failed.
+            return ProviderStatus.UNAVAILABLE
+    except Exception:  # pragma: no cover
+        pass
+
     try:  # httpx is a declared dependency; stay safe if it is missing anyway.
         import httpx
     except Exception:  # pragma: no cover
@@ -675,7 +690,10 @@ class CalDavProvider(CalendarProvider):
   <c:filter><c:comp-filter name="VCALENDAR"><c:comp-filter name="VEVENT"/></c:comp-filter></c:filter>
 </c:calendar-query>"""
 
+        from ..security.egress import require  # noqa: E402
+
         try:
+            require(self.url)
             with httpx.Client(timeout=20.0) as client:
                 response = client.request(
                     "REPORT", self.url, content=body.encode(),
@@ -718,7 +736,10 @@ class CalDavProvider(CalendarProvider):
 
         if not event.uid:
             event.uid = f"jarvis-{uuid.uuid4().hex[:12]}"
+        from ..security.egress import require  # noqa: E402
+
         try:
+            require(self.url)
             with httpx.Client(timeout=20.0) as client:
                 response = client.put(
                     self._resource(event.uid),
@@ -758,7 +779,10 @@ class CalDavProvider(CalendarProvider):
         if changes.get("end") is not None:
             existing.end = changes["end"]
 
+        from ..security.egress import require  # noqa: E402
+
         try:
+            require(self.url)
             with httpx.Client(timeout=20.0) as client:
                 response = client.put(
                     self._resource(uid), content=to_ics(existing).encode(), headers=self._headers()
@@ -777,7 +801,10 @@ class CalDavProvider(CalendarProvider):
     def cancel(self, uid: str) -> Dict[str, Any]:
         import httpx
 
+        from ..security.egress import require  # noqa: E402
+
         try:
+            require(self.url)
             with httpx.Client(timeout=20.0) as client:
                 response = client.delete(self._resource(uid), headers=self._headers())
         except Exception as exc:

@@ -1918,6 +1918,69 @@
         "NOT VERIFIED (level 5-6): no failure was selected by a click; the newest is auto-selected on open and the ranking was driven over HTTP. Synthetic clicks are dropped (AXIsProcessTrusted() false).",
         "The tournament is advisory. It ranks which repair is the best first thing to try; whether it worked is decided by the runner's independent verifier, not by the ranking. This is stated on screen."
       ]
+    },
+    "V12-6-privacy-egress-firewall": {
+      "title": "V12: Privacy Egress Firewall -- a declared allowlist at the one read chokepoint",
+      "status": "completed",
+      "priority": 1,
+      "acceptance": [
+        "every outbound read goes through one gate that decides the destination",
+        "an undeclared host is refused before a socket is opened",
+        "a refusal is its own failure, never reported as a network error or a timeout",
+        "privacy mode refuses the destinations that carry the conversation (providers, first-party services)",
+        "privacy mode leaves loopback and lookups working, so the product does not break",
+        "the allowlist is declared in source from the hosts the code actually contacts",
+        "a new host is added by naming it, never by a route that widens the list",
+        "the posture states what the gate does not cover (other apps' traffic)",
+        "the screen shows the posture, the kind counts, and a live check with its reason"
+      ],
+      "evidence": [
+        "2026-11-16: jarvis/security/egress.py added -- Destination/Verdict, EgressFirewall.check, declared hosts measured from source (21 hosts: 3 loopback, 6 lookup, 4 provider, 8 service), describe_firewall with not_covered.",
+        "2026-11-16: jarvis/net.py -- http_read calls the firewall before opening a socket; EgressRefused re-exported; a firewall that cannot decide refuses (fails closed).",
+        "2026-11-16: jarvis/gateway/providers.py -- EgressRefused caught as its own category 'egress_refused', not 'network'.",
+        "2026-11-16: jarvis/api/egress_routes.py -- GET /egress posture, POST /egress/check (read-only). No route widens the allowlist.",
+        "2026-11-16 PASS: tests/test_egress_firewall.py 28 passed -- incl. test_a_refused_read_never_opens_a_socket (urlopen spy counts 0), test_privacy_mode_is_read_at_check_time, test_a_provider_reports_an_egress_refusal_as_its_own_category.",
+        "2026-11-16 PASS: network regression sweep 211 passed (n8n, provider categories, timeout gap, no-implicit-retry, google, phase34 deadline, no-duplicate-routes).",
+        "2026-11-16 PASS (level 7, live :8798): /egress reports 21 declared hosts; check of collect.example.net refused 'not a declared destination'; api.openai.com allowed with privacy off, refused under privacy mode ('would carry the conversation off this Mac'), en.wikipedia.org still allowed under privacy mode; then a real POST /command 'what is a train' returned a Wikipedia answer with privacy ON -- the lookup path works end to end under the gate.",
+        "2026-11-16 PASS (level 4, rendered): EgressFirewallView renders live from the backend -- Privacy mode on, 3 loopback / 6 lookup / 8 service / 4 provider, 'enforced at jarvis.net.http_read', check of example.com REFUSED with its reason, provider hosts marked 'blocked'.",
+        "2026-11-16 PASS: httpx call sites gated -- egress.require() added at jarvis/relay.py _httpx_sender, the four CalDAV clients in integrations/calendar_provider.py, voice/stt.py and transport/endpoint.py. classify_transport_error maps EgressRefused to UNAVAILABLE. A wrong relative-import depth (...security) silently disabled the calendar guards; caught by the classifier test and fixed to ..security.",
+        "2026-11-16 PASS: tests/test_egress_firewall.py 34 passed, incl. test_the_relay_refuses_an_undeclared_peer, test_the_stt_backend_refuses_a_provider_under_privacy_mode (real OpenAIWhisperSTT.transcribe returns ok=False 'refused ... privacy mode'), test_a_refused_caldav_read_is_classified_as_unavailable_not_a_network_error."
+      ],
+      "blocked_or_unverified": [
+        "NOT VERIFIED (level 5-6): the privacy toggle and the Check button were exercised over HTTP, not by a physical click (AXIsProcessTrusted() false drops synthetic clicks).",
+        "The gate covers reads through jarvis.net.http_read. Integrations using httpx directly (relay, calendar provider, voice STT, transport endpoint, car/watch readers) are NOT gated by this module yet -- named as the next widening rather than claimed.",
+        "Traffic from other applications on the Mac is outside the process and is not seen or controlled. The posture and the screen say so.",
+        "The car/watch readers use urllib.request.urlopen with an injectable opener, not http_read, so they remain ungated. Stated, not claimed."
+      ]
+    },
+    "V12-7-adaptive-autonomy-control": {
+      "title": "V12: Adaptive Autonomy Control -- one dial, with a ceiling it cannot cross",
+      "status": "completed",
+      "priority": 1,
+      "acceptance": [
+        "a single level chooses how much may run without asking",
+        "the dial can only make a verdict stricter, never looser",
+        "a destructive or physical action is never auto-executed at any level",
+        "a scope narrows the dial to a resource prefix",
+        "a call naming a path outside the scope is not treated as scoped",
+        "the level persists across restart",
+        "a corrupt dial file falls back to the safe default (3)",
+        "the permission engine applies the dial on the real decision path",
+        "a read-only preview shows the classifier's verdict beside the dial's, without executing"
+      ],
+      "evidence": [
+        "2026-11-16: jarvis/security/autonomy.py added -- LEVELS 0-4, CEILING_RISK=DESTRUCTIVE, AutonomySetting, AutonomyControl.apply (pure, _stricter, scope matching via RESOURCE_PARAMETER_KEYS), JSON store under data_home().",
+        "2026-11-16: jarvis/security/policy.py -- PermissionEngine.evaluate applies the dial after the classifier (step 4b); a dial failure leaves the classifier verdict rather than widening.",
+        "2026-11-16: jarvis/api/autonomy_routes.py -- GET /autonomy, POST /autonomy, POST /autonomy/preview (restores the setting after).",
+        "2026-11-16 PASS: tests/test_adaptive_autonomy.py 20 passed -- incl. test_the_dial_never_loosens_a_confirmation, test_a_destructive_action_is_never_auto_executed_at_any_level (all 5 levels), test_a_copy_that_writes_outside_the_scope_is_not_scoped, test_the_preview_does_not_leave_the_dial_moved, test_the_permission_engine_applies_the_dial.",
+        "2026-11-16 PASS (level 7, live :8798): preview delete_file at level 4 -> CONFIRM->CONFIRM (ceiling holds); search_files level 0 -> EXECUTE->CONFIRM 'autonomy is set to ask before everything', level 3 -> EXECUTE->EXECUTE; then a real POST /command 'what is a train' at level 0 stopped with 'This needs your confirmation before I run it. Will do: ask_question' instead of answering.",
+        "2026-11-16 PASS (level 4, rendered): AutonomyControlView on the live backend -- 5 levels with 3 'current', scope field, the ceiling statement, and a live preview showing delete_file CONFIRM->CONFIRM 'risk 3 - destructive'."
+      ],
+      "blocked_or_unverified": [
+        "NOT VERIFIED (level 5-6): levels were moved over HTTP, not by a physical click (synthetic clicks are dropped; AXIsProcessTrusted() false).",
+        "The dial is applied in PermissionEngine.evaluate. Paths that decide without calling it (if any) are not covered; the engine is the only authoriser by design, but that is asserted from the code, not swept.",
+        "Level 4's extra room is the permission engine's existing standing-grant rule; the dial does not add a second auto-execute path."
+      ]
     }
   }
 }
