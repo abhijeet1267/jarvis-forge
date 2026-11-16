@@ -4232,6 +4232,19 @@ hidden behind a passing test count.
   per-leg target-and-readback decodes and renders. A typo in the coordinate field
   used to send the real pointer to (0, 0); it is now refused.
 
+### A second defect, found the same way
+
+Recording a `desktop_type_text` step with `{"text": "password=hunter2"}` was
+**accepted and stored**. The sensitive-value guard inspected only parameter
+*names*, so "text" looked innocent and the value — which would be replayed as
+keystrokes on every run and sat in the draft in plain text — was kept. Found by
+driving the live `/intelligence/recordings/steps` endpoint, not by reading the
+code. Fixed: a typed parameter's value is now inspected for `key=value` shapes,
+and the value never appears in the skip reason. Verified after the fix:
+`skipped=true, params={}`. A sentence that merely mentions a credential ("the
+token expired") is still recorded, because a bare word match would make the
+recorder useless for notes.
+
 ### A defect the demonstration found
 
 TextEdit was not in the app catalog (`jarvis/registry/apps.py`), so the required
@@ -4249,6 +4262,7 @@ run and by `tests/test_missions_api.py`.
 | `tests/test_desktop_native.py` | **29 passed** |
 | `tests/test_phase28_reading_is_not_writing.py` | **33 passed** (ledger 49 → 51; the invariant-asserting line above the pinned count is unchanged) |
 | `tests/test_missions_api.py` | **30 passed** |
+| `tests/test_recorder.py` | **40 passed** (was 31; includes the two cross-language pins and the typed-secret guard) |
 | `test_phase41`, `test_phase52`, `test_phase39`, `test_phase51`, `test_r43_browser_slice` | **166 passed** (before the fix: 165 passed, 1 failed — that one pinned README's tool count against the live registry and caught 196 vs 200) |
 
 Published tool count corrected 196 → 200 and pinned by
