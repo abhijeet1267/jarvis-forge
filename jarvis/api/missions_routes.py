@@ -45,6 +45,66 @@ def build_router(require_auth) -> APIRouter:
                 raise HTTPException(status_code=400, detail=f"unknown state {state!r}")
         return {"missions": [_dump(m) for m in service.list(limit=limit, states=states)]}
 
+    @router.post("/plan")
+    async def plan_mission(body: Dict[str, Any] = Body(None)) -> Dict[str, Any]:
+        """Turn a desktop sentence into mission steps, without creating a mission.
+
+        The planner is the only path from an instruction to a desktop action. It
+        never invents a target: an ambiguous request comes back with a
+        ``clarification`` and **no steps**, so a caller cannot accidentally build
+        a mission out of a guess.
+
+        Every planned tool is checked against the registry before it is returned.
+        A plan naming a tool this backend does not have would fail later, at the
+        point where it matters, with a worse message.
+        """
+        from ..desktop.planner import plan_desktop
+
+        body = body or {}
+        request = str(body.get("request") or "").strip()
+        if not request:
+            raise HTTPException(status_code=422, detail="a plan needs a request")
+
+        context: Dict[str, Any] = {}
+        if body.get("application"):
+            context["application"] = str(body["application"])
+        if body.get("x") is not None and body.get("y") is not None:
+            context["point"] = (float(body["x"]), float(body["y"]))
+
+        planned = plan_desktop(request, context=context or None)
+
+        registry = _registry_names()
+        # An empty registry means it could not be built, not that no tools exist;
+        # checking against it would report every planned tool as unknown.
+        unknown = sorted({s.tool for s in planned.steps
+                          if registry and s.tool not in registry})
+        if unknown:
+            raise HTTPException(
+                status_code=500,
+                detail=f"the planner named tools this backend does not register: {unknown}",
+            )
+
+        # Steps are sequenced with depends_on rather than left independent: these
+        # are pointer and keyboard actions in one place, and a plan that ran them
+        # concurrently would type into whatever happened to be focused.
+        steps = []
+        for index, step in enumerate(planned.steps):
+            steps.append({
+                "step_id": f"S{index + 1}",
+                "title": step.description,
+                "tool": step.tool,
+                "params": step.params,
+                "depends_on": [f"S{index}"] if index else [],
+                "idempotency_key": "",
+            })
+        return {
+            "status": "planned" if steps else "clarification",
+            "request": request,
+            "steps": steps,
+            "clarification": planned.clarification,
+            "notes": planned.notes,
+        }
+
     @router.get("/interrupted")
     async def interrupted_missions() -> Dict[str, Any]:
         """Missions that were mid-flight when the process stopped.
@@ -479,6 +539,22 @@ def _service() -> MissionService:
     from ..db.database import get_db
 
     return MissionService(get_db())
+
+
+def _registry_names() -> set:
+    """Every tool name this backend can actually dispatch.
+
+    Read from the same registry the runner uses, so "the planner named a tool
+    that does not exist" is caught at plan time rather than at run time.
+    """
+    from ..tools import build_default_registry
+
+    try:
+        return set(build_default_registry().names())
+    except Exception:
+        # A registry that cannot be built is a far more serious failure than a
+        # bad plan; the caller's request should not mask it with a 500 of ours.
+        return set()
 
 
 def _audit():

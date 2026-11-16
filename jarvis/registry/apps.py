@@ -76,6 +76,18 @@ DEFAULT_APPS: List[AppSpec] = [
         aliases=["notes", "notepad"],
         category="productivity",
     ),
+    AppSpec(
+        key="textedit",
+        display_name="TextEdit",
+        platform=["macos"],
+        launch={"macos": "TextEdit"},
+        # "editor" belongs to VS Code and is deliberately not repeated here: an
+        # alias shared by two apps makes `resolve` order-dependent, and "open the
+        # editor" must keep meaning the coding environment. "text editor" is
+        # unambiguous and is what a person actually says for this app.
+        aliases=["textedit", "text edit", "text editor", "plain text editor"],
+        category="productivity",
+    ),
     #: Mail and Calendar are registered because "open Mail" and "open Calendar" are
     #: application requests, and both sentences were being answered by something else: the
     #: first by the mail-search agent's help text, the second by a web address. Neither app

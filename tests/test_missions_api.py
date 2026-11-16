@@ -473,3 +473,59 @@ def test_an_auto_intent_covers_a_copy_destination_not_only_its_source():
                            json={"steps": [{"step_id": "S1"}]})
     assert response.status_code == 200, response.text
     assert response.json()["intent_refusals"] == []
+
+
+# -- planning a desktop sentence into mission steps (V15 §16) -----------------
+
+DEMO = ("Open TextEdit, move the cursor to 412 336, click there, "
+        "type 'Hello from Vantage', then press cmd+s")
+
+
+def test_the_demonstration_sentence_plans_into_ordered_steps():
+    client = _client()
+    response = client.post("/missions/plan", headers=HEADERS, json={"request": DEMO})
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["status"] == "planned"
+    tools = [s["tool"] for s in body["steps"]]
+    assert tools == ["open_application", "desktop_move_pointer", "desktop_click",
+                     "desktop_type_text", "desktop_shortcut"]
+    # Sequenced, not parallel: these act in one place, one after another.
+    assert body["steps"][0]["depends_on"] == []
+    assert body["steps"][1]["depends_on"] == ["S1"]
+    assert body["steps"][4]["depends_on"] == ["S4"]
+
+
+def test_an_ambiguous_sentence_returns_no_steps_and_a_question():
+    """A plan built from a guess would click somewhere nobody named."""
+    client = _client()
+    response = client.post("/missions/plan", headers=HEADERS,
+                           json={"request": "focus Safari and click Save"})
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["steps"] == []
+    assert body["clarification"]
+
+
+def test_a_plan_with_no_request_is_refused():
+    client = _client()
+    response = client.post("/missions/plan", headers=HEADERS, json={})
+    assert response.status_code == 422
+
+
+def test_planning_requires_authentication():
+    client = _client()
+    response = client.post("/missions/plan", headers={"Host": "127.0.0.1"},
+                           json={"request": "move the cursor to 10 10"})
+    assert response.status_code in (401, 403), response.text
+
+
+def test_every_planned_tool_is_one_the_backend_registers():
+    """A plan naming a tool that does not exist would fail where it matters."""
+    from jarvis.tools import build_default_registry
+
+    client = _client()
+    response = client.post("/missions/plan", headers=HEADERS, json={"request": DEMO})
+    names = set(build_default_registry().names())
+    for step in response.json()["steps"]:
+        assert step["tool"] in names, step["tool"]

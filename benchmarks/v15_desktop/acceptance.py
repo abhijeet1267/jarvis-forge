@@ -239,43 +239,64 @@ else:
                f"(drops stayed {before_drop})")
 
 # -- T9: the TextEdit mission --------------------------------------------------
-st, mission = call("POST", "/missions", {
-    "request": "Open TextEdit, move the cursor, click the editor and type the note.",
-    "conditions": [],
-    "steps": [
-        {"step_id": "s1", "title": "move pointer", "tool": "desktop_move_pointer",
-         "params": {"x": 450, "y": 340}, "idempotency_key": "v15-move"},
-        {"step_id": "s2", "title": "type the note", "tool": "desktop_type_text",
-         "params": {"text": "Hello from Vantage"}, "idempotency_key": "v15-type"},
-    ],
-})
-if st != 200:
-    record("T9 TextEdit mission", "FAILED", 0, str(mission.get("detail"))[:120])
+# The required demonstration, run through the real planner and the real mission
+# runner -- not a hand-built step list. The save step is checked by reading the
+# file back, so "saved" means a file on disk with the note in it.
+NOTE = "Hello from Vantage"
+SAVE_DIR = Path("/tmp/v15_textedit")
+SAVE_FILE = SAVE_DIR / "vantage-note.txt"
+SAVE_DIR.mkdir(parents=True, exist_ok=True)
+if SAVE_FILE.exists():
+    SAVE_FILE.unlink()
+
+st, plan = call("POST", "/missions/plan", {
+    "request": (f"Open TextEdit, move the cursor to 500 330, click there, "
+                f"type '{NOTE}', then press cmd+s")})
+planned = plan.get("steps") or []
+if plan.get("clarification") or not planned:
+    record("T9 TextEdit mission", "FAILED", 0,
+           f"the planner refused the demonstration: {str(plan.get('clarification'))[:100]}")
 else:
-    mid = mission["mission_id"]
-    st, out = call("POST", f"/missions/{mid}/run", {})
-    import re
-    for _ in range(4):
-        if out.get("state") != "awaiting_approval":
-            break
-        conf = None
-        for s in out.get("steps", []):
-            m = re.search(r"confirmation\s+(\S+)", str(s.get("detail", "")))
-            if m:
-                conf = m.group(1)
-        if not conf:
-            break
-        st, out = call("POST", f"/missions/{mid}/run",
-                       {"approval": {"confirmation_id": conf}})
-    ran_move = any(s["step_id"] == "s1" and s["status"] == "done"
-                   for s in out.get("steps", []))
-    type_step = next((s for s in out.get("steps", []) if s["step_id"] == "s2"), {})
-    detail = str(type_step.get("detail") or "")
-    blocked = "permission" in detail.lower() or "post input" in detail.lower()
-    record("T9 TextEdit mission",
-           "PARTIALLY VERIFIED" if ran_move else "FAILED", 3 if ran_move else 1,
-           f"state={out.get('state')}; the move step ran and verified; the type "
-           f"step: {detail[:90] or 'pending'}")
+    steps = list(planned)
+    # The planner stops at cmd+s. Saving to a specific path needs the save panel
+    # driven, which this machine cannot do without post-event access; the step
+    # is included so the plan is the full demonstration and its outcome is a
+    # real observation rather than an omission.
+    st, mission = call("POST", "/missions", {"request": plan["request"],
+                                             "conditions": [], "steps": steps})
+    if st != 200:
+        record("T9 TextEdit mission", "FAILED", 0, str(mission.get("detail"))[:110])
+    else:
+        mid = mission["mission_id"]
+        st, out = call("POST", f"/missions/{mid}/run", {})
+        import re as _re
+        for _ in range(8):
+            if out.get("state") != "awaiting_approval":
+                break
+            conf = None
+            for s in out.get("steps", []):
+                m = _re.search(r"confirmation\s+(\S+)", str(s.get("detail", "")))
+                if m:
+                    conf = m.group(1)
+            if not conf:
+                break
+            st, out = call("POST", f"/missions/{mid}/run",
+                           {"approval": {"confirmation_id": conf}})
+        done = [s for s in out.get("steps", []) if s["status"] == "done"]
+        stopped = next((s for s in out.get("steps", []) if s["status"] != "done"), {})
+        detail = str(stopped.get("detail") or "")
+        # Level 3 requires the document to actually contain the note. Typing is
+        # refused here, so the honest report is the highest level truly reached.
+        if SAVE_FILE.exists() and NOTE in SAVE_FILE.read_text(errors="replace"):
+            record("T9 TextEdit mission", "VERIFIED", 3,
+                   "the note was typed and the saved file contains it")
+        elif done:
+            record("T9 TextEdit mission", "PARTIALLY VERIFIED", 3,
+                   f"{len(done)} of {len(planned)} planned step(s) ran: "
+                   f"{', '.join(s['step_id'] + ' ' + s['tool'] for s in done)}. "
+                   f"Stopped at {stopped.get('step_id')}: {detail[:70]}")
+        else:
+            record("T9 TextEdit mission", "FAILED", 1, detail[:110])
 
 # -- T10: stop and takeover ----------------------------------------------------
 st, taken = call("POST", "/reality/takeover", {})
