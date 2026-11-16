@@ -2803,3 +2803,62 @@ native fields and clicking **Save & run**. Synthetic clicks are still dropped on
 (`AXIsProcessTrusted()` false), so the editor is proven at levels 1–4 (source, compiled,
 contract, rendered with live data) and the *backend* journey at level 7 — the seam between
 the two, a human clicking the control, is unproven.
+
+## Update — 2026-11-16 (V12 phase 2: ShadowMission — predict, do not perform)
+
+A person deciding whether to run a plan needs to know what it would change and what would
+stop it. Until now the only way to find out was to run it. ShadowMission answers the
+question without acting: it walks the plan step by step and, for each step, asks the **real**
+permission engine for its decision, computes the file effect from the contents on disk now
+(held in memory, never written), and says "unknown" where it cannot see.
+
+**What was built**
+
+- `jarvis/core/shadow.py` — `ShadowMission.run(steps, gate=...)`. Read-only by construction:
+  the module's only filesystem calls are the ones `ParallelWorld` already uses to take a
+  snapshot. File effects (write / copy / move / delete) are computed against an in-memory
+  world that is rolled forward, so a second write to one path reports the first write's
+  result as its "before", and a read of a file an earlier step wrote is marked `predicted`
+  rather than observed.
+- `POST /missions/{mission_id}/shadow` — reuses `_gate_factory`, so the shadow asks the
+  same policy implementation the runner does; there is no second copy of the rules to drift.
+- The files' own `_guard` is injected, so a protected path is refused in the preview exactly
+  as the executor would refuse it. A preview that promised success for a target the executor
+  then rejects would be worse than no preview.
+- `ShadowMissionView` — a plan picker, and a report card with per-step verdicts:
+  `would run`, `would run (predicted)`, `needs your approval`, `would be refused`,
+  `effect unknown`. Before/after previews are drawn **only** where the shadow actually has
+  them, because empty boxes would imply a step that was refused or not simulated did
+  something. Registered in the sidebar under the MAC group.
+
+**Defects found and fixed during the work**
+
+1. **A gate-blocked step was counted as previewed.** The conclusion read "2 of 3 step(s) can
+   be previewed" about steps the permission engine had just refused to let run — nothing
+   about their effects had been computed at all. `_conclusion` now counts `previewed`
+   separately from `would_need_approval` and `not_simulated`, and states plainly that no
+   effect could be previewed when the count is zero.
+2. **A raising gate would have crashed the screen.** A gate exception is now caught and
+   reported as a refusal with its reason, so a broken engine produces a report rather than a
+   blank panel.
+3. **ShadowMission was registered but invisible.** `NavItem` had the case and the dispatch,
+   but the sidebar is built from explicit `group(...)` lists; `.shadow` was not in any of
+   them.
+
+**Evidence.** `test_shadow_mission.py` **15 passed** — the load-bearing ones are
+`test_a_shadow_writes_nothing`, `test_a_second_write_sees_the_first_writes_result`,
+`test_the_guards_refusal_is_honoured`, `test_a_gate_blocked_step_is_not_counted_as_previewed`.
+Together with `test_recorder`, `test_mission_runner`, `test_missions_api`,
+`test_mission_contracts`, `test_no_duplicate_routes`: **84 passed, 0 failed**. Both Swift
+targets build clean.
+
+**Rendered, level 4 (live data, not interaction).** Against a real 3-step plan on the probe
+backend the screen shows: `needs your approval · Write it · write_file`,
+`effect unknown · Open a page · open_url`, `needs your approval · Copy it · copy_file`;
+summary `3 step(s) · 2 need approval · 1 unknown`; conclusion *"No step's effect could be
+previewed: 2 step(s) need your approval first and 1 act outside Vantage, so what they would
+change is unknown until they run."*; and the note *"Nothing was executed…"*.
+
+**NOT verified.** No click reached a control: selecting a plan was exercised over HTTP, not
+by a real click (`AXIsProcessTrusted()` is false on this machine, so synthetic events are
+dropped). The seam between the rendered screen and the backend call it makes is unproven.

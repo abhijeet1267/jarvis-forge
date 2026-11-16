@@ -1521,6 +1521,43 @@ extension APIModels {
         let missions: [Mission]
     }
 
+    /// `POST /missions/{id}/shadow`. What a plan would do, executed by nothing.
+    struct ShadowReport: Codable {
+        struct Step: Codable, Identifiable {
+            let step_id: String
+            let title: String
+            let tool: String
+            /// One of would_run, would_need_approval, would_be_refused,
+            /// not_simulated, predicted. The server decides it; the client
+            /// renders it and never upgrades it.
+            let verdict: String
+            let detail: String?
+            let before: String?
+            let after: String?
+            /// True when `before` is what an earlier step in the same plan would
+            /// have written, not what is on disk now.
+            let source_is_shadowed: Bool?
+
+            var id: String { step_id }
+        }
+
+        struct Summary: Codable {
+            let steps: Int
+            let would_run: Int
+            let would_be_refused: Int
+            let would_need_approval: Int
+            let not_simulated: Int
+        }
+
+        let steps: [Step]
+        let summary: Summary
+        /// One sentence on what this shadow can and cannot tell you.
+        let conclusion: String
+        let note: String
+        let mission_id: String
+        let mission_state: String
+    }
+
     struct MissionProof: Codable {
         let mission_id: String
         let verdict: String

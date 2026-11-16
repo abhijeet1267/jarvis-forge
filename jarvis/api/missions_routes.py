@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 
+from types import SimpleNamespace
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Body, Depends, HTTPException
@@ -294,6 +295,50 @@ def build_router(require_auth) -> APIRouter:
         except ValueError as exc:
             raise HTTPException(status_code=404, detail=str(exc))
         return _dump(mission)
+
+    @router.post("/{mission_id}/shadow")
+    async def shadow_mission(mission_id: str,
+                             body: Dict[str, Any] = Body(None)) -> Dict[str, Any]:
+        """Predict what this mission would do, executing none of it.
+
+        The permission question is answered by the same gate a real run uses, so
+        a step a shadow says would run is a step the run would also allow. The
+        file effects are computed from what is on disk now and never written.
+        """
+        from .app import get_core
+        from ..core.shadow import ShadowMission
+
+        service = _service()
+        mission = service.get(mission_id)
+        if mission is None:
+            raise HTTPException(status_code=404, detail=f"no mission {mission_id!r}")
+
+        core = get_core()
+        # The file tools' own protector, so a shadow refuses a path they would
+        # refuse. A preview that promises a write the executor then rejects moves
+        # the refusal to the worst possible moment.
+        from ..tools.files import _guard as file_guard
+
+        real_gate = _gate_factory(core)
+
+        def gate(tool: str, params: Dict[str, Any], device: str,
+                 session_id: str) -> Dict[str, Any]:
+            # The real gate takes (step, mission). A shadow has no MissionStep
+            # yet -- it is predicting steps that may never become one -- so the
+            # two fields it reads are supplied directly.
+            probe = SimpleNamespace(step_id="shadow", tool=tool, params=params)
+            return real_gate(probe, SimpleNamespace(mission_id=session_id))
+
+        shadow = ShadowMission(guard=file_guard)
+        report = shadow.run(
+            [{"step_id": s.step_id, "title": s.title, "tool": s.tool,
+              "params": dict(s.params or {})} for s in mission.steps],
+            gate=gate,
+            device=str((body or {}).get("device") or "laptop_main"),
+            session_id=mission_id)
+        report["mission_id"] = mission_id
+        report["mission_state"] = mission.state
+        return report
 
     @router.post("/observe")
     async def observe_goal(body: Dict[str, Any] = Body(None)) -> Dict[str, Any]:

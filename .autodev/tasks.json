@@ -1,5 +1,5 @@
 {
-  "updated": "2026-11-15",
+  "updated": "2026-11-16",
   "version": 1,
   "note": "Durable task queue for the autodev supervisor. Statuses: pending, ready, running, completed, failed, blocked, skipped. A task is completed only when its acceptance criteria are met AND evidence is recorded. Priority: lower = sooner. Mirror of docs/PROJECT_ROADMAP.md.",
   "tasks": {
@@ -1795,6 +1795,35 @@
       ],
       "blocked_or_unverified": [
         "NOT VERIFIED (level 5-6): the native editor was never driven by a real click -- AXIsProcessTrusted() is false on this machine, so synthetic events are dropped. The journey above mirrors the Swift calls step for step but does not prove the controls."
+      ]
+    },
+    "V12-2-shadow-mission": {
+      "title": "V12: ShadowMission -- what a plan would do, before anything runs",
+      "status": "completed",
+      "priority": 0,
+      "acceptance": [
+        "a shadow performs no effect at all: no file is written, moved or deleted",
+        "before/after for a file effect comes from the file's real contents at the time of the shadow",
+        "later steps are rolled forward against earlier ones, and a read of an earlier write is marked a prediction",
+        "the permission question is answered by the real engine, and a CONFIRM is distinguished from a refusal",
+        "the files' own guard is honoured, so a protected path does not preview as runnable",
+        "a tool whose effect is outside the process is reported unknown rather than simulated",
+        "a gate that raises does not crash the screen",
+        "the summary and conclusion never count a gate-blocked step as previewed",
+        "the screen renders the report with live data and states that nothing was executed"
+      ],
+      "evidence": [
+        "2026-11-16: jarvis/core/shadow.py added -- walks a plan asking the real permission engine, computes file effects in memory via ParallelWorld/snapshot, never opens a file for writing.",
+        "2026-11-16: POST /missions/{mission_id}/shadow added in jarvis/api/missions_routes.py, reusing _gate_factory so there is one policy implementation.",
+        "2026-11-16: shadow.py _conclusion counts previewed separately from refusal and approval. Before this it said '2 of 3 step(s) can be previewed' about steps the engine had refused.",
+        "2026-11-16 PASS: tests/test_shadow_mission.py 15 passed -- including test_a_shadow_writes_nothing, test_a_second_write_sees_the_first_writes_result, test_the_guards_refusal_is_honoured, test_a_gate_blocked_step_is_not_counted_as_previewed.",
+        "2026-11-16 PASS: 84 passed across test_shadow_mission, test_recorder, test_mission_runner, test_missions_api, test_mission_contracts, test_no_duplicate_routes.",
+        "2026-11-16 PASS (level 4, rendered): ShadowMissionView rendered from a live backend with a 3-step plan -- verdicts 'needs your approval / effect unknown / needs your approval', summary '3 step(s) . 2 need approval . 1 unknown', conclusion 'No step's effect could be previewed...', and the nothing-was-executed note.",
+        "2026-11-16 PASS: ShadowMission appears in the sidebar under the MAC group (NavItem case + explicit group() list). swift build clean."
+      ],
+      "blocked_or_unverified": [
+        "NOT VERIFIED (level 5-6): selecting a plan in ShadowMissionView was never driven by a real click. Synthetic events are dropped (AXIsProcessTrusted() false); the shadow-on-selection path was exercised over HTTP instead.",
+        "NOT VERIFIED: no shadow has been run against a plan containing run_allowlisted_command that would actually change outside state -- those are reported not_simulated by construction, so there is nothing to observe."
       ]
     }
   }
