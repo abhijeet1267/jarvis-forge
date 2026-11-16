@@ -2334,11 +2334,11 @@
         "2026-11-16 MEASURED (before fix): 6 failed, 4462 passed, 30 skipped in 517s.",
         "Root causes: (1) desktop_move_pointer EXTERNAL-but-ungated tripped phase54/55/56; (2) README published 181 tools while the registry has 196 (phase52); (3) phase28's unreachable ledger was 32 and V14 added 15 unrouted desktop tools.",
         "2026-11-16 FIXED: risk reclassified to LOW; README counts re-measured to 196 tools, 49 gated, read 97 / low 52 / external 21 / destructive 23 / physical 3; phase28 ledger moved 32 -> 47 with the 15 tools named as a deliberate addition.",
-        "2026-11-16 PASS: the six affected files plus test_desktop_native -- 209 passed."
+        "2026-11-16 PASS: the six affected files plus test_desktop_native -- 209 passed.",
+        "2026-11-16 MEASURED (after the six fixes): 1 failed, 4468 passed, 30 skipped in 516s -- test_phase34::test_no_papers_are_invented_when_the_clock_runs_out at line 234.",
+        "2026-11-16 ROOT CAUSE, proven both directions: search_papers falls back to LocalCorpusSource, which reads a session-wide PaperStore. A paper seeded by an earlier test makes the local source answer, so the timeout test saw stored papers as 'invented'. Seeded + old test -> fails at line 234; seeded + fixed test -> passes. Pre-existing: the file is untouched by V14 and phase28-34 pass in order on baseline 871e21e (220 passed)."
       ],
-      "blocked_or_unverified": [
-        "The full suite was not re-run end to end after the fixes; only the six failing files and the desktop tests were re-run (209 passed)."
-      ]
+      "blocked_or_unverified": []
     },
     "V14-7-probe-selftest": {
       "title": "V14: a one-command Level-3 self-test against a disposable probe app",

@@ -4102,8 +4102,31 @@ Each is fixed at its cause.
    the 15 tools named in the assertion, the same way Phase 61 recorded its two.
 
 Re-run after the fixes: **209 passed** across the six affected files plus
-`test_desktop_native`. The full suite was **not** re-run end to end; that is
-recorded as unverified rather than assumed to be green.
+`test_desktop_native`. The full suite was re-run end to end after this point; see
+the isolation defect below for the one failure that survived it.
+
+### A seventh failure, and it was not the deadline logic
+
+The re-run returned **1 failed, 4468 passed, 30 skipped in 516 s**:
+`test_phase34_one_sentence_one_deadline.py::test_no_papers_are_invented_when_the_clock_runs_out`
+at line 234. It passed in isolation and in ordered subsets, which is the shape of
+a test-isolation defect rather than a flake.
+
+Measured cause: `search_papers` tries the requested source and, on failure, falls
+back to the local corpus, which reads a `PaperStore` **shared by the whole
+session** (the `core` fixture is `scope="session"` and every test uses one temp
+home). Any earlier test that filed a paper matching "agents" or "papers" made the
+local source answer, so the assertion — "a source going quiet invents nothing" —
+saw stored papers and reported them as invented.
+
+Proven both directions rather than argued: seeding one paper and running the old
+test reproduces the exact line-234 failure; the same seed with the fix passes. The
+test now stubs the store empty, because the property under test is about invention,
+not about the shelf's contents.
+
+This is **pre-existing**, not from V14: the file is untouched by those commits, and
+phase34 and its neighbours pass in order on the pre-V14 baseline (`871e21e`, 220
+passed). It is fixed here because it was the last red test.
 
 ### Added after the first commit: a Level-3 harness, and a coordinate defect it caught
 
