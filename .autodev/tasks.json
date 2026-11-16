@@ -2262,8 +2262,9 @@
       ],
       "evidence": [
         "2026-11-16: jarvis/tools/desktop_native.py -- 15 tools registered via jarvis/tools/__init__.py.",
-        "2026-11-16 PASS: registry holds 15 desktop tools; risk split read 4, low 1, external 1, destructive 9.",
-        "2026-11-16 PASS: tests pin no-phantom-tools, tier discipline and parameter declaration."
+        "2026-11-16 PASS: registry holds 15 desktop tools; risk split read 4, low 2, destructive 9.",
+        "2026-11-16 PASS: tests pin no-phantom-tools, tier discipline and parameter declaration.",
+        "2026-11-16 CORRECTED: desktop_move_pointer was EXTERNAL while ungated, which broke the project invariant that every EXTERNAL and DESTRUCTIVE tool is confirmation-gated (asserted by phase54/55/56). It is now LOW -- reversible, visible, less consequential than close_app/browser_open which are both LOW -- rather than the invariant being weakened for it."
       ],
       "blocked_or_unverified": []
     },
@@ -2318,6 +2319,43 @@
         "2026-11-16 PASS (live): takeover -> POST /desktop/move -> HTTP 409 'laptop is paused (human takeover ...)'; release resumed 17."
       ],
       "blocked_or_unverified": []
+    },
+    "V14-6-full-suite-after-v14": {
+      "title": "Full suite after V14: distinguish pre-existing failures from new ones",
+      "status": "completed",
+      "priority": 0,
+      "acceptance": [
+        "every failure introduced by V14 is fixed at its cause, not silenced",
+        "the README's published counts match the live registry"
+      ],
+      "evidence": [
+        "2026-11-16 MEASURED (before fix): 6 failed, 4462 passed, 30 skipped in 517s.",
+        "Root causes: (1) desktop_move_pointer EXTERNAL-but-ungated tripped phase54/55/56; (2) README published 181 tools while the registry has 196 (phase52); (3) phase28's unreachable ledger was 32 and V14 added 15 unrouted desktop tools.",
+        "2026-11-16 FIXED: risk reclassified to LOW; README counts re-measured to 196 tools, 49 gated, read 97 / low 52 / external 21 / destructive 23 / physical 3; phase28 ledger moved 32 -> 47 with the 15 tools named as a deliberate addition.",
+        "2026-11-16 PASS: the six affected files plus test_desktop_native -- 209 passed."
+      ],
+      "blocked_or_unverified": [
+        "The full suite was not re-run end to end after the fixes; only the six failing files and the desktop tests were re-run (209 passed)."
+      ]
+    },
+    "V14-7-probe-selftest": {
+      "title": "V14: a one-command Level-3 self-test against a disposable probe app",
+      "status": "completed",
+      "priority": 0,
+      "acceptance": [
+        "the target reports its own control coordinates so nothing is guessed",
+        "every assertion reads the target's own state, not the caller's claim",
+        "a missing permission attempts nothing and says so"
+      ],
+      "evidence": [
+        "2026-11-16: tools/input_probe/{main.swift,build.sh,selftest.py}.",
+        "2026-11-16 PASS (measured): the probe reports window_frame_ns x=120 y=120 h=672, and targets ordered top-to-bottom click 252.5 < double 294.5 < right 340.5 < checkbox 379.8 < field 415.0, all inside the window.",
+        "2026-11-16 DEFECT FOUND AND FIXED while building it: the first coordinate conversion mirrored every target vertically (it reported the first control at y=623.5, below the fifth at y=461). NSHostingView is already flipped, so the extra content-height subtraction was wrong. Now uses AppKit's own convert() chain.",
+        "2026-11-16 PASS: selftest exits 2 with 'PERMISSION BLOCKED' and attempts nothing."
+      ],
+      "blocked_or_unverified": [
+        "The success path (exit 0) has never executed: no binary is trusted on this machine. Only the exit-2 branch is verified."
+      ]
     }
   }
 }

@@ -314,7 +314,19 @@ def test_the_sweep_is_measured_not_improvised(core):
         "a sentence must not be able to put something from the internet on the disk"
     assert "read_email" not in unreachable, \
         "reading a message the person named is a question that deserves an answer"
-    assert len(unreachable) == 32, unreachable
+    # V14 moved it 32 -> 47 by adding fifteen desktop tools with no sentence
+    # route. That is the on-purpose direction again: the whole point of the
+    # desktop surface is that a *sentence* cannot reach a pointer, a keystroke or
+    # an AXPress. Each is dispatchable only as a planned step behind the
+    # permission engine and a confirmation card. The four reads are the same
+    # shape and are named here so their absence from the routes is not mistaken
+    # for the older hole; they are reachable through the API and the UI, which
+    # is where somebody asking "what can you do to my Mac" looks.
+    desktop_tools = sorted(n for n in core.tools.names() if n.startswith("desktop_"))
+    assert len(desktop_tools) == 15, desktop_tools
+    assert set(desktop_tools) <= set(unreachable), \
+        "a desktop tool acquired a sentence route; that is a design change, not a fix"
+    assert len(unreachable) == 47, unreachable
     assert "read_file" not in unreachable
 
 

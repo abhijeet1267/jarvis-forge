@@ -20,6 +20,15 @@ final class ProbeState: ObservableObject {
     @Published var scrollOffset = 0.0
     @Published var lastAction = ""
 
+    /// Where each control actually is, in CGEvent screen coordinates: points,
+    /// origin at the top-left of the primary display, y growing down. That is
+    /// the same space the executor posts events in, so a caller never has to
+    /// redo the AppKit conversion and get it subtly wrong.
+    var targets: [String: [String: Double]] = [:]
+
+    /// The window the targets live in, set by the delegate once it exists.
+    var window: NSWindow?
+
     private let logPath = "/tmp/vantage_probe_app/state.json"
 
     func record(_ action: String) {
@@ -27,15 +36,72 @@ final class ProbeState: ObservableObject {
         write()
     }
 
+    /// Convert a SwiftUI `.global` point to CGEvent screen coordinates.
+    ///
+    /// Done with AppKit's own conversions rather than arithmetic: the window may
+    /// have a title bar, may have been moved by the user, and the content view
+    /// may not sit at the window origin. Hand-rolling the flip is how a click
+    /// lands somewhere that is not the control — which is what the first
+    /// version of this function did (it reported x=60 for a control in a window
+    /// at x=120).
+    func cgPoint(_ global: CGPoint) -> CGPoint {
+        guard let win = window, let content = win.contentView else { return global }
+        // NSHostingView is a flipped view: its bounds origin is the top-left
+        // and y grows downward, exactly like SwiftUI's `.global` space. So the
+        // point passes through unchanged. Subtracting the height here (the
+        // obvious-looking thing) mirrors every target vertically — measured:
+        // it put the first control below the fifth.
+        let inWindow = content.convert(global, to: nil as NSView?)
+        let onScreen = win.convertPoint(toScreen: inWindow)
+        // AppKit screen y grows up; CGEvent y grows down from the primary
+        // display's top edge. The primary display is screens[0].
+        let primary = NSScreen.screens.first ?? NSScreen.main
+        let primaryHeight = primary?.frame.height ?? onScreen.y
+        return CGPoint(x: onScreen.x, y: primaryHeight - onScreen.y)
+    }
+
+    func reportTarget(_ name: String, _ global: CGRect) {
+        let centre = cgPoint(CGPoint(x: global.midX, y: global.midY))
+        targets[name] = ["x": (centre.x * 100).rounded() / 100,
+                         "y": (centre.y * 100).rounded() / 100]
+        write()
+    }
+
     func write() {
-        let payload: [String: Any] = [
+        var payload: [String: Any] = [
             "clicks": clicks, "double_clicks": doubleClicks,
             "right_clicks": rightClicks, "checkbox": checkbox,
             "text": text, "scroll_offset": scrollOffset,
-            "last_action": lastAction,
+            "last_action": lastAction, "targets": targets,
         ]
+        // The geometry goes in the file so the conversion is auditable from
+        // outside: a reported target can be checked against the window frame
+        // instead of being taken on faith.
+        if let win = window {
+            payload["window_frame_ns"] = [
+                "x": win.frame.minX, "y": win.frame.minY,
+                "width": win.frame.width, "height": win.frame.height,
+            ]
+            if let content = win.contentView {
+                payload["content_height"] = content.bounds.height
+            }
+            payload["primary_screen_height"] = NSScreen.screens.first?.frame.height ?? 0
+        }
         if let data = try? JSONSerialization.data(withJSONObject: payload, options: [.prettyPrinted]) {
             try? data.write(to: URL(fileURLWithPath: logPath))
+        }
+    }
+}
+
+/// Reports a view's frame in window-global space without drawing anything or
+/// taking part in hit testing.
+struct TargetReporter: View {
+    let name: String
+    var body: some View {
+        GeometryReader { geo in
+            Color.clear.onAppear {
+                ProbeState.shared.reportTarget(name, geo.frame(in: .global))
+            }
         }
     }
 }
@@ -56,6 +122,7 @@ struct ProbeView: View {
                 }
                 .accessibilityIdentifier("probe.click")
                 .accessibilityLabel("Click me")
+                .background(TargetReporter(name: "click"))
                 Text("clicks: \(state.clicks)").accessibilityIdentifier("probe.click.count")
                     .accessibilityLabel("click count \(state.clicks)")
             }
@@ -71,6 +138,7 @@ struct ProbeView: View {
                     }
                     .accessibilityIdentifier("probe.double")
                     .accessibilityLabel("Double-click target")
+                    .background(TargetReporter(name: "double"))
                 Text("doubles: \(state.doubleClicks)")
             }
 
@@ -87,6 +155,7 @@ struct ProbeView: View {
                     }
                     .accessibilityIdentifier("probe.right")
                     .accessibilityLabel("Right-click target")
+                    .background(TargetReporter(name: "right"))
                 Text("rights: \(state.rightClicks)")
             }
 
@@ -94,6 +163,7 @@ struct ProbeView: View {
                 get: { state.checkbox },
                 set: { state.checkbox = $0; state.record("checkbox") }))
                 .accessibilityIdentifier("probe.checkbox")
+                .background(TargetReporter(name: "checkbox"))
 
             TextField("Type here", text: Binding(
                 get: { state.text },
@@ -101,6 +171,7 @@ struct ProbeView: View {
                 .textFieldStyle(.roundedBorder)
                 .frame(width: 280)
                 .accessibilityIdentifier("probe.field")
+                .background(TargetReporter(name: "field"))
 
             Text("field length: \(state.text.count)")
 
@@ -136,19 +207,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         win.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
         window = win
+        ProbeState.shared.window = win
         ProbeState.shared.write()
         print("probe window frame (points): \(win.frame)")
+        if let content = win.contentView {
+            print("content view bounds: \(content.bounds)")
+        }
+        print("primary screen: \(NSScreen.screens.first?.frame ?? .zero)")
         print("probe pid: \(ProcessInfo.processInfo.processIdentifier)")
     }
 }
 
-@main
-struct ProbeMain {
-    static func main() {
-        let app = NSApplication.shared
-        let delegate = AppDelegate()
-        app.delegate = delegate
-        app.setActivationPolicy(.regular)
-        app.run()
-    }
-}
+// Top-level entry point rather than `@main`: this file is named main.swift,
+// and Swift rejects the `main` attribute alongside main.swift's implicit
+// top-level code.
+let probeApp = NSApplication.shared
+let probeDelegate = AppDelegate()
+probeApp.delegate = probeDelegate
+probeApp.setActivationPolicy(.regular)
+probeApp.run()

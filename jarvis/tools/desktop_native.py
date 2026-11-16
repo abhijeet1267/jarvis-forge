@@ -347,7 +347,14 @@ SPECS = [
                 "Move the real on-screen pointer to a global display point. The move is "
                 "verified by reading the pointer position back."
             ),
-            risk=RiskLevel.EXTERNAL,
+            # LOW, not EXTERNAL: moving the pointer changes nothing but where the
+            # pointer is, and it is reversible by moving it back. The project's
+            # invariant is that every EXTERNAL and DESTRUCTIVE tool is gated, and
+            # a pointer move is less consequential than `close_app` or
+            # `browser_open`, both of which are LOW and ungated. Calling it
+            # EXTERNAL while ungated was the incoherence; a click is where the
+            # consequence actually starts, and that one is DESTRUCTIVE.
+            risk=RiskLevel.LOW,
             requires_confirmation=False,
             reversible=True,
             parameters={"x": "number", "y": "number", "smooth": "boolean",

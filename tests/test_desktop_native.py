@@ -74,10 +74,27 @@ def test_every_desktop_tool_declares_risk_and_parameters(registry):
 
 def test_a_visible_action_is_not_ranked_as_a_read(registry):
     """Moving the pointer changes what the user sees, so it is not READ.
-    Ranking it READ would let it run without the external tier's scrutiny."""
+
+    It is LOW rather than EXTERNAL, which is a deliberate correction: the
+    project's invariant is that *every* EXTERNAL and DESTRUCTIVE tool is
+    confirmation-gated, enforced by three separate phase tests. Ranking the move
+    EXTERNAL while leaving it ungated broke that invariant, and the honest way
+    out is to rank it where it belongs, not to weaken the gate. A pointer move
+    is reversible and less consequential than `close_app` or `browser_open`,
+    both of which are LOW.
+    """
     move = registry.get("desktop_move_pointer")
-    assert move.risk >= RiskLevel.EXTERNAL
+    assert move.risk is RiskLevel.LOW
+    assert move.risk > RiskLevel.READ
     assert move.requires_confirmation is False  # it is reversible and visible
+
+
+def test_nothing_ranked_external_is_ungated(registry):
+    """The project-wide invariant, asserted on the desktop tools as well."""
+    for spec in registry.all():
+        if spec.risk in (RiskLevel.EXTERNAL, RiskLevel.DESTRUCTIVE):
+            assert spec.requires_confirmation, (
+                f"{spec.name} changes something outside and does not ask first")
 
 
 def test_anything_that_lands_on_the_users_session_asks_first(registry):

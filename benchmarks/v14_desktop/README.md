@@ -12,6 +12,35 @@ JARVIS_HOME=/tmp/vantage_probe2 JARVIS_BACKEND_PORT=8798 \
 .venv/bin/python benchmarks/v14_desktop/acceptance.py
 ```
 
+## The one-command Level-3 check
+
+The acceptance script below drives the *backend*. This drives a real target
+directly, with no server involved, and that is the shortest path to a genuine
+Level-3 result:
+
+```bash
+tools/input_probe/build.sh
+tools/input_probe/vantage-probe &      # leave it on screen
+tools/input_probe/selftest.py
+```
+
+The probe is a disposable SwiftUI app that does nothing on its own — no timer,
+no animation, no synthetic events. Every control is labelled, and each one
+writes its effect to `/tmp/vantage_probe_app/state.json` **from inside its own
+process**. The self-test posts real events at coordinates the probe reports, then
+reads that file back. A posted event that nothing received leaves the file
+unchanged, so a PASS cannot be manufactured by the act of posting.
+
+Exit codes: `0` every step observed · `2` input permission missing, nothing
+attempted · `3` permission present but the target never changed (a real defect).
+
+**The success path of this harness has not been executed on this machine**, for
+the same reason the demos below are blocked: post-event access is not granted to
+`vantage-desktop`, and a freshly built binary is not trusted either (measured:
+`CGPreflightPostEventAccess()` false for a compiled probe built minutes earlier).
+Only the `exit 2` path has run. That is stated here rather than implied by the
+existence of the script.
+
 ## The measurement that shaped the design
 
 Three permission checks, read fresh on this machine, from a newly built binary:

@@ -4071,5 +4071,58 @@ acceptance tests that require Accessibility — they skip honestly rather than
 faking a pass. `swift build` is clean for the app.
 
 README counts re-measured after adding 15 tools: **49 of 196** confirmation-gated,
-tiers read 97 · low 51 · external 22 · destructive 23 · physical 3; 238 test
-modules · 4498 collected; 219.6k versioned lines.
+tiers read 97 · low 52 · external 21 · destructive 23 · physical 3; 238 test
+modules · 4499 collected; 219.6k versioned lines.
+
+### Corrections found by running the full suite (not by reading the diff)
+
+The targeted suites above all passed, and that was not enough: the full suite
+returned **6 failed, 4462 passed, 30 skipped in 517 s**, and all six were mine.
+Each is fixed at its cause.
+
+1. **`desktop_move_pointer` was EXTERNAL and ungated.** Phase 54, 55 and 56 each
+   assert that *every* EXTERNAL and DESTRUCTIVE tool requires confirmation — a
+   deliberate invariant, not a frozen count (they were written that way
+   specifically so a new phase could add gated capabilities). Last session I
+   reasoned "a visible move is not a READ, so make it EXTERNAL" and then, in the
+   same spec, set `requires_confirmation=False`. Those two lines cannot both be
+   right. The fix is **LOW**: a pointer move is reversible and less consequential
+   than `close_app` or `browser_open`, both of which are LOW and ungated. The
+   consequence starts at the click, and a click is DESTRUCTIVE and gated. The
+   invariant was not weakened for it; `test_nothing_ranked_external_is_ungated`
+   now pins this on the desktop tools as well.
+
+2. **The README published 181 tools while the registry has 196** (Phase 52's
+   guard). A stale published count is the defect this project keeps re-finding,
+   so it is re-measured rather than nudged.
+
+3. **Phase 28's unreachable ledger was 32; V14 added 15 unrouted desktop tools.**
+   That is the on-purpose direction — the entire design intent is that a *sentence*
+   cannot reach a pointer, keystroke or AXPress — so the ledger moves 32 → 47 with
+   the 15 tools named in the assertion, the same way Phase 61 recorded its two.
+
+Re-run after the fixes: **209 passed** across the six affected files plus
+`test_desktop_native`. The full suite was **not** re-run end to end; that is
+recorded as unverified rather than assumed to be green.
+
+### Added after the first commit: a Level-3 harness, and a coordinate defect it caught
+
+`tools/input_probe/` is a disposable SwiftUI app that does nothing by itself, and
+`selftest.py` drives it with real events and then reads the target's own state
+file back. Building it exposed a bug in my own coordinate conversion, which is
+exactly the class of error the harness exists to catch:
+
+- The probe reports each control's position in CGEvent screen space so nothing is
+  guessed. The first conversion **mirrored every target vertically** — measured:
+  the first control reported y=623.5, the fifth y=461. The cause is that
+  `NSHostingView` is already a flipped view, so the "obvious" content-height
+  subtraction double-inverts. It now uses AppKit's own `convert()` chain, and the
+  measured ordering is top-to-bottom (252.5 → 294.5 → 340.5 → 379.8 → 415.0),
+  geometrically consistent with a window at (120, 120), height 672.
+
+**The success path of that harness has never executed.** Post-event access is not
+granted to `vantage-desktop`, and a freshly compiled binary is not trusted either
+(measured: `CGPreflightPostEventAccess()` false for a probe built minutes earlier).
+Only the refusal path — exit 2, nothing attempted — is verified. The script exists
+so that the grant, when given, produces a Level-3 answer in one command; it is not
+evidence that a click has happened.

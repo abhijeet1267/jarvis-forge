@@ -103,3 +103,10 @@ Thumbs.db
 # A stale 316-line copy of jarvis/security/providers.py; nothing imports it.
 # Publishing it would ship dead duplicate code into a fresh clone.
 *.py.multimodal
+
+# --- Compiled native helpers (built from the committed sources) -------------
+# macOS authorizes input per binary identity, but the binary itself is an
+# artifact: the paths must stay stable for a grant to follow, so the build
+# scripts write here and the outputs are not tracked.
+native/desktop_executor/vantage-desktop
+tools/input_probe/vantage-probe
