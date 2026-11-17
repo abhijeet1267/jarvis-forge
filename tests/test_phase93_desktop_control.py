@@ -4,17 +4,38 @@ Tests real macOS desktop automation via AppleScript/Accessibility API.
 Requires macOS and accessibility permissions.
 """
 
+import sys
+
 import pytest
 
+# macOS-only means "skip where macOS is absent", not "never run". These were
+# unconditionally skipped, so seven desktop-control tests never executed on the
+# one platform they were written for -- and two of them had drifted onto an API
+# that no longer exists, which is exactly what running them would have caught.
+requires_macos = pytest.mark.skipif(sys.platform != "darwin", reason="macOS-only test")
 
-@pytest.mark.skip(reason="macOS-only test")
+def _ctx():
+    """A ToolContext built from the fields that actually exist.
+
+    These tests used to pass `platform=` and `token=`, which are not fields -- so
+    they could not have run even if the blanket skip had been lifted. Kept in one
+    place so the next signature change is one edit, not five.
+    """
+    from jarvis.config import get_settings
+    from jarvis.tools.base import ToolContext
+
+    return ToolContext(device_id="laptop_main", settings=get_settings())
+
+
+
+@requires_macos
 def test_accessibility_permission_required():
     """Desktop control requires macOS accessibility permissions."""
     from jarvis.tools.desktop import _accessibility
     from jarvis.config import get_settings
-    
-    settings = get_settings()
-    state = _accessibility(settings)
+    from jarvis.tools.base import ToolContext
+
+    state = _accessibility(ToolContext(settings=get_settings(), device_id="laptop"))
     
     # Must report status (even if not granted)
     assert "status" in state
@@ -26,80 +47,60 @@ def test_accessibility_permission_required():
         pytest.skip("Accessibility not granted - cannot perform desktop control")
 
 
-@pytest.mark.skip(reason="macOS-only test")
+@requires_macos
 def test_focused_application_readable():
     """Can read currently focused application name."""
-    from jarvis.tools.desktop import _focused, _READ_FRONTMOST
-    from .agents import send_command
-    
-    result = send_command("osascript", "-e", _READ_FRONTMOST)
-    
-    if result.exit_code == 0 and result.stdout.strip():
-        app_name = result.stdout.split("\n")[0].strip()
-        assert len(app_name) > 0, "Focused app name should not be empty"
-        print(f"✓ Focused application: {app_name}")
-    else:
-        print(f"✗ Could not read frontmost app: {result.stderr}")
+    from jarvis.tools.desktop import _focused, _READ_FRONTMOST, _osascript
+
+    # `from .agents import send_command` referenced a helper that no longer exists,
+    # which is why this could never have run. `_osascript` is the seam the module
+    # actually provides.
+    code, out = _osascript(_READ_FRONTMOST, [])
+    if code == 0 and out.strip():
+        app_name = _focused((code, out))
+        assert app_name, "the frontmost application name should not be empty"
 
 
-@pytest.mark.skip(reason="macOS-only test")
+@requires_macos
 async def test_click_at_coordinate_granted():
     """Click at known coordinate works when accessibility granted."""
     from jarvis.tools.desktop import click_desktop
-    from jarvis.core.models import ToolContext
+
+    result = await click_desktop(_ctx(), x=100, y=100)
     
-    ctx = ToolContext(
-        device_id="laptop_main",
-        platform="macos",
-        apps=None,
-        settings=None,
-        token="test-token"
-    )
-    
-    # Click on common safe location (top-left corner of screen)
-    result = await click_desktop(ctx, x=100, y=100)
-    
-    assert result.ok or "authoriz" in result.error.lower(), \
-        f"Click should succeed or require authorization: {result.error}"
+    # A click is permitted, or it is refused for want of authority. The refusal
+    # wording varies: AppleScript reports `-25200` (errAEEventNotPermitted) when
+    # macOS Automation access is missing, and the tool's own text says "refused".
+    # Matching only the word "authoriz" rejected a real, correctly-reported
+    # permission denial -- the test was wrong, not the code.
+    text = str(result.error or "").lower()
+    refused_for_authority = any(marker in text for marker in
+                                ("authoriz", "refused", "-25200", "permission"))
+    assert result.ok or refused_for_authority, (
+        f"a click must either succeed or be refused for want of authority, "
+        f"not fail for another reason: {result.error}")
 
 
-@pytest.mark.skip(reason="macOS-only test")
+@requires_macos
 async def test_type_text_into_active_app():
     """Type text into currently active application."""
     from jarvis.tools.desktop import type_desktop_text
-    from jarvis.core.models import ToolContext
-    
-    ctx = ToolContext(
-        device_id="laptop_main",
-        platform="macos",
-        apps=None,
-        settings=None,
-        token="test-token"
-    )
-    
-    # Type test string
-    result = await type_desktop_text(ctx, text="VantageTest123")
+
+    result = await type_desktop_text(_ctx(), text="VantageTest123")
     
     # Should either succeed or be unverified (can't observe effect)
     assert result.ok or result.verification.name == "UNKNOWN", \
         f"Should succeed or be unverified: {result.error}"
 
 
-@pytest.mark.skip(reason="macOS-only test")
+@requires_macos
 def test_desktop_control_state_reported():
     """get_desktop_control_state returns accurate permission status."""
+    import asyncio
+
     from jarvis.tools.desktop import get_desktop_control_state
-    from jarvis.core.models import ToolContext
-    
-    ctx = ToolContext(
-        device_id="laptop_main",
-        platform="macos",
-        apps=None,
-        settings=None,
-        token="test-token"
-    )
-    
-    result = get_desktop_control_state(ctx)
+
+    result = asyncio.run(get_desktop_control_state(_ctx()))
     
     assert "can_control" in result.output, "Must report can_control flag"
     assert "accessibility" in result.output, "Must report accessibility status"
@@ -109,29 +110,21 @@ def test_desktop_control_state_reported():
 # Red-First Tests
 # ---------------------------------------------------------------------------
 
-@pytest.mark.skip(reason="macOS-only test")
+@requires_macos
 def test_click_without_authorization_rejected():
     """RED-FIRST TEST: Click is refused without accessibility permission."""
     from jarvis.tools.desktop import click_desktop
-    from jarvis.core.models import ToolContext
-    
-    ctx = ToolContext(
-        device_id="laptop_main",
-        platform="macos",
-        apps=None,
-        settings=None,
-        token="test-token"
-    )
-    
+
     # First check if we have permission
     from jarvis.tools.desktop import _accessibility
     from jarvis.config import get_settings
     
-    state = _accessibility(get_settings())
-    
+    state = _accessibility(_ctx())
+
     if state.get("status") != "GRANTED":
-        # Without permission, click should fail immediately
-        result = click_desktop(ctx, x=100, y=100)
+        import asyncio
+        # Without permission, click should fail immediately.
+        result = asyncio.run(click_desktop(_ctx(), x=100, y=100))
         assert not result.ok, "Click should fail without accessibility permission"
         assert "refusal" in str(result.error).lower() or "authoriz" in str(result.error).lower(), \
             f"Error should indicate refusal: {result.error}"
@@ -177,31 +170,28 @@ def test_unverified_when_cannot_observe_effect():
         "a keystroke Vantage cannot read back must never be reported as verified/success"
 
 
-@pytest.mark.skip(reason="macOS-only test")
+@requires_macos
 def test_safe_coordinates_enforced():
     """RED-FIRST TEST: Coordinates outside screen bounds are rejected."""
+    import asyncio
+
     from jarvis.tools.desktop import click_desktop
-    from jarvis.core.models import ToolContext
-    
-    ctx = ToolContext(
-        device_id="laptop_main",
-        platform="macos",
-        apps=None,
-        settings=None,
-        token="test-token"
-    )
-    
+
+    ctx = _ctx()
+
     # MAX_COORDINATE defined in desktop.py
     MAX_COORDINATE = 32000
     
     # Test boundary
-    result = click_desktop(ctx, x=MAX_COORDINATE, y=MAX_COORDINATE)
+    result = asyncio.run(click_desktop(ctx, x=MAX_COORDINATE, y=MAX_COORDINATE))
     assert not result.ok or result.verification.name == "UNKNOWN", \
         "Boundary clicks handled truthfully"
     
-    # Test overflow
-    result = click_desktop(ctx, x=MAX_COORDINATE + 1, y=MAX_COORDINATE + 1)
-    assert not result.ok, "Overflow coordinates must be rejected"
+    # Test overflow -- `click_desktop` is a coroutine, so it must be awaited.
+    # Calling it bare returned a coroutine object, and `.ok` on that raised
+    # AttributeError: the assertion could never have been evaluating a result.
+    overflow = asyncio.run(click_desktop(ctx, x=MAX_COORDINATE + 1, y=MAX_COORDINATE + 1))
+    assert not overflow.ok, "Overflow coordinates must be rejected"
 
 
 if __name__ == "__main__":
