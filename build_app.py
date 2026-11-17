@@ -74,6 +74,63 @@ def build_info_plist() -> dict:
 LAUNCHER_SOURCE = Path(__file__).resolve().parent / "app" / "launcher_main.swift"
 
 
+#: Packages the packaged backend never imports. Excluded so the bundle carries
+#: what it runs rather than the whole development venv.
+#:
+#: playwright alone is 161 MB of the 247 MB venv -- it drives the *browser*
+#: automation tool, not the desktop backend, and its browser binaries are not in
+#: site-packages anyway. pip and setuptools are build tools.
+STAGED_SITE_SKIP = {"playwright", "pip", "setuptools", "wheel", "_pytest",
+                    "pytest", "pygments", "pypdf"}
+
+
+def stage_python_packages(resources: Path, python: Path) -> Path | None:
+    """Copy the runtime dependencies into the bundle and point the launcher at them.
+
+    Without this the "standalone" app is not standalone: `python_path.txt` named
+    the development checkout's interpreter, so the bundle only worked while this
+    repository sat at that exact path. Copied elsewhere, or with the checkout
+    removed, it started nothing.
+
+    The interpreter itself is still the one the build ran under. Bundling a full
+    CPython is a much larger job (a relocatable framework plus signing each binary);
+    what this guarantees is that the *packages* travel with the app, so the
+    remaining external dependency is a Python 3.11 on the machine. The bundle says
+    so in `docs/STANDALONE.md` rather than implying otherwise.
+    """
+    import sysconfig
+
+    if python.resolve().parts[:3] == ("/", "usr", "bin"):
+        # A system interpreter has no site-packages of ours to copy.
+        print("  ! no virtualenv to stage; the bundle will use the system python")
+        return None
+
+    site = Path(sysconfig.get_paths()["purelib"])
+    if not site.is_dir():
+        print(f"  ! site-packages not found at {site}")
+        return None
+
+    target = resources / "site-packages"
+    if target.exists():
+        shutil.rmtree(target)
+    target.mkdir(parents=True)
+
+    copied = 0
+    for entry in site.iterdir():
+        if entry.name in STAGED_SITE_SKIP or entry.name.startswith("__pycache__"):
+            continue
+        if entry.name.endswith((".pyc", ".pyo")):
+            continue
+        if entry.is_dir():
+            shutil.copytree(entry, target / entry.name, symlinks=True,
+                            ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
+        else:
+            shutil.copy2(entry, target / entry.name)
+        copied += 1
+    print(f"  · staged {copied} package(s) from {site}")
+    return target
+
+
 def build_launcher_executable(destination: Path) -> None:
     """Compile the bundle's main executable.
 
@@ -210,6 +267,13 @@ def build(dest_root: Path, python: Path) -> Path:
     stage_project(resources)
     print("  · staging the native desktop executor")
     staged_executor = stage_native(resources)
+    print("  · staging Python packages")
+    staged_packages = stage_python_packages(resources, python)
+    if staged_packages is not None:
+        # Read by launcher_main.swift, which sets PYTHONPATH before exec. Written
+        # after staging, because the path has to exist before it is recorded.
+        (resources / "site_packages_path.txt").write_text(str(staged_packages),
+                                                          encoding="utf-8")
 
     # --- Info.plist ---------------------------------------------------------
     print("  · writing Info.plist")

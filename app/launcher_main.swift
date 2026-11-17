@@ -51,6 +51,20 @@ guard FileManager.default.fileExists(atPath: launcher) else {
     exit(1)
 }
 
+// Packages staged beside the app take precedence over whatever the interpreter
+// would otherwise find. Without this the bundle still imported from the
+// development venv, so copying it elsewhere changed which code ran.
+// Resolved RELATIVE to this bundle, never from the recorded absolute path.
+// Measured: the build records the path where it built, so a copied bundle pointed
+// PYTHONPATH at the original location -- the copy imported packages from the
+// bundle it was cloned from, or failed outright once that was gone. The staged
+// directory is always beside this executable; that is what makes it relocatable.
+let bundledPackages = resources.appendingPathComponent("site-packages")
+if FileManager.default.fileExists(atPath: bundledPackages.path) {
+    setenv("PYTHONPATH", bundledPackages.path, 1)
+    setenv("PYTHONNOUSERSITE", "1", 1)   // ignore ~/.local, which may shadow them
+}
+
 // execv replaces this process, so the backend is a direct child of the same
 // signed binary rather than of an intermediary shell.
 var args: [UnsafeMutablePointer<CChar>?] = [strdup(python), strdup(launcher), nil]
