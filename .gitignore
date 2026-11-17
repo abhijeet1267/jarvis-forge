@@ -111,3 +111,7 @@ Thumbs.db
 native/desktop_executor/vantage-desktop
 native/desktop_executor/VantageDesktopDev.app/
 tools/input_probe/vantage-probe
+
+# Agent worktrees and staged build artifacts are not source.
+.claude/worktrees/
+native/desktop_executor/vantage-desktop.staging
