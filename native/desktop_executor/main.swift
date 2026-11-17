@@ -1298,6 +1298,76 @@ func opReadElement(application: String, keyword: String, role: String) -> Never 
     Emit.out(.verified, "found one matching element", ["element": described])
 }
 
+/// Scroll a view through its own Accessibility action.
+///
+/// Synthetic wheel events posted at the HID tap were measured never to reach the
+/// target application on this machine, while clicks from the same tap did — the
+/// ScrollArea's own AX actions, by contrast, are advertised by the application
+/// itself ("AXScrollDownByPage" and friends). Driving the action the app
+/// publishes cannot miss by a pixel and does not depend on pointer routing, so
+/// it is the better path whenever the view exposes it.
+func opScrollElement(application: String, direction: String, pages: Int) -> Never {
+    requireAX("scrolling a view")
+    let app = resolveApplication(application)
+    let root = AXUIElementCreateApplication(app.processIdentifier)
+    // An explicit table, not string surgery: the first version assembled this
+    // name by concatenation and produced something the app never advertised, so
+    // a working action appeared unreachable.
+    let wanted: String
+    switch direction.lowercased() {
+    case "up": wanted = "AXScrollUpByPage"
+    case "left": wanted = "AXScrollLeftByPage"
+    case "right": wanted = "AXScrollRightByPage"
+    default: wanted = "AXScrollDownByPage"
+    }
+
+    // Same walk and same cast as `findElements`, which is proven to reach these
+    // elements; an earlier version re-derived the children differently and found
+    // nothing at all.
+    var performed = 0
+    var lastError = "no scroll area reached"
+    var seenRoles: [String] = []
+
+    func act(_ element: AXUIElement, depth: Int) {
+        if depth > 8 { return }
+        let described = describe(element, depth: 0, maxDepth: 0)
+        let role = (described["role"] as? String) ?? ""
+        if role == "AXScrollArea" {
+            seenRoles.append(role)
+            var actionsRef: CFArray?
+            AXUIElementCopyActionNames(element, &actionsRef)
+            let names = (actionsRef as? [String]) ?? []
+            let name = names.contains(wanted) ? wanted
+                : names.first(where: { $0.hasPrefix("AXScroll") && $0.hasSuffix("ByPage") })
+            if let name {
+                let result = AXUIElementPerformAction(element, name as CFString)
+                if result == .success { performed += 1 }
+                else { lastError = "AXError \(result.rawValue) for \(name)" }
+            } else {
+                lastError = "actions available: \(names.joined(separator: ","))"
+            }
+        }
+        var childrenValue: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(element, kAXChildrenAttribute as CFString,
+                                            &childrenValue) == .success,
+              let children = childrenValue as? [AXUIElement] else { return }
+        for child in children { act(child, depth: depth + 1) }
+    }
+    act(root, depth: 0)
+
+    if performed == 0 {
+        Emit.out(.target_not_found,
+                 "no scroll area in \(app.localizedName ?? application) accepted \(wanted)",
+                 ["wanted_action": wanted, "last_error": lastError,
+                  "scroll_areas_seen": seenRoles.count,
+                  "application": app.localizedName ?? application])
+    }
+    Emit.out(.verified,
+             "\(performed) scroll area(s) in \(app.localizedName ?? application) accepted \(wanted)",
+             ["action": wanted, "performed": performed,
+              "application": app.localizedName ?? application])
+}
+
 func opPressElement(application: String, keyword: String, role: String) -> Never {
     requireAX("pressing a UI element")
     let app = resolveApplication(application)
@@ -1504,6 +1574,10 @@ case "drag":
     }
     opDrag(fromX: fx, fromY: fy, toX: tx, toY: ty, durationMs: int("duration_ms", 400),
            expectation: expectation)
+case "scroll_element":
+    opScrollElement(application: str("application"),
+                    direction: str("direction", "down"),
+                    pages: int("pages", 1))
 case "scroll":
     guard let x = num("x"), let y = num("y") else { failUsage("scroll needs x= and y=") }
     opScroll(x: x, y: y, lines: int("lines", 3), horizontal: str("horizontal") == "true")
