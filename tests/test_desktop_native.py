@@ -261,6 +261,35 @@ def test_a_coordinate_tool_without_an_expectation_passes_none(
     assert sent.get("expect_window_id") is None
 
 
+# -- a keystroke goes to the focused app, so the guard is app identity ---------
+
+def test_press_key_forwards_the_expected_application(stub, registry, ctx):
+    """`cmd+s` replayed into the wrong app saves the wrong document.
+
+    A key event has no target of its own -- macOS delivers it to whatever holds
+    focus. The tool accepted `expect_app` only through **kwargs, so it was
+    silently dropped and the executor never received it.
+    """
+    calls, make, mp = stub
+    mp.setattr(desktop_native.executor, "press_key",
+               make({"status": "performed_unverified", "reason": "posted"}))
+    result = _call(registry, ctx, "desktop_press_key",
+                   key="s", modifiers=["cmd"], expect_app="TextEdit")
+    assert result.ok is True, result.message
+    _args, sent = calls[0]
+    assert sent.get("expect_app") == "TextEdit"
+
+
+def test_press_key_without_an_expectation_stays_unrestricted(stub, registry, ctx):
+    calls, make, mp = stub
+    mp.setattr(desktop_native.executor, "press_key",
+               make({"status": "performed_unverified", "reason": "posted"}))
+    result = _call(registry, ctx, "desktop_press_key", key="enter")
+    assert result.ok is True, result.message
+    _args, sent = calls[0]
+    assert sent.get("expect_app") == ""
+
+
 def test_a_shortcut_without_a_modifier_is_refused(stub, registry, ctx):
     """A 'shortcut' with no modifier is a bare keystroke; letting it through
     would type into a field while claiming a safe, known action."""

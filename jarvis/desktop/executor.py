@@ -291,10 +291,19 @@ def release_all() -> Dict[str, Any]:
     return _run("release_all")
 
 
-def press_key(key: str, modifiers: Optional[List[str]] = None) -> Dict[str, Any]:
+def press_key(key: str, modifiers: Optional[List[str]] = None,
+              expect_app: str = "") -> Dict[str, Any]:
+    """Press a key, optionally refusing if the wrong application has focus.
+
+    Like typing, a keystroke goes wherever macOS has focus. `cmd+s` replayed
+    into the wrong application saves the wrong document, or nothing at all,
+    while reporting success -- so a resolved target can name the app it meant.
+    """
     args = [f"key={key}"]
     if modifiers:
         args.append("modifiers=" + ",".join(modifiers))
+    if expect_app:
+        args.append(f"expect_app={expect_app}")
     return _run("key", args)
 
 

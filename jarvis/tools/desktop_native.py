@@ -283,13 +283,14 @@ async def desktop_type_text(ctx: ToolContext, text: str = "",
 
 
 async def desktop_press_key(ctx: ToolContext, key: str = "",
-                            modifiers: Optional[list] = None, **_: Any) -> Any:
+                            modifiers: Optional[list] = None,
+                            expect_app: str = "", **_: Any) -> Any:
     """Press one key, optionally with modifiers (cmd, shift, opt, ctrl)."""
     if not key:
         return fail("desktop_press_key", "No key was named.", device=ctx.device_id)
     if isinstance(modifiers, str):
         modifiers = [part.strip() for part in modifiers.split(",") if part.strip()]
-    result = executor.press_key(key, list(modifiers or []))
+    result = executor.press_key(key, list(modifiers or []), expect_app=expect_app)
     label = "+".join([*(modifiers or []), key])
     return _finish("desktop_press_key", result, ctx, f"Pressed {label}")
 

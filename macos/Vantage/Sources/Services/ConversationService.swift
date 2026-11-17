@@ -24,6 +24,16 @@ final class ConversationService: ObservableObject {
     /// without them retyping it.
     @Published private(set) var lastPrompt: String = ""
 
+    /// The desktop plan that is holding for the person's decision, if any.
+    ///
+    /// A desktop step that acts — click, type, key press — is gated as level 3,
+    /// so a mission stops at the first one. The turn has to stop with it: the
+    /// backend accepts a supplied confirmation id as the approval, so sending
+    /// that id back on our own would be approving a plan nobody was shown. This
+    /// value is the only thing that carries a parked plan to the two methods
+    /// that can answer it, and both of those are called by the person.
+    @Published private(set) var pendingDesktopApproval: PendingDesktopApproval?
+
     /// Whether the backend can answer conversationally at all.
     ///
     /// This is not decoration. With no provider configured, the backend falls
@@ -138,43 +148,152 @@ final class ConversationService: ObservableObject {
         guard let mission = created.mission else { return nil }
 
         conversation.appendUser(text)
-        let summary = await runDesktopMission(mission)
+        guard let summary = await runDesktopMission(mission) else {
+            // The run failed and the reason is already the last turn.
+            return conversation.messages.last
+        }
         conversation.append(summary, role: .tool, meta: ChatMessage.MessageMeta(model: "desktop-mission"))
         return conversation.messages.last
     }
 
-    /// Run a planned desktop mission, approving the parked steps it asks for.
+    /// Plan and run a desktop mission. Stops at the first step that needs a person.
     ///
-    /// The desktop tools are LOW/EXTERNAL risk and still require an approval --
-    /// that is the autonomy rule, not a defect -- so this drives the same
-    /// decide-then-run loop a person would use in Mission Control. Bounded: a
-    /// mission that keeps parking is reported, not retried forever.
-    private func runDesktopMission(_ mission: APIModels.Mission) async -> String {
-        var current = mission
-        var lines: [String] = []
-        for _ in 0..<8 {
-            let run: APIModels.Mission? = try? await api.post(
-                "/missions/\(current.mission_id)/run",
-                body: APIModels.MissionRunRequest(approval: nil),
+    /// It runs the mission **once**. If the backend parks it at
+    /// `awaiting_approval`, the plan is recorded in `pendingDesktopApproval`
+    /// and the turn ends there: the person is shown what would run and answers
+    /// through `approvePendingDesktop()` or `denyPendingDesktop()`.
+    ///
+    /// The previous version looped and resubmitted the confirmation id the
+    /// backend had just issued. The backend checks that the id matches the one
+    /// it minted, so it accepted it — but "the client fetched the id and sent
+    /// it back" is not a person approving a level-3 action, and it meant every
+    /// click and keystroke ran with nobody having seen the plan.
+    private func runDesktopMission(_ mission: APIModels.Mission) async -> String? {
+        guard let current = await runMissionOnce(mission.mission_id) else {
+            return nil          // runMissionOnce already recorded the failure
+        }
+        if current.state == "awaiting_approval" {
+            pendingDesktopApproval = Self.park(current)
+            let parked = Self.pendingSteps(of: current)
+            return Self.parkedNotice(parked) + "\n" + Self.describeSteps(parked)
+        }
+        return Self.describe(current)
+    }
+
+    /// Say a plan is parked without overstating how far it got.
+    ///
+    /// A plan can run its ungated steps (moving the pointer, for instance)
+    /// before it reaches one that needs a person. "Nothing has run yet" is only
+    /// true when no step finished, and the transcript must not claim either way
+    /// without checking.
+    private static func parkedNotice(_ steps: [PendingDesktopApproval.Step]) -> String {
+        let ran = steps.contains { $0.status == "done" || $0.status == "skipped" }
+        return ran
+            ? "This plan is waiting for your approval. The steps marked done have "
+              + "already run; nothing further will run until you approve."
+            : "This plan is waiting for your approval and nothing has run yet."
+    }
+
+    /// Approve the plan that is waiting, then run it on from the step it parked on.
+    ///
+    /// The run continues until it finishes or parks again. A later park is a
+    /// different step with a different confirmation, so it is handed back as a
+    /// new pending approval instead of being answered — a 5-step mission may
+    /// need the person's decision five times, and each one has to be theirs.
+    ///
+    /// A no-op when nothing is pending.
+    func approvePendingDesktop() async {
+        guard let pending = pendingDesktopApproval else { return }
+        pendingDesktopApproval = nil
+        lastError = nil
+        isThinking = true
+        defer { isThinking = false }
+
+        // The id can only come from what the person was shown. When the backend
+        // did not record one, there is nothing to approve *with*, and guessing
+        // or re-fetching would be exactly the auto-approval this replaces.
+        guard let confirmation = pending.confirmationId else {
+            let reason = "This plan did not record a confirmation id, so it cannot "
+                + "be approved from here. Open Mission Control to review it."
+            lastError = reason
+            conversation.appendError(reason)
+            return
+        }
+
+        guard let resumed = await runMissionOnce(
+            pending.missionId,
+            approval: APIModels.MissionApproval(
+                confirmation_id: confirmation, lease_id: "")) else {
+            return          // runMissionOnce already recorded the failure
+        }
+        if resumed.state == "awaiting_approval" {
+            pendingDesktopApproval = Self.park(resumed)
+            conversation.append(
+                "Approved one step. The plan is waiting again:\n"
+                    + Self.describeSteps(Self.pendingSteps(of: resumed)),
+                role: .tool, meta: ChatMessage.MessageMeta(model: "desktop-mission"))
+            return
+        }
+        conversation.append(Self.describe(resumed), role: .tool,
+                            meta: ChatMessage.MessageMeta(model: "desktop-mission"))
+    }
+
+    /// Deny the plan that is waiting.
+    ///
+    /// The backend needs a decision for the *parked step*, so the step id is
+    /// sent with it; denying marks that step failed and blocks the mission. A
+    /// no-op when nothing is pending.
+    func denyPendingDesktop() async {
+        guard let pending = pendingDesktopApproval else { return }
+        pendingDesktopApproval = nil
+        lastError = nil
+        isThinking = true
+        defer { isThinking = false }
+
+        guard let stepId = pending.parkedStepId else {
+            // The decide route answers per step, and it refused nothing here:
+            // there is no step for the backend to deny. Saying "denied" would
+            // claim a state change that did not happen.
+            let reason = "This plan has no step awaiting a decision, so the deny "
+                + "could not be sent. The mission is unchanged."
+            lastError = reason
+            conversation.appendError(reason)
+            return
+        }
+
+        do {
+            let _: APIModels.Mission = try await api.post(
+                "/missions/\(pending.missionId)/steps/\(stepId)/decide",
+                body: APIModels.StepDecisionRequest(decision: "deny", lease_id: nil),
                 as: APIModels.Mission.self)
-            guard var latest = run else { break }
-            if latest.state == "awaiting_approval" {
-                guard let confirmation = Self.parkedConfirmation(latest) else { break }
-                latest = (try? await api.post(
-                    "/missions/\(latest.mission_id)/run",
-                    body: APIModels.MissionRunRequest(
-                        approval: .init(confirmation_id: confirmation, lease_id: "")),
-                    as: APIModels.Mission.self)) ?? latest
-            }
-            current = latest
-            if current.state != "awaiting_approval" { break }
+            conversation.append(
+                "Denied. Nothing was run.",
+                role: .tool, meta: ChatMessage.MessageMeta(model: "desktop-mission"))
+        } catch {
+            let reason = describe(error)
+            lastError = reason
+            conversation.appendError(reason)
         }
-        for step in current.steps ?? [] {
-            let detail = step.detail ?? ""
-            lines.append("\(step.step_id) \(step.status): \(detail.isEmpty ? (step.tool ?? "") : detail)")
+    }
+
+    /// Run a mission once and return the mission as the backend left it.
+    ///
+    /// A failure is recorded as an error turn rather than returned as a
+    /// mission, so a caller cannot mistake "the request failed" for "the
+    /// mission finished".
+    private func runMissionOnce(_ missionId: String,
+                                approval: APIModels.MissionApproval? = nil) async -> APIModels.Mission? {
+        do {
+            return try await api.post(
+                "/missions/\(missionId)/run",
+                body: APIModels.MissionRunRequest(approval: approval),
+                as: APIModels.Mission.self)
+        } catch {
+            let reason = describe(error)
+            lastError = reason
+            conversation.appendError(reason)
+            return nil
         }
-        if lines.isEmpty { return "The desktop mission finished with no steps to report." }
-        return "Desktop mission \(current.state ?? "unknown"):\n" + lines.joined(separator: "\n")
     }
 
     static func parkedConfirmation(_ mission: APIModels.Mission) -> String? {
@@ -184,6 +303,70 @@ final class ConversationService: ObservableObject {
             if !id.isEmpty && id != "unspecified" { return String(id) }
         }
         return nil
+    }
+
+    /// The steps of a parked mission, as the person needs to read them.
+    ///
+    /// Every step is carried, not only the parked one: a plan is approved as a
+    /// plan, and the steps that already ran say how much has happened.
+    static func pendingSteps(of mission: APIModels.Mission) -> [PendingDesktopApproval.Step] {
+        (mission.steps ?? []).map { step in
+            PendingDesktopApproval.Step(
+                id: step.step_id,
+                title: step.title,
+                status: step.status,
+                tool: step.tool ?? "",
+                detail: step.detail ?? "",
+                paramsSummary: (step.params ?? [:])
+                    .sorted { $0.key < $1.key }
+                    .map { "\($0.key): \($0.value.text)" }
+                    .joined(separator: ", "))
+        }
+    }
+
+    /// Record a parked mission as the pending decision.
+    ///
+    /// The steps and summary are captured here, once, so the view renders what
+    /// was parked rather than re-reading a mission that may have moved on.
+    static func park(_ mission: APIModels.Mission) -> PendingDesktopApproval {
+        PendingDesktopApproval(
+            mission: mission,
+            missionId: mission.mission_id,
+            confirmationId: parkedConfirmation(mission),
+            steps: pendingSteps(of: mission),
+            summary: summary(of: mission))
+    }
+
+    /// What approving would do, in one sentence.
+    static func summary(of mission: APIModels.Mission) -> String {
+        let names = (mission.steps ?? [])
+            .filter { $0.status == "pending" }
+            .compactMap { $0.tool }
+            .filter { !$0.isEmpty }
+        if names.isEmpty { return "Run the desktop plan." }
+        return "Run \(names.joined(separator: ", ")) on this Mac."
+    }
+
+    private static func describeSteps(_ steps: [PendingDesktopApproval.Step]) -> String {
+        guard !steps.isEmpty else { return "The plan has no steps to show." }
+        return steps
+            .map { step in
+                let what = step.paramsSummary.isEmpty ? step.detail : step.paramsSummary
+                let label = step.tool.isEmpty ? step.title : step.tool
+                return "\(step.id) [\(step.status)] \(label)"
+                    + (what.isEmpty ? "" : ": \(what)")
+            }
+            .joined(separator: "\n")
+    }
+
+    /// The mission as it ended, step by step.
+    static func describe(_ mission: APIModels.Mission) -> String {
+        let lines = (mission.steps ?? []).map { step -> String in
+            let detail = step.detail ?? ""
+            return "\(step.step_id) \(step.status): \(detail.isEmpty ? (step.tool ?? "") : detail)"
+        }
+        if lines.isEmpty { return "The desktop mission finished with no steps to report." }
+        return "Desktop mission \(mission.state):\n" + lines.joined(separator: "\n")
     }
 
     /// One network turn. `appendUserTurn` is false only for a retry, whose
@@ -293,6 +476,10 @@ final class ConversationService: ObservableObject {
         conversation.startNewConversation()
         lastError = nil
         lastPrompt = ""
+        // A plan parked in the old conversation belongs to it. Carrying it into
+        // a fresh transcript would offer an approval with no visible plan above
+        // it; the mission itself stays parked in Mission Control either way.
+        pendingDesktopApproval = nil
     }
 
     /// Add a turn that is not a chat reply — an attachment's result or an
@@ -412,3 +599,41 @@ final class ConversationService: ObservableObject {
 /// behind it is slow. The person reading the transcript needs to be pointed at
 /// the provider, not at the backend.
 struct TurnTimeout: Error {}
+
+/// A desktop plan that is parked, waiting for the person to answer it.
+///
+/// It carries the mission it belongs to as well as the flattened parts to
+/// show: the mission is what `approvePendingDesktop()` resumes, and the steps
+/// and summary are what a view renders. `confirmationId` may be nil when the
+/// backend recorded no id — approving then is refused rather than invented,
+/// because a confirmation this app made up is not an answer from anyone.
+///
+/// Not `Equatable`: it holds an `APIModels.Mission`, which is not, and nothing
+/// needs to compare two whole plans — the view reads the parts it shows.
+struct PendingDesktopApproval {
+
+    /// One proposed step, as the person reads it.
+    struct Step: Equatable, Identifiable {
+        let id: String
+        let title: String
+        let status: String
+        let tool: String
+        let detail: String
+        /// The step's parameters in one readable line, e.g. `text: hello`.
+        let paramsSummary: String
+    }
+
+    /// The mission as the backend left it when it parked.
+    let mission: APIModels.Mission
+    let missionId: String
+    let confirmationId: String?
+    /// Every step of the plan, in order, with the status it had at the park.
+    let steps: [Step]
+    /// One sentence on what approving would do.
+    let summary: String
+
+    /// The step whose approval is being asked for: the first one still pending.
+    var parkedStepId: String? {
+        steps.first { $0.status == "pending" }?.id
+    }
+}

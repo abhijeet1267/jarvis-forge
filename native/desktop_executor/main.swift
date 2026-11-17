@@ -1136,28 +1136,8 @@ func opType(text: String, expectApp: String) -> Never {
     }
 
     // Typing goes to whatever macOS has focused, so a caller that resolved a
-    // target has to be able to say which application that was. Without this
-    // check a window can lose focus between the click that aimed at it and the
-    // keystrokes that were meant for it, and the text lands in something else.
-    // Applied here, before `requirePostEvents`, so a wrong focus is reported as
-    // a wrong focus rather than as a permission problem.
-    if !expectApp.isEmpty {
-        let front = NSWorkspace.shared.frontmostApplication
-        let frontName = (front?.localizedName ?? "")
-        let frontBundle = (front?.bundleIdentifier ?? "")
-        let needle = expectApp.lowercased()
-        let matches = frontName.lowercased().contains(needle)
-            || frontBundle.lowercased().contains(needle)
-        guard matches else {
-            Emit.out(.target_stale,
-                     "the frontmost application is \(frontName.isEmpty ? "not readable" : frontName), "
-                     + "not \(expectApp); nothing was typed. Re-focus the target before typing.",
-                     ["expected_application": expectApp,
-                      "frontmost_after": frontName,
-                      "frontmost_bundle": frontBundle,
-                      "staleness_check": "frontmost_application"])
-        }
-    }
+    // target has to be able to say which application that was.
+    requireExpectedApp(expectApp, verb: "typed")
 
     // Only now ask for the permission to post. A wrong focus is knowable without
     // it, so reporting "permission_required" for a window the caller never meant
@@ -1257,7 +1237,38 @@ enum KeyTable {
     }
 }
 
-func opKey(key: String, modifiers: [String]) -> Never {
+/// Refuse when the frontmost application is not the one a caller expected.
+///
+/// Typing and key presses both go to whatever macOS has focused, so a caller
+/// that resolved a target has to be able to say which application that was.
+/// Without this a window can lose focus between the click that aimed at it and
+/// the keystrokes meant for it, and the input lands in something else.
+///
+/// Applied before `requirePostEvents`, so a wrong focus is reported as a wrong
+/// focus rather than as a permission problem. An empty expectation is the
+/// existing behaviour: no check.
+func requireExpectedApp(_ expectApp: String, verb: String) {
+    guard !expectApp.isEmpty else { return }
+    let front = NSWorkspace.shared.frontmostApplication
+    let frontName = (front?.localizedName ?? "")
+    let frontBundle = (front?.bundleIdentifier ?? "")
+    let needle = expectApp.lowercased()
+    let matches = frontName.lowercased().contains(needle)
+        || frontBundle.lowercased().contains(needle)
+    guard matches else {
+        Emit.out(.target_stale,
+                 "the frontmost application is \(frontName.isEmpty ? "not readable" : frontName), "
+                 + "not \(expectApp); nothing was \(verb). Re-focus the target before retrying.",
+                 ["expected_application": expectApp,
+                  "frontmost_after": frontName,
+                  "frontmost_bundle": frontBundle,
+                  "staleness_check": "frontmost_application"])
+    }
+}
+
+func opKey(key: String, modifiers: [String],
+           expectApp: String = "") -> Never {
+    requireExpectedApp(expectApp, verb: "pressed")
     requirePostEvents("pressing a key")
     guard let code = KeyTable.codes[key.lowercased()] else {
         Emit.out(.blocked, "\(key) is not a key this build sends",
@@ -1645,7 +1656,8 @@ case "scroll":
 case "type":
     opType(text: str("text"), expectApp: str("expect_app"))
 case "key":
-    opKey(key: str("key"), modifiers: list("modifiers"))
+    opKey(key: str("key"), modifiers: list("modifiers"),
+          expectApp: str("expect_app"))
 case "focus":
     opFocus(application: str("application"), windowTitle: str("window"))
 case "inspect":
