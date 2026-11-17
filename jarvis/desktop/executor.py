@@ -47,24 +47,38 @@ MOVE_TIMEOUT_S = 30.0
 
 _EXECUTABLE_NAME = "vantage-desktop"
 
+#: The development bundle a person is told to grant in System Settings.
+_DEV_BUNDLE = "VantageDesktopDev.app"
+
 
 def executor_path() -> Optional[Path]:
     """Where the native executor is, or None.
 
     Search order is deliberate: an explicit override first (tests and a packaged
-    build), then next to the app bundle, then the in-repo build output. A
-    missing binary is reported as a missing capability, never worked around with
-    a slower or less honest mechanism.
+    build), then the app bundle, then the in-repo build output. A missing binary
+    is reported as a missing capability, never worked around with a slower or
+    less honest mechanism.
+
+    The bundle comes *before* the bare binary because they are different code
+    identities and only one of them is offered to the person granting access.
+    Measured: with the bare binary first, the backend invoked
+    ``native/desktop_executor/vantage-desktop`` while the Accessibility grant sat
+    on ``VantageDesktopDev.app`` -- so every action was refused as unauthorised
+    while System Settings showed the app toggled on. Preferring the bundle makes
+    the thing that runs and the thing that is granted the same thing.
     """
     override = os.environ.get("VANTAGE_DESKTOP_EXECUTOR")
     if override and Path(override).is_file():
         return Path(override)
 
     here = Path(__file__).resolve()
+    root = here.parent.parent.parent
     candidates = [
-        # A packaged app puts the helper beside the backend.
-        here.parent.parent.parent / "native" / "desktop_executor" / _EXECUTABLE_NAME,
-        here.parent.parent.parent / "build" / _EXECUTABLE_NAME,
+        # The granted identity first: the bundle's own executable.
+        root / "native" / "desktop_executor" / _DEV_BUNDLE / "Contents" / "MacOS"
+        / _EXECUTABLE_NAME,
+        root / "native" / "desktop_executor" / _EXECUTABLE_NAME,
+        root / "build" / _EXECUTABLE_NAME,
         Path.home() / ".jarvis-forge" / "bin" / _EXECUTABLE_NAME,
     ]
     for candidate in candidates:

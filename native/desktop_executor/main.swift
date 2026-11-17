@@ -1460,6 +1460,19 @@ func list(_ key: String) -> [String] {
 
 switch op {
 case "permissions":   opPermissions()
+case "self_check":
+    // The same reading `permissions` does, but with no argv beyond the op name,
+    // so it can be invoked from an already-running process identity (or as an
+    // app's own executable) and report what macOS thinks of *that* process.
+    var body = permissionSnapshot()
+    body["argv0"] = CommandLine.arguments.first ?? ""
+    body["argc"] = CommandLine.arguments.count
+    body["bundle_id_check"] = Bundle.main.bundleIdentifier ?? ""
+    body["can_move_cursor"] = true
+    body["can_click"] = CGPreflightPostEventAccess()
+    body["can_type"] = CGPreflightPostEventAccess()
+    body["can_read_ui"] = AXIsProcessTrusted()
+    Emit.out(.verified, "self check from this process", body)
 case "capabilities":  opCapabilities()
 case "identity":      opIdentity()
 case "windows":       opWindows(application: str("application"))
