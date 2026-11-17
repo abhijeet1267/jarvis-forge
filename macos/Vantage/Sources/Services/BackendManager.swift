@@ -761,6 +761,21 @@ final class BackendManager: ObservableObject {
     /// the start then fails visibly on a missing dependency rather than silently
     /// running the wrong environment.
     nonisolated static func backendInterpreter(in projectDir: String) -> String {
+        // A packaged backend records the interpreter it was built against. That
+        // file is the only reliable answer inside a bundle, which has no .venv.
+        //
+        // Measured: without this, a bundled app found no `.venv/bin/python` under
+        // Resources and fell back to `/usr/bin/python3`, which cannot import
+        // fastapi. The backend then died before binding a port and the app showed
+        // an empty Home screen -- the failure the campaign kept calling "the app
+        // does not start its backend".
+        let recorded = projectDir + "/python_path.txt"
+        if let text = try? String(contentsOfFile: recorded, encoding: .utf8) {
+            let path = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !path.isEmpty, FileManager.default.isExecutableFile(atPath: path) {
+                return path
+            }
+        }
         let venv = projectDir + "/.venv/bin/python"
         if FileManager.default.isExecutableFile(atPath: venv) {
             return venv
