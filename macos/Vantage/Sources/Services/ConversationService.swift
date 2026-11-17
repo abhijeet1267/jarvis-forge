@@ -109,6 +109,83 @@ final class ConversationService: ObservableObject {
         await turn(lastPrompt, appendUserTurn: false)
     }
 
+    // MARK: - Desktop missions
+
+    /// Plan and run a desktop instruction, or nil when this is not one.
+    ///
+    /// Three outcomes, all shown to the person:
+    /// - `planned`: the mission ran (or parked) -- report the real step results.
+    /// - `clarification`: nothing was planned; say what the planner needs.
+    /// - 422: not a desktop instruction, so the caller falls through to /command.
+    private func desktopMissionTurn(_ text: String) async -> ChatMessage? {
+        struct Created: Decodable {
+            let status: String
+            let mission: APIModels.Mission?
+            let clarification: String?
+        }
+        guard let created: Created = try? await api.post(
+            "/missions/desktop",
+            body: ["request": text],
+            as: Created.self) else {
+            return nil          // 422 or transport: let the chat path handle it
+        }
+        if created.status == "clarification" {
+            conversation.appendUser(text)
+            conversation.append(created.clarification ?? "That instruction needs more detail.",
+                                role: .tool, meta: ChatMessage.MessageMeta(model: "desktop-planner"))
+            return conversation.messages.last
+        }
+        guard let mission = created.mission else { return nil }
+
+        conversation.appendUser(text)
+        let summary = await runDesktopMission(mission)
+        conversation.append(summary, role: .tool, meta: ChatMessage.MessageMeta(model: "desktop-mission"))
+        return conversation.messages.last
+    }
+
+    /// Run a planned desktop mission, approving the parked steps it asks for.
+    ///
+    /// The desktop tools are LOW/EXTERNAL risk and still require an approval --
+    /// that is the autonomy rule, not a defect -- so this drives the same
+    /// decide-then-run loop a person would use in Mission Control. Bounded: a
+    /// mission that keeps parking is reported, not retried forever.
+    private func runDesktopMission(_ mission: APIModels.Mission) async -> String {
+        var current = mission
+        var lines: [String] = []
+        for _ in 0..<8 {
+            let run: APIModels.Mission? = try? await api.post(
+                "/missions/\(current.mission_id)/run",
+                body: APIModels.MissionRunRequest(approval: nil),
+                as: APIModels.Mission.self)
+            guard var latest = run else { break }
+            if latest.state == "awaiting_approval" {
+                guard let confirmation = Self.parkedConfirmation(latest) else { break }
+                latest = (try? await api.post(
+                    "/missions/\(latest.mission_id)/run",
+                    body: APIModels.MissionRunRequest(
+                        approval: .init(confirmation_id: confirmation, lease_id: "")),
+                    as: APIModels.Mission.self)) ?? latest
+            }
+            current = latest
+            if current.state != "awaiting_approval" { break }
+        }
+        for step in current.steps ?? [] {
+            let detail = step.detail ?? ""
+            lines.append("\(step.step_id) \(step.status): \(detail.isEmpty ? (step.tool ?? "") : detail)")
+        }
+        if lines.isEmpty { return "The desktop mission finished with no steps to report." }
+        return "Desktop mission \(current.state ?? "unknown"):\n" + lines.joined(separator: "\n")
+    }
+
+    static func parkedConfirmation(_ mission: APIModels.Mission) -> String? {
+        for step in mission.steps ?? [] {
+            guard let detail = step.detail, let range = detail.range(of: "confirmation ") else { continue }
+            let id = detail[range.upperBound...].prefix { !$0.isWhitespace }
+            if !id.isEmpty && id != "unspecified" { return String(id) }
+        }
+        return nil
+    }
+
     /// One network turn. `appendUserTurn` is false only for a retry, whose
     /// question is already in the transcript.
     @discardableResult
@@ -120,6 +197,18 @@ final class ConversationService: ObservableObject {
         lastError = nil
         isThinking = true
         defer { isThinking = false }
+
+        // A desktop instruction belongs to the desktop planner, not to the chat
+        // planner. Measured before this branch existed: "move the cursor to
+        // 400 300" came back from /command as `move_file` with source="the cursor"
+        // -- a rename of a file that does not exist -- and the pointer never moved.
+        //
+        // /missions/desktop owns the question of what is a desktop instruction:
+        // it answers 422 for anything else, so this branch falls through rather
+        // than duplicating the verb list here where the two would drift.
+        if let desktopTurn = await desktopMissionTurn(trimmed) {
+            return desktopTurn
+        }
 
         // The session id is what makes this a conversation rather than a
         // series of unrelated questions.
