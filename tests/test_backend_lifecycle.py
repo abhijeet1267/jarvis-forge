@@ -13,6 +13,7 @@ refusal is proven rather than asserted in prose.
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 import time
@@ -25,6 +26,9 @@ REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "scripts"))
 
 import backend_lifecycle as lifecycle  # noqa: E402
+
+#: Bound on waiting for a stub to be reaped after the tool said it stopped it.
+GRACEFUL_TEST_WAIT = lifecycle.GRACEFUL_WAIT_S + 5
 
 
 # ---------------------------------------------------------------------------
@@ -179,6 +183,9 @@ def test_start_refuses_to_add_a_second_instance(monkeypatch):
         "port": port, "pid": 1, "state": "ours", "identity": {}, "code": {},
         "stale": False, "safe_to_restart": True,
     })
+    # No ownership record: the listener may well be ours, but this tool cannot
+    # prove it started this instance, so it must not claim "already running".
+    monkeypatch.setattr(lifecycle, "read_record", lambda port: None)
     ok, message = lifecycle.start(8765)
     assert ok is False
     assert "already in use" in message
@@ -422,3 +429,426 @@ def test_only_the_tail_of_a_large_log_is_read(tmp_path):
                    encoding="utf-8")
     reason = lifecycle._startup_failure_reason(log, max_bytes=4096)
     assert "boom" in reason
+
+
+# ---------------------------------------------------------------------------
+# Ownership records: decide from a stamp, never from a guess
+# ---------------------------------------------------------------------------
+#
+# Each test here runs against a scratch JARVIS_HOME and a private record
+# directory, so nothing reads or writes the developer's real lifecycle state.
+
+@pytest.fixture()
+def lifecycle_state(tmp_path, monkeypatch):
+    """A private ownership-record directory and an isolated profile home."""
+    state = tmp_path / "state"
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setenv(lifecycle.STATE_DIR_ENV, str(state))
+    monkeypatch.setenv("JARVIS_HOME", str(home))
+    return state, home
+
+
+def _dead_pid() -> int:
+    """A pid that has positively exited (a reaped child), so no process owns it."""
+    proc = subprocess.Popen([sys.executable, "-c", "pass"])
+    proc.wait(timeout=10)
+    return proc.pid
+
+
+def _free_port() -> int:
+    import socket
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", 0))
+        return sock.getsockname()[1]
+
+
+def test_a_record_round_trips_with_pid_profile_and_root(lifecycle_state):
+    _, home = lifecycle_state
+    port = _free_port()
+    assert lifecycle.write_record(port, pid=os.getpid(), home=str(home),
+                                  project_root=str(REPO))
+    record = lifecycle.read_record(port)
+    assert record["pid"] == os.getpid()
+    assert Path(record["home"]) == home
+    assert Path(record["project_root"]) == REPO
+    assert record["started_at"] > 0
+
+
+def test_a_dead_pids_record_is_stale(lifecycle_state):
+    _, home = lifecycle_state
+    port = _free_port()
+    lifecycle.write_record(port, pid=_dead_pid(), home=str(home), project_root=str(REPO))
+    relation, reason, _ = lifecycle.ownership_verdict(
+        port, home=home, project_root=REPO)
+    assert relation == "stale"
+    assert "exited" in reason
+
+
+def test_a_proven_same_instance_is_reported_as_same(lifecycle_state, monkeypatch):
+    _, home = lifecycle_state
+    port = _free_port()
+    monkeypatch.setattr(lifecycle, "listening_pid", lambda p: os.getpid())
+    lifecycle.write_record(port, pid=os.getpid(), home=str(home), project_root=str(REPO))
+    relation, _, _ = lifecycle.ownership_verdict(port, home=home, project_root=REPO)
+    assert relation == "same"
+
+
+def test_a_different_profile_is_distinguished(lifecycle_state, monkeypatch):
+    """Same backend, same checkout, another JARVIS_HOME: not this instance."""
+    _, home = lifecycle_state
+    port = _free_port()
+    monkeypatch.setattr(lifecycle, "listening_pid", lambda p: os.getpid())
+    lifecycle.write_record(port, pid=os.getpid(), home=str(home / "other"),
+                           project_root=str(REPO))
+    relation, reason, _ = lifecycle.ownership_verdict(port, home=home, project_root=REPO)
+    assert relation == "different-profile"
+    assert "profile" in reason
+
+
+def test_a_different_project_root_is_distinguished(lifecycle_state, monkeypatch):
+    _, home = lifecycle_state
+    port = _free_port()
+    monkeypatch.setattr(lifecycle, "listening_pid", lambda p: os.getpid())
+    lifecycle.write_record(port, pid=os.getpid(), home=str(home),
+                           project_root=str(home / "Vantage-backup"))
+    relation, reason, _ = lifecycle.ownership_verdict(port, home=home, project_root=REPO)
+    assert relation == "other-root"
+    assert "not" in reason
+
+
+def test_a_sibling_directory_with_the_repo_as_a_prefix_is_not_the_same_root(tmp_path):
+    """``startswith`` would call ``.../Vantage-backup`` this checkout. It is not."""
+    sibling = Path(str(REPO) + "-backup")
+    assert not lifecycle._same_root(str(sibling), REPO)
+    assert lifecycle._same_root(str(REPO), REPO)
+
+
+def test_a_pid_that_no_longer_holds_the_port_has_changed_hands(lifecycle_state, monkeypatch):
+    _, home = lifecycle_state
+    port = _free_port()
+    monkeypatch.setattr(lifecycle, "listening_pid", lambda p: os.getpid() + 99999)
+    lifecycle.write_record(port, pid=os.getpid(), home=str(home), project_root=str(REPO))
+    relation, reason, _ = lifecycle.ownership_verdict(port, home=home, project_root=REPO)
+    assert relation == "changed-hands"
+    assert str(os.getpid()) in reason
+
+
+def test_clearing_a_record_only_removes_the_pid_that_owns_it(lifecycle_state):
+    _, home = lifecycle_state
+    port = _free_port()
+    lifecycle.write_record(port, pid=os.getpid(), home=str(home), project_root=str(REPO))
+    lifecycle.clear_record(port, only_pid=os.getpid() + 1)
+    assert lifecycle.read_record(port) is not None, "a newer instance's record was erased"
+    lifecycle.clear_record(port, only_pid=os.getpid())
+    assert lifecycle.read_record(port) is None
+
+
+# ---------------------------------------------------------------------------
+# One real stub server on a disposable port, driven through start/stop/restart
+# ---------------------------------------------------------------------------
+#
+# These spawn a tiny server the test controls. It answers /health/identity with
+# the pid it was told to report, so the tool's "is this MY process" handshake is
+# exercised for real without the 40s cost of booting the whole backend.
+
+STUB_SERVER = r"""
+import json, os, sys
+from http.server import BaseHTTPRequestHandler, HTTPServer
+
+port = int(sys.argv[1])
+report_pid = int(sys.argv[2])
+root = sys.argv[3]
+instance = sys.argv[4]
+
+class H(BaseHTTPRequestHandler):
+    def log_message(self, *args):
+        pass
+    def do_GET(self):
+        if self.path == "/health/identity":
+            body = json.dumps({
+                "identity": {"service": "vantage-backend", "instance_id": instance,
+                             "pid": report_pid, "source_root": root},
+                "code": {"stale": False},
+            }).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+        self.send_response(404)
+        self.end_headers()
+
+HTTPServer(("127.0.0.1", port), H).serve_forever()
+"""
+
+
+def _spawn_stub(port: int, root: str = "", report_pid: int = -1) -> subprocess.Popen:
+    """Run the stub in the foreground of a child, reporting its own pid by default."""
+    code = STUB_SERVER
+    argv = [sys.executable, "-c", code, str(port),
+            str(report_pid), root or str(REPO), "BKT-stub"]
+    return subprocess.Popen(argv, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
+def _wait_listening(port: int, timeout: float = 10.0) -> None:
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        if lifecycle.port_open(port):
+            return
+        time.sleep(0.05)
+    raise AssertionError(f"stub server never listened on {port}")
+
+
+def test_starting_when_the_port_is_free_reports_ready(lifecycle_state, tmp_path, monkeypatch):
+    """A start is only a success once the spawned process answers identity."""
+    state, home = lifecycle_state
+    port = _free_port()
+    # The stub must report its own pid: the handshake accepts only a payload
+    # naming the very pid start() spawned.
+    stub = tmp_path / "stub_ready.py"
+    stub.write_text(
+        "import json, os, sys\n"
+        "from http.server import BaseHTTPRequestHandler, HTTPServer\n"
+        "port = int(sys.argv[1]); root = sys.argv[2]\n"
+        "class H(BaseHTTPRequestHandler):\n"
+        "    def log_message(self, *a): pass\n"
+        "    def do_GET(self):\n"
+        "        if self.path != '/health/identity':\n"
+        "            self.send_response(404); self.end_headers(); return\n"
+        "        body = json.dumps({'identity': {'service': 'vantage-backend',\n"
+        "            'instance_id': 'BKT-ready', 'pid': os.getpid(), 'source_root': root},\n"
+        "            'code': {'stale': False}}).encode()\n"
+        "        self.send_response(200)\n"
+        "        self.send_header('Content-Type', 'application/json')\n"
+        "        self.send_header('Content-Length', str(len(body)))\n"
+        "        self.end_headers(); self.wfile.write(body)\n"
+        "HTTPServer(('127.0.0.1', port), H).serve_forever()\n",
+        encoding="utf-8")
+    monkeypatch.setattr(lifecycle, "spawn_command",
+                        lambda p, host: [sys.executable, str(stub), str(p), str(REPO)])
+    ok, message = lifecycle.start(port, home=str(home))
+    try:
+        assert ok is True, message
+        assert "answers /health/identity" in message
+        record = lifecycle.read_record(port)
+        assert record is not None, "a successful start must leave an ownership record"
+        assert Path(record["home"]) == home
+        assert Path(record["project_root"]) == REPO
+        assert record["instance_id"] == "BKT-ready"
+    finally:
+        lifecycle.stop(port, force=True)
+
+
+def test_the_same_instance_holding_the_port_is_reported_and_not_duplicated(
+        lifecycle_state, tmp_path, monkeypatch):
+    """Second launch while the first holds the port: "already running", no spawn."""
+    state, home = lifecycle_state
+    port = _free_port()
+    stub = _spawn_stub(port)
+    _wait_listening(port)
+    try:
+        # The stub is a live process holding the port; stamp it as this profile's.
+        lifecycle.write_record(port, pid=stub.pid, home=str(home),
+                               project_root=str(REPO))
+        spawned = []
+        monkeypatch.setattr(lifecycle, "spawn_command",
+                            lambda p, host: spawned.append(p) or ["false"])
+        ok, message = lifecycle.start(port, home=str(home))
+        assert ok is True, message
+        assert "already running" in message.lower()
+        assert str(stub.pid) in message
+        assert spawned == [], "a second instance was started over a live one"
+    finally:
+        stub.kill()
+        stub.wait(timeout=GRACEFUL_TEST_WAIT)
+
+
+def test_a_foreign_process_holding_the_port_is_refused_and_not_killed(
+        lifecycle_state, tmp_path, monkeypatch):
+    """The single most important rule: an unrelated listener is never signalled."""
+    state, home = lifecycle_state
+    port = _free_port()
+    foreign = subprocess.Popen(
+        [sys.executable, "-c",
+         "import socket,sys,time\n"
+         "s=socket.socket(); s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)\n"
+         "s.bind(('127.0.0.1', int(sys.argv[1]))); s.listen(5)\n"
+         "time.sleep(120)\n",
+         str(port)],
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    _wait_listening(port)
+    signalled = []
+    real_kill = os.kill
+    try:
+        monkeypatch.setattr(lifecycle.os, "kill",
+                            lambda pid, sig: signalled.append((pid, sig)))
+        spawned = []
+        monkeypatch.setattr(lifecycle, "spawn_command",
+                            lambda p, host: spawned.append(p) or ["false"])
+        ok, message = lifecycle.start(port, home=str(home))
+        assert ok is False, message
+        assert "already in use" in message
+        assert str(foreign.pid) in message, "the refusal must name the holder"
+        assert "will not stop it" in message
+        assert spawned == [], "a second instance was started over a foreign listener"
+        assert signalled == [], "a process this tool did not start was signalled"
+        # And stop() must refuse it too, by the same evidence.
+        ok, message = lifecycle.stop(port)
+        assert ok is False
+        assert "Refusing" in message
+        assert signalled == []
+        assert foreign.poll() is None, "the foreign process was terminated"
+    finally:
+        if foreign.poll() is None:
+            real_kill(foreign.pid, 9)
+        foreign.wait(timeout=10)
+
+
+def test_stop_confirms_exit_and_reports_the_pid(lifecycle_state, tmp_path, monkeypatch):
+    state, home = lifecycle_state
+    port = _free_port()
+    stub = _spawn_stub(port)
+    _wait_listening(port)
+    lifecycle.write_record(port, pid=stub.pid, home=str(home), project_root=str(REPO))
+    ok, message = lifecycle.stop(port)
+    stub.wait(timeout=GRACEFUL_TEST_WAIT)
+    assert ok is True, message
+    assert str(stub.pid) in message, "the report must name the pid it stopped"
+    assert "free" in message.lower() or "Stopped" in message
+    assert stub.returncode is not None, "stop reported success but the process is alive"
+    assert not lifecycle.port_open(port), "stop reported success but the port is still held"
+    assert lifecycle.read_record(port) is None, "the stopped instance's record was left behind"
+
+
+def test_stopping_something_not_running_is_a_clean_no_op(lifecycle_state):
+    port = _free_port()
+    ok, message = lifecycle.stop(port, force=True)
+    assert ok is True
+    assert "Nothing is listening" in message
+
+
+def test_a_stale_record_does_not_block_a_fresh_start(lifecycle_state, tmp_path, monkeypatch):
+    """A dead pid's record must not be read as "already running"."""
+    state, home = lifecycle_state
+    port = _free_port()
+    lifecycle.write_record(port, pid=_dead_pid(), home=str(home), project_root=str(REPO))
+    stub = tmp_path / "stub_stale.py"
+    stub.write_text(
+        "import json, os, sys\n"
+        "from http.server import BaseHTTPRequestHandler, HTTPServer\n"
+        "port = int(sys.argv[1]); root = sys.argv[2]\n"
+        "class H(BaseHTTPRequestHandler):\n"
+        "    def log_message(self, *a): pass\n"
+        "    def do_GET(self):\n"
+        "        if self.path != '/health/identity':\n"
+        "            self.send_response(404); self.end_headers(); return\n"
+        "        body = json.dumps({'identity': {'service': 'vantage-backend',\n"
+        "            'instance_id': 'BKT-fresh', 'pid': os.getpid(), 'source_root': root},\n"
+        "            'code': {'stale': False}}).encode()\n"
+        "        self.send_response(200)\n"
+        "        self.send_header('Content-Length', str(len(body)))\n"
+        "        self.end_headers(); self.wfile.write(body)\n"
+        "HTTPServer(('127.0.0.1', port), H).serve_forever()\n",
+        encoding="utf-8")
+    monkeypatch.setattr(lifecycle, "spawn_command",
+                        lambda p, host: [sys.executable, str(stub), str(p), str(REPO)])
+    ok, message = lifecycle.start(port, home=str(home))
+    try:
+        assert ok is True, message
+        record = lifecycle.read_record(port)
+        assert record is not None and record["instance_id"] == "BKT-fresh"
+    finally:
+        lifecycle.stop(port, force=True)
+
+
+def test_restart_replaces_the_instance_and_reports_both_halves(
+        lifecycle_state, tmp_path, monkeypatch):
+    state, home = lifecycle_state
+    port = _free_port()
+    stub = tmp_path / "stub_restart.py"
+    stub.write_text(
+        "import json, os, sys\n"
+        "from http.server import BaseHTTPRequestHandler, HTTPServer\n"
+        "port = int(sys.argv[1]); root = sys.argv[2]\n"
+        "class H(BaseHTTPRequestHandler):\n"
+        "    def log_message(self, *a): pass\n"
+        "    def do_GET(self):\n"
+        "        if self.path != '/health/identity':\n"
+        "            self.send_response(404); self.end_headers(); return\n"
+        "        body = json.dumps({'identity': {'service': 'vantage-backend',\n"
+        "            'instance_id': 'BKT-' + str(os.getpid()), 'pid': os.getpid(),\n"
+        "            'source_root': root}, 'code': {'stale': False}}).encode()\n"
+        "        self.send_response(200)\n"
+        "        self.send_header('Content-Length', str(len(body)))\n"
+        "        self.end_headers(); self.wfile.write(body)\n"
+        "HTTPServer(('127.0.0.1', port), H).serve_forever()\n",
+        encoding="utf-8")
+    old = _spawn_stub(port)
+    _wait_listening(port)
+    lifecycle.write_record(port, pid=old.pid, home=str(home), project_root=str(REPO))
+    monkeypatch.setattr(lifecycle, "spawn_command",
+                        lambda p, host: [sys.executable, str(stub), str(p), str(REPO)])
+    ok, message = lifecycle.restart(port, home=str(home))
+    new_record = lifecycle.read_record(port)
+    try:
+        assert ok is True, message
+        old.wait(timeout=GRACEFUL_TEST_WAIT)
+        assert old.returncode is not None, "the old instance survived the restart"
+        assert "Stopped pid" in message
+        assert new_record is not None
+        assert new_record["pid"] != old.pid, "restart re-stamped the old pid"
+        assert lifecycle.port_open(port)
+    finally:
+        lifecycle.stop(port, force=True)
+
+
+def test_restart_reports_failure_once_and_does_not_loop(
+        lifecycle_state, tmp_path, monkeypatch):
+    """A start that cannot come up is one failure, reported -- never a retry loop."""
+    state, home = lifecycle_state
+    port = _free_port()
+    attempts = []
+
+    def _always_fails(p, host):
+        attempts.append(p)
+        return [sys.executable, "-c", "import sys; sys.stderr.write('Vantage: boom\\n'); "
+                                      "sys.exit(3)"]
+
+    monkeypatch.setattr(lifecycle, "spawn_command", _always_fails)
+    old = _spawn_stub(port)
+    _wait_listening(port)
+    lifecycle.write_record(port, pid=old.pid, home=str(home), project_root=str(REPO))
+    ok, message = lifecycle.restart(port, home=str(home))
+    assert ok is False
+    assert "exited during startup" in message
+    assert "boom" in message
+    assert len(attempts) == 1, f"restart retried the start {len(attempts)} times"
+    assert lifecycle.read_record(port) is None, "a failed start left an ownership record"
+    old.wait(timeout=GRACEFUL_TEST_WAIT)
+
+
+def test_a_start_that_never_answers_is_a_failure_not_a_success(
+        lifecycle_state, tmp_path, monkeypatch):
+    """A spawned process that holds the port but cannot name itself is not ready."""
+    state, home = lifecycle_state
+    port = _free_port()
+    # Bind the port and sit there, never answering /health/identity.
+    script = ("import socket, sys, time\n"
+              "s = socket.socket(); s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)\n"
+              "s.bind(('127.0.0.1', int(sys.argv[1]))); s.listen(5)\n"
+              "time.sleep(60)\n")
+    monkeypatch.setattr(lifecycle, "spawn_command",
+                        lambda p, host: [sys.executable, "-c", script, str(p)])
+    monkeypatch.setattr(lifecycle, "READY_TIMEOUT_S", 2.0)
+    ok, message = lifecycle.start(port, home=str(home))
+    try:
+        assert ok is False, message
+        assert "did not answer /health/identity" in message
+        assert "was stopped" in message, "the failed start left its process running"
+        assert not lifecycle.port_open(port)
+        assert lifecycle.read_record(port) is None
+    finally:
+        if lifecycle.port_open(port):
+            lifecycle.stop(port, force=True)

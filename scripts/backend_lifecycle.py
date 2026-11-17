@@ -17,7 +17,15 @@ Rules:
 * One candidate: whatever is listening on the port. No process-name matching.
 * Before signalling anything, confirm the identity response names this service
   and this ``source_root``. A stranger's server is reported, never touched.
-* Graceful first (SIGTERM), a bounded wait, then SIGKILL only with ``--force``.
+* A start writes an ownership record beside its port -- pid, start time, the
+  profile (``JARVIS_HOME``) and the project root served. A later start reads it:
+  the same profile and root that is answering is "already running" (no second
+  process); a different profile or root is refused, naming the holder and how
+  to stop it; a dead pid is a stale record and the port may be taken.
+* Starting is only a success when ``/health/identity`` answers. A spawned
+  process is not a healthy backend.
+* Graceful first (SIGTERM), a bounded wait, then SIGKILL only with ``--force``
+  (``restart`` escalates after its bounded wait, never in a loop).
 * Refuse to start a second instance: if the port is already owned, say so.
 * Secrets are never printed; only the identity fields the server publishes.
 """
@@ -42,6 +50,14 @@ DEFAULT_PORT = 8765
 EXPECTED_SERVICE = "vantage-backend"
 #: How long a graceful stop may take before we report failure instead of hiding it.
 GRACEFUL_WAIT_S = 15.0
+#: How long a spawned backend has to answer ``/health/identity`` before the start
+#: is reported as failed. A spawned process is not a healthy backend.
+READY_TIMEOUT_S = 30.0
+#: How long a SIGKILLed process gets to disappear before we say it survived.
+KILL_WAIT_S = 5.0
+#: The record a start writes lives in one per-user, port-keyed directory -- not
+#: in a profile's home, which a *different* profile could not find or judge.
+STATE_DIR_ENV = "VANTAGE_LIFECYCLE_DIR"
 
 
 # ---------------------------------------------------------------------------
@@ -111,6 +127,169 @@ def port_open(port: int) -> bool:
         return sock.connect_ex(("127.0.0.1", port)) == 0
 
 
+# ---------------------------------------------------------------------------
+# Ownership: which process this tool started, for which profile and root
+# ---------------------------------------------------------------------------
+#
+# The record is per user and keyed by port, not stored inside a profile's home:
+# the decision it feeds is *between* profiles, so a record a different profile
+# could not see would be useless.
+
+def _resolved_path(value: Any) -> Optional[Path]:
+    if not value:
+        return None
+    try:
+        return Path(str(value)).expanduser().resolve()
+    except (OSError, RuntimeError):
+        return None
+
+
+def _profile_home(home: Optional[str]) -> Path:
+    """The profile directory a started backend will use, as an absolute path."""
+    raw = home or os.environ.get("JARVIS_HOME") or (Path.home() / ".jarvis-forge")
+    return _resolved_path(raw) or Path(str(raw)).expanduser()
+
+
+def _same_root(candidate: Any, expected: Path) -> bool:
+    """Whether ``candidate`` names exactly ``expected`` -- not merely a prefix.
+
+    ``startswith`` would make ``/x/Vantage-backup`` the same checkout as
+    ``/x/Vantage``; two trees must never be mistaken for one.
+    """
+    resolved = _resolved_path(candidate)
+    wanted = _resolved_path(expected)
+    return resolved is not None and wanted is not None and resolved == wanted
+
+
+def _state_dir() -> Path:
+    override = os.environ.get(STATE_DIR_ENV)
+    if override:
+        return Path(override).expanduser()
+    return Path.home() / ".vantage" / "lifecycle"
+
+
+def record_path(port: int) -> Path:
+    return _state_dir() / f"backend-{port}.json"
+
+
+def read_record(port: int) -> Optional[Dict[str, Any]]:
+    """The ownership record for ``port``, or ``None`` if absent or unreadable."""
+    try:
+        data = json.loads(record_path(port).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def write_record(port: int, *, pid: int, home: str, project_root: str,
+                 instance_id: Optional[str] = None,
+                 started_at: Optional[float] = None) -> bool:
+    """Write the ownership record atomically; ``False`` if it could not be written."""
+    path = record_path(port)
+    payload: Dict[str, Any] = {
+        "schema": 1,
+        "pid": pid,
+        "port": port,
+        "started_at": time.time() if started_at is None else started_at,
+        "home": home,
+        "project_root": project_root,
+    }
+    if instance_id:
+        payload["instance_id"] = instance_id
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+        tmp.write_text(json.dumps(payload), encoding="utf-8")
+        os.replace(tmp, path)
+    except OSError:
+        return False
+    return True
+
+
+def clear_record(port: int, *, only_pid: Optional[int] = None) -> None:
+    """Remove the record for ``port`` (only when it names ``only_pid``, if given)."""
+    if only_pid is not None:
+        record = read_record(port)
+        if record is not None and record.get("pid") != only_pid:
+            return
+    try:
+        record_path(port).unlink(missing_ok=True)
+    except OSError:
+        pass
+
+
+def _pid_gone(pid: Any) -> bool:
+    """Whether ``pid`` has positively exited.
+
+    ``os.kill(pid, 0)`` alone is not enough: a child that exited but has not
+    been reaped is still a process to the OS, which would make every stop of a
+    process this tool spawned look like a failure. ``waitpid`` reaps it when it
+    is ours; otherwise the signal probe is the answer.
+    """
+    if not isinstance(pid, int) or pid <= 0:
+        return True
+    try:
+        reaped, _ = os.waitpid(pid, os.WNOHANG)
+        return reaped == pid
+    except ChildProcessError:
+        pass
+    except OSError:
+        return True
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return True
+    except PermissionError:
+        return False
+    except OSError:
+        return False
+    return False
+
+
+def pid_alive(pid: Any) -> bool:
+    return not _pid_gone(pid)
+
+
+def _wait_pid_exit(pid: int, timeout: float) -> bool:
+    """Wait, bounded, until ``pid`` has exited. No unbounded poll."""
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        if _pid_gone(pid):
+            return True
+        time.sleep(0.1)
+    return _pid_gone(pid)
+
+
+def _terminate(pid: int, *, force: bool) -> Tuple[bool, str]:
+    """One bounded stop attempt: SIGTERM, wait for exit, SIGKILL only after.
+
+    Returns success only when the process is confirmed gone. ``force`` is the
+    escalation permission, never a first choice.
+    """
+    try:
+        os.kill(pid, signal.SIGTERM)
+    except ProcessLookupError:
+        return True, f"pid {pid} had already exited."
+    except PermissionError as exc:
+        return False, f"Cannot signal pid {pid}: {exc}. Nothing was stopped."
+    if _wait_pid_exit(pid, GRACEFUL_WAIT_S):
+        return True, f"Stopped pid {pid} gracefully after SIGTERM."
+    if not force:
+        return False, (
+            f"pid {pid} did not exit within {GRACEFUL_WAIT_S:.0f}s of SIGTERM. It is still "
+            "running and nothing else was signalled. Re-run with --force to send SIGKILL.")
+    try:
+        os.kill(pid, signal.SIGKILL)
+    except ProcessLookupError:
+        return True, f"pid {pid} exited just before SIGKILL could be sent."
+    except OSError as exc:
+        return False, f"SIGKILL to pid {pid} failed: {exc}."
+    if _wait_pid_exit(pid, KILL_WAIT_S):
+        return True, (f"Stopped pid {pid} with SIGKILL after the "
+                      f"{GRACEFUL_WAIT_S:.0f}s graceful wait expired.")
+    return False, f"pid {pid} survived SIGKILL; the port may still be held."
+
+
 def legacy_verdict(evidence: Dict[str, Any], repo: Path) -> Tuple[str, str]:
     """Whether a pid that cannot answer identity is provably *our* old backend.
 
@@ -154,7 +333,9 @@ def describe(port: int) -> Dict[str, Any]:
 
     is_ours = bool(
         identity.get("service") == EXPECTED_SERVICE
-        and str(identity.get("source_root", "")).startswith(str(REPO))
+        # Exact root, not a prefix: a sibling directory named
+        # `Vantage-backup` is a different checkout and must not be acted on.
+        and _same_root(identity.get("source_root"), REPO)
     )
     legacy: Optional[Dict[str, Any]] = None
     # A 200 that carries no identity block answers *something*, but says nothing
@@ -200,6 +381,9 @@ def describe(port: int) -> Dict[str, Any]:
         # the proven-ours case and `migratable` for the proven-legacy one.
         "safe_to_restart": state == "ours" and pid not in (None, -1),
         "migratable": state == "legacy" and pid not in (None, -1),
+        # Who `start` believes owns the port, for this profile and this checkout.
+        # Present so a refusal can name the holder instead of guessing at it.
+        "owner": ownership_payload(port),
     }
 
 
@@ -207,16 +391,73 @@ def describe(port: int) -> Dict[str, Any]:
 # Acting
 # ---------------------------------------------------------------------------
 
-def _wait_gone(port: int, timeout: float) -> bool:
-    deadline = time.time() + timeout
-    while time.time() < deadline:
-        if not port_open(port):
-            return True
-        time.sleep(0.2)
-    return False
+def ownership_verdict(port: int, *, home: Path, project_root: Path) -> Tuple[str, str, Optional[Dict[str, Any]]]:
+    """Compare the ownership record for ``port`` with the profile being started.
+
+    Returns ``(relation, reason, record)`` where relation is one of:
+
+    ``same``             record names this profile, this root, and the pid now listening
+    ``different-profile`` a live backend from this root, but for another JARVIS_HOME
+    ``other-root``       a live backend from a different checkout
+    ``changed-hands``    the record's process is alive but is not the listener
+    ``unverified``       the listener's pid could not be determined
+    ``stale``            the record's pid has exited (the port may be taken when free)
+    ``missing``          no record at all
+
+    Only ``same`` may be treated as "this app instance"; only ``stale``/``missing``
+    may be treated as permission to take a *free* port. Holding the port is never
+    permission to signal the holder.
+    """
+    record = read_record(port)
+    if record is None:
+        return "missing", "no ownership record was written for this port", None
+    recorded_pid = record.get("pid")
+    if not isinstance(recorded_pid, int) or recorded_pid <= 0:
+        return "stale", "the ownership record has no usable pid", record
+    if not pid_alive(recorded_pid):
+        return "stale", f"the recorded pid {recorded_pid} has exited", record
+    listener = listening_pid(port)
+    if listener is None or listener == -1:
+        return "unverified", "the listening pid could not be determined", record
+    if listener != recorded_pid:
+        return "changed-hands", (
+            f"the record names pid {recorded_pid}, but pid {listener} now holds the port"), record
+    if not _same_root(record.get("project_root"), project_root):
+        return "other-root", (
+            f"it serves {record.get('project_root') or 'an unknown project root'}, "
+            f"not {project_root}"), record
+    recorded_home = _resolved_path(record.get("home"))
+    if recorded_home != _resolved_path(home):
+        return "different-profile", (
+            f"it was started for profile {record.get('home') or 'unknown'}, "
+            f"not {home}"), record
+    return "same", "the record names this profile and this project root", record
+
+
+def ownership_payload(port: int) -> Optional[Dict[str, Any]]:
+    """The record for ``port`` plus whether its pid is still alive; ``None`` if absent."""
+    record = read_record(port)
+    if record is None:
+        return None
+    return {**record, "pid_alive": pid_alive(record.get("pid"))}
+
+
+def spawn_command(port: int, host: str) -> list:
+    """The argv a started backend runs. A seam, so a test can serve a stub.
+
+    The real command is this checkout's own interpreter and launcher: an
+    app-initiated start and a CLI start must produce the same process shape.
+    """
+    return [str(REPO / ".venv" / "bin" / "python"), str(REPO / "run.py"),
+            "serve", "--port", str(port), "--host", host]
 
 
 def stop(port: int, *, force: bool = False) -> Tuple[bool, str]:
+    """Stop the proven-ours backend on ``port`` and confirm the pid actually exited.
+
+    Success means the process is gone, not that a signal was sent. The pid is
+    always reported, so the operator knows exactly what was acted on.
+    """
     info = describe(port)
     if info["state"] == "free":
         return True, "Nothing is listening; there is no backend to stop."
@@ -225,23 +466,14 @@ def stop(port: int, *, force: bool = False) -> Tuple[bool, str]:
             f"Refusing to stop pid {info['pid']}: it is not the Vantage backend from "
             f"this checkout (state: {info['state']}). Inspect it yourself; nothing was signalled.")
     pid = int(info["pid"])
-    try:
-        os.kill(pid, signal.SIGTERM)
-    except ProcessLookupError:
-        return True, f"pid {pid} had already exited."
-    except PermissionError as exc:
-        return False, f"Cannot signal pid {pid}: {exc}. Nothing was stopped."
-    if _wait_gone(port, GRACEFUL_WAIT_S):
-        return True, f"Stopped pid {pid} gracefully after SIGTERM."
-    if not force:
-        return False, (
-            f"pid {pid} did not exit within {GRACEFUL_WAIT_S:.0f}s of SIGTERM. It is still "
-            "running and nothing else was signalled. Re-run with --force to send SIGKILL.")
-    try:
-        os.kill(pid, signal.SIGKILL)
-    except OSError as exc:
-        return False, f"SIGKILL to pid {pid} failed: {exc}."
-    return (_wait_gone(port, 5.0), f"Sent SIGKILL to pid {pid}.")
+    ok, message = _terminate(pid, force=force)
+    if ok:
+        # The record is only removed when it names the process that just exited,
+        # so a stop cannot erase a newer instance's claim.
+        clear_record(port, only_pid=pid)
+        if not port_open(port):
+            message = f"{message} Port {port} is free."
+    return ok, message
 
 
 def migrate(port: int, *, confirm: bool = False, force: bool = False,
@@ -283,17 +515,25 @@ def migrate(port: int, *, confirm: bool = False, force: bool = False,
     try:
         os.kill(pid, signal.SIGTERM)
     except ProcessLookupError:
+        clear_record(port, only_pid=pid)
         return start(port, home=home)
     except PermissionError as exc:
         return False, f"Cannot signal pid {pid}: {exc}. Nothing was stopped."
-    if not _wait_gone(port, GRACEFUL_WAIT_S):
+    if not _wait_pid_exit(pid, GRACEFUL_WAIT_S):
         if not force:
             return False, (f"pid {pid} did not exit within {GRACEFUL_WAIT_S:.0f}s. It is "
                            "still running and nothing else was signalled. Re-run with "
                            "--force to escalate after re-checking it is still ours.")
-        os.kill(pid, signal.SIGKILL)
-        if not _wait_gone(port, 5.0):
+        try:
+            os.kill(pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        except OSError as exc:
+            return False, f"SIGKILL to pid {pid} failed: {exc}."
+        if not _wait_pid_exit(pid, KILL_WAIT_S):
             return False, f"pid {pid} survived SIGKILL; the port is still held."
+    # The old process is confirmed gone; its record must not describe the new one.
+    clear_record(port, only_pid=pid)
     return start(port, home=home)
 
 
@@ -338,52 +578,160 @@ def _bind_host(home: Optional[str]) -> str:
     return "0.0.0.0" if text in ("true", "1", "on", "yes") else "127.0.0.1"
 
 
-def start(port: int, home: Optional[str] = None) -> Tuple[bool, str]:
-    """Start the backend from this checkout, refusing to add a second instance."""
-    if port_open(port):
-        info = describe(port)
+def wait_until_ready(port: int, proc: "subprocess.Popen[Any]",
+                     timeout: Optional[float] = None) -> Tuple[Optional[Dict[str, Any]], str]:
+    """Poll ``/health/identity`` until *the process we spawned* answers, or ``timeout``.
+
+    ``timeout`` defaults to :data:`READY_TIMEOUT_S` read at call time, so a
+    caller (or a test) can shorten it without patching a function default.
+
+    Returns the identity payload on success and ``None`` otherwise, with a
+    sentence describing what happened. Bounded by one deadline, and it stops
+    early the moment the child exits -- a start that has already failed must be
+    reported now, not after the timeout. Readiness means the payload names this
+    service, this checkout, and the spawned pid: a port that accepts a
+    connection, or an unrelated server that got there first, is not this start
+    succeeding.
+    """
+    if timeout is None:
+        timeout = READY_TIMEOUT_S
+    deadline = time.time() + timeout
+    last_seen = ""
+    while time.time() < deadline:
+        payload = _get(port, "/health/identity", timeout=1.0)
+        identity = (payload or {}).get("identity") or {}
+        if (identity.get("service") == EXPECTED_SERVICE
+                and _same_root(identity.get("source_root"), REPO)
+                and identity.get("pid") == proc.pid):
+            return payload, "answers /health/identity as this process"
+        if identity:
+            last_seen = (f" (port {port} answers as service {identity.get('service')!r} "
+                         f"pid {identity.get('pid')}, not this start's pid {proc.pid})")
+        if proc.poll() is not None:
+            return None, f"exited during startup (code {proc.returncode}){last_seen}"
+        time.sleep(0.2)
+    return None, f"did not answer /health/identity in {timeout:.0f}s{last_seen}"
+
+
+def _refuse_held_port(port: int, profile: Path) -> Tuple[bool, str]:
+    """The decision when the port is already held: same instance, or refused.
+
+    A process is treated as "this instance" only when the ownership record, the
+    listener, the profile, and the project root all agree, and the backend
+    answers identity for this checkout. Everything else is refused *without*
+    signalling anything: an unrelated process is never this tool's to stop, and
+    a second backend is never started over a live one.
+    """
+    info = describe(port)
+    relation, reason, record = ownership_verdict(port, home=profile, project_root=REPO)
+    record_note = ""
+    if record is not None:
+        record_note = (f" Ownership record: pid {record.get('pid')}, profile "
+                       f"{record.get('home')}, root {record.get('project_root')}.")
+    holder = f"pid {info['pid']}" if info["pid"] not in (None, -1) else "an unknown pid"
+
+    if relation == "same" and info["state"] == "ours":
+        return True, (f"Already running: pid {info['pid']} is this instance on port {port} "
+                      f"(profile {profile}, root {REPO}) and answers /health/identity. "
+                      "No second instance was started.")
+
+    if relation == "same":
         return False, (
-            f"Port {port} is already in use (state: {info['state']}, pid {info['pid']}). "
-            "Not starting a second instance. Use `restart` instead.")
+            f"Port {port} is already in use by pid {info['pid']}, which the ownership "
+            f"record names, but it is not answering as this checkout's backend (state: "
+            f"{info['state']}). Not starting a second instance; nothing was signalled. "
+            f"Run `status` to inspect it.")
+
+    if info["state"] == "free":
+        # The listener vanished between the probe and now; the caller may start.
+        return True, "the port became free"
+
+    how = (f"Stop it from its own checkout with `.venv/bin/python scripts/backend_lifecycle.py "
+           f"stop --port {port}` (it refuses to act on anything it cannot prove is its own), "
+           f"or inspect `status --json` first.")
+    return False, (
+        f"Port {port} is already in use by {holder} ({info['state']}; {reason}), so a second "
+        f"instance will not be started.{record_note} This tool did not start it and will not "
+        f"stop it. {how}")
+
+
+def start(port: int, home: Optional[str] = None) -> Tuple[bool, str]:
+    """Start the backend, handshake for readiness, and report a real outcome.
+
+    Never adds a second instance: a live port is resolved through
+    :func:`_refuse_held_port`. A spawned process is not a success -- only the
+    spawned process answering ``/health/identity`` is.
+    """
+    profile = _profile_home(home)
+    if port_open(port):
+        ok, message = _refuse_held_port(port, profile)
+        if not ok or describe(port)["state"] != "free":
+            return ok, message
+        # A listener that vanished between the probe and describe(): fall through
+        # to a normal start, which fails visibly if it was real after all.
     env = dict(os.environ)
-    if home:
-        env["JARVIS_HOME"] = home
-    host = _bind_host(home or env.get("JARVIS_HOME"))
-    # Detached so the server outlives this helper; its log is the operator's.
-    log_path = Path(home or env.get("JARVIS_HOME") or Path.home() / ".jarvis-forge")
-    log_path.mkdir(parents=True, exist_ok=True)
-    log_file = log_path / "backend.log"
+    env["JARVIS_HOME"] = str(profile)
+    host = _bind_host(str(profile))
+    log_file = profile / "backend.log"
     try:
+        profile.mkdir(parents=True, exist_ok=True)
         with log_file.open("ab") as handle:
             proc = subprocess.Popen(
-                [str(REPO / ".venv" / "bin" / "python"), str(REPO / "run.py"),
-                 "serve", "--port", str(port), "--host", host],
+                spawn_command(port, host),
                 cwd=str(REPO), env=env, stdout=handle, stderr=subprocess.STDOUT,
                 start_new_session=True)
     except OSError as exc:
         return False, f"Could not start the backend: {exc}"
-    # Wait for the identity endpoint, not merely for the port to accept.
-    deadline = time.time() + 30
-    while time.time() < deadline:
-        if describe(port)["state"] == "ours":
-            return True, f"Started pid {proc.pid}; log: {log_file}"
-        if proc.poll() is not None:
-            # Say WHAT the process said. "exited during startup (code 0)" alone
-            # hides the common, actionable cause -- the single-instance claim on
-            # the data directory being held by another server -- and leaves a
-            # person staring at a dead port with no next step.
-            reason = _startup_failure_reason(log_file)
-            detail = f" It said: {reason}" if reason else ""
-            return False, (f"The backend exited during startup (code {proc.returncode}). "
-                           f"{detail} See {log_file}.")
-        time.sleep(0.25)
-    return False, f"Started pid {proc.pid} but it did not answer /health/identity in 30s."
+
+    # Stamp ownership before waiting for readiness: a concurrent start must see
+    # a record naming a live pid rather than conclude the port is unowned.
+    write_record(port, pid=proc.pid, home=str(profile), project_root=str(REPO))
+
+    ready, detail = wait_until_ready(port, proc)
+    if ready is None:
+        # A process this tool started and that failed is ours to clean up: do
+        # not leave an orphan for the next launch to trip over.
+        leftovers = ""
+        if proc.poll() is None:
+            try:
+                proc.terminate()
+            except OSError:
+                pass
+            if not _wait_pid_exit(proc.pid, GRACEFUL_WAIT_S):
+                try:
+                    proc.kill()
+                except OSError:
+                    pass
+                _wait_pid_exit(proc.pid, KILL_WAIT_S)
+            leftovers = f" pid {proc.pid} was stopped."
+        clear_record(port, only_pid=proc.pid)
+        reason = _startup_failure_reason(log_file)
+        said = f" It said: {reason}" if reason else ""
+        return False, (f"The backend {detail}.{leftovers}{said} See {log_file}.")
+    identity = ready.get("identity") or {}
+    write_record(port, pid=proc.pid, home=str(profile), project_root=str(REPO),
+                 instance_id=str(identity.get("instance_id") or "") or None)
+    return True, (f"Started pid {proc.pid} for profile {profile}; it answers "
+                  f"/health/identity. Log: {log_file}")
 
 
 def restart(port: int, *, force: bool = False, home: Optional[str] = None) -> Tuple[bool, str]:
-    ok, message = stop(port, force=force)
-    if not ok:
-        return False, message
+    """One bounded restart: stop (confirmed), then start (handshake-confirmed).
+
+    Exactly one attempt. A failure is reported, never retried, so a backend that
+    cannot start cannot become a restart loop.
+
+    The stop escalates to SIGKILL only after the graceful wait has expired, and
+    only for a process ``stop`` has just proven is this checkout's own backend:
+    leaving the old process behind is what makes a restart untrustworthy, while
+    killing sooner than the backend needs is what makes it destructive.
+    """
+    if port_open(port):
+        ok, message = stop(port, force=True)
+        if not ok:
+            return False, message
+    else:
+        message = "Nothing was listening; starting a fresh backend."
     started, start_message = start(port, home=home)
     return started, f"{message} {start_message}"
 
@@ -418,6 +766,13 @@ def main(argv: Optional[list] = None) -> int:
                 print(f"version   : {ident.get('app_version')}  revision {ident.get('revision')}")
                 print(f"source    : {ident.get('source_root')}")
             print(f"stale code: {info['stale'] if info['stale'] is not None else 'unknown (cannot report identity)'}")
+            owner = info.get("owner")
+            if owner:
+                alive = "alive" if owner.get("pid_alive") else "exited (stale record)"
+                print(f"owner     : pid {owner.get('pid')} ({alive}), profile "
+                      f"{owner.get('home')}, root {owner.get('project_root')}")
+            else:
+                print("owner     : no ownership record (not started by this tool)")
             if info["code"].get("note"):
                 print(f"note      : {info['code']['note']}")
             if info["state"] == "legacy":
