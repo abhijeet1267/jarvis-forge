@@ -372,3 +372,49 @@ def test_a_single_plain_instruction_plans_exactly_as_before():
     assert len(result.steps) == 1
     assert result.steps[0].tool == "desktop_move_pointer"
     assert result.notes == []
+
+
+# -- routing: a file operation is not a desktop operation ---------------------
+
+@pytest.mark.parametrize("utterance", [
+    "move report.pdf to Documents",
+    "move notes.txt to Downloads",
+    "move the folder to trash",
+])
+def test_a_file_move_is_not_a_desktop_instruction(utterance):
+    """The crossover the directive names, in both directions.
+
+    "move report.pdf to Documents" begins with a desktop verb and is a file
+    operation. Classifying it desktop would send a rename to the pointer
+    planner; the reverse mistake sends coordinates to the filesystem.
+    """
+    from jarvis.desktop.planner import looks_like_desktop
+
+    assert looks_like_desktop(utterance) is False
+
+
+@pytest.mark.parametrize("utterance", [
+    "move the cursor to 400 300",
+    "click 400 300",
+    "type hello",
+    "focus Safari",
+])
+def test_a_real_desktop_instruction_is_still_desktop(utterance):
+    from jarvis.desktop.planner import looks_like_desktop
+
+    assert looks_like_desktop(utterance) is True
+
+
+@pytest.mark.parametrize("utterance", [
+    "focus on your goals",
+    "type this up for me",
+])
+def test_a_sentence_that_merely_uses_a_desktop_verb_plans_nothing(utterance):
+    """"focus on your goals" is about attention, not an app called "on your goals".
+
+    Measured before: it planned `desktop_focus_window {application: "on your
+    goals"}`, and "type this up for me" planned typing "this up for me" into
+    whatever was focused. Both are now questions, not actions.
+    """
+    result = plan_desktop(utterance)
+    assert result.steps == [], result.steps

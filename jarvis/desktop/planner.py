@@ -98,6 +98,26 @@ _DESKTOP_VERBS = frozenset({
 })
 
 
+#: Suffixes and shapes that mean "this is a file", not "this is a pointer".
+_PATH_HINTS = (".pdf", ".txt", ".md", ".docx", ".png", ".jpg", ".csv", ".json",
+               ".zip", ".mp4", ".mov", ".xlsx", ".pptx")
+_PATH_DIRECTORIES = frozenset({
+    "documents", "downloads", "desktop folder", "trash", "folder", "directory",
+})
+
+
+def _looks_like_a_path(words: List[Tuple[str, bool, int, int]]) -> bool:
+    """Whether a `move …` instruction names files rather than a pointer.
+
+    Deliberately narrow: only a file extension or a directory word counts. A
+    pointer move names coordinates, which are neither.
+    """
+    text = " ".join(value for value, _, _, _ in words).lower()
+    if any(hint in text for hint in _PATH_HINTS):
+        return True
+    return any(word in text.split() for word in ("folder", "directory", "trash"))
+
+
 def looks_like_desktop(request: str) -> bool:
     """Whether ``request`` is a desktop instruction this planner should own.
 
@@ -117,7 +137,14 @@ def looks_like_desktop(request: str) -> bool:
     if not words:
         return False
     first = words[0][0].lower()
-    return first in _DESKTOP_VERBS
+    if first not in _DESKTOP_VERBS:
+        return False
+    # "move report.pdf to Documents" begins with a desktop verb and is a file
+    # operation. A path-shaped token (an extension, a slash, or a documented
+    # destination) means the filesystem owns it.
+    if first == "move" and _looks_like_a_path(words):
+        return False
+    return True
 
 
 def _plan_one(text: str, ctx: Dict[str, Any]) -> DesktopPlan:
@@ -588,6 +615,12 @@ def _plan_type(text: str, ctx: Dict[str, Any]) -> Optional[DesktopPlan]:
     typed = _strip_outer_quotes(match.group("text").strip())
     if not typed:
         return _ask("What should I type?")
+    # "type this up for me" is a request to compose something, not a literal
+    # instruction to send those keystrokes. Require the text to be quoted or to
+    # look like content rather than a request about content.
+    lowered = typed.lower()
+    if lowered.startswith(("this up", "that up")) or lowered.endswith(" for me"):
+        return None
     if len(typed) > MAX_TEXT_CHARS:
         return _ask(f"That text is {len(typed)} characters; one call types at "
                     f"most {MAX_TEXT_CHARS}.")
@@ -641,6 +674,10 @@ def _plan_focus(text: str, ctx: Dict[str, Any]) -> Optional[DesktopPlan]:
     app = _clean_app(match.group("rest"))
     if not app:
         return _ask("Which application should I bring to the front?")
+    # "focus on your goals" is a sentence about attention, not an application
+    # called "on your goals". A named app does not begin with a preposition.
+    if app.lower().split()[0] in {"on", "in", "at", "about", "upon"}:
+        return None
     if not _looks_like_one_app(app):
         return _ask(f"I read {app!r} as a single application name, and that looks "
                     "like two instructions. Which one should I bring to the front, "
