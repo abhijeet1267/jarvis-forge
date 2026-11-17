@@ -474,15 +474,6 @@ def test_a_rejected_confirmation_does_not_rotate_the_live_one(tmp_path, spy):
         "the operator's own approval stopped matching after a bogus attempt")
 
 
-@pytest.mark.xfail(strict=True, reason=(
-    "DEFECT: steering a mission whose intent was derived at creation makes it "
-    "permanently unrunnable. The intent is stamped plan_revision 0 and "
-    "apply_revision bumps the mission to 1 without re-recording it, so the "
-    "revision rule refuses every step forever -- including after the person "
-    "gives a fresh approval. There is no API to re-authorize the intent. "
-    "Repro: create via /missions (auto intent) -> /run (park) -> /steer -> "
-    "/run is BLOCKED with 'the plan changed after the intent was authorized' "
-    "and no later approval can clear it."))
 def test_a_steered_mission_can_be_resumed_with_a_fresh_approval(tmp_path, spy):
     """Refusing the pre-revision approval is correct; refusing forever is not.
 

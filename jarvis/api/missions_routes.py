@@ -267,6 +267,16 @@ def build_router(require_auth) -> APIRouter:
         except ValueError as exc:
             raise HTTPException(status_code=409, detail=str(exc))
 
+        # A revision changes the plan, and the intent is what authorizes it.
+        # The intent stamped at creation names plan_revision 0; once the
+        # revision is bumped the intent's own rule refuses every step
+        # ("the plan changed after the intent was authorized") and nothing
+        # re-authorized it, so a steered mission could never run again -- not
+        # even after a fresh approval. Re-record it against the plan that is
+        # actually going to run. `record_intent` had no callers at all before
+        # this, which is why the record described a plan that no longer existed.
+        mission = _rerecord_intent_after_steer(service, mission)
+
         return _dump(mission) | {"steering": steering_report(mission)}
 
     @router.post("/{mission_id}/steer/preview")
@@ -689,6 +699,53 @@ def _intent_json(*, mission_id, request: str, body: Dict[str, Any]) -> str:
         raise HTTPException(status_code=422,
                             detail=f"the mission's intent is not valid: {exc}")
     return scope.to_json()
+
+def _rerecord_intent_after_steer(service, mission):
+    """Re-stamp the mission's intent against the plan that will actually run.
+
+    The intent derived at creation is bound to ``plan_revision`` 0 and to the
+    capabilities and resources of *that* plan. A steer replaces the un-run
+    remainder and bumps the revision; leaving the old intent in place means its
+    own rule refuses every step forever, which is the right answer for a stale
+    approval and the wrong one for a person who just said what they want.
+
+    Bounded by the union of the old and new plans: a steer may add a capability
+    or a resource, and it may drop one, but it must never silently widen the
+    mission to something neither plan named. That keeps the intent an actual
+    constraint rather than a rubber stamp on whatever the revision says.
+
+    A mission with no intent stays that way -- recording an authorization nobody
+    can check would be worse than having none.
+    """
+    if not (mission.intent or "").strip():
+        return mission
+    try:
+        from ..security.intentshield import (
+            IntentScope, RESOURCE_PARAMETER_KEYS)
+
+        previous = IntentScope.from_dict(json.loads(mission.intent))
+        capabilities = sorted({str(s.tool or "") for s in mission.steps
+                               if str(s.tool or "").strip()}
+                              | set(previous.allowed_capabilities or []))
+        prefixes = sorted({
+            str((s.params or {}).get(key) or "").strip()
+            for s in mission.steps
+            for key in RESOURCE_PARAMETER_KEYS
+            if str((s.params or {}).get(key) or "").strip()
+        } | set(previous.allowed_resource_prefixes or []))
+        scope = IntentScope.from_dict({
+            **previous.to_dict(),
+            "allowed_capabilities": capabilities,
+            "allowed_resource_prefixes": prefixes,
+            "plan_revision": mission.plan_revision,
+        })
+        return service.record_intent(mission.mission_id, scope.to_json())
+    except (ValueError, TypeError, KeyError, AttributeError):
+        # The plan runs under the intent it already has. A steer is not the
+        # place to widen authorization, so a failure here leaves the old scope
+        # standing rather than granting a broader one.
+        return mission
+
 
 def _gate_factory(core):
     """A gate that asks the real PermissionEngine about one mission step."""
