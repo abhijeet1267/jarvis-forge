@@ -343,7 +343,7 @@ struct CommandCenterView: View {
             // A desktop plan the backend parked because it needs a person. It
             // is drawn where the turn that produced it ended, so the plan and
             // the actions it would take are read together.
-            if let approval = chat.pendingDesktopApproval ?? desktopPlanInFlight {
+            if let approval = desktopPlanInFlight ?? chat.pendingDesktopApproval {
                 DesktopPlanApprovalCard(
                     approval: approval,
                     isDeciding: isDecidingDesktopPlan,
@@ -1191,8 +1191,8 @@ struct DesktopPlanApprovalCard: View {
         if stepsThatRan > 0 {
             Label(
                 stepsThatRan == 1
-                    ? "1 step already ran. Everything not marked done will run only if you approve."
-                    : "\(stepsThatRan) steps already ran. Everything not marked done will run only if you approve.",
+                    ? "1 step already ran. Steps still marked pending run only if you approve."
+                    : "\(stepsThatRan) steps already ran. Steps still marked pending run only if you approve.",
                 systemImage: "clock.arrow.circlepath")
                 .font(V.Font.caption)
                 .foregroundStyle(V.textSecondary)
@@ -1202,8 +1202,9 @@ struct DesktopPlanApprovalCard: View {
 
     private var destructiveLine: some View {
         Label(
-            "These steps click, type or press keys on this Mac. The backend rates them "
-                + "level-3 destructive: they act outside Vantage and cannot be undone from here.",
+            "Clicking, typing, scrolling and key presses land on whatever is focused "
+                + "in your session. The backend rates those tools level-3 destructive, "
+                + "and nothing here undoes them.",
             systemImage: "exclamationmark.triangle.fill")
             .font(V.Font.caption)
             .foregroundStyle(V.warning)
@@ -1235,7 +1236,7 @@ struct DesktopPlanApprovalCard: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
 
-            if canDeny {
+            if approval.parkedStepId != nil {
                 Button("Deny") {
                     Task { await onDeny() }
                 }
@@ -1245,7 +1246,7 @@ struct DesktopPlanApprovalCard: View {
                 .accessibilityLabel("Deny desktop plan")
             }
 
-            if canApprove {
+            if approval.confirmationId != nil {
                 Button("Approve and run") {
                     Task { await onApprove() }
                 }
