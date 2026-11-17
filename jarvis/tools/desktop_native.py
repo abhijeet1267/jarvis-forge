@@ -162,7 +162,7 @@ async def desktop_move_pointer(ctx: ToolContext, x: Optional[float] = None,
 async def desktop_click(ctx: ToolContext, x: Optional[float] = None,
                         y: Optional[float] = None, button: str = "left",
                         expect_window_id: Optional[int] = None,
-                        **_: Any) -> Any:
+                        expect_pid: Optional[int] = None, **_: Any) -> Any:
     """Post one real mouse click. DESTRUCTIVE: needs confirmation."""
     if x is None or y is None:
         return fail("desktop_click", "A click needs both an x and a y coordinate.",
@@ -172,14 +172,19 @@ async def desktop_click(ctx: ToolContext, x: Optional[float] = None,
     except CoordinateError as refusal:
         return fail("desktop_click", str(refusal), device=ctx.device_id,
                     detail=refusal.detail)
+    # `expect_pid` is declared on the spec, so a caller can send it; it has to
+    # reach the executor or the declaration is a promise the tool does not keep.
     result = executor.click(px, py, button=button, count=1,
-                            expect_window_id=expect_window_id)
+                            expect_window_id=expect_window_id,
+                            expect_pid=expect_pid)
     return _finish("desktop_click", result, ctx,
                    f"Clicked at ({x}, {y})")
 
 
 async def desktop_double_click(ctx: ToolContext, x: Optional[float] = None,
-                               y: Optional[float] = None, **_: Any) -> Any:
+                               y: Optional[float] = None,
+                               expect_window_id: Optional[int] = None,
+                               expect_pid: Optional[int] = None, **_: Any) -> Any:
     """Post one double-click (a click with clickState 2, not two clicks)."""
     if x is None or y is None:
         return fail("desktop_double_click",
@@ -190,13 +195,20 @@ async def desktop_double_click(ctx: ToolContext, x: Optional[float] = None,
     except CoordinateError as refusal:
         return fail("desktop_double_click", str(refusal), device=ctx.device_id,
                     detail=refusal.detail)
-    result = executor.click(px, py, button="left", count=2)
+    # The same Swift `click` op as `desktop_click`, only with count=2, so the
+    # same staleness guard applies: a replay whose window moved would otherwise
+    # double-click whatever now sits at the recorded point.
+    result = executor.click(px, py, button="left", count=2,
+                            expect_window_id=expect_window_id,
+                            expect_pid=expect_pid)
     return _finish("desktop_double_click", result, ctx,
                    f"Double-clicked at ({x}, {y})")
 
 
 async def desktop_right_click(ctx: ToolContext, x: Optional[float] = None,
-                              y: Optional[float] = None, **_: Any) -> Any:
+                              y: Optional[float] = None,
+                              expect_window_id: Optional[int] = None,
+                              expect_pid: Optional[int] = None, **_: Any) -> Any:
     """Post one right-click, which normally opens a context menu."""
     if x is None or y is None:
         return fail("desktop_right_click",
@@ -207,7 +219,12 @@ async def desktop_right_click(ctx: ToolContext, x: Optional[float] = None,
     except CoordinateError as refusal:
         return fail("desktop_right_click", str(refusal), device=ctx.device_id,
                     detail=refusal.detail)
-    result = executor.click(px, py, button="right", count=1)
+    # Right-click is the same `click` op with a different button, so it accepts
+    # the same guard; a context menu opened in the wrong window is still a real
+    # action on somebody's session.
+    result = executor.click(px, py, button="right", count=1,
+                            expect_window_id=expect_window_id,
+                            expect_pid=expect_pid)
     return _finish("desktop_right_click", result, ctx,
                    f"Right-clicked at ({x}, {y})")
 
@@ -570,7 +587,8 @@ SPECS = [
             risk=RiskLevel.DESTRUCTIVE,
             requires_confirmation=True,
             reversible=False,
-            parameters={"x": "number", "y": "number"},
+            parameters={"x": "number", "y": "number",
+                        "expect_window_id": "integer", "expect_pid": "integer"},
             required_parameters=("x", "y"),
             tags=["system", "desktop", "pointer", "actuation"],
         ),
@@ -586,7 +604,8 @@ SPECS = [
             risk=RiskLevel.DESTRUCTIVE,
             requires_confirmation=True,
             reversible=False,
-            parameters={"x": "number", "y": "number"},
+            parameters={"x": "number", "y": "number",
+                        "expect_window_id": "integer", "expect_pid": "integer"},
             required_parameters=("x", "y"),
             tags=["system", "desktop", "pointer", "actuation"],
         ),
@@ -635,7 +654,7 @@ SPECS = [
             risk=RiskLevel.DESTRUCTIVE,
             requires_confirmation=True,
             reversible=False,
-            parameters={"text": "string"},
+            parameters={"text": "string", "expect_app": "string"},
             required_parameters=("text",),
             tags=["system", "desktop", "keyboard", "actuation"],
         ),

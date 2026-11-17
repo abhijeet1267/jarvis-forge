@@ -615,3 +615,62 @@ def test_the_registry_accepts_the_expected_application(tool, params):
     assert not unexpected, (
         f"{tool} does not declare {sorted(unexpected)}; the permission engine "
         f"would BLOCK the step before it reached the executor")
+
+
+# -- the guard reaches the click variants, not only the plain click -----------
+#
+# `desktop_double_click` and `desktop_right_click` call the same Swift `click` op
+# with a different count or button, so a replay whose window moved would land a
+# real double-click or open a context menu in whatever now sits at the recorded
+# point. Before this they accepted the expectation through **kwargs and dropped
+# it, and neither declared it in its ToolSpec -- so the permission engine refused
+# the parameter outright and a guarded variant was worse off than an unguarded
+# one: it could not be recorded at all.
+
+@pytest.mark.parametrize("tool,executor_name", [
+    ("desktop_click", "click"),
+    ("desktop_double_click", "click"),
+    ("desktop_right_click", "click"),
+])
+def test_every_click_variant_forwards_the_window_expectation(
+        stub, registry, ctx, tool, executor_name):
+    calls, make, mp = stub
+    mp.setattr(desktop_native.executor, executor_name,
+               make({"status": "performed_unverified", "reason": "posted"}))
+    result = _call(registry, ctx, tool, x=120, y=240,
+                   expect_window_id=4242, expect_pid=999)
+    assert result.ok is True, result.message
+    _args, sent = calls[0]
+    assert sent.get("expect_window_id") == 4242, \
+        f"{tool} dropped expect_window_id instead of forwarding it"
+    assert sent.get("expect_pid") == 999, \
+        f"{tool} dropped expect_pid instead of forwarding it"
+
+
+@pytest.mark.parametrize("tool,params", [
+    ("desktop_click", {"x": 1, "y": 2, "expect_window_id": 7}),
+    ("desktop_double_click", {"x": 1, "y": 2, "expect_window_id": 7}),
+    ("desktop_right_click", {"x": 1, "y": 2, "expect_pid": 7}),
+    ("desktop_type_text", {"text": "hello", "expect_app": "TextEdit"}),
+    ("desktop_press_key", {"key": "s", "expect_app": "TextEdit"}),
+    ("desktop_shortcut", {"key": "s", "modifiers": ["cmd"], "expect_app": "TextEdit"}),
+    ("desktop_drag", {"from_x": 1, "from_y": 2, "to_x": 3, "to_y": 4,
+                      "expect_window_id": 7}),
+    ("desktop_scroll", {"x": 1, "y": 2, "lines": -3, "expect_window_id": 7}),
+])
+def test_every_guarded_tool_declares_its_guard_in_the_spec(tool, params):
+    """The registry must accept every guard the handler forwards.
+
+    A parameter a handler accepts but its `ToolSpec.parameters` omits is refused
+    by `ToolRegistry.validate_params`, so the permission engine BLOCKs the step
+    before it reaches the executor. Calling the handler directly hides this --
+    which is exactly how the original gap survived a green suite.
+    """
+    from jarvis.core.orchestrator import JarvisCore
+
+    spec = JarvisCore().tools.get(tool)
+    assert spec is not None, f"{tool} is not registered"
+    undeclared = set(params) - set(spec.parameters)
+    assert not undeclared, (
+        f"{tool} does not declare {sorted(undeclared)}; the permission engine "
+        f"would BLOCK the step before it reached the executor")
