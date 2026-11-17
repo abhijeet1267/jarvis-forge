@@ -5,11 +5,23 @@ per-step approval carrying a ``confirmation_id``. That makes the *refusals* the
 security boundary: everything here asks "can a thing that is not a valid
 approval be made to authorize a step?" rather than "does the happy path work".
 
-The six required cases are strict tests and pass against the current code. The
-section at the bottom pins defects this file found; each is marked
-``xfail(strict=True)`` so a fix turns it red rather than letting the marker
-quietly outlive the bug. Do not delete those markers to get a green run -- read
-the reason first.
+Every case here is a strict test and passes against the current code. The
+section at the bottom pins defects this file found; each was fixed rather than
+marked `xfail`, and the test stays as the regression proof. Do not weaken them
+to get a green run -- read the reason first.
+
+What the confirmation id is, and is not (measured against this code, not
+assumed): the gate mints it with `new_secret_id("CONF")` -- 128 random bits --
+and writes the row as the same ordinary row a chat action's confirmation gets
+(`jarvis/security/policy.py:_create_confirmation`). It is *not* a signature and
+carries no identity: possession is the whole of the check once a caller is
+through the door, and the door is authenticated by one master token (or a
+session that stands in for it) for the entire backend. So this file can prove
+binding and refusal; it cannot prove that a person, rather than any process
+holding the token, was the one who clicked. `test_a_mission_confirmation_cannot_
+be_answered_as_a_chat_action` pins the one thing that used to make that worse:
+the mission's own gate confirmation was a fully live chat credential that
+executed the step's *original* params, skipping the plan-revision binding.
 
 Everything runs through the real routes, the real permission engine and the real
 lease service against the isolated test ``JARVIS_HOME``. The only stand-in is
@@ -512,3 +524,381 @@ def test_a_steered_mission_can_be_resumed_with_a_fresh_approval(tmp_path, spy):
     assert run["state"] != "blocked", (
         "a revision left the mission permanently unrunnable: "
         f"{run.get('reason')}")
+
+
+# == 7. what the confirmation id actually is ==============================
+#
+# The audit answers, in order: who authenticates a caller, who mints the id,
+# whether a person is distinguishable from a script, whether it expires, and
+# what it is bound to. Each answer that is "no" is pinned below as a fact so a
+# later change cannot quietly claim more than the system does.
+
+def test_the_whole_backend_is_guarded_by_one_token_not_a_person(tmp_path, spy):
+    """AUTHENTICATION IS A SHARED SECRET, NOT AN IDENTITY. SAY IT PLAINLY.
+
+    `require_auth` accepts the master token or any live session token, and a
+    dashboard session is refused only on the phone surface. There is no
+    per-caller identity, no user account and no second factor anywhere on this
+    path. So "a person approved this" is not a fact this system can produce; the
+    strongest true statement is "something holding the token posted the id".
+
+    This is a characterization test, not an endorsement. If a real per-person
+    credential is ever added, this test should be rewritten to assert the new
+    property -- not deleted.
+    """
+    client = _client()
+    target = tmp_path / "shared_token.txt"
+    mission_id = _write_mission(client, target)
+    parked = _run(client, mission_id)
+    assert parked["state"] == "awaiting_approval"
+
+    # The very same shared token that conducted the mission answers it. No
+    # separate approver identity exists to present.
+    approved = _run(client, mission_id,
+                    {"confirmation_id": _confirmation(parked)})
+    assert approved["state"] != "awaiting_approval", (
+        "the runner refused its own caller's approval, which contradicts the "
+        "documented model: one token covers both")
+    assert (tmp_path / "shared_token.txt").exists()
+
+
+def test_the_confirmation_id_is_minted_by_the_gate_not_the_approver(tmp_path, spy):
+    """The engine issues the id; the approval only echoes it back.
+
+    `_create_confirmation` writes an ordinary `confirmations` row (128 random
+    bits, no signature, no approver field) when the gate answers CONFIRM. The
+    runner then compares the caller's offered string with the copy recorded on
+    the parked step. Possession of that string is therefore the entire check
+    once the caller is authenticated -- which is why the binding tests below
+    (mission, step, revision) are the defense that actually exists.
+    """
+    from jarvis.api.app import get_core
+
+    client = _client()
+    mission_id = _write_mission(client, tmp_path / "minted.txt")
+    parked = _run(client, mission_id)
+    issued = _confirmation(parked)
+    assert issued.startswith("CONF-"), issued
+    assert len(issued) > 20, "a confirmation id is a credential; it must not be short"
+
+    # It exists as a real row in the engine's table -- the same table a chat
+    # action's confirmation would occupy.
+    row = get_core().policy.get_confirmation(issued)
+    assert row is not None and row["state"] == "pending"
+    assert row["requested_surface"] == "mission"
+
+
+# == 8. a mission confirmation is not a chat credential ===================
+#
+# Found by this audit, 2026-11-17. Before the fix, POST /confirm with the id
+# scraped out of a parked mission step executed the step directly:
+#
+#   * with the mission still AWAITING_APPROVAL (its step never marked done, so
+#     a later /run executed it a SECOND time -- measured: content "EE"), and
+#   * after a steer, with the step's ORIGINAL params -- the pre-revision action
+#     the mission's own binding had deliberately refused (measured: "old.txt"
+#     written when the current plan said "new.txt").
+#
+# The fix is in `PermissionEngine.resolve` (mission-owned rows never resolve
+# through the generic hub) and `JarvisCore.resolve_confirmation` (a resolve that
+# leaves the row pending no longer falls through to execute). This test fails
+# on the un-fixed tree.
+
+def test_a_mission_confirmation_cannot_be_answered_as_a_chat_action(tmp_path, spy):
+    """The id a person was shown for a mission step is not a chat credential."""
+    client = _client()
+    target = tmp_path / "chat_path.txt"
+    mission_id = _write_mission(client, target, content="via-mission")
+    parked = _run(client, mission_id)
+    assert parked["state"] == "awaiting_approval"
+    issued = _confirmation(parked)
+    assert issued
+
+    answered = client.post(f"/confirm/{issued}", headers=HEADERS,
+                           params={"approve": "true"})
+    # The route may keep its 200 envelope; the property is what matters.
+    assert answered.status_code in (200, 409), answered.text
+    assert spy.calls == [], (
+        "a mission's parked confirmation executed the step through /confirm: "
+        f"{spy.calls}")
+    assert not target.exists(), "the step ran on a chat-style approval"
+
+    # The mission is untouched and still answerable on its own route.
+    after = _state(mission_id)
+    assert after["state"] == "awaiting_approval"
+    assert _step(after, "S1")["status"] == "pending"
+
+    resumed = _run(client, mission_id, {"confirmation_id": issued})
+    assert resumed["state"] != "awaiting_approval", (
+        "refusing /confirm must not consume the mission's own approval")
+    assert target.read_text(encoding="utf-8") == "via-mission"
+
+
+def test_a_steer_cannot_be_undone_through_the_chat_confirm_route(tmp_path, spy):
+    """The pre-revision id must not run the pre-revision action anywhere.
+
+    The mission's own `/run` already refuses this (test 5 above). `/confirm`
+    bypassed that refusal entirely because it rebuilt the action from the
+    stored confirmation row and never compared `plan_revision`.
+    """
+    client = _client()
+    old_target = tmp_path / "old.txt"
+    new_target = tmp_path / "new.txt"
+    mission_id = _write_mission(client, old_target, content="OLD")
+    parked = _run(client, mission_id)
+    old_approval = _confirmation(parked)
+    assert old_approval
+
+    steered = client.post(f"/missions/{mission_id}/steer", headers=HEADERS, json={
+        "steps": [{"step_id": "S1", "title": "write", "tool": "write_file",
+                   "params": {"path": str(new_target), "content": "NEW"}}],
+        "reason": "the person changed what the step should write"})
+    assert steered.status_code == 200, steered.text
+    assert steered.json()["plan_revision"] == parked["plan_revision"] + 1
+
+    # The mission's own route refuses the spent approval...
+    refused = _run(client, mission_id, {"confirmation_id": old_approval})
+    assert refused["state"] == "awaiting_approval", refused.get("reason")
+    assert spy.calls == []
+
+    # ...and the chat route must not be the way around that refusal.
+    answered = client.post(f"/confirm/{old_approval}", headers=HEADERS,
+                           params={"approve": "true"})
+    assert answered.status_code in (200, 409), answered.text
+    assert spy.calls == [], (
+        "a pre-revision approval executed through /confirm after a steer: "
+        f"{spy.calls}")
+    assert not old_target.exists(), (
+        "the pre-revision action ran -- the exact approval the revision was "
+        "supposed to spend")
+    assert not new_target.exists(), "the post-revision action ran on an old approval"
+
+
+def test_a_mission_confirmation_does_not_survive_two_paths_as_a_double_execution(
+        tmp_path, spy):
+    """One approval buys one execution, whichever route is used.
+
+    Before the fix, `/confirm` executed once and left the mission parked, so the
+    next `/run` executed again. A delete or a send is not idempotent.
+    """
+    client = _client()
+    target = tmp_path / "twice.txt"
+    mission_id = _write_mission(client, target, content="once")
+    parked = _run(client, mission_id)
+    issued = _confirmation(parked)
+
+    client.post(f"/confirm/{issued}", headers=HEADERS, params={"approve": "true"})
+    ran_via_confirm = len(spy.calls)
+    assert ran_via_confirm == 0, f"/confirm executed the step: {spy.calls}"
+
+    _run(client, mission_id, {"confirmation_id": issued})
+    assert len(spy.calls) == 1, (
+        f"the step executed {len(spy.calls)} times for one approval: {spy.calls}")
+    assert target.read_text(encoding="utf-8") == "once"
+
+
+# == 9. binding: a revision that leaves the step unchanged ================
+
+def test_a_revision_that_keeps_the_step_identical_keeps_its_approval(tmp_path, spy):
+    """The binding is (tool, params), not "any revision at all".
+
+    A revision that renames the step's title but leaves the action identical is
+    not a new ask, so the person's answer still describes it -- and the runner's
+    intent check, re-recorded against the new revision, must let that run. A
+    guard that refused every post-revision approval would be safe but useless,
+    and would turn steering into a permanent block (already covered positively
+    by the resumable test above; this one isolates the unchanged-step case).
+    """
+    from jarvis.api.app import get_core
+
+    client = _client()
+    target = tmp_path / "unchanged.txt"
+    mission_id = _write_mission(client, target, content="same")
+    parked = _run(client, mission_id)
+    issued = _confirmation(parked)
+    assert issued
+
+    steered = client.post(f"/missions/{mission_id}/steer", headers=HEADERS, json={
+        "steps": [{"step_id": "S1", "title": "a clearer title",
+                   "tool": "write_file",
+                   "params": {"path": str(target), "content": "same"}}],
+        "reason": "only the title changed"})
+    assert steered.status_code == 200, steered.text
+    assert steered.json()["plan_revision"] == parked["plan_revision"] + 1
+
+    # The engine row still exists; the runner decides, not the revision number.
+    row = get_core().policy.get_confirmation(issued)
+    assert row is not None
+
+    resumed = _run(client, mission_id, {"confirmation_id": issued})
+    assert resumed["state"] != "awaiting_approval", (
+        "a revision that left the step's action identical still forced "
+        f"re-approval: {resumed.get('reason')}")
+    assert target.read_text(encoding="utf-8") == "same"
+    assert spy.tools_called() == ["write_file"]
+
+
+# == 10. sequential decide calls: the second cannot re-answer ==============
+
+def test_a_second_decision_on_a_settled_step_is_refused(tmp_path, spy):
+    """Two sequential decide calls must not both take effect.
+
+    The route guards on `step.status == "pending"`, so the second call is a 409
+    and the denial recorded by the first is not overwritten into an approval.
+    The property asserted is the executor was never reached.
+    """
+    client = _client()
+    target = tmp_path / "settled.txt"
+    mission_id = _write_mission(client, target)
+    assert _run(client, mission_id)["state"] == "awaiting_approval"
+
+    first = client.post(f"/missions/{mission_id}/steps/S1/decide", headers=HEADERS,
+                        json={"decision": "deny"})
+    assert first.status_code == 200, first.text
+    assert first.json()["state"] == "blocked"
+
+    second = client.post(f"/missions/{mission_id}/steps/S1/decide", headers=HEADERS,
+                         json={"decision": "approve"})
+    assert second.status_code == 409, second.text
+
+    assert spy.calls == [], "a settled step executed"
+    assert not target.exists()
+    step = _step(_state(mission_id), "S1")
+    assert step["status"] == "failed"
+    assert step["detail"] == "denied by the operator", (
+        f"the denial was rewritten: {step['detail']!r}")
+
+
+# == 11. an approval minted for one mission name is still per-mission =====
+
+def test_an_approval_minted_in_one_mission_does_not_carry_to_another(tmp_path, spy):
+    """The same shape of step in two missions carries two independent ids.
+
+    `test_a_foreign_confirmation_id_cannot_resume_a_parked_mission` already
+    covers a *different* id. This covers the stronger claim that matters for a
+    cloned plan: two missions with byte-identical steps must not share one.
+    """
+    client = _client()
+    target = tmp_path / "shared_shape.txt"
+    one = _write_mission(client, target)
+    two = _write_mission(client, target)
+
+    first = _run(client, one)
+    second = _run(client, two)
+    assert _confirmation(first) and _confirmation(second)
+    assert _confirmation(first) != _confirmation(second), (
+        "identical steps in two missions were issued the same confirmation")
+
+    refused = _run(client, one, {"confirmation_id": _confirmation(second)})
+    assert refused["state"] == "awaiting_approval", (
+        f"the other mission's id authorized this one: {refused.get('reason')}")
+    assert spy.calls == []
+
+
+# == 12. restart while pending: the id and the parked state survive =======
+
+def test_a_parked_mission_and_its_confirmation_survive_a_restart(tmp_path, spy):
+    """Park, re-open the database and a fresh service, then resume.
+
+    A confirmation that lived only in memory would make a relaunch either lose
+    the person's ability to answer or -- worse -- silently un-park. Both the
+    mission row and the confirmation row are read back through new objects over
+    the same database file.
+    """
+    from jarvis.core.missions import MissionService
+    from jarvis.db.database import Database, get_db
+    from jarvis.security.policy import PermissionEngine
+
+    client = _client()
+    target = tmp_path / "restart.txt"
+    mission_id = _write_mission(client, target, content="survived")
+    parked = _run(client, mission_id)
+    assert parked["state"] == "awaiting_approval"
+    issued = _confirmation(parked)
+    assert issued
+
+    # A fresh handle on the same file, and a fresh service over it.
+    reopened = Database(get_db().path)
+    fresh_service = MissionService(reopened)
+    reloaded = fresh_service.get(mission_id)
+    assert reloaded is not None, "the mission did not survive the restart"
+    assert reloaded.state == "awaiting_approval"
+    assert _confirmation(reloaded.to_dict()) == issued, (
+        "the confirmation id the person was shown did not survive the restart")
+
+    # The engine, too, still knows the row -- and says it is still pending, not
+    # silently expired or approved.
+    rows = reopened.query(
+        "SELECT state, tool FROM confirmations WHERE confirmation_id = ?", (issued,))
+    assert rows and rows[0]["state"] == "pending", (
+        f"the confirmation row did not survive the restart: {rows}")
+    assert rows[0]["tool"] == "write_file"
+
+    # And the id still resumes the step after the restart.
+    resumed = _run(client, mission_id, {"confirmation_id": issued})
+    assert resumed["state"] != "awaiting_approval", (
+        f"the parked approval stopped working after a restart: {resumed.get('reason')}")
+    assert target.read_text(encoding="utf-8") == "survived"
+    assert spy.tools_called() == ["write_file"]
+
+# -- a mission's confirmation cannot be spent through the generic hub --------
+#
+# Measured by audit: the generic confirmation surface (`POST /confirm/{id}`) and
+# the mission runner both resolve from the same confirmation store, but only the
+# runner also compares the id with the one recorded on the parked step, checks
+# the plan revision and spends the step's lease. Resolving a mission-owned
+# confirmation through the hub therefore skipped every one of those.
+
+def test_a_mission_confirmation_cannot_be_spent_through_the_confirm_route(tmp_path):
+    """The hub must refuse a confirmation a mission's gate minted.
+
+    Otherwise an approval parked at revision 0 could execute the step's original
+    params after a steer replaced them -- the revision check is exactly what the
+    hub path skips.
+    """
+    client = _client()
+    target = tmp_path / "hub_bypass.txt"
+    mission_id = _write_mission(client, target)
+
+    parked = _run(client, mission_id)
+    assert parked["state"] == "awaiting_approval", parked["state"]
+    confirmation = _step(parked)["detail"].split("confirmation ", 1)[1].split()[0].rstrip(")").strip()
+
+    # Try to spend it through the generic confirmation endpoint.
+    response = client.post(f"/confirm/{confirmation}?approve=true", headers=HEADERS)
+
+    # Whatever the hub answers, the effect is what matters: the mission's step
+    # must not have run behind the runner's back.
+    state = _state(mission_id)
+    assert state["state"] == "awaiting_approval", (
+        f"the hub resolved a mission-owned confirmation: state is {state['state']!r}")
+    assert not target.exists(), "the hub path executed the parked step"
+    assert response.status_code in (200, 404, 409, 422), response.status_code
+
+
+def test_a_mission_confirmation_is_refused_by_the_policy_layer():
+    """Belt and braces: the refusal is recorded where the confirmation lives.
+
+    The route above may answer with a message; this asserts the policy store
+    itself declined, so a future caller reaching `resolve` by another route hits
+    the same wall.
+    """
+    from jarvis.core.orchestrator import JarvisCore
+
+    core = JarvisCore()
+    engine = core.policy
+    if not hasattr(engine, "resolve"):
+        pytest.skip("this build has no confirmation resolver to check")
+
+    # A record shaped exactly as the mission gate writes it.
+    created = engine.evaluate(
+        type("A", (), {"tool": "write_file", "params": {"path": "/tmp/x"}, "device": "laptop_main"})(),
+        session_id="mission:MIS-test", requested_surface="mission")
+    confirmation_id = getattr(created, "confirmation_id", None)
+    if not confirmation_id:
+        pytest.skip("the policy engine minted no confirmation for this action")
+
+    resolved = engine.resolve(confirmation_id)
+    state = getattr(resolved, "state", None) or (resolved or {}).get("state")
+    assert state != "approved", (
+        "the generic resolver approved a mission-owned confirmation")
