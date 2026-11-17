@@ -1157,26 +1157,39 @@ func opType(text: String, expectApp: String) -> Never {
     // would hide the more useful answer.
     requirePostEvents("typing")
 
-    // Unicode injection: set the keyboard event's unicode payload rather than
-    // mapping characters to keycodes. This respects any layout and types
-    // characters no physical key produces.
-    let units = Array(text.utf16)
-    guard let down = CGEvent(keyboardEventSource: nil, virtualKey: 0, keyDown: true),
-          let up = CGEvent(keyboardEventSource: nil, virtualKey: 0, keyDown: false) else {
-        Emit.out(.failed, "the keystroke event could not be constructed")
+    // One character per event pair, not the whole string in a single unicode
+    // payload. TextEdit ignores a bulk `keyboardSetUnicodeString` on one event --
+    // measured: 18 characters posted, the AXTextArea value stayed empty -- while
+    // the same characters sent individually appear. Per-character delivery also
+    // matches what a keyboard actually does, so an app that reads key events one
+    // at a time (editors, terminals) behaves the same way it would for a person.
+    var typed = 0
+    for scalar in text {
+        if Cancellation.requested() {
+            Emit.out(.cancelled, "typing was cancelled after \(typed) character(s)",
+                     ["typed": typed])
+        }
+        let units = Array(String(scalar).utf16)
+        guard let down = CGEvent(keyboardEventSource: nil, virtualKey: 0, keyDown: true),
+              let up = CGEvent(keyboardEventSource: nil, virtualKey: 0, keyDown: false) else {
+            Emit.out(.failed, "the keystroke event could not be constructed")
+        }
+        down.keyboardSetUnicodeString(stringLength: units.count, unicodeString: units)
+        up.keyboardSetUnicodeString(stringLength: units.count, unicodeString: units)
+        down.post(tap: .cghidEventTap)
+        usleep(2_000)
+        up.post(tap: .cghidEventTap)
+        typed += 1
+        // Fast enough to feel instant, slow enough that an app which processes
+        // events on its own runloop does not drop any.
+        usleep(6_000)
     }
-    down.keyboardSetUnicodeString(stringLength: units.count, unicodeString: units)
-    up.keyboardSetUnicodeString(stringLength: units.count, unicodeString: units)
-    down.post(tap: .cghidEventTap)
-    usleep(10_000)
-    up.post(tap: .cghidEventTap)
-    usleep(60_000)
     let front = NSWorkspace.shared.frontmostApplication?.localizedName ?? ""
     Emit.out(.performed_unverified,
              "\(text.count) character(s) typed at the focused field of "
              + "\(front.isEmpty ? "an unreadable application" : front). "
              + "Whether they appeared is read separately.",
-             ["length": text.count, "typed_into": front])
+             ["length": text.count, "characters_sent": typed, "typed_into": front])
 }
 
 func opKey(key: String, modifiers: [String]) -> Never {
