@@ -4550,3 +4550,46 @@ with no intermediary process. Measured after: `responsible = com.jarforge.app`.
 staged, so an installed app resolved its executor to a source-tree path a copied
 bundle does not have; `scripts/` holds `backend_lifecycle.py`, without which the
 app could not start its own backend.
+
+## Update — 2026-11-17 (V22: the Swift app the user opens now stands alone)
+
+The campaign had been validating two different products. `macos/Vantage/Vantage.app`
+is the SwiftUI app the user double-clicks; `dist/Vantage.app` is a Python launcher
+with no Swift UI. The V22 "standalone passed" results came from the second while
+the product is the first. That is recorded here so it is not repeated.
+
+### The one line that blocked startup
+
+`BackendManager.backendInterpreter()` looked for `.venv/bin/python` inside the
+project directory. A bundle has no `.venv`, so it fell back to
+`/usr/bin/python3` — which cannot import fastapi. The backend died before binding
+a port and the app showed an empty Home screen. Every earlier "the app does not
+start its backend" was this.
+
+It now reads `python_path.txt`, written by the packaging step. A checkout keeps
+working unchanged: no such file, so the `.venv` branch still runs.
+
+### Verified by launching the assembled app with an empty port
+
+| Check | Result |
+|---|---|
+| Backend started by the app | pid 24936, no manual step |
+| Backend working directory | `<bundle>/Contents/Resources` — the bundle, not the checkout |
+| `/health` | `status=ok`, 200 tools |
+| Native executor | `<bundle>/Contents/Resources/native/desktop_executor/.../vantage-desktop` |
+| Capabilities | move, click, type, read_ui, screen_capture — all true |
+| SIGTERM | app exits, port released, no orphan |
+
+The bundle is 81 MB: backend source, 89 Python packages, and the executor.
+
+### Two defects found while verifying
+
+`applicationWillTerminate` does not run on a signal. `kill -TERM` left the app
+alive *and* orphaned its backend on the port, so the next launch found a stranger.
+SIGTERM and SIGINT now run the same teardown and exit.
+
+### Still not done
+
+**The interpreter is not bundled.** `python_path.txt` names the build machine's
+`.venv`. The packages travel with the app; the Python runtime does not. A machine
+without that interpreter would still fail, and this is the remaining V22 gap.
