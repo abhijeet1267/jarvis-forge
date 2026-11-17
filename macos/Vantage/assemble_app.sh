@@ -129,6 +129,23 @@ iconutil -c icns "${ICONSET}" -o "${ICNS_PATH}" 2>/dev/null
 # and the separate `--verify` step mirror build_app.py (R5.1) and the
 # "fail loud on codesign failure" invariant, so a bad bundle can't be mistaken
 # for a good one at the packaging step.
+# --- Relocatable Python -------------------------------------------------------
+#
+# Before signing: it writes into Contents/Resources, and a signature computed
+# first would not cover the interpreter. It also rewrites python_path.txt to the
+# bundled runtime, which is what makes the app independent of this checkout.
+if [ -x "${PROJECT_DIR}/scripts/bundle_python.sh" ]; then
+    echo "==> Bundling relocatable Python"
+    if ! "${PROJECT_DIR}/scripts/bundle_python.sh" --app "$(pwd)/${APP_BUNDLE}"; then
+        # A bundle without its own interpreter still runs on this machine from
+        # the checkout's venv. Say so rather than shipping it silently.
+        echo "    ! the bundled Python could not be produced; this app depends on" >&2
+        echo "      ${PROJECT_DIR}/.venv and will not run on another Mac (needs network)." >&2
+    fi
+else
+    echo "    (scripts/bundle_python.sh missing; using this machine's interpreter)"
+fi
+
 echo "==> Signing ${APP_BUNDLE}"
 if ! codesign --force --deep -s - "${APP_BUNDLE}"; then
     echo "Error: codesign failed for ${APP_BUNDLE}" >&2
