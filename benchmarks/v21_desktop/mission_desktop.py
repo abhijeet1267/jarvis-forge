@@ -15,6 +15,7 @@ step status.
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 import time
@@ -22,7 +23,14 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-BASE = "http://127.0.0.1:8798"
+# The development port, overridable, and never 8765: that is the installed
+# app's backend, and a test that takes it breaks a running session. Measured --
+# a test build did exactly that once, and the app correctly refused to talk to it.
+PORT = int(os.environ.get("VANTAGE_TEST_PORT", "8798"))
+if PORT == 8765:
+    raise SystemExit("8765 is the installed app's backend port; "
+                     "use scripts/dev_port_guard.sh claim for a test port")
+BASE = f"http://127.0.0.1:{PORT}"
 TOKEN_FILE = Path("/tmp/vantage_probe2/api_token")
 STATE = Path("/tmp/vantage_probe_app/state.json")
 EXE = (Path(__file__).resolve().parents[2] / "native" / "desktop_executor"

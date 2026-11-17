@@ -4453,3 +4453,69 @@ grant is only meaningful once the packaging work exists.
 (`.venv/bin/python -m pytest -q -p no:cacheprovider`). The 31 skips are the
 pre-existing prerequisite-gated tests that skip honestly rather than passing on
 a mock.
+
+### Test builds must not take the app's port
+
+During a build-testing session a second copy of the app (`dist/Vantage.app`) was
+launched. It started its own backend, which took **8765** and displaced the
+backend the user's running `/Applications/Vantage.app` was talking to. The app
+detected the mismatch and refused to connect — its ownership guard worked — but
+the user's session stayed broken until the stray backend was killed by hand.
+Nothing on the build/test side prevented the collision.
+
+`scripts/dev_port_guard.sh` is that missing guard. POSIX `sh`, `lsof` only, and
+it **never signals or kills a process**.
+
+| Verb | Behaviour |
+|---|---|
+| `check <port>` | exit 0 and print `port N is free`; exit 1 and print `port N is IN USE` with each holder's pid and cwd (`lsof -p N \| grep cwd`; if the cwd is unreadable, say so instead of guessing). Exit 2 on a non-numeric or out-of-range port. |
+| `claim` | print the first free port in **8798–8810**, the number alone on stdout, so `PORT=$(scripts/dev_port_guard.sh claim)` works. Exit 1 if the whole range is busy. |
+| `check 8765` | **refused even when the port is free**: it belongs to the installed app. The refusal is checked before the port is probed, so occupancy cannot make it pass. |
+
+`claim` reports a free port; it does not reserve it. The number is a hint, not
+a lock.
+
+Verified on this tree at `fa62b0f`, with the real backend listening on 8765
+(pid 1682, cwd this checkout):
+
+```
+$ scripts/dev_port_guard.sh check 8765
+REFUSED: port 8765 is the installed app's backend port.
+A test build must never take it. Run "scripts/dev_port_guard.sh claim" for a development port (8798-8810).
+Port 8765 is currently held by:
+  pid 1682 (cwd: /Users/abhijeetmiskin/AppData/Vantage)
+exit=1
+
+$ PORT=$(scripts/dev_port_guard.sh claim); echo "[$PORT]"
+[8799]
+
+$ scripts/dev_port_guard.sh check 8798
+port 8798 is IN USE:
+  pid 95137 (cwd: /Users/abhijeetmiskin/AppData/Vantage)
+exit=1
+
+$ scripts/dev_port_guard.sh check 8799
+port 8799 is free
+exit=0
+```
+
+8798 was genuinely held by an unrelated Python process, and `claim` skipped it
+rather than handing it out — the range is real. Invalid input (`check abc`,
+`check 70000`), a missing verb and an unknown verb each print usage and exit 2.
+After every check, `lsof -nP -iTCP:8765 -sTCP:LISTEN` still showed pid 1682 and
+the backend still answered HTTP (401 from the auth gate): the guard did not
+touch it.
+
+Portability was checked with `dash` (a strict POSIX shell), not only with
+macOS's `/bin/sh`, which is bash 3.2 in POSIX mode: `dash -n` parses clean and
+all three verbs behave identically under `dash`. **`shellcheck` is not
+installed on this machine, so no lint was claimed** — `dash -n` is a syntax
+check, not a lint.
+
+Limitation, stated rather than papered over: `lsof` run as an ordinary user may
+not see a process owned by another user, so a busy port can read as free. Run
+the guard as the user who owns the build.
+
+Not yet wired in: nothing calls it. The next step is the build/test entry points
+(`build_app.py`, the playwright-driven tests) invoking `claim` instead of
+assuming 8765.
