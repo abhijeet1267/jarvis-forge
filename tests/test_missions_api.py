@@ -577,3 +577,90 @@ def test_an_ambiguous_desktop_instruction_creates_no_mission():
     assert body["mission"] is None
     assert body["steps"] == []
     assert body["clarification"]
+
+
+# -- an approval must be the one that was issued, for the step it was issued to --
+#
+# The permission gate is only worth its noise if a wrong approval is refused.
+# The runner matches a caller-supplied approval against the confirmation id
+# recorded on the parked step; these drive that match from the wire, because a
+# client is exactly what was supplying approvals silently before.
+
+def _parked_with_confirmation(client):
+    """Park a two-step mission and return (mission_id, confirmation_id)."""
+    mission_id = _parked_mission(client)
+    run = client.post(f"/missions/{mission_id}/run", headers=HEADERS, json={})
+    assert run.status_code == 200, run.text
+    body = run.json()
+    assert body["state"] == "awaiting_approval", body["state"]
+    for step in body["steps"]:
+        detail = step.get("detail") or ""
+        if "confirmation " in detail:
+            return mission_id, detail.split("confirmation ", 1)[1].split()[0].rstrip(")").strip()
+    raise AssertionError(f"no confirmation id in any step detail: {body['steps']}")
+
+
+def test_a_made_up_confirmation_does_not_authorize_a_parked_step():
+    """A client that invents an id must not get to run a gated step."""
+    client = _client()
+    mission_id = _parked_mission(client)
+    client.post(f"/missions/{mission_id}/run", headers=HEADERS, json={})
+
+    ran = client.post(f"/missions/{mission_id}/run", headers=HEADERS,
+                      json={"approval": {"confirmation_id": "deadbeef",
+                                         "lease_id": ""}})
+    assert ran.status_code == 200, ran.text
+    body = ran.json()
+    assert body["state"] == "awaiting_approval", \
+        f"a fabricated confirmation authorized the step: {body['state']}"
+    assert body["steps"][0]["status"] == "pending"
+
+
+def test_a_confirmation_for_a_different_mission_does_not_authorize_this_one():
+    """One approval buys one step of one mission. Not a family of them."""
+    client = _client()
+    other_id, foreign = _parked_with_confirmation(client)
+    mission_id = _parked_mission(client)
+    client.post(f"/missions/{mission_id}/run", headers=HEADERS, json={})
+
+    ran = client.post(f"/missions/{mission_id}/run", headers=HEADERS,
+                      json={"approval": {"confirmation_id": foreign,
+                                         "lease_id": ""}})
+    assert ran.status_code == 200, ran.text
+    body = ran.json()
+    assert body["state"] == "awaiting_approval", \
+        f"another mission's approval authorized step S1: {body['state']}"
+
+
+def test_an_empty_confirmation_is_not_an_approval():
+    """Absence of a person is not consent -- the shape that mattered most."""
+    client = _client()
+    mission_id = _parked_mission(client)
+    client.post(f"/missions/{mission_id}/run", headers=HEADERS, json={})
+
+    for supplied in ({"confirmation_id": "", "lease_id": ""},
+                     {"confirmation_id": "   ", "lease_id": ""},
+                     {"lease_id": ""}):
+        ran = client.post(f"/missions/{mission_id}/run", headers=HEADERS,
+                          json={"approval": supplied})
+        assert ran.status_code == 200, ran.text
+        assert ran.json()["state"] == "awaiting_approval", \
+            f"{supplied!r} was treated as an approval"
+
+
+def test_a_parked_mission_does_not_run_its_step_without_an_approval():
+    """The gate's whole point: parking means nothing happened."""
+    import os
+    client = _client()
+    target = "/tmp/vantage_unapproved_probe.txt"
+    if os.path.exists(target):
+        os.unlink(target)
+    mission = client.post("/missions", headers=HEADERS, json={
+        "request": "one protected write",
+        "steps": [{"title": "write", "tool": "write_file",
+                   "params": {"path": target, "content": "should not exist"}}],
+    }).json()
+    run = client.post(f"/missions/{mission['mission_id']}/run", headers=HEADERS, json={})
+    assert run.json()["state"] == "awaiting_approval"
+    assert not os.path.exists(target), \
+        "a parked step wrote its file with no approval supplied"
