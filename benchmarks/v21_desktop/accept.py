@@ -62,24 +62,42 @@ def record(name: str, ok: bool, detail: str) -> None:
     print(f"  {'PASS' if ok else 'FAIL':5s} {name:22s} {detail}")
 
 
-def activate() -> None:
-    subprocess.run(["osascript", "-e",
-                    'tell application "System Events" to set frontmost of '
-                    '(first process whose name contains "vantage-probe") to true'],
-                   capture_output=True)
-    time.sleep(0.7)
+def frontmost() -> str:
+    return run("windows").get("frontmost_application", "")
+
+
+def ensure_focus(tries: int = 6) -> bool:
+    """Bring the fixture forward and confirm it, before every input step.
+
+    A single activation at the start is not enough: the desktop is in use while
+    this runs, and measured, focus moved to Safari between steps -- every action
+    then went to Safari and the fixture never saw an event. Activation is
+    idempotent and harmless to retry; sending input blindly is not.
+    """
+    for _ in range(tries):
+        if "vantage-probe" in frontmost().lower():
+            return True
+        subprocess.run(["osascript", "-e",
+                        'tell application "System Events" to set frontmost of '
+                        '(first process whose name contains "vantage-probe") to true'],
+                       capture_output=True)
+        time.sleep(0.4)
+    return "vantage-probe" in frontmost().lower()
 
 
 if not STATE.exists():
     print("the fixture is not running; start tools/input_probe/vantage-probe first")
     sys.exit(2)
 
-activate()
+if not ensure_focus():
+    print("the fixture will not come to the front; not sending input to another app")
+    sys.exit(2)
 baseline = state()
 print(f"\nfixture baseline: clicks={baseline.get('clicks')} "
       f"doubles={baseline.get('double_clicks')} text={baseline.get('text')!r}\n")
 
 # -- T2: one left click -------------------------------------------------------
+ensure_focus()
 p = target("click")
 before = state()["clicks"]
 run("click", f"x={p['x']}", f"y={p['y']}")
@@ -89,6 +107,7 @@ record("T2 left click", after == before + 1,
        f"counter {before} -> {after} at ({p['x']:.0f},{p['y']:.0f})")
 
 # -- T3: a real double-click --------------------------------------------------
+ensure_focus()
 p = target("double")
 before = state()["double_clicks"]
 run("click", f"x={p['x']}", f"y={p['y']}", "count=2")
@@ -97,6 +116,7 @@ after = state()["double_clicks"]
 record("T3 double click", after > before, f"doubles {before} -> {after}")
 
 # -- T4: right click opens the context menu -----------------------------------
+ensure_focus()
 p = target("context_menu")
 before = state()["context_menu_openings"]
 run("click", f"x={p['x']}", f"y={p['y']}", "button=right")
@@ -107,6 +127,7 @@ run("key", "key=escape")
 time.sleep(0.3)
 
 # -- T5: typing reaches the field ---------------------------------------------
+ensure_focus()
 p = target("field")
 run("click", f"x={p['x']}", f"y={p['y']}")
 time.sleep(0.4)
@@ -117,6 +138,7 @@ after = state()["text"]
 record("T5 typing", after == note, f"field reads {after!r}")
 
 # -- T6: cmd+a selects the whole field ----------------------------------------
+ensure_focus()
 p = target("shortcut_field")
 run("click", f"x={p['x']}", f"y={p['y']}")
 time.sleep(0.4)
@@ -128,6 +150,7 @@ record("T6 shortcut", bool(length) and sel == length,
        f"selection {sel} of {length} characters")
 
 # -- T7: scroll ---------------------------------------------------------------
+ensure_focus()
 p = target("scroller")
 before = state()["scroll_offset"]
 run("scroll", f"x={p['x']}", f"y={p['y']}", "lines=-5")
@@ -144,6 +167,7 @@ else:
 record("T7 scroll", after != before, note)
 
 # -- T8: drag an item onto the drop target ------------------------------------
+ensure_focus()
 src, dst = target("drag_source"), target("drop_target")
 before = state()["drop_count"]
 run("drag", f"from_x={src['x']}", f"from_y={src['y']}",
