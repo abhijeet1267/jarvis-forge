@@ -76,6 +76,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // calls this twice cannot double-register anything.
         AnywhereController.shared.start()
         installMenuBarItem()
+        installTerminationSignals()
+    }
+
+    /// Tear down on SIGTERM and SIGINT as well as on a normal Quit.
+    ///
+    /// `applicationWillTerminate` only runs for AppKit's own quit path. Measured:
+    /// `kill -TERM` left the app running *and* its backend orphaned on the port,
+    /// because nothing caught the signal. A service that spawns a child has to
+    /// stop it on every exit route, not just the polite one.
+    ///
+    /// The handler runs the same teardown, then exits — doing it on the signal
+    /// itself rather than dispatching to the main queue, because a second signal
+    /// while waiting would kill the process with the child still alive.
+    private func installTerminationSignals() {
+        for number in [SIGTERM, SIGINT] {
+            signal(number, SIG_IGN)          // stop the default "die now" behaviour
+            let source = DispatchSource.makeSignalSource(signal: number, queue: .main)
+            source.setEventHandler {
+                BackendManager.shared.disconnect()
+                AnywhereController.shared.stop()
+                exit(0)
+            }
+            source.resume()
+            terminationSources.append(source)   // keep alive: a released source stops firing
+        }
     }
 
     /// A lightweight menu bar entry: the palette is reachable even if the
@@ -130,6 +155,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func quit() { NSApp.terminate(nil) }
+
+    /// Held so the signal sources stay alive for the process's lifetime.
+    private var terminationSources: [DispatchSourceSignal] = []
 
     func applicationWillTerminate(_ notification: Notification) {
         // Release the Carbon hotkey and its handler before the process goes away,
