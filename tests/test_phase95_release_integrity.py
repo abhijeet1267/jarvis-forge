@@ -41,13 +41,27 @@ class TestBundleStructure:
         assert macos.exists(), "MacOS/ directory missing from bundle"
     
     def test_executable_exists(self, vantage_bundle):
-        """Bundle has executable launcher."""
+        """Bundle has an executable launcher that macOS can attribute to the app.
+
+        This used to require a `#!/bin/sh` script. That was wrong, and measurably
+        so: macOS cannot attach a TCC identity to a shell script, so it attributed
+        the native executor's Accessibility request to the Homebrew python the
+        script exec'd. A grant to Vantage.app therefore never applied, and the
+        installed app could not post input while the same binary launched from a
+        terminal could.
+
+        The launcher is now a compiled Mach-O inside the signed bundle. What this
+        test guards is unchanged -- the launcher exists, is executable, and is a
+        real binary rather than a placeholder -- and the Mach-O check is what makes
+        the TCC fix stick instead of silently regressing to a script.
+        """
         launcher = vantage_bundle / "Contents" / "MacOS" / "JarvisForge"
         assert launcher.exists(), "Executable JarvisForge not found"
         assert launcher.stat().st_mode & 0o111, "Launcher must be executable"
-        # Verify it's a shell script (launcher shim)
-        content = launcher.read_text()
-        assert content.startswith("#!/bin/sh"), "Launcher should be shell script"
+        magic = launcher.read_bytes()[:4]
+        assert magic == b"\xcf\xfa\xed\xfe", (
+            "Launcher must be a Mach-O binary, not a script: a shell script has no "
+            f"code identity for macOS to grant (got {magic!r})")
     
     def test_resources_exists(self, vantage_bundle):
         """Bundle has Resources directory with app files."""
