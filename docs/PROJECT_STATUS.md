@@ -4593,3 +4593,80 @@ SIGTERM and SIGINT now run the same teardown and exit.
 **The interpreter is not bundled.** `python_path.txt` names the build machine's
 `.venv`. The packages travel with the app; the Python runtime does not. A machine
 without that interpreter would still fail, and this is the remaining V22 gap.
+
+---
+
+## Update — 2026-11-17 (V23.2: the approval the client gave itself, and a guard two tools dropped)
+
+**HEAD at start:** `bb9fc3a`. Commits this round: `7138232`, `cbc3d90`.
+
+### The finding that mattered
+
+The permission gate was correct. The client defeated it.
+
+Measured against the live backend:
+
+```
+POST /missions/desktop {"request":"click at 400 300"}
+POST /missions/{id}/run {}
+-> state=awaiting_approval
+   S1 pending | requires approval before it may run
+               (level 3 (destructive) action requires confirmation);
+               a mission does not supply that approval
+```
+
+`ConversationService.runDesktopMission` reacted to `awaiting_approval` by
+scraping the confirmation id out of the step detail and posting it straight
+back, in a loop of up to eight iterations. The backend validates that the id
+matches the one it minted — so it accepted. But an id the client fetched in the
+same breath is not a person approving a destructive action. Every click,
+keystroke and scroll in a desktop mission ran unseen. The doc comment there
+claimed these tools were "LOW/EXTERNAL risk"; the gate reports level 3.
+
+Fixed (`cbc3d90`): the mission runs once; if it parks, the plan is held in
+`pendingDesktopApproval` and the turn ends. `approvePendingDesktop()` and
+`denyPendingDesktop()` are the only ways forward, and the single place a
+confirmation id is supplied reads it from that state. A plan that parks again
+re-parks for a fresh answer instead of chaining.
+
+### A guard the tools dropped on the floor
+
+The executor has carried `--expect-window-id` / `requireFreshTarget` since the
+replay defect. It reached exactly one tool.
+
+Measured, same binary, same command, before and after:
+
+| binary | `scroll x=400 y=300 --expect-window-id=999999` |
+|---|---|
+| live (granted, old) | `status=performed_unverified` — **posted anyway** |
+| staging (new) | `status=target_not_found` — "nothing was posted" |
+
+`opScroll` parsed the flag into `TargetExpectation` and never passed it to the
+operation. `desktop_drag` and `desktop_scroll` swallowed it through `**kwargs`.
+`desktop_press_key` swallowed `expect_app` the same way, so a recorded `cmd+s`
+replayed into the wrong application pressed anyway. All three now forward their
+guard; the frontmost-app check in `opType` is `requireExpectedApp`, shared with
+`opKey`.
+
+### Verified commands
+
+| command | result |
+|---|---|
+| `pytest tests/test_desktop_native.py tests/test_desktop_coordinates.py -q` | **65 passed** |
+| `pytest tests/test_desktop_native.py -q` (after key guard) | **37 passed** |
+| `swift build --product Vantage` | exit 0, "Build of product 'Vantage' complete!" |
+| `./native/desktop_executor/build.sh` | built, CDHash `8a16a9e0`, **not promoted** |
+| `vantage-desktop windows` | `verified`, 23 windows with real ids/pids/bounds |
+
+**The staging binary is deliberately not promoted.** Swapping it in changes the
+CDHash and invalidates the Accessibility + Post-Event grants the live binary
+holds (`accessibility=True post_events=True`). Promotion is a user action.
+
+### Not verified
+
+- The pending-approval UI end to end. `ConversationService` exposes the state
+  and the two methods; the view wiring is in progress.
+- Recorded-workflow window identity (worker in flight).
+- Approval adversarial tests (worker in flight).
+- Physical input from the Finder-launched app — still gated on the user granting
+  Accessibility to `macos/Vantage/Vantage.app` under its own identity.
