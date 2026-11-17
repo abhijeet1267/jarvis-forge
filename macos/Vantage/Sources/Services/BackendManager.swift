@@ -574,6 +574,15 @@ final class BackendManager: ObservableObject {
         // second `uv run uvicorn` over it would either fail on the port or
         // orphan the first process, which would keep holding :8765 and make
         // the next health check report a dead UI against a live server.
+        // A Process whose child has exited is a stale handle, not a running
+        // backend. Measured: `kill -9` on the backend left this non-nil, so every
+        // later start returned here and nothing was ever spawned again -- the UI
+        // sat at "Checking…" and the only recovery was an undocumented
+        // Disconnect-then-Connect. Clear it when the child is gone.
+        if let existing = process, !existing.isRunning {
+            trace("BACKEND_PROCESS_EXITED", "pid=\(existing.processIdentifier) cleared")
+            process = nil
+        }
         guard process == nil else {
             return
         }
@@ -623,10 +632,18 @@ final class BackendManager: ObservableObject {
         }
         proc.environment = env
 
-        // Pipe stderr for diagnostics
+        // Drain the child's output. A Pipe that nobody reads fills its buffer and
+        // the reason for a refusal -- "port already in use", an import error --
+        // is lost, which is how a busy port surfaced as "did not respond within
+        // 15s". The last lines are kept for the error message.
         let pipe = Pipe()
         proc.standardError = pipe
         proc.standardOutput = pipe
+        let captured = OutputCapture()   // read on the pipe queue; it locks
+        pipe.fileHandleForReading.readabilityHandler = { handle in
+            let chunk = handle.availableData
+            if !chunk.isEmpty { captured.append(chunk) }
+        }
 
         do {
             try proc.run()
@@ -637,6 +654,23 @@ final class BackendManager: ObservableObject {
             return
         }
         process = proc
+        proc.terminationHandler = { [weak self] finished in
+            let tail = captured.tail()
+            Task { @MainActor in
+                guard let self else { return }
+                // Only clear if this is still the process we know about: a restart
+                // may already have replaced it.
+                if self.process === finished {
+                    self.process = nil
+                    self.trace("BACKEND_PROCESS_EXITED",
+                               "pid=\(finished.processIdentifier) status=\(finished.terminationStatus)")
+                    if finished.terminationStatus != 0 && !tail.isEmpty {
+                        self.state = .error("The backend exited (\(finished.terminationStatus)): "
+                                            + tail.suffix(300))
+                    }
+                }
+            }
+        }
 
         // The companion gateway is owned by the backend itself — see
         // startCompanionGateway for why the app does not spawn it.
