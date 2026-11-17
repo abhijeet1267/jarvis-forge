@@ -541,6 +541,34 @@ final class BackendManager: ObservableObject {
         return fa.path == fb.path
     }
 
+    /// One line per lifecycle step, kept in the process and written beside the
+    /// profile's log.
+    ///
+    /// Measured need: when `backendInterpreter` fell back to `/usr/bin/python3`
+    /// the backend died before binding a port, and all the app showed was an
+    /// empty Home screen. Nothing recorded which of the nine stages had run, so
+    /// the failure had to be found by reading the source. A start that fails
+    /// before the window renders leaves no other trace.
+    private(set) var startupTrace: [String] = []
+
+    func trace(_ event: String, _ detail: String = "") {
+        let stamp = ISO8601DateFormatter().string(from: Date())
+        let line = detail.isEmpty ? "\(stamp) \(event)" : "\(stamp) \(event) — \(detail)"
+        startupTrace.append(line)
+        if startupTrace.count > 200 { startupTrace.removeFirst(startupTrace.count - 200) }
+        // Best effort: a trace that cannot be written must not stop a start.
+        let home = ProcessInfo.processInfo.environment["JARVIS_HOME"]
+            ?? (NSHomeDirectory() + "/.jarvis-forge")
+        let path = home + "/backend-startup.log"
+        if let handle = FileHandle(forWritingAtPath: path) {
+            handle.seekToEndOfFile()
+            handle.write((line + "\n").data(using: .utf8) ?? Data())
+            try? handle.close()
+        } else {
+            try? (line + "\n").write(toFile: path, atomically: true, encoding: .utf8)
+        }
+    }
+
     private func startBackend() async {
         // Idempotent: a start already in flight owns the process. Spawning a
         // second `uv run uvicorn` over it would either fail on the port or
@@ -553,6 +581,7 @@ final class BackendManager: ObservableObject {
 
         // Find the jarvis-forge project root
         let projectDir = BackendManager.findProjectDir()
+        trace("BACKEND_START_REQUESTED", "projectDir=\(projectDir)")
 
         // Spawn the checkout's own interpreter through the canonical launcher,
         // not `env uv run uvicorn`.
@@ -567,6 +596,7 @@ final class BackendManager: ObservableObject {
         // interpreter path is the same one `backend_lifecycle.py start` uses, so
         // a start from the UI and a start from the CLI produce the same process.
         let interpreter = Self.backendInterpreter(in: projectDir)
+        trace("PYTHON_RUNTIME_RESOLVED", interpreter)
         let proc = Process()
         proc.executableURL = URL(fileURLWithPath: interpreter)
         proc.arguments = [
@@ -600,7 +630,9 @@ final class BackendManager: ObservableObject {
 
         do {
             try proc.run()
+            trace("BACKEND_PROCESS_STARTED", "pid=\(proc.processIdentifier) port=\(port)")
         } catch {
+            trace("BACKEND_LAUNCH_FAILED", error.localizedDescription)
             state = .error("Failed to start backend: \(error.localizedDescription)")
             return
         }
