@@ -522,3 +522,229 @@ def test_the_sensitive_value_never_appears_in_the_skip_reason(recorder):
     step = recorder.capture("desktop_type_text", {"text": "password=hunter2"},
                             label="type")
     assert "hunter2" not in (step.skip_reason or "")
+
+
+# -- a recorded point remembers which window it was aimed at ------------------
+#
+# A recording stores absolute screen coordinates, and nothing re-resolves them.
+# Measured with a negative control: a recorded 3-step workflow replayed after its
+# window moved clicked the old coordinate, the counter did not change, and every
+# step still reported `done`. The executor already refuses a stale target when it
+# is given `expect_window_id`; the recorder never captured one, so the guard could
+# never fire. These pin the capture, the round trip and the hand-over.
+
+@pytest.fixture()
+def window(monkeypatch):
+    """A deterministic window identity, so no test reads the real window list."""
+    from jarvis.core import recorder as module
+
+    def _set(value):
+        monkeypatch.setattr(module, "target_window_id", lambda: value)
+
+    return _set
+
+
+def test_a_recorded_click_stores_the_window_it_was_aimed_at(recorder, window):
+    window(4242)
+    recorder.start()
+    step = recorder.capture("desktop_click", {"x": 120, "y": 240}, label="press")
+
+    assert step.window_id == 4242
+    assert "expect_window_id" not in step.params, (
+        "the window id is not a value the person supplied and must not be "
+        "stored as a recorded parameter")
+
+
+def test_a_caller_supplied_window_id_is_not_resolved_again(recorder, window):
+    """A caller that already resolved the target passes it in; a second read
+    could disagree with the first and record a window the person never aimed at."""
+    def _refuse():  # pragma: no cover - failing here is the assertion
+        raise AssertionError("the recorder resolved a window it was given")
+
+    window(_refuse)
+    recorder.start()
+    step = recorder.capture("desktop_click", {"x": 1, "y": 2}, window_id=77)
+
+    assert step.window_id == 77
+
+
+def test_an_unreadable_window_list_records_the_step_without_a_guard(recorder, window):
+    """Capture must survive a window list it cannot read.
+
+    A recorder that refused to record because it could not name the window would
+    lose the whole demonstration. Recording without the guard is the honest
+    record of what the person did; refusing is not.
+    """
+    window(None)
+    recorder.start()
+    step = recorder.capture("desktop_click", {"x": 5, "y": 6}, label="press")
+    stopped = recorder.stop()
+
+    assert step.skipped is False
+    assert step.window_id is None
+    assert stopped.steps[0].params == {"x": 5, "y": 6}
+    assert "expect_window_id" not in recorder.derive()["steps"][0]["params"]
+
+
+def test_a_window_title_never_reaches_the_recording(recorder, window):
+    """The id is opaque; a title is whatever the person has open.
+
+    A window title can carry a document name, a subject line or a credential.
+    Only the integer id may be stored.
+    """
+    window(9001)
+    recorder.start()
+    recorder.capture("desktop_scroll", {"x": 10, "y": 20}, label="scroll")
+    dumped = str(recorder.stop().to_dict())
+
+    assert "9001" in dumped
+    assert "title" not in dumped
+
+
+def test_a_window_id_round_trips_through_to_dict_and_load():
+    """A stored recording loads with the identity it was captured with."""
+    from jarvis.core.recorder import Recording
+
+    stored = {
+        "recording_id": "REC-1", "name": "demo",
+        "started_at": 100.0, "stopped_at": 200.0, "open": False,
+        "steps": [{"index": 0, "kind": "desktop_click",
+                   "params": {"x": 1, "y": 2}, "label": "press", "at": 150.0,
+                   "window_id": 4242, "skipped": False, "skip_reason": ""}],
+    }
+    loaded = Recording.from_dict(stored)
+
+    assert loaded.steps[0].window_id == 4242
+    assert loaded.to_dict()["steps"][0]["window_id"] == 4242
+    assert loaded.steps[0].to_dict() == stored["steps"][0]
+
+
+def test_an_old_recording_without_a_window_id_still_loads():
+    """A recording written before window ids existed is still runnable.
+
+    It must load as one that replays unguarded, not be refused: the whole
+    demonstration is otherwise thrown away over a field it could not have had.
+    """
+    from jarvis.core.recorder import Recording
+
+    loaded = Recording.from_dict({
+        "recording_id": "REC-old",
+        "steps": [{"index": 0, "kind": "desktop_click",
+                   "params": {"x": 3, "y": 4}, "label": "press"}],
+        "open": False,
+    })
+
+    assert loaded.steps[0].window_id is None
+    assert loaded.steps[0].params == {"x": 3, "y": 4}
+
+
+def test_derive_hands_the_window_id_to_the_tool_as_its_expectation(recorder, window):
+    window(4242)
+    recorder.start()
+    recorder.capture("desktop_click", {"x": 120, "y": 240}, label="press")
+    draft = recorder.derive(recorder.stop())
+
+    # The recorder's params are untouched; the guard travels as the executor's
+    # own parameter name, which is what `desktop_click` forwards.
+    assert draft["steps"][0]["params"] == {
+        "x": 120, "y": 240, "expect_window_id": 4242}
+
+
+def test_derive_omits_the_expectation_when_no_window_was_recorded(recorder, window):
+    window(None)
+    recorder.start()
+    recorder.capture("desktop_scroll", {"x": 10, "y": 20}, label="scroll")
+    draft = recorder.derive(recorder.stop())
+
+    assert draft["steps"][0]["params"] == {"x": 10, "y": 20}
+
+
+def test_the_expectation_only_goes_to_the_tools_that_accept_it(recorder, window):
+    """`expect_window_id` on a tool that does not declare it is refused by the
+    permission engine, which is a step that cannot run at all -- worse than one
+    that runs unguarded."""
+    from jarvis.core.recorder import WINDOW_GUARDED_KINDS
+
+    window(4242)
+    recorder.start()
+    for kind, params in (("desktop_click", {"x": 1, "y": 2}),
+                         ("desktop_drag", {"from_x": 1, "from_y": 2,
+                                           "to_x": 3, "to_y": 4}),
+                         ("desktop_scroll", {"x": 1, "y": 2}),
+                         ("desktop_right_click", {"x": 1, "y": 2}),
+                         ("desktop_move_pointer", {"x": 1, "y": 2}),
+                         ("desktop_double_click", {"x": 1, "y": 2})):
+        recorder.capture(kind, params)
+    steps = recorder.derive(recorder.stop())["steps"]
+
+    for step in steps:
+        guarded = "expect_window_id" in step["params"]
+        assert guarded == (step["tool"] in WINDOW_GUARDED_KINDS), (
+            f"{step['tool']} received expect_window_id={guarded}, which its tool "
+            "does or does not accept")
+
+
+def test_a_review_does_not_drop_the_window_guard(recorder, window):
+    """The editor sends back the fields it displays, not the guard. A review that
+    dropped it would re-arm the defect this exists to fix."""
+    window(4242)
+    recorder.start()
+    recorder.capture("desktop_click", {"x": 120, "y": 240}, label="press")
+    recorder.stop()
+
+    reviewed = recorder.derive(reviewed=[{
+        "index": 0, "title": "press", "tool": "desktop_click",
+        "params": {"x": 130, "y": 250}}])
+
+    # A review's values arrive as text (the editor holds text); what matters here
+    # is that the guard survived it.
+    assert reviewed["steps"][0]["params"] == {
+        "x": "130", "y": "250", "expect_window_id": 4242}
+
+
+def test_the_window_helper_reads_the_executor_window_list(monkeypatch):
+    """The id comes from the executor's own window list -- the same source the
+    staleness guard compares against, so capture and check cannot disagree."""
+    from jarvis.core import recorder as module
+    from jarvis.desktop import executor
+
+    calls = []
+
+    def fake_windows(application=""):
+        calls.append(application)
+        return {"status": "verified", "windows": [
+            # A menu is first in the list while a menu is open. It is layer 1 and
+            # is not what any document coordinate was aimed at.
+            {"window_id": 11, "layer": 1, "on_screen": True, "title": "File"},
+            {"window_id": 22, "layer": 0, "on_screen": True, "title": "Report"},
+            {"window_id": 33, "layer": 0, "on_screen": True, "title": "Notes"},
+        ]}
+
+    monkeypatch.setattr(executor, "windows", fake_windows)
+    assert module.target_window_id() == 22
+    assert calls == [""]
+
+
+@pytest.mark.parametrize("answer", [
+    {"status": "permission_required", "reason": "no screen recording"},
+    {"status": "failed", "reason": "no window list"},
+    {"status": "verified", "windows": []},
+    {"status": "verified", "windows": [{"window_id": "not-a-number", "layer": 0}]},
+])
+def test_the_window_helper_returns_none_rather_than_raising(monkeypatch, answer):
+    from jarvis.core import recorder as module
+    from jarvis.desktop import executor
+
+    monkeypatch.setattr(executor, "windows", lambda application="": answer)
+    assert module.target_window_id() is None
+
+
+def test_the_window_helper_survives_an_executor_that_raises(monkeypatch):
+    from jarvis.core import recorder as module
+    from jarvis.desktop import executor
+
+    def boom(application=""):
+        raise OSError("the executor is not built")
+
+    monkeypatch.setattr(executor, "windows", boom)
+    assert module.target_window_id() is None

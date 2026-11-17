@@ -68,6 +68,15 @@ SUPPORTED_KINDS = (
     "desktop_focus_window", "desktop_press_element",
 )
 
+#: The recorded kinds whose tool passes a window expectation through to the
+#: executor's staleness guard. A recording stores absolute screen points, so a
+#: replay after the target window moved aims at the old place; the executor
+#: refuses when the window it was aimed at is gone or has moved -- but only the
+#: click, drag and scroll tools accept ``expect_window_id``. The other coordinate
+#: kinds take the same points without a guard, and recording a window id for them
+#: would only be a parameter their tool rejects.
+WINDOW_GUARDED_KINDS = ("desktop_click", "desktop_drag", "desktop_scroll")
+
 #: The parameters each supported tool requires, mirroring the registered
 #: ``ToolSpec.required_parameters`` for exactly the kinds above.
 #:
@@ -124,6 +133,94 @@ def _missing_reason(missing: List[str]) -> str:
     names = ", ".join(missing)
     return (f"{names} {'was' if len(missing) == 1 else 'were'} never captured; "
             f"supply {'it' if len(missing) == 1 else 'them'} before running")
+
+
+def _window_id_of(value: Any) -> Optional[int]:
+    """A usable window id, or None.
+
+    Window ids are opaque positive integers from the window server. A value read
+    back from a stored recording is untrusted by the time it is used again, and
+    one that is not an integer must become None -- an unguarded replay -- rather
+    than reach the executor as a failed conversion, which would report a broken
+    step instead of the honest "this recording predates the guard".
+    """
+    try:
+        window_id = int(value)
+    except (TypeError, ValueError):
+        return None
+    return window_id if window_id > 0 else None
+
+
+def target_window_id() -> Optional[int]:
+    """The window a coordinate action would land in right now, or None.
+
+    Asked through the executor's own window list, which is the same source the
+    staleness guard compares against on replay: resolving the window from
+    anything else would make capture and check disagree about what "the window"
+    is. The window server orders that list front-to-back, so the first layer-0
+    window is the one under the pointer's own plane -- the one a person
+    demonstrating an action is almost always aiming at.
+
+    Returning None for every failure is deliberate. Capture must not depend on
+    screen-recording being granted, the executor being built, or the window list
+    answering: a recorder that refused to record because it could not name the
+    window would lose the demonstration entirely, and an unguarded recording is
+    still the honest record of what the person did.
+
+    Only the integer id is returned. A window *title* is free text from whatever
+    the person has open and can carry a document name, a subject line or worse;
+    it never enters a recording.
+    """
+    try:
+        from ..desktop import executor
+
+        result = executor.windows("")
+    except Exception as exc:  # a diagnostic must never fail a recording
+        log.info("window identity unavailable", extra_fields={"error": str(exc)})
+        return None
+    if str(result.get("status") or "") != "verified":
+        return None
+    windows = result.get("windows")
+    if not isinstance(windows, list):
+        return None
+    for window in windows:
+        if not isinstance(window, dict):
+            continue
+        # Layers above 0 are menus, palettes, tooltips and overlays: real windows
+        # in a different plane, never what a click at a document coordinate was
+        # aimed at. They sort first when a menu is open, which is exactly when a
+        # recording is likely to be in progress.
+        if int(window.get("layer") or 0) != 0:
+            continue
+        if window.get("on_screen") is False:
+            continue
+        try:
+            window_id = int(window.get("window_id"))
+        except (TypeError, ValueError):
+            continue
+        if window_id > 0:
+            return window_id
+    return None
+
+
+def _with_window_guard(kind: str, params: Dict[str, Any],
+                       window_id: Optional[int]) -> Dict[str, Any]:
+    """``params`` plus the executor's window expectation, when there is one.
+
+    Only the kinds whose tool forwards ``expect_window_id`` get it. Handing it
+    to any other tool would be an unexpected parameter that the permission
+    engine refuses, which is a step that will not run at all -- worse than a
+    step that runs without a guard.
+
+    A recorded point is only meaningful for the window it was demonstrated in.
+    Without this the guard has nothing to compare and a replay clicks wherever
+    the old coordinates now land: measured, a moved window took the click, the
+    counter did not change, and every step still reported done.
+    """
+    guarded = dict(params or {})
+    if window_id is not None and kind in WINDOW_GUARDED_KINDS:
+        guarded["expect_window_id"] = int(window_id)
+    return guarded
 
 
 def _acceptance_for(kind: str, params: Dict[str, Any]) -> Optional[Dict[str, Any]]:
@@ -228,6 +325,11 @@ def _apply_review(steps: List[Dict[str, Any]],
         params = dict(original.get("params") or {})
         for name, value in (supplied.get("params") or {}).items():
             params[str(name)] = "" if value is None else str(value)
+        # The original already carries the window expectation `derive` added, and
+        # a review edits values rather than aims. It is re-applied so an editor
+        # that sends back only the fields it displays cannot drop the guard.
+        params = _with_window_guard(original["tool"], params,
+                                    _window_id_of(params.get("expect_window_id")))
         entry: Dict[str, Any] = {"title": str(supplied.get("title") or original["title"]),
                                  "tool": original["tool"], "params": params}
         missing = missing_parameters(original["tool"], params)
@@ -272,13 +374,39 @@ class RecordedStep:
     #: something happened there without the value being kept.
     skipped: bool = False
     skip_reason: str = ""
+    #: The window the action was demonstrated in, when one could be resolved.
+    #: Kept beside the params rather than in them so it is not mistaken for a
+    #: value the person supplied, and `derive` decides which kinds forward it to
+    #: their tool. None is a complete recording: it just replays unguarded,
+    #: which is what every recording made before this existed does.
+    window_id: Optional[int] = None
 
     def to_dict(self) -> Dict[str, Any]:
         return {
             "index": self.index, "kind": self.kind, "params": dict(self.params),
-            "label": self.label, "at": self.at,
+            "label": self.label, "at": self.at, "window_id": self.window_id,
             "skipped": self.skipped, "skip_reason": self.skip_reason,
         }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "RecordedStep":
+        """Rebuild a step from what a recording stored.
+
+        A step written before window ids existed has no ``window_id`` key, and
+        must load as one that simply replays unguarded -- refusing the whole
+        recording would throw away a demonstration that is still perfectly
+        runnable, just without the staleness check.
+        """
+        return cls(
+            index=int(data.get("index") or 0),
+            kind=str(data.get("kind") or ""),
+            params=dict(data.get("params") or {}),
+            label=str(data.get("label") or ""),
+            at=float(data.get("at") or 0.0),
+            skipped=bool(data.get("skipped")),
+            skip_reason=str(data.get("skip_reason") or ""),
+            window_id=_window_id_of(data.get("window_id")),
+        )
 
 
 @dataclass
@@ -309,6 +437,24 @@ class Recording:
             "steps": [s.to_dict() for s in self.steps],
             "replayable": [s.to_dict() for s in self.steps if not s.skipped],
         }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "Recording":
+        """Rebuild a recording that ``to_dict`` produced.
+
+        ``id`` rather than ``recording_id``: a client may round-trip either
+        spelling, and a recording that loaded with an empty id would be one no
+        later request could name.
+        """
+        return cls(
+            recording_id=str(data.get("recording_id") or data.get("id") or ""),
+            name=str(data.get("name") or ""),
+            started_at=float(data.get("started_at") or 0.0),
+            stopped_at=float(data.get("stopped_at") or 0.0),
+            steps=[RecordedStep.from_dict(s) for s in (data.get("steps") or [])
+                   if isinstance(s, dict)],
+            open=bool(data.get("open")),
+        )
 
 
 #: Parameters whose *name* says nothing about sensitivity but whose *value* is
@@ -366,12 +512,20 @@ class Recorder:
         log.info("recording started", extra_fields={"recording_id": self._recording.recording_id})
         return self._recording
 
-    def capture(self, kind: str, params: Dict[str, Any], *, label: str = "") -> RecordedStep:
+    def capture(self, kind: str, params: Dict[str, Any], *, label: str = "",
+                window_id: Optional[int] = None) -> RecordedStep:
         """Record one semantic action.
 
         A sensitive parameter is refused: the step is kept as a `skipped`
         placeholder so a reviewer knows something happened there, but the value
         is never stored.
+
+        A coordinate-driven action also records which window it was aimed at, so
+        the executor's staleness guard can refuse a replay after that window has
+        moved. The id is resolved once per step, here, because the moment the
+        person acts is the only moment at which "the window they meant" is
+        knowable; a caller that already resolved one passes it in rather than
+        paying for a second window-list read that could disagree with the first.
         """
         recording = self._open_recording()
         if kind not in SUPPORTED_KINDS:
@@ -392,9 +546,12 @@ class Recorder:
                                    "parameter": sensitive})
             return step
 
+        if window_id is None and kind in WINDOW_GUARDED_KINDS:
+            window_id = target_window_id()
+
         step = RecordedStep(index=len(recording.steps), kind=kind,
                             params=dict(params or {}), label=label or kind,
-                            at=time.time())
+                            at=time.time(), window_id=_window_id_of(window_id))
         recording.steps.append(step)
         return step
 
@@ -487,7 +644,8 @@ class Recorder:
 
             entry: Dict[str, Any] = {"title": step.label or step.kind,
                                      "tool": step.kind,
-                                     "params": dict(step.params)}
+                                     "params": _with_window_guard(
+                                         step.kind, step.params, step.window_id)}
             acceptance = _acceptance_for(step.kind, step.params or {})
             if acceptance is not None:
                 condition_id = f"C{len(conditions) + 1}"
