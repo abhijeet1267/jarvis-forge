@@ -4446,3 +4446,10 @@ result above is through the development checkout.
 The executor inherits its permission from the responsible process, so a
 Finder-launched app gets nothing until it is granted in its own right — and that
 grant is only meaningful once the packaging work exists.
+
+### Final regression — clean at this revision
+
+**4582 passed, 31 skipped, 0 failed, exit 0** in 547 s at `0f9b490`
+(`.venv/bin/python -m pytest -q -p no:cacheprovider`). The 31 skips are the
+pre-existing prerequisite-gated tests that skip honestly rather than passing on
+a mock.
