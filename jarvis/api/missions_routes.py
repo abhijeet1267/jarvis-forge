@@ -105,6 +105,76 @@ def build_router(require_auth) -> APIRouter:
             "notes": planned.notes,
         }
 
+    @router.post("/desktop")
+    async def create_desktop_mission(body: Dict[str, Any] = Body(None)) -> Dict[str, Any]:
+        """Plan a desktop instruction and open a mission from it, in one call.
+
+        The pieces existed but nothing joined them: `/missions/plan` returns
+        steps and creates nothing, `/missions` creates a draft from steps a caller
+        supplied, and no route chained the two. Measured, that gap is why Command
+        Center could not run a desktop instruction -- and worse, a desktop sentence
+        sent to `/command` was read by the filesystem planner as `move_file`
+        (source="the cursor"), which is a rename of a file that does not exist.
+
+        This route is the join. It refuses an instruction the desktop planner does
+        not own rather than passing it on to another planner, and it creates the
+        mission in DRAFT so the caller still gets the usual plan review and
+        approval before anything acts.
+        """
+        from ..desktop.planner import looks_like_desktop, plan_desktop
+
+        body = body or {}
+        request = str(body.get("request") or "").strip()
+        if not request:
+            raise HTTPException(status_code=422, detail="a desktop instruction is required")
+        if not looks_like_desktop(request):
+            raise HTTPException(
+                status_code=422,
+                detail=(f"{request!r} is not a desktop instruction; this route only "
+                        "handles pointer, keyboard and application actions."))
+
+        context: Dict[str, Any] = {}
+        if body.get("application"):
+            context["application"] = str(body["application"])
+        if body.get("x") is not None and body.get("y") is not None:
+            context["point"] = (float(body["x"]), float(body["y"]))
+
+        planned = plan_desktop(request, context=context or None)
+        if planned.clarification or not planned.steps:
+            # A question is a result, not a failure: nothing was planned, and the
+            # clarification is what the person needs to see.
+            return {"status": "clarification", "request": request, "mission": None,
+                    "steps": [], "clarification": planned.clarification}
+
+        registry = _registry_names()
+        unknown = sorted({st.tool for st in planned.steps
+                          if registry and st.tool not in registry})
+        if unknown:
+            raise HTTPException(
+                status_code=500,
+                detail=f"the planner named tools this backend does not register: {unknown}")
+
+        steps = []
+        for index, step in enumerate(planned.steps):
+            steps.append({
+                "step_id": f"S{index + 1}",
+                "title": step.description,
+                "tool": step.tool,
+                "params": step.params,
+                "depends_on": [f"S{index}"] if index else [],
+                "idempotency_key": "",
+            })
+
+        service = _service()
+        try:
+            mission = service.create(request, conditions=[], steps=steps,
+                                     intent=_intent_json(mission_id=None,
+                                                         request=request, body=body))
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc))
+        return {"status": "planned", "request": request,
+                "mission": _dump(mission), "steps": steps, "clarification": None}
+
     @router.get("/interrupted")
     async def interrupted_missions() -> Dict[str, Any]:
         """Missions that were mid-flight when the process stopped.

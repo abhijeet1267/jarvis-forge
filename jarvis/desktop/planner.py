@@ -20,7 +20,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from ..desktop.coordinates import MAX_COORDINATE, CoordinateError, parse_point
 from ..tools.desktop_native import MAX_TEXT_CHARS
 
-__all__ = ["DesktopPlan", "PlannedStep", "plan_desktop"]
+__all__ = ["DesktopPlan", "PlannedStep", "plan_desktop", "looks_like_desktop"]
 
 Point = Tuple[float, float]
 
@@ -87,6 +87,37 @@ def plan_desktop(request: str, *, context: Optional[Dict[str, Any]] = None) -> D
     if len(clauses) <= 1:
         return _plan_one(text, ctx)
     return _plan_chain(clauses, ctx)
+
+
+#: Verbs that only make sense as a desktop action. Used to decide whether an
+#: instruction belongs here at all, so it is never handed to the filesystem
+#: planner by mistake.
+_DESKTOP_VERBS = frozenset({
+    "click", "double-click", "right-click", "move", "drag", "scroll",
+    "type", "press", "focus", "switch", "activate", "inspect",
+})
+
+
+def looks_like_desktop(request: str) -> bool:
+    """Whether ``request`` is a desktop instruction this planner should own.
+
+    This exists because of a measured misroute: "move the cursor to 400 300" was
+    handed to the file planner, which read it as `move_file` with
+    source="the cursor" and destination="400 300" -- a rename of a file that does
+    not exist, offered for approval while the pointer never moved.
+
+    The test is deliberately narrow. It asks whether the first instruction word is
+    a desktop verb, not whether any word appears, so "open my documents folder" is
+    not captured merely because it contains "move"-adjacent vocabulary.
+    """
+    text = request.strip() if isinstance(request, str) else ""
+    if not text:
+        return False
+    words = _words(text)
+    if not words:
+        return False
+    first = words[0][0].lower()
+    return first in _DESKTOP_VERBS
 
 
 def _plan_one(text: str, ctx: Dict[str, Any]) -> DesktopPlan:

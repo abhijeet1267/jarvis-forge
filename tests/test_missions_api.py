@@ -529,3 +529,51 @@ def test_every_planned_tool_is_one_the_backend_registers():
     names = set(build_default_registry().names())
     for step in response.json()["steps"]:
         assert step["tool"] in names, step["tool"]
+
+
+# -- a desktop instruction becomes a mission, in one call (V22) ----------------
+
+def test_a_desktop_instruction_opens_a_mission_with_real_steps():
+    """The gap this closes: nothing chained plan -> mission.
+
+    `/missions/plan` returned steps and created nothing; `/missions` took steps a
+    caller supplied. No route joined them, which is why Command Center could not
+    run a desktop instruction.
+    """
+    client = _client()
+    response = client.post("/missions/desktop", headers=HEADERS,
+                           json={"request": "move the cursor to 400 300"})
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["status"] == "planned"
+    assert [s["tool"] for s in body["steps"]] == ["desktop_move_pointer"]
+    assert body["steps"][0]["params"] == {"x": 400.0, "y": 300.0}
+    # A draft, not a running mission: plan review and approval still come first.
+    assert body["mission"]["state"] == "draft"
+
+
+def test_a_file_instruction_is_refused_by_the_desktop_route():
+    """It must not silently accept work another planner owns.
+
+    Measured: "move the cursor to 400 300" sent to /command was read as `move_file`
+    with source="the cursor" -- a rename of a file that does not exist. The reverse
+    mistake matters too, so this route refuses what it does not own.
+    """
+    client = _client()
+    response = client.post("/missions/desktop", headers=HEADERS,
+                           json={"request": "organize the sample project"})
+    assert response.status_code == 422
+    assert "not a desktop instruction" in response.json()["detail"]
+
+
+def test_an_ambiguous_desktop_instruction_creates_no_mission():
+    """A question is a result. Nothing was planned, so nothing is created."""
+    client = _client()
+    response = client.post("/missions/desktop", headers=HEADERS,
+                           json={"request": "click"})
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["status"] == "clarification"
+    assert body["mission"] is None
+    assert body["steps"] == []
+    assert body["clarification"]
