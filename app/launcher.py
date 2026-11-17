@@ -17,6 +17,7 @@ process is refused by TCC.
 from __future__ import annotations
 
 import json
+import logging
 import os
 import platform
 import socket
@@ -28,6 +29,12 @@ import urllib.error
 import urllib.request
 import webbrowser
 from pathlib import Path
+
+# The launcher's own log. Five call sites referenced `log` and none defined it, so
+# every quit path -- Quit, Cmd-Q, SIGTERM, a failed start, a force kill -- raised
+# NameError before reaching terminate(). Measured: the backend only died because
+# run.py's guardian notices a dead parent, not because shutdown worked.
+log = logging.getLogger("vantage.launcher")
 from typing import Optional
 
 # ---------------------------------------------------------------------------
@@ -144,12 +151,16 @@ def build_supervisor(project_dir: Path, python: str, port: int) -> "RuntimeSuper
     sys.path.insert(0, str(project_dir))
     
     try:
-        from jarvis.runtime.supervisor import RuntimeSupervisor, SUP
-        
-        # Initialize with background mode enabled
-        supervisor = RuntimeSupervisor.get_instance(background_mode=True)
-        
-        return supervisor
+        # The class only; `SUP` is not a name this module exports. Importing it
+        # raised ImportError, which the except below turned into "return None" --
+        # so the supervisor never initialised and nothing said so beyond a warning
+        # printed to a stream a bundled app does not show.
+        from jarvis.runtime.supervisor import RuntimeSupervisor
+
+        # `get_instance()` takes no arguments; passing `background_mode` raised
+        # TypeError, which the except below swallowed into "return None". Three
+        # separate faults had to be fixed before this line could run at all.
+        return RuntimeSupervisor.get_instance()
         
     except Exception as e:
         print(f"Warning: Could not initialize runtime supervisor: {e}")
