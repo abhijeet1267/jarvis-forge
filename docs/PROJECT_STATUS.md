@@ -4670,3 +4670,85 @@ holds (`accessibility=True post_events=True`). Promotion is a user action.
 - Approval adversarial tests (worker in flight).
 - Physical input from the Finder-launched app — still gated on the user granting
   Accessibility to `macos/Vantage/Vantage.app` under its own identity.
+
+---
+
+## Update — 2026-11-17 (V23.2 continued: three approval defects, all reproduced then fixed)
+
+**Commits:** `1753619`, `88205fd`, `5a2a0fe`, `df13a6b`.
+
+Adversarial tests — written by a worker, then verified independently here —
+turned up three real defects in the approval path. All three are fixed and their
+`xfail(strict=True)` markers retired, so a regression now turns the suite red
+rather than returning to "expected failure".
+
+### D2 — a refused credential was exchangeable for a working one
+
+Every `/run` calls the permission engine, which mints a fresh confirmation id,
+and the runner wrote that id over the parked step's detail **before** comparing
+it to what the caller offered. Reproduced against the running app:
+
+```
+park                    -> CONF-a
+/run with "deadbeef"    -> awaiting_approval, response now names CONF-b
+/run with CONF-b        -> partially_completed, file written
+```
+
+A smuggled id destroyed the operator's real approval *and* was answered with a
+usable replacement. An already-parked step now keeps the id it was parked with.
+
+### D1 — a refused request erased the record of a denial
+
+`mark_step` re-reads the mission and persists steps from that fresh copy, so
+mutating a step before a transition that then failed left it rewritten while the
+mission stayed put. A `/run` on a denied mission returned 404 **and** had
+already replaced "denied by the operator" with "awaiting approval", making the
+denied step approvable again. The park branch now refuses before touching
+anything and raises the transition error the state machine would have.
+
+### D3 — a steered mission could never run again
+
+`record_intent` had no callers. The intent stamped at creation is bound to
+`plan_revision` 0; steering bumps the revision; the intent's own rule then
+refused every step forever — including after a fresh approval. A steer now
+re-records the intent against the plan that will run, bound to the new revision
+and to the **union** of the old and new plans, so a steer cannot silently widen
+the mission beyond what either plan named.
+
+Verified end to end (not just by state): create → steer `x`→`y` → run parks →
+approve → `partially_completed`, and the file on disk contains `y`.
+
+### Also fixed: my own earlier window-guard fix was inert
+
+`expect_window_id` was accepted by the handlers but declared in no
+`ToolSpec.parameters`, so the permission engine **BLOCKed** every guarded step
+before it reached the executor — a recorded workflow was refused outright rather
+than protected, which is worse than having no guard. The earlier tests missed it
+because they called handlers directly instead of going through the registry. A
+registry-level test now covers it; removing a declaration again fails that test
+(verified by mutation, not by inspection).
+
+### Verified commands
+
+| command | result |
+|---|---|
+| `pytest` approval-refusals + runner + missions API + live-steering + desktop-native + recorder | **200 passed, 0 xfailed** |
+| `pytest` approval-refusals + runner + missions API | 79 passed, 0 xfailed |
+| `pytest` recorder | 56 passed |
+| `pytest` desktop-native + coordinates | 65 passed |
+
+### Test-quality change
+
+`test_a_refused_point_leaves_the_real_pointer_where_it_was` asserted the live
+cursor was unchanged across the call. That is unprovable when anything else is
+using the desktop — a person, or another agent — and it produced three spurious
+failures this session while workers were running. It now re-reads once and
+attributes a move correctly instead of assuming the world held still.
+
+### Still open
+
+- The Command Center UI that renders `pendingDesktopApproval` (worker in flight).
+- Physical input from the Finder-launched app — gated on the user granting
+  Accessibility to `macos/Vantage/Vantage.app` under its own identity.
+- The staged executor (`CDHash 8a16a9e0`) is not promoted; promotion revokes the
+  live Accessibility grant and is a user action.
