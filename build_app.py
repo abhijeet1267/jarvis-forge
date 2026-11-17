@@ -69,29 +69,31 @@ def build_info_plist() -> dict:
     }
 
 
-def build_launcher_executable() -> str:
-    """The bundle's main executable: a thin shim that starts the Python launcher."""
-    return """#!/bin/sh
-# Vantage launcher shim.
-# Locates a usable Python and hands off to the real launcher in Resources/.
-set -e
+#: The compiled launcher source, kept beside this build script so the bundle is
+#: reproducible from the checkout.
+LAUNCHER_SOURCE = Path(__file__).resolve().parent / "app" / "launcher_main.swift"
 
-RESOURCES="$(cd "$(dirname "$0")/../Resources" && pwd)"
 
-PY=""
-if [ -f "$RESOURCES/python_path.txt" ]; then
-    PY="$(cat "$RESOURCES/python_path.txt")"
-fi
-if [ ! -x "$PY" ]; then
-    PY="$(command -v python3 || true)"
-fi
-if [ -z "$PY" ]; then
-    osascript -e 'display dialog "Vantage needs Python 3.10 or newer, but no python3 was found." with title "Vantage" buttons {"OK"} with icon caution'
-    exit 1
-fi
+def build_launcher_executable(destination: Path) -> None:
+    """Compile the bundle's main executable.
 
-exec "$PY" "$RESOURCES/launcher.py"
-"""
+    It must be a Mach-O binary, not a shell script. Measured: with /bin/sh as
+    CFBundleExecutable, macOS attributed the native executor's Accessibility
+    request to the Homebrew python the script exec'd -- "python3-55554944..." --
+    so a grant to Vantage.app never applied and the standalone app could not post
+    input while the same binary launched from a terminal could.
+
+    A shell script has no code identity to grant. A compiled executable inside the
+    signed bundle does, and everything it spawns inherits that attribution.
+    """
+    if not LAUNCHER_SOURCE.exists():
+        raise RuntimeError(f"the launcher source is missing: {LAUNCHER_SOURCE}")
+    compiled = run(["swiftc", "-O", "-o", str(destination), str(LAUNCHER_SOURCE)])
+    if compiled.returncode != 0:
+        raise RuntimeError(
+            "swiftc failed building the launcher:\n"
+            f"{compiled.stdout.strip()}\n{compiled.stderr.strip()}")
+    destination.chmod(0o755)
 
 
 def run(cmd: list[str], **kwargs) -> subprocess.CompletedProcess:
@@ -102,8 +104,21 @@ def run(cmd: list[str], **kwargs) -> subprocess.CompletedProcess:
 #: the test suite, previous builds and every cache in the tree; copying it wholesale
 #: would ship those inside an application bundle and make the bundle slow to build,
 #: impossible to sign quickly, and larger than the thing it launches.
-STAGED_ITEMS = ("jarvis", "dashboard", "run.py", "requirements.txt", "pyproject.toml",
-                ".env.example")
+#: What the application runs, copied into Resources/app.
+#
+# `native/` joined this list in V22: the desktop executor lived only in the
+# checkout, so an installed app resolved it to a source-tree path that a copied
+# bundle does not have. The executor is a build artifact and is excluded by
+# STAGED_SKIP, so the built binary is copied separately by stage_native().
+#
+# `scripts/` joined it for the same class of reason: the native app invokes
+# `scripts/backend_lifecycle.py`, and without it the app could not start its own
+# backend.
+STAGED_ITEMS = ("jarvis", "dashboard", "scripts", "run.py", "requirements.txt",
+                "pyproject.toml", ".env.example")
+
+#: Paths inside Resources/app that the staged copy must never carry.
+STAGED_NATIVE = "native"
 STAGED_SKIP = {".venv", "venv", "tests", "dist", "build", ".git", "__pycache__",
                ".pytest_cache", ".ruff_cache", "node_modules"}
 
@@ -131,6 +146,36 @@ def stage_project(resources: Path) -> Path:
             shutil.copytree(source, target / item, ignore=ignore)
         else:
             shutil.copy2(source, target / item)
+    return target
+
+
+def stage_native(resources: Path) -> Path | None:
+    """Copy the built desktop executor into the bundle.
+
+    The source is a build artifact, not source: `native/desktop_executor/main.swift`
+    is staged as source so the app can rebuild it, but the compiled binary has to be
+    copied explicitly because STAGED_SKIP excludes build outputs.
+
+    The destination mirrors the checkout layout, because that is what
+    `jarvis/desktop/executor.py` searches for -- `native/desktop_executor/vantage-desktop`
+    relative to the project root. Keeping the two in step means the same resolution
+    code works from the checkout and from an installed bundle, instead of the bundle
+    silently falling back to `shutil.which`.
+
+    A missing binary is reported and skipped rather than failing the build: the app
+    still runs, and its own permission panel says the executor is not built, which is
+    the honest answer rather than a broken app.
+    """
+    source = PROJECT_DIR / "native" / "desktop_executor" / "vantage-desktop"
+    target_dir = resources / "app" / "native" / "desktop_executor"
+    if not source.is_file():
+        print("  ! the desktop executor is not built; "
+              "run native/desktop_executor/build.sh to include it")
+        return None
+    target_dir.mkdir(parents=True, exist_ok=True)
+    target = target_dir / "vantage-desktop"
+    shutil.copy2(source, target)
+    target.chmod(0o755)
     return target
 
 
@@ -163,6 +208,8 @@ def build(dest_root: Path, python: Path) -> Path:
     (resources / "python_path.txt").write_text(str(python), encoding="utf-8")
     print("  · staging the project inside the bundle")
     stage_project(resources)
+    print("  · staging the native desktop executor")
+    staged_executor = stage_native(resources)
 
     # --- Info.plist ---------------------------------------------------------
     print("  · writing Info.plist")
@@ -173,8 +220,8 @@ def build(dest_root: Path, python: Path) -> Path:
 
     # --- executable ---------------------------------------------------------
     executable = macos / "JarvisForge"
-    executable.write_text(build_launcher_executable(), encoding="utf-8")
-    executable.chmod(0o755)
+    print("  · compiling the launcher (Mach-O, so it can hold a TCC identity)")
+    build_launcher_executable(executable)
 
     # --- sign ---------------------------------------------------------------
     # Ad-hoc signing is not optional here: without a stable code identity TCC
