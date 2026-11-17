@@ -4812,3 +4812,70 @@ gate the old binary defeated and this one does not.
 - Physical input from this bundle under its own Finder-launched identity still
   needs the Accessibility grant at the app level.
 - The staged executor (`CDHash 8a16a9e0`) is still not promoted.
+
+---
+
+## Update — 2026-11-17 (V23.3: the permission model, measured at last)
+
+**HEAD:** `43a6df3`. Four workers running in parallel on disjoint files; two
+leads committed directly.
+
+### The measurement that settles V22's blocked gates
+
+One binary, two launching contexts, opposite answers:
+
+| context | accessibility | post_events |
+|---|---|---|
+| `vantage-desktop self_check` from a terminal | **true** | **true** |
+| the same binary, asked by the backend under Vantage.app | **false** | **false** |
+
+Same executable path in both. macOS grants Accessibility to a **responsible
+process**, and it attributes the request to the app that launched the binary.
+From a shell the terminal is responsible and holds the grant; under Vantage.app
+the chain resolves to `com.jarvisforge.vantage`, which holds none.
+
+Consequences, now written down in `docs/DESKTOP_PERMISSION_MODEL.md`:
+
+- Granting the executor, or `VantageDesktopDev.app`, **cannot** fix this — neither
+  is the responsible process when the app drives them.
+- `Vantage.app` is **ad-hoc signed**, so the code identity includes the binary
+  hash. **Rebuilding invalidates any grant**, which is why chasing this defect by
+  rebuilding repeatedly can look like the grant "not working".
+- The only meaningful readout is the one returned **by the app's own backend**.
+  A `self_check` in a terminal reports the terminal's capability and proves
+  nothing about the app.
+- The required action is a person's: grant Accessibility to
+  `macos/Vantage/Vantage.app`, relaunch from Finder, and verify from inside.
+
+Status of the physical gates: **PERMISSION_BLOCKED**, not broken. Everything that
+does not post input is proven without it.
+
+### Command Center journey — VERIFIED
+
+`benchmarks/v23_command_center/journey.py`, 3/3, each ending in a filesystem fact
+rather than a response body:
+
+| journey | evidence |
+|---|---|
+| deny | parks, writes nothing, ends `blocked`, step `denied by the operator`, still no file |
+| approve | nothing before the decision; then `done`; file contains exactly the approved bytes |
+| forged id | refused; the issued confirmation is unchanged; no file |
+
+The denial branch's "no file" assertion is the one that matters: it is the
+negative proof that a parked plan does not act.
+
+### Routing and clarification — VERIFIED
+
+| utterance | desktop? | steps | clarification |
+|---|---|---|---|
+| `type this up for me` | yes | 0 | yes — asks instead of typing blindly |
+| `move the cursor to 400 300` | yes | 1 | no |
+| `move report.pdf to Documents` | **no** | 0 | yes — not misrouted to the pointer |
+
+### Live app state
+
+App `42975`, backend `42977`, `/health` ok, 200 tools, backend running from
+`Vantage.app/Contents/Resources/python/bin/python3.11`. The bundled backend
+resolves the bundled executor at
+`.../Resources/native/desktop_executor/VantageDesktopDev.app/...` — the granted
+identity is preferred by design, and the bundle stays self-contained.
