@@ -4752,3 +4752,63 @@ attributes a move correctly instead of assuming the world held still.
   Accessibility to `macos/Vantage/Vantage.app` under its own identity.
 - The staged executor (`CDHash 8a16a9e0`) is not promoted; promotion revokes the
   live Accessibility grant and is a user action.
+
+---
+
+## Update — 2026-11-17 (rebuilt and relaunched: the fixes are now in the running app)
+
+The installed `macos/Vantage/Vantage.app` was a build from **18:57**, which
+predated every approval fix this round. It was replaced.
+
+```
+swift build -c release --product Vantage     -> complete (69.67s)
+./assemble_app.sh release                    -> codesign verify: ok
+```
+
+**A mistake made and corrected during this:** I ran the app *binary* with a
+`--self-check` flag expecting a diagnostic. No such flag exists; it launched a
+second GUI, whose backend took :8765 and displaced the user's running app,
+leaving an orphan at 19:33. The orphan was confirmed (same `run.py serve`, cwd
+= the checkout), health-checked, stopped with SIGTERM, and the port verified
+free before rebuilding. Nothing was deleted; the user's app was restarted from
+current source.
+
+### Bundle verified self-contained (measured, not assumed)
+
+```
+python_path.txt -> <APP>/Contents/Resources/python/bin/python3.11
+from <APP>/Contents/Resources, PYTHONPATH=<APP>/.../site-packages:
+  py 3.11.18 | fastapi 0.162.7 | uvicorn 0.54.0
+  jarvis -> <APP>/Contents/Resources/jarvis/__init__.py
+```
+
+A plain `import fastapi` fails without `PYTHONPATH` — the packages travel in
+`Resources/site-packages`, not in the interpreter's own path. That is by design
+(`BackendManager` sets it), and the first check was wrong for omitting it.
+
+### Live launch (PASS)
+
+| check | result |
+|---|---|
+| app process | 42975 `Vantage.app/Contents/MacOS/Vantage` |
+| backend process | 42977 |
+| backend interpreter | `<APP>/Contents/Resources/python/bin/python3.11` — **bundled, not the venv** |
+| `/health` | `status: ok`, 200 tools |
+| desktop click mission | `awaiting_approval` — "level 3 (destructive) action requires confirmation" |
+
+The backend running from inside the bundle rather than the developer `.venv` is
+V22's gate, observed in a real launch rather than inferred from source.
+
+### Re-verified in the rebuilt app
+
+A `desktop_click` mission parks with `awaiting_approval` and the level-3 reason;
+denying it settles the mission at `blocked` with nothing posted. That is the
+gate the old binary defeated and this one does not.
+
+### Still not verified
+
+- The approval **card** has never been rendered on screen. The code builds and
+  the state it binds to is proven, but no one has seen the layout.
+- Physical input from this bundle under its own Finder-launched identity still
+  needs the Accessibility grant at the app level.
+- The staged executor (`CDHash 8a16a9e0`) is still not promoted.
