@@ -595,3 +595,23 @@ def test_the_registry_accepts_the_window_expectation(tool, params):
     assert not unexpected, (
         f"{tool} does not declare {sorted(unexpected)}; the permission engine "
         f"would BLOCK the step before it reached the executor")
+
+
+@pytest.mark.parametrize("tool,params", [
+    ("desktop_press_key", {"key": "s", "expect_app": "TextEdit"}),
+    ("desktop_shortcut", {"key": "s", "modifiers": ["cmd"], "expect_app": "TextEdit"}),
+])
+def test_the_registry_accepts_the_expected_application(tool, params):
+    """Same trap as the window guard: a spec that omits it BLOCKs the step.
+
+    `desktop_shortcut` also routed through `press_key` without the expectation,
+    so a recorded `cmd+s` lost its app guard on the way to the executor.
+    """
+    from jarvis.core.orchestrator import JarvisCore
+
+    spec = JarvisCore().tools.get(tool)
+    assert spec is not None, f"{tool} is not registered"
+    unexpected = set(params) - set(spec.parameters)
+    assert not unexpected, (
+        f"{tool} does not declare {sorted(unexpected)}; the permission engine "
+        f"would BLOCK the step before it reached the executor")

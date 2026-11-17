@@ -296,7 +296,7 @@ async def desktop_press_key(ctx: ToolContext, key: str = "",
 
 
 async def desktop_shortcut(ctx: ToolContext, modifiers: Optional[list] = None,
-                           key: str = "", **_: Any) -> Any:
+                           key: str = "", expect_app: str = "", **_: Any) -> Any:
     """Press a keyboard shortcut. Refuses a shortcut with no modifier.
 
     A "shortcut" with no modifier is just a keystroke, and sending one through
@@ -313,7 +313,7 @@ async def desktop_shortcut(ctx: ToolContext, modifiers: Optional[list] = None,
                     device=ctx.device_id)
     if not key:
         return fail("desktop_shortcut", "No key was named.", device=ctx.device_id)
-    result = executor.press_key(key, modifiers)
+    result = executor.press_key(key, modifiers, expect_app=expect_app)
     label = "+".join([*modifiers, key])
     return _finish("desktop_shortcut", result, ctx, f"Pressed {label}")
 
@@ -648,7 +648,7 @@ SPECS = [
             risk=RiskLevel.DESTRUCTIVE,
             requires_confirmation=True,
             reversible=False,
-            parameters={"key": "string", "modifiers": "list"},
+            parameters={"key": "string", "modifiers": "list", "expect_app": "string"},
             required_parameters=("key",),
             tags=["system", "desktop", "keyboard", "actuation"],
         ),
@@ -664,7 +664,7 @@ SPECS = [
             risk=RiskLevel.DESTRUCTIVE,
             requires_confirmation=True,
             reversible=False,
-            parameters={"key": "string", "modifiers": "list"},
+            parameters={"key": "string", "modifiers": "list", "expect_app": "string"},
             required_parameters=("key", "modifiers"),
             tags=["system", "desktop", "keyboard", "actuation"],
         ),
