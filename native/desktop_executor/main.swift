@@ -1169,20 +1169,39 @@ func opType(text: String, expectApp: String) -> Never {
             Emit.out(.cancelled, "typing was cancelled after \(typed) character(s)",
                      ["typed": typed])
         }
-        let units = Array(String(scalar).utf16)
-        guard let down = CGEvent(keyboardEventSource: nil, virtualKey: 0, keyDown: true),
-              let up = CGEvent(keyboardEventSource: nil, virtualKey: 0, keyDown: false) else {
+        // A real keycode where one exists; the unicode payload stays attached so
+        // characters with no physical key (accents, emoji, CJK) still arrive.
+        // TextEdit ignores the payload-only form entirely -- measured: focused
+        // TextArea, event delivered, value unchanged -- and accepts the keycode.
+        let lookup = KeyTable.lookup(scalar)
+        let virtualKey = lookup?.0 ?? 0
+        let needsShift = lookup?.1 ?? false
+        guard let down = CGEvent(keyboardEventSource: nil, virtualKey: virtualKey, keyDown: true),
+              let up = CGEvent(keyboardEventSource: nil, virtualKey: virtualKey, keyDown: false) else {
             Emit.out(.failed, "the keystroke event could not be constructed")
         }
-        down.keyboardSetUnicodeString(stringLength: units.count, unicodeString: units)
-        up.keyboardSetUnicodeString(stringLength: units.count, unicodeString: units)
+        // Set the flags on EVERY event, not only the shifted ones. A CGEvent
+        // starts from the live modifier state, so leaving `.flags` untouched on a
+        // lowercase character inherited whatever Shift state the previous
+        // shifted character left behind -- measured: "Hello from Vantage" arrived
+        // as "HELLO FROM VANTAGE" because every letter after the initial capital
+        // picked up Shift.
+        down.flags = needsShift ? .maskShift : []
+        up.flags = needsShift ? .maskShift : []
+        if lookup == nil {
+            let units = Array(String(scalar).utf16)
+            down.keyboardSetUnicodeString(stringLength: units.count, unicodeString: units)
+            up.keyboardSetUnicodeString(stringLength: units.count, unicodeString: units)
+        }
         down.post(tap: .cghidEventTap)
-        usleep(2_000)
+        usleep(8_000)
         up.post(tap: .cghidEventTap)
         typed += 1
-        // Fast enough to feel instant, slow enough that an app which processes
-        // events on its own runloop does not drop any.
-        usleep(6_000)
+        // Measured: 2ms/6ms produced interleaved characters ("L iprobessu" for
+        // "Hello from Vantage") because AppKit's input system had not finished
+        // processing one keystroke before the next arrived. 12ms between
+        // characters is still faster than a fast typist and arrives in order.
+        usleep(12_000)
     }
     let front = NSWorkspace.shared.frontmostApplication?.localizedName ?? ""
     Emit.out(.performed_unverified,
@@ -1192,11 +1211,14 @@ func opType(text: String, expectApp: String) -> Never {
              ["length": text.count, "characters_sent": typed, "typed_into": front])
 }
 
-func opKey(key: String, modifiers: [String]) -> Never {
-    requirePostEvents("pressing a key")
-    // A small, honest table. The keycodes are the hardware ones; a layout that
-    // remaps them is a real difference this tool does not paper over.
-    let keycodes: [String: CGKeyCode] = [
+/// Hardware keycodes, shared by `key` and `type`.
+///
+/// `type` needs these because a bulk unicode payload does not reach every text
+/// view: TextEdit is focused, receives the event, and ignores it. Sending the
+/// same character with its real keycode is what a keyboard does, and what the
+/// view is written to handle.
+enum KeyTable {
+    static let codes: [String: CGKeyCode] = [
         "return": 0x24, "enter": 0x24, "tab": 0x30, "space": 0x31,
         "delete": 0x33, "backspace": 0x33, "escape": 0x35, "esc": 0x35,
         "left": 0x7B, "right": 0x7C, "down": 0x7D, "up": 0x7E,
@@ -1208,10 +1230,31 @@ func opKey(key: String, modifiers: [String]) -> Never {
         "y": 0x10, "z": 0x06,
         "0": 0x1D, "1": 0x12, "2": 0x13, "3": 0x14, "4": 0x15,
         "5": 0x17, "6": 0x16, "7": 0x1A, "8": 0x1C, "9": 0x19,
+        "-": 0x1B, "=": 0x18, "[": 0x21, "]": 0x1E, "\\": 0x2A,
+        ";": 0x29, "'": 0x27, ",": 0x2B, ".": 0x2F, "/": 0x2C, "`": 0x32,
     ]
-    guard let code = keycodes[key.lowercased()] else {
+
+    /// Characters that need Shift held on a US layout.
+    static let shifted: Set<Character> = [
+        "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M",
+        "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z",
+        "!", "@", "#", "$", "%", "^", "&", "*", "(", ")", "_", "+", "{",
+        "}", "|", ":", "\"", "<", ">", "?", "~",
+    ]
+
+    /// The keycode for a character, and whether Shift is required.
+    static func lookup(_ ch: Character) -> (CGKeyCode, Bool)? {
+        let lowered = String(ch).lowercased()
+        guard let code = codes[lowered] else { return nil }
+        return (code, shifted.contains(ch))
+    }
+}
+
+func opKey(key: String, modifiers: [String]) -> Never {
+    requirePostEvents("pressing a key")
+    guard let code = KeyTable.codes[key.lowercased()] else {
         Emit.out(.blocked, "\(key) is not a key this build sends",
-                 ["known_keys": keycodes.keys.sorted()])
+                 ["known_keys": KeyTable.codes.keys.sorted()])
     }
     var flags: CGEventFlags = []
     for m in modifiers.map({ $0.lowercased() }) {
