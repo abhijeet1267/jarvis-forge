@@ -220,6 +220,47 @@ def test_a_drag_without_all_four_points_is_refused(stub, registry, ctx):
     assert "to_y" in text
 
 
+# -- the staleness guard reaches every acting tool ----------------------------
+#
+# A recorded workflow stores absolute points. Replay after its window moved would
+# send a real click, drag or wheel event to whatever now sits there. The executor
+# has a guard; these pin that each tool actually hands it over, because a guard
+# the tool drops on the floor protects nothing. Before this, only `desktop_click`
+# accepted `expect_window_id`.
+
+@pytest.mark.parametrize("tool,kwargs,executor_name", [
+    ("desktop_drag", {"from_x": 10, "from_y": 20, "to_x": 30, "to_y": 40}, "drag"),
+    ("desktop_scroll", {"x": 10, "y": 20, "lines": -3}, "scroll"),
+])
+def test_a_coordinate_tool_forwards_the_window_expectation(
+        stub, registry, ctx, tool, kwargs, executor_name):
+    calls, make, mp = stub
+    mp.setattr(desktop_native.executor, executor_name,
+               make({"status": "performed_unverified", "reason": "posted"}))
+    result = _call(registry, ctx, tool, expect_window_id=4242, **kwargs)
+    assert result.ok is True, result.message
+    assert calls, f"{tool} never reached the executor"
+    _args, sent = calls[0]
+    assert sent.get("expect_window_id") == 4242, \
+        f"{tool} dropped the staleness guard instead of forwarding it"
+
+
+@pytest.mark.parametrize("tool,kwargs,executor_name", [
+    ("desktop_drag", {"from_x": 10, "from_y": 20, "to_x": 30, "to_y": 40}, "drag"),
+    ("desktop_scroll", {"x": 10, "y": 20, "lines": -3}, "scroll"),
+])
+def test_a_coordinate_tool_without_an_expectation_passes_none(
+        stub, registry, ctx, tool, kwargs, executor_name):
+    """The guard is opt-in: a fresh, just-resolved target stays unrestricted."""
+    calls, make, mp = stub
+    mp.setattr(desktop_native.executor, executor_name,
+               make({"status": "performed_unverified", "reason": "posted"}))
+    result = _call(registry, ctx, tool, **kwargs)
+    assert result.ok is True, result.message
+    _args, sent = calls[0]
+    assert sent.get("expect_window_id") is None
+
+
 def test_a_shortcut_without_a_modifier_is_refused(stub, registry, ctx):
     """A 'shortcut' with no modifier is a bare keystroke; letting it through
     would type into a field while claiming a safe, known action."""

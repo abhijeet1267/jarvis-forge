@@ -1053,12 +1053,17 @@ func opDrag(fromX: Double, fromY: Double, toX: Double, toY: Double, durationMs: 
              body)
 }
 
-func opScroll(x: Double, y: Double, lines: Int, horizontal: Bool) -> Never {
+func opScroll(x: Double, y: Double, lines: Int, horizontal: Bool,
+              expectation: TargetExpectation = TargetExpectation()) -> Never {
     requirePostEvents("scrolling")
     let point = CGPoint(x: x, y: y)
     guard Coord.displayContaining(point) != nil else {
         Emit.out(.blocked, "the scroll point is not inside any active display")
     }
+    // A wheel event carries no target: it scrolls whatever window sits under the
+    // pointer. Replay after the window moved would silently scroll the wrong
+    // thing, so the expectation is checked before the cursor is warped.
+    let targetCheck = requireFreshTarget(expectation, point: point, verb: "scrolling")
     CGWarpMouseCursorPosition(point)
     usleep(40_000)
     guard let event = CGEvent(scrollWheelEvent2Source: nil, units: .line,
@@ -1070,9 +1075,11 @@ func opScroll(x: Double, y: Double, lines: Int, horizontal: Bool) -> Never {
     event.location = point
     event.post(tap: .cghidEventTap)
     usleep(80_000)
+    var body: [String: Any] = ["lines": lines, "horizontal": horizontal]
+    if !expectation.isEmpty { body["target_check"] = targetCheck }
     Emit.out(.performed_unverified,
              "a scroll of \(lines) line(s) was posted at (\(x), \(y)). Whether the view moved is read separately.",
-             ["lines": lines, "horizontal": horizontal])
+             body)
 }
 
 /// Why the focused element must not receive synthetic characters, or "" if it may.
@@ -1633,7 +1640,8 @@ case "scroll_element":
                     amount: num("amount") ?? 0.35)
 case "scroll":
     guard let x = num("x"), let y = num("y") else { failUsage("scroll needs x= and y=") }
-    opScroll(x: x, y: y, lines: int("lines", 3), horizontal: str("horizontal") == "true")
+    opScroll(x: x, y: y, lines: int("lines", 3), horizontal: str("horizontal") == "true",
+             expectation: expectation)
 case "type":
     opType(text: str("text"), expectApp: str("expect_app"))
 case "key":

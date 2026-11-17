@@ -220,20 +220,44 @@ def click(x: float, y: float, *, button: str = "left", count: int = 1,
 
 def drag(from_x: float, from_y: float, to_x: float, to_y: float,
          *, duration_ms: int = 400,
-         cancel_file: Optional[str] = None) -> Dict[str, Any]:
+         cancel_file: Optional[str] = None,
+         expect_window_id: Optional[int] = None,
+         expect_pid: Optional[int] = None) -> Dict[str, Any]:
+    """Drag between two points, optionally refusing if the source window moved.
+
+    The expectation describes where the drag *starts*: the executor checks the
+    window under the from-point, so a drag whose source button has gone lands
+    nowhere rather than somewhere.
+    """
     args = [f"from_x={from_x}", f"from_y={from_y}",
             f"to_x={to_x}", f"to_y={to_y}",
             f"duration_ms={int(duration_ms)}"]
     if cancel_file:
         args += ["--cancel-file", cancel_file]
+    if expect_window_id is not None:
+        args.append(f"--expect-window-id={int(expect_window_id)}")
+    if expect_pid is not None:
+        args.append(f"--expect-pid={int(expect_pid)}")
     return _run("drag", args)
 
 
 def scroll(x: float, y: float, *, lines: int = 3,
-           horizontal: bool = False) -> Dict[str, Any]:
+           horizontal: bool = False,
+           expect_window_id: Optional[int] = None,
+           expect_pid: Optional[int] = None) -> Dict[str, Any]:
+    """Scroll at a point, optionally refusing if the intended window has moved.
+
+    A wheel event carries no target of its own: it scrolls whatever is under the
+    pointer. Without the expectation a recorded scroll replays into whichever
+    window happens to sit at those coordinates now.
+    """
     args = [f"x={x}", f"y={y}", f"lines={int(lines)}"]
     if horizontal:
         args.append("horizontal=true")
+    if expect_window_id is not None:
+        args.append(f"--expect-window-id={int(expect_window_id)}")
+    if expect_pid is not None:
+        args.append(f"--expect-pid={int(expect_pid)}")
     return _run("scroll", args)
 
 

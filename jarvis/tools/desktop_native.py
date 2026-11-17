@@ -215,6 +215,8 @@ async def desktop_right_click(ctx: ToolContext, x: Optional[float] = None,
 async def desktop_drag(ctx: ToolContext, from_x: Optional[float] = None,
                        from_y: Optional[float] = None, to_x: Optional[float] = None,
                        to_y: Optional[float] = None, duration_ms: int = 400,
+                       expect_window_id: Optional[int] = None,
+                       expect_pid: Optional[int] = None,
                        **_: Any) -> Any:
     """Drag from one point to another, releasing the button at the end."""
     missing = [name for name, value in
@@ -230,14 +232,18 @@ async def desktop_drag(ctx: ToolContext, from_x: Optional[float] = None,
         return fail("desktop_drag", str(refusal), device=ctx.device_id,
                     detail=refusal.detail)
     result = executor.drag(fx, fy, tx, ty,
-                           duration_ms=max(50, min(8000, int(duration_ms or 400))))
+                           duration_ms=max(50, min(8000, int(duration_ms or 400))),
+                           expect_window_id=expect_window_id,
+                           expect_pid=expect_pid)
     return _finish("desktop_drag", result, ctx,
                    f"Dragged from ({from_x}, {from_y}) to ({to_x}, {to_y})")
 
 
 async def desktop_scroll(ctx: ToolContext, x: Optional[float] = None,
                          y: Optional[float] = None, lines: int = 3,
-                         horizontal: bool = False, **_: Any) -> Any:
+                         horizontal: bool = False,
+                         expect_window_id: Optional[int] = None,
+                         expect_pid: Optional[int] = None, **_: Any) -> Any:
     """Post a bounded wheel scroll at a point."""
     if x is None or y is None:
         return fail("desktop_scroll", "A scroll needs both an x and a y coordinate.",
@@ -252,7 +258,9 @@ async def desktop_scroll(ctx: ToolContext, x: Optional[float] = None,
         return fail("desktop_scroll", str(refusal), device=ctx.device_id,
                     detail=refusal.detail)
     result = executor.scroll(px, py, lines=bounded,
-                             horizontal=bool(horizontal))
+                             horizontal=bool(horizontal),
+                             expect_window_id=expect_window_id,
+                             expect_pid=expect_pid)
     return _finish("desktop_scroll", result, ctx,
                    f"Scrolled {bounded} line(s) at ({x}, {y})")
 
