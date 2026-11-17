@@ -56,6 +56,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// never appears. Setting the default before AppKit restores state is what makes
     /// this take effect.
     func applicationWillFinishLaunching(_ notification: Notification) {
+        // Refuse to be a second instance before any backend work begins. This is
+        // the fix for a measured incident: a development build launched with a
+        // flag that does not exist started a second GUI whose backend bound :8765
+        // and displaced the running app, orphaning its backend. One process must
+        // never be able to do that to another.
+        //
+        // The check is a kernel exclusive lock, not a bundle-id lookup, because a
+        // dev binary has no bundle id and is exactly the case that caused it.
+        if !InstanceGuard.acquire() {
+            InstanceGuard.activateExistingAndExit()
+        }
+
         UserDefaults.standard.register(defaults: [
             "ApplePersistenceIgnoreState": true,
             "NSQuitAlwaysKeepsWindows": false,
