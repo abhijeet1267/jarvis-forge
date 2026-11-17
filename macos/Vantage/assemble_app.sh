@@ -32,6 +32,46 @@ cp "${BINARY}" "${APP_BUNDLE}/Contents/MacOS/"
 # --- Info.plist ---
 cp Resources/Info.plist "${APP_BUNDLE}/Contents/"
 
+# --- Stage the backend inside the bundle --------------------------------------
+#
+# BackendManager.findProjectDir() prefers `Resources/run.py` over any checkout,
+# so staging here is what makes the app the user opens run its own backend. Without
+# it the app looks for a checkout beside itself and starts `.venv/bin/python` from
+# there -- which is the development layout, not a product.
+#
+# `native/` carries the desktop executor; `scripts/` carries backend_lifecycle.py,
+# which the launcher invokes. Both were missing from the earlier bundle.
+PROJECT_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
+RESOURCES="${APP_BUNDLE}/Contents/Resources"
+
+if [ -f "${PROJECT_DIR}/run.py" ]; then
+    echo "==> Staging backend from ${PROJECT_DIR}"
+    for item in run.py jarvis dashboard scripts native pyproject.toml requirements.txt; do
+        if [ -d "${PROJECT_DIR}/${item}" ]; then
+            rsync -a --exclude '__pycache__' --exclude '*.pyc' \
+                  "${PROJECT_DIR}/${item}/" "${RESOURCES}/${item}/"
+        elif [ -f "${PROJECT_DIR}/${item}" ]; then
+            cp "${PROJECT_DIR}/${item}" "${RESOURCES}/"
+        fi
+    done
+
+    # Packages travel with the app. Playwright is 161 MB of the 247 MB venv and
+    # drives browser automation, not the desktop backend.
+    VENV_SITE="${PROJECT_DIR}/.venv/lib/python3.11/site-packages"
+    if [ -d "${VENV_SITE}" ]; then
+        echo "==> Staging Python packages"
+        rsync -a --exclude '__pycache__' --exclude '*.pyc' \
+              --exclude 'playwright' --exclude 'pip' --exclude 'setuptools' \
+              --exclude 'pytest' --exclude '_pytest' --exclude 'pygments' --exclude 'pypdf' \
+              "${VENV_SITE}/" "${RESOURCES}/site-packages/"
+    fi
+
+    # The interpreter is still this machine's. Bundling CPython is a separate job.
+    printf '%s' "${PROJECT_DIR}/.venv/bin/python" > "${RESOURCES}/python_path.txt"
+else
+    echo "    (no backend to stage; the app will need a checkout beside it)"
+fi
+
 # --- Generate icon ---
 ICONSET="${APP_NAME}.iconset"
 rm -rf "${ICONSET}"

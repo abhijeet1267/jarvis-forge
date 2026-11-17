@@ -578,7 +578,19 @@ final class BackendManager: ObservableObject {
         // Run from the project root, and resolve modules from it even if the
         // checkout's venv is only partially installed.
         var env = ProcessInfo.processInfo.environment
-        env["PYTHONPATH"] = projectDir + (env["PYTHONPATH"].map { ":" + $0 } ?? "")
+        // A bundled backend carries its own packages beside `run.py`. Without this
+        // a copied app imported whatever the machine's interpreter happened to
+        // have, so "standalone" depended on the developer's venv still existing.
+        // The checkout layout keeps its packages in the venv instead, and
+        // `PYTHONPATH=projectDir` is right there.
+        let bundledPackages = projectDir + "/site-packages"
+        let paths = FileManager.default.fileExists(atPath: bundledPackages)
+            ? [projectDir, bundledPackages]
+            : [projectDir]
+        env["PYTHONPATH"] = (paths + [env["PYTHONPATH"]].compactMap { $0 }).joined(separator: ":")
+        if FileManager.default.fileExists(atPath: bundledPackages) {
+            env["PYTHONNOUSERSITE"] = "1"   // ignore ~/.local, which would shadow them
+        }
         proc.environment = env
 
         // Pipe stderr for diagnostics
