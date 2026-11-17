@@ -262,7 +262,9 @@ class TestTruthfulPermissionsReporting:
 class TestSystemSettingsGuidance:
     """Test that users get accurate System Settings guidance."""
     
-    @pytest.mark.skip(reason="macOS-only - requires actual system permissions")
+    # Not macOS-only: this asserts the *guidance text* each permission reports, which
+    # needs no system permission at all. The skip hid that the strings are checkable
+    # on any run.
     def test_settings_paths_provided(self):
         """All permissions provide settings path guidance."""
         from jarvis.wizard import check_accessibility_permission, check_microphone_permission
@@ -278,13 +280,13 @@ class TestSystemSettingsGuidance:
         assert "System Settings" in mic_info.settings_path
         assert "Microphone" in mic_info.settings_path
     
-    @pytest.mark.skip(reason="macOS-only - requires actual system permissions")
+    # Same: the note is a property of the response, not of a granted permission.
     def test_note_for_optional_permissions(self):
         """Optional permissions include helpful notes."""
-        from jarvis.wizard import check_microphone_permission
-        
+        from jarvis.wizard import PermissionStatus, check_microphone_permission
+
         info = check_microphone_permission()
-        
+
         if info.status == PermissionStatus.DENIED:
             assert info.note is not None
             assert "grant" in info.note.lower() or "permission" in info.note.lower()
@@ -293,7 +295,6 @@ class TestSystemSettingsGuidance:
 # Red-First Tests
 # ==============================
 
-@pytest.mark.skip(reason="macOS-only - requires actual MacPermissionDetector")
 @pytest.mark.asyncio
 async def test_wizard_never_claims_permission_without_evidence():
     """RED-FIRST TEST: Wizard must never claim permission granted without real evidence."""
