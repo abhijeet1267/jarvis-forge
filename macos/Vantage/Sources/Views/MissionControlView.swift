@@ -209,7 +209,7 @@ struct MissionControlView: View {
         do {
             var leaseID: String?
             if approve {
-                let scope = step.params?["path"].map { [$0] } ?? []
+                let scope = step.params?["path"].map { [$0.text] } ?? []
                 let lease: APIModels.MissionLease = try await api.post(
                     "/missions/\(mission.mission_id)/leases",
                     body: APIModels.MissionLeaseRequest(
@@ -251,7 +251,7 @@ struct MissionControlView: View {
         do {
             var approval: APIModels.MissionApproval?
             if approving {
-                let scope = mission.steps?.first?.params?["path"].map { [$0] } ?? []
+                let scope = mission.steps?.first?.params?["path"].map { [$0.text] } ?? []
                 let lease: APIModels.MissionLease = try await api.post(
                     "/missions/\(mission.mission_id)/leases",
                     body: APIModels.MissionLeaseRequest(

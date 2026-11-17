@@ -1008,6 +1008,78 @@ extension AnyCodable {
 // decode rather than throw, and the views branch on the specific values they
 // know.
 extension APIModels {
+    /// A tool-call parameter, as the backend actually sends it.
+    ///
+    /// Eight declarations typed this `[String: String]`, which is wrong: a desktop
+    /// step carries `{"x": 400.0, "y": 300.0}`, and JSON `400.0` is a number. One
+    /// such step made the whole decode throw -- and because `MissionList` decodes
+    /// the array in one go, a single desktop mission blanked Mission Control,
+    /// Steering and Shadow together.
+    ///
+    /// Measured on the live backend: 8 steps across 3 missions already carry
+    /// numeric params, so this was not hypothetical.
+    ///
+    /// Decoded through a permissive wrapper rather than `Any`, because `Any`
+    /// cannot be `Codable`; `ParamValue` accepts whatever JSON the server sends
+    /// and renders it back as text for display.
+    enum ParamValue: Codable, Equatable {
+        case string(String)
+        case number(Double)
+        case bool(Bool)
+        case null
+
+        init(from decoder: Decoder) throws {
+            let single = try decoder.singleValueContainer()
+            if single.decodeNil() { self = .null; return }
+            if let value = try? single.decode(Bool.self) { self = .bool(value); return }
+            if let value = try? single.decode(Double.self) { self = .number(value); return }
+            if let value = try? single.decode(String.self) { self = .string(value); return }
+            // An array or object in a tool param is rare but legal; keep it as
+            // text rather than failing the whole mission list over it.
+            self = .string(String(describing: try single.decode(JSONValue.self)))
+        }
+
+        func encode(to encoder: Encoder) throws {
+            var single = encoder.singleValueContainer()
+            switch self {
+            case .string(let value): try single.encode(value)
+            case .number(let value): try single.encode(value)
+            case .bool(let value): try single.encode(value)
+            case .null: try single.encodeNil()
+            }
+        }
+
+        /// Display form: `400` not `400.0`, so a step reads the way it was written.
+        var text: String {
+            switch self {
+            case .string(let value): return value
+            case .number(let value):
+                return value == value.rounded() && abs(value) < 1e15
+                    ? String(Int64(value)) : String(value)
+            case .bool(let value): return value ? "true" : "false"
+            case .null: return ""
+            }
+        }
+    }
+
+    /// Any JSON value, used only to keep an unexpected shape as text.
+    indirect enum JSONValue: Codable {
+        case value(String)
+        init(from decoder: Decoder) throws {
+            self = .value(String(describing: try decoder.singleValueContainer().decode(String.self)))
+        }
+        func encode(to encoder: Encoder) throws {
+            var single = encoder.singleValueContainer()
+            if case .value(let text) = self { try single.encode(text) }
+        }
+    }
+
+    typealias ToolParams = [String: ParamValue]
+}
+
+// MARK: - Tool params are not all strings
+
+extension APIModels {
 
     struct GoogleConnection: Codable {
         let state: String            // not_configured | disconnected | connected | expired | error
@@ -1522,7 +1594,7 @@ extension APIModels {
         let tool: String?
         /// The tool call this step makes, as the server recorded it. Optional so
         /// a step written by an older server still decodes.
-        let params: [String: String]?
+        let params: ToolParams?
 
         var id: String { step_id }
     }
@@ -1742,7 +1814,7 @@ extension APIModels {
     struct AutonomyPreviewRequest: Codable {
         let tool: String
         let level: Int
-        let params: [String: String]
+        let params: ToolParams
     }
 
     // MARK: - Outcome Assurance
@@ -1811,7 +1883,7 @@ extension APIModels {
             let step_id: String
             let title: String?
             let tool: String?
-            let params: [String: String]?
+            let params: ToolParams?
         }
 
         let steps: [Step]
@@ -2328,7 +2400,7 @@ extension APIModels {
     struct CreateMissionStep: Codable {
         let title: String
         let tool: String
-        let params: [String: String]
+        let params: ToolParams
     }
 
     // MARK: - Project Doctor
@@ -2606,7 +2678,7 @@ extension APIModels {
     struct RecordingStepRequest: Codable {
         let kind: String
         let label: String
-        let params: [String: String]
+        let params: ToolParams
     }
 
     /// The reviewable workflow draft. `verdict` begins at `unverified` and only a
@@ -2626,7 +2698,7 @@ extension APIModels {
         let index: Int
         let title: String
         let tool: String
-        let params: [String: String]
+        let params: ToolParams
     }
 
     struct RecordingDraftReview: Codable {
@@ -2641,7 +2713,7 @@ extension APIModels {
 
             /// The parameters the demonstration actually captured. Absent on a
             /// step that was skipped because it carried a sensitive value.
-            var params: [String: String]?
+            var params: ToolParams?
 
             /// The condition this step is meant to establish, when the recorder
             /// could name one it can actually re-check.
@@ -2662,7 +2734,7 @@ extension APIModels {
                 title = try c.decode(String.self, forKey: .title)
                 tool = try c.decode(String.self, forKey: .tool)
                 needs_input = try c.decodeIfPresent(String.self, forKey: .needs_input)
-                params = try c.decodeIfPresent([String: String].self, forKey: .params)
+                params = try c.decodeIfPresent(ToolParams.self, forKey: .params)
                 satisfies = try c.decodeIfPresent(String.self, forKey: .satisfies)
                 recordedIndex = 0
             }
@@ -2676,9 +2748,13 @@ extension APIModels {
                 try c.encodeIfPresent(satisfies, forKey: .satisfies)
             }
 
-            var id: String { "\(recordedIndex)-" + title + tool
-                + (params ?? [:]).sorted { $0.key < $1.key }
-                    .map { $0.key + $0.value }.joined() }
+            var id: String {
+                let written = (params ?? [:])
+                    .sorted { $0.key < $1.key }
+                    .map { $0.key + $0.value.text }
+                    .joined()
+                return "\(recordedIndex)-" + title + tool + written
+            }
         }
 
         struct Condition: Codable {
@@ -2727,7 +2803,7 @@ extension APIModels {
         let step_id: String
         let title: String
         let tool: String
-        let params: [String: String]
+        let params: ToolParams
         /// The condition this step is meant to establish, when the recorder
         /// could name one. Absent for a step whose effect nothing can re-check.
         var satisfies: String?

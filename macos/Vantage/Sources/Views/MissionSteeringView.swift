@@ -45,10 +45,10 @@ struct MissionSteeringView: View {
         /// only exposes `path`, and dropping the rest on commit would silently
         /// re-write a step's tool call -- exactly the "editing the record"
         /// failure the backend refuses.
-        var extra: [String: String]
+        var extra: APIModels.ToolParams
 
         init(id: String, title: String, tool: String, path: String,
-             extra: [String: String] = [:]) {
+             extra: APIModels.ToolParams = [:]) {
             self.id = id
             self.title = title
             self.tool = tool
@@ -61,7 +61,7 @@ struct MissionSteeringView: View {
             title = step.title
             tool = step.tool ?? ""
             var rest = step.params ?? [:]
-            path = rest.removeValue(forKey: "path") ?? ""
+            path = rest.removeValue(forKey: "path")?.text ?? ""
             extra = rest
         }
     }
@@ -411,7 +411,7 @@ struct MissionSteeringView: View {
     private func wireSteps() -> [APIModels.SteerRequest.Step] {
         draftSteps.map { step in
             var params = step.extra
-            if !step.path.isEmpty { params["path"] = step.path }
+            if !step.path.isEmpty { params["path"] = .string(step.path) }
             return .init(step_id: step.id,
                          title: step.title.isEmpty ? nil : step.title,
                          tool: step.tool.isEmpty ? nil : step.tool,

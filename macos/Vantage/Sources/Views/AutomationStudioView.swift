@@ -414,7 +414,10 @@ struct AutomationStudioView: View {
                 var params = loaded.steps[index].params ?? [:]
                 for field in APIModels.RecordingDraft.requiredFields(
                     for: loaded.steps[index].tool) where !field.value.isEmpty {
-                    if (params[field.name] ?? "").isEmpty { params[field.name] = field.value }
+                    // Params are ParamValue now; the editor deals in text.
+                    if (params[field.name]?.text ?? "").isEmpty {
+                        params[field.name] = .string(field.value)
+                    }
                 }
                 loaded.steps[index].params = params
                 loaded.steps[index].recordedIndex = index
@@ -465,9 +468,9 @@ struct AutomationStudioView: View {
         busy = true
         errorMessage = nil
         defer { busy = false }
-        var params: [String: String] = [:]
+        var params: APIModels.ToolParams = [:]
         for field in stepParams where !field.value.isEmpty {
-            params[field.name] = field.value
+            params[field.name] = .string(field.value)
         }
         do {
             _ = try await api.post(
@@ -578,8 +581,8 @@ struct AutomationStudioView: View {
             // recorded parameters equal to the ones the editor displayed.
             var params = step.params ?? [:]
             for field in APIModels.RecordingDraft.requiredFields(for: step.tool)
-            where !field.value.isEmpty && (params[field.name] ?? "").isEmpty {
-                params[field.name] = field.value
+            where !field.value.isEmpty && (params[field.name]?.text ?? "").isEmpty {
+                params[field.name] = .string(field.value)
             }
             return APIModels.MissionStepDraft(step_id: "S\(index + 1)",
                                               title: step.title,
@@ -753,11 +756,11 @@ struct AutomationStudioView: View {
     private func binding(for index: Int, field: String, fallback: String) -> Binding<String> {
         Binding(
             get: { guard let draft, draft.steps.indices.contains(index) else { return fallback }
-                   return draft.steps[index].params?[field] ?? fallback },
+                   return draft.steps[index].params?[field]?.text ?? fallback },
             set: { newValue in
                 guard var steps = draft?.steps, index < steps.count else { return }
                 var params = steps[index].params ?? [:]
-                params[field] = newValue
+                params[field] = .string(newValue)
                 steps[index].params = params
                 draft?.steps = steps
             })
@@ -797,7 +800,7 @@ struct AutomationStudioView: View {
     /// so demanding it would ask the person for a value that already exists.
     private func missingFields(in step: APIModels.RecordingDraft.Step) -> [APIModels.AutomationKinds.ParamField] {
         APIModels.RecordingDraft.requiredFields(for: step.tool)
-            .filter { $0.value.isEmpty && (step.params?[$0.name] ?? "").isEmpty }
+            .filter { $0.value.isEmpty && (step.params?[$0.name]?.text ?? "").isEmpty }
     }
 
     /// Derives capabilities and touched scope from the steps as they now stand.
@@ -808,9 +811,8 @@ struct AutomationStudioView: View {
         for step in steps {
             if !capabilities.contains(step.tool) { capabilities.append(step.tool) }
             for key in ["path", "source", "destination"] {
-                if let value = step.params?[key], !value.isEmpty, !scope.contains(value) {
-                    scope.append(value)
-                }
+                let value = step.params?[key]?.text ?? ""
+                if !value.isEmpty, !scope.contains(value) { scope.append(value) }
             }
         }
         draft?.steps = steps
