@@ -161,9 +161,15 @@ def check_accessibility_permission() -> PermissionInfo:
     """Check macOS accessibility permission status."""
     from .tools.desktop import _accessibility
     from .config import get_settings
-    
+    from .tools.base import ToolContext
+
+    # `_accessibility` takes a ToolContext, not a Settings. Passing Settings made
+    # it raise AttributeError on `ctx.settings`, which its own except swallowed
+    # into {"status": "UNKNOWN"} -- so this wizard reported Accessibility as
+    # unknown on a machine where it was granted. Measured: wizard said UNKNOWN
+    # while a direct ToolContext call said GRANTED.
     settings = get_settings()
-    state = _accessibility(settings)
+    state = _accessibility(ToolContext(settings=settings, device_id="laptop"))
     
     status_map = {
         "GRANTED": PermissionStatus.GRANTED,

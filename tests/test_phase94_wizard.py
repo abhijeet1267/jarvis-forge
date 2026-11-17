@@ -348,3 +348,35 @@ async def test_denied_permission_does_not_enable_capability():
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+
+
+def test_the_wizard_reports_the_same_accessibility_state_the_service_does():
+    """The onboarding screen must not disagree with the service about permission.
+
+    `check_accessibility_permission` used to pass a `Settings` where
+    `_accessibility` takes a `ToolContext`. That raised AttributeError, which
+    `_accessibility`'s own except swallowed into {"status": "UNKNOWN"} -- so the
+    wizard reported Accessibility as unknown on a machine where it was granted,
+    and the person onboarding was told to grant something they already had.
+
+    Comparing the two answers is the invariant: whatever the service says is what
+    the wizard must say.
+    """
+    from jarvis.config import get_settings
+    from jarvis.tools.base import ToolContext
+    from jarvis.tools.desktop import _accessibility
+    from jarvis.wizard import check_accessibility_permission
+
+    direct = _accessibility(ToolContext(settings=get_settings(), device_id="laptop"))
+    wizard = check_accessibility_permission()
+
+    expected = {
+        "GRANTED": "GRANTED",
+        "DENIED": "DENIED",
+    }.get(str(direct.get("status", "")).upper(), "UNKNOWN")
+
+    # `PermissionStatus` renders lowercase; the service reports uppercase. The
+    # invariant is agreement, not casing.
+    assert str(wizard.status.value).upper() == expected, (
+        f"the service says {direct.get('status')!r}; the wizard says "
+        f"{wizard.status.value!r}")
