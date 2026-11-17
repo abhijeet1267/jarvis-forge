@@ -4519,3 +4519,34 @@ the guard as the user who owns the build.
 Not yet wired in: nothing calls it. The next step is the build/test entry points
 (`build_app.py`, the playwright-driven tests) invoking `claim` instead of
 assuming 8765.
+
+### Full suite, at revision 0b23014
+
+**4611 passed, 20 skipped, 0 failed** in 539 s
+(`.venv/bin/python -m pytest -q -p no:cacheprovider -rs`).
+
+Skipped count is down from 30. The ten that were lifted had never executed, and
+running them found real breakage in every group -- a deleted helper, `ToolContext`
+fields that do not exist, coroutines called without `await`, and two instances of
+the same `Settings`/`ToolContext` mismatch that made the wizard report a granted
+permission as UNKNOWN. Details in `docs/SKIPPED_TESTS.md`.
+
+The remaining 20 each name a prerequisite this machine does not have (tkinter,
+qrcode, Android SDK, microphone hardware, a real API key, a configured model). None
+masks a failure.
+
+### Standalone app: the TCC identity fix
+
+The installed bundle could be built, signed, and resolve its executor from inside
+itself, and still could not post input. TCC showed why: with `/bin/sh` as
+`CFBundleExecutable`, macOS attributed the executor's Accessibility request to
+`python3-55554944...` — the Homebrew runtime the script exec'd — so a grant to
+Vantage.app never applied.
+
+The launcher is now a compiled Mach-O in the signed bundle that `execv`s Python,
+with no intermediary process. Measured after: `responsible = com.jarforge.app`.
+
+`native/` and `scripts/` are also staged into the bundle now. `native/` was never
+staged, so an installed app resolved its executor to a source-tree path a copied
+bundle does not have; `scripts/` holds `backend_lifecycle.py`, without which the
+app could not start its own backend.
