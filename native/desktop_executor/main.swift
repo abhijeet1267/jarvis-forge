@@ -950,7 +950,8 @@ func opClick(x: Double, y: Double, button: String, count: Int,
     let upType: CGEventType = button == "right" ? .rightMouseUp : .leftMouseUp
 
     var postedCount = 0
-    for _ in 0..<max(1, count) {
+    let total = max(1, count)
+    for index in 0..<total {
         if Cancellation.requested() {
             let released = releaseHeldInput()
             Emit.out(.cancelled, "cancelled after starting; held input was released",
@@ -962,15 +963,23 @@ func opClick(x: Double, y: Double, button: String, count: Int,
                                mouseCursorPosition: point, mouseButton: cgButton) else {
             Emit.out(.failed, "the click event could not be constructed")
         }
-        // A clickCount of 2 is what makes the second click a double-click
-        // rather than two independent clicks.
-        down.setIntegerValueField(.mouseEventClickState, value: Int64(count))
-        up.setIntegerValueField(.mouseEventClickState, value: Int64(count))
+        // clickState counts up across the run: the first press is 1, the second
+        // is 2, and macOS turns that 1-then-2 sequence into a double-click.
+        //
+        // This used to set every event to `count`, so a double-click sent two
+        // events both claiming to be the second press of a pair. No first press
+        // meant no sequence, and several controls discarded it entirely --
+        // measured: the fixture's double-click target never fired.
+        let clickState = Int64(index + 1)
+        down.setIntegerValueField(.mouseEventClickState, value: clickState)
+        up.setIntegerValueField(.mouseEventClickState, value: clickState)
         down.post(tap: .cghidEventTap)
-        usleep(15_000)
+        usleep(8_000)
         up.post(tap: .cghidEventTap)
         postedCount += 1
-        usleep(40_000)
+        // Between the presses of a multi-click the gap must stay inside the
+        // double-click interval, or macOS reads them as separate clicks.
+        usleep(index + 1 < total ? 45_000 : 40_000)
     }
     let after = cursorPosition()
     var body: [String: Any] = [
