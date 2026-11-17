@@ -1298,74 +1298,71 @@ func opReadElement(application: String, keyword: String, role: String) -> Never 
     Emit.out(.verified, "found one matching element", ["element": described])
 }
 
-/// Scroll a view through its own Accessibility action.
+/// Scroll a view by setting its scrollbar's position.
 ///
-/// Synthetic wheel events posted at the HID tap were measured never to reach the
-/// target application on this machine, while clicks from the same tap did — the
-/// ScrollArea's own AX actions, by contrast, are advertised by the application
-/// itself ("AXScrollDownByPage" and friends). Driving the action the app
-/// publishes cannot miss by a pixel and does not depend on pointer routing, so
-/// it is the better path whenever the view exposes it.
-func opScrollElement(application: String, direction: String, pages: Int) -> Never {
+/// Two other approaches were measured and rejected on this machine:
+/// synthetic wheel events posted at the HID tap (line, pixel, continuous and
+/// phased units) never reached the target application at all, while clicks from
+/// the same tap did; and the ScrollArea's advertised `AXScrollDownByPage` action
+/// returned `kAXErrorActionUnsupported` (-25204) even though the app lists it.
+///
+/// Setting `AXValue` on the scroll bar is a different mechanism: it does not ask
+/// the view to perform anything, it states where the scroll position should be.
+/// That is both supported and idempotent, which also makes it safe to retry.
+func opScrollElement(application: String, direction: String, amount: Double) -> Never {
     requireAX("scrolling a view")
     let app = resolveApplication(application)
     let root = AXUIElementCreateApplication(app.processIdentifier)
-    // An explicit table, not string surgery: the first version assembled this
-    // name by concatenation and produced something the app never advertised, so
-    // a working action appeared unreachable.
-    let wanted: String
-    switch direction.lowercased() {
-    case "up": wanted = "AXScrollUpByPage"
-    case "left": wanted = "AXScrollLeftByPage"
-    case "right": wanted = "AXScrollRightByPage"
-    default: wanted = "AXScrollDownByPage"
-    }
 
-    // Same walk and same cast as `findElements`, which is proven to reach these
-    // elements; an earlier version re-derived the children differently and found
-    // nothing at all.
-    var performed = 0
-    var lastError = "no scroll area reached"
-    var seenRoles: [String] = []
+    // Positive moves down/right, negative up/left, in fractions of the content.
+    let signum = (direction.lowercased() == "up" || direction.lowercased() == "left") ? -1.0 : 1.0
+    let step = signum * max(0.02, min(1.0, amount))
 
-    func act(_ element: AXUIElement, depth: Int) {
-        if depth > 8 { return }
-        let described = describe(element, depth: 0, maxDepth: 0)
-        let role = (described["role"] as? String) ?? ""
-        if role == "AXScrollArea" {
-            seenRoles.append(role)
-            var actionsRef: CFArray?
-            AXUIElementCopyActionNames(element, &actionsRef)
-            let names = (actionsRef as? [String]) ?? []
-            let name = names.contains(wanted) ? wanted
-                : names.first(where: { $0.hasPrefix("AXScroll") && $0.hasSuffix("ByPage") })
-            if let name {
-                let result = AXUIElementPerformAction(element, name as CFString)
-                if result == .success { performed += 1 }
-                else { lastError = "AXError \(result.rawValue) for \(name)" }
-            } else {
-                lastError = "actions available: \(names.joined(separator: ","))"
+    var moved = 0
+    var before: [Double] = []
+    var after: [Double] = []
+    var failure = ""
+
+    func walk(_ element: AXUIElement, depth: Int) {
+        if depth > 10 { return }
+        var roleValue: CFTypeRef?
+        if AXUIElementCopyAttributeValue(element, kAXRoleAttribute as CFString, &roleValue) == .success,
+           let role = roleValue as? String, role == "AXScrollBar" {
+            var valueRef: CFTypeRef?
+            if AXUIElementCopyAttributeValue(element, kAXValueAttribute as CFString, &valueRef) == .success,
+               let current = valueRef as? Double {
+                let target = max(0.0, min(1.0, current + step))
+                before.append(current)
+                if AXUIElementSetAttributeValue(element, kAXValueAttribute as CFString,
+                                                target as CFTypeRef) == .success {
+                    after.append(target)
+                    moved += 1
+                } else {
+                    failure = "AXValue could not be set"
+                }
             }
         }
         var childrenValue: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(element, kAXChildrenAttribute as CFString,
-                                            &childrenValue) == .success,
-              let children = childrenValue as? [AXUIElement] else { return }
-        for child in children { act(child, depth: depth + 1) }
+        if AXUIElementCopyAttributeValue(element, kAXChildrenAttribute as CFString,
+                                         &childrenValue) == .success,
+           let children = childrenValue as? [AXUIElement] {
+            for child in children { walk(child, depth: depth + 1) }
+        }
     }
-    act(root, depth: 0)
+    walk(root, depth: 0)
 
-    if performed == 0 {
+    if moved == 0 {
         Emit.out(.target_not_found,
-                 "no scroll area in \(app.localizedName ?? application) accepted \(wanted)",
-                 ["wanted_action": wanted, "last_error": lastError,
-                  "scroll_areas_seen": seenRoles.count,
-                  "application": app.localizedName ?? application])
+                 "no scroll bar in \(app.localizedName ?? application) accepted a position",
+                 ["application": app.localizedName ?? application,
+                  "reason_detail": failure.isEmpty ? "no scroll bars found" : failure])
     }
     Emit.out(.verified,
-             "\(performed) scroll area(s) in \(app.localizedName ?? application) accepted \(wanted)",
-             ["action": wanted, "performed": performed,
-              "application": app.localizedName ?? application])
+             "scrolled \(app.localizedName ?? application) \(direction.lowercased()): "
+             + "\(moved) scroll bar(s) moved from \(before.map { String(format: "%.2f", $0) }.joined(separator: ","))",
+             ["application": app.localizedName ?? application,
+              "direction": direction, "moved": moved,
+              "before": before, "after": after])
 }
 
 func opPressElement(application: String, keyword: String, role: String) -> Never {
@@ -1577,7 +1574,7 @@ case "drag":
 case "scroll_element":
     opScrollElement(application: str("application"),
                     direction: str("direction", "down"),
-                    pages: int("pages", 1))
+                    amount: num("amount") ?? 0.35)
 case "scroll":
     guard let x = num("x"), let y = num("y") else { failUsage("scroll needs x= and y=") }
     opScroll(x: x, y: y, lines: int("lines", 3), horizontal: str("horizontal") == "true")
