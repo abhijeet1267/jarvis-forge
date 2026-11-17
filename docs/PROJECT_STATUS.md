@@ -4392,3 +4392,57 @@ corrected first, then the whole suite was re-run at the corrected revision rathe
 than the old result being restated. The 30 skips are the pre-existing
 prerequisite-gated tests (Accessibility, Playwright browsers, microphone) that skip
 honestly rather than passing on a mock.
+
+## Update — 2026-11-17 (V21: real desktop input, and the bug that was hiding it)
+
+Desktop automation works on this machine. The central result: T2–T8 all pass
+against the disposable fixture with the target's own state observed, and the
+complete TextEdit → save → Finder workflow runs through real GUI interaction.
+
+### The defect that caused everything
+
+For three campaigns the report said "clicks are blocked by permissions". That was
+wrong. The fixture's coordinate conversion was wrong by **32 points**, so every
+click landed on the text label directly beneath the button. The event was
+delivered perfectly; the target was wrong.
+
+What settled it was instrumentation, not reasoning. Three earlier hypotheses — a
+modal dialog, window occlusion, wrong window identity — were each measured and
+each disproved. Adding a local `NSEvent` monitor to the fixture that records
+every event it actually receives, including which view was hit
+(`hit_view: NSTextField`), showed the click arriving at the right screen point and
+the wrong control. `last_action` alone could never have shown that, because it
+only changes when one of the fixture's own callbacks fires.
+
+### Six defects fixed
+
+| Defect | Evidence it was real |
+|---|---|
+| coordinate conversion off by 32pt | button answered at y 210–230, advertised 252.5 |
+| double-click `clickState` | both presses carried 2, so no 1-then-2 sequence existed |
+| Shift never released | "Hello" arrived as "HELLO" — flags only set on shifted chars |
+| keystroke timing | 2ms/6ms produced `L iprobessu` for "Hello from Vantage" |
+| scroll | wheel events never arrived; `AXScrollDownByPage` returned -25204 |
+| focus lost mid-run | activating once, then 7 steps, gave 1/7 |
+
+### Verified, with the observation each rests on
+
+- **T2–T8:** 7/7 in `benchmarks/v21_desktop/accept.py`
+- **T9:** 8/8 in `benchmarks/v21_desktop/textedit_finder.py` — typed, GUI-saved,
+  file on disk, Finder open
+- **T10:** every desktop action kind refused during takeover (HTTP 409)
+- **MissionRunner:** counter 3→4 through the real runner and a real approval
+- **Automation Studio:** a recorded click replayed, counter 4→5
+
+### What remains genuinely undone
+
+**Standalone packaging.** `/Applications/Vantage.app` is a signed native Swift
+app whose backend and executor are not inside the bundle; it looks for
+`scripts/backend_lifecycle.py` beside itself and finds nothing. Every desktop
+result above is through the development checkout.
+
+**Permission attribution.** Measured: a never-granted binary reports
+`accessibility: true` launched from this shell and `false` launched from Finder.
+The executor inherits its permission from the responsible process, so a
+Finder-launched app gets nothing until it is granted in its own right — and that
+grant is only meaningful once the packaging work exists.
