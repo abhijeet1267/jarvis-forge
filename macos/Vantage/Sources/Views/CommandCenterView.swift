@@ -55,6 +55,15 @@ struct CommandCenterView: View {
     /// This app's session, so the backend can record who approved what.
     @State private var sessionId = "native"
 
+    // A parked desktop plan is answered in its own card below. The service
+    // clears `pendingDesktopApproval` as soon as a decision is sent, so the
+    // buttons need a flag of their own to stay disabled for the round trip.
+    @State private var isDecidingDesktopPlan = false
+    /// The plan that was sent, kept only while the decision is in flight so
+    /// the card can say what is being worked on after the service has already
+    /// cleared the live one. Never read once the decision completes.
+    @State private var desktopPlanInFlight: PendingDesktopApproval?
+
     /// A send is in progress (attachment upload included), so a second gesture
     /// — Return and the send button both firing — cannot send twice.
     @State private var isSending = false
@@ -329,6 +338,18 @@ struct CommandCenterView: View {
                     onDeny: { await resolve(confirmation, approve: false) }
                 )
                 .id(confirmation.id)
+            }
+
+            // A desktop plan the backend parked because it needs a person. It
+            // is drawn where the turn that produced it ended, so the plan and
+            // the actions it would take are read together.
+            if let approval = chat.pendingDesktopApproval ?? desktopPlanInFlight {
+                DesktopPlanApprovalCard(
+                    approval: approval,
+                    isDeciding: isDecidingDesktopPlan,
+                    onApprove: { await decideDesktopPlan(approve: true) },
+                    onDeny: { await decideDesktopPlan(approve: false) }
+                )
             }
 
             if chat.isThinking {
@@ -800,6 +821,30 @@ struct CommandCenterView: View {
         }
         await refreshConfirmations()
     }
+
+    /// Approve or deny the parked desktop plan, one decision at a time.
+    ///
+    /// The card's buttons are disabled while `isDecidingDesktopPlan` is set,
+    /// because the service clears `pendingDesktopApproval` the moment the
+    /// decision starts: without a flag of its own the card would vanish and
+    /// the person would have no sign their click was sent.
+    private func decideDesktopPlan(approve: Bool) async {
+        guard !isDecidingDesktopPlan else { return }
+        desktopPlanInFlight = chat.pendingDesktopApproval
+        isDecidingDesktopPlan = true
+        defer {
+            isDecidingDesktopPlan = false
+            desktopPlanInFlight = nil
+        }
+
+        if approve {
+            await chat.approvePendingDesktop()
+        } else {
+            await chat.denyPendingDesktop()
+        }
+        // The service records the outcome (or the failure) in the transcript
+        // itself; this view has nothing to add and must not claim a result.
+    }
 }
 
 // MARK: - Message model
@@ -1047,6 +1092,240 @@ struct MessageCaption: View {
         .foregroundStyle(V.textTertiary)
         .lineLimit(1)
         .truncationMode(.middle)
+    }
+}
+
+// MARK: - Desktop plan approval
+
+/// A desktop mission the backend parked because it needs a person's answer.
+///
+/// The tools that park here click, type and press keys on this Mac, and the
+/// backend rates them level-3 destructive. The card therefore shows the whole
+/// plan — including the steps that already ran — before offering a decision,
+/// and it offers no Approve at all when the backend recorded no confirmation
+/// id, because there is nothing to approve *with*.
+struct DesktopPlanApprovalCard: View {
+    let approval: PendingDesktopApproval
+    var isDeciding = false
+    var onApprove: () async -> Void
+    var onDeny: () async -> Void
+
+    private var stepsThatRan: Int {
+        approval.steps.filter { $0.status == "done" || $0.status == "skipped" }.count
+    }
+
+    private var canApprove: Bool {
+        approval.confirmationId != nil && approval.parkedStepId != nil && !isDeciding
+    }
+
+    private var canDeny: Bool {
+        approval.parkedStepId != nil && !isDeciding
+    }
+
+    /// Why no decision can be offered, or nil when one can.
+    private var unavailableReason: String? {
+        if approval.parkedStepId == nil {
+            return "No step of this plan is waiting for a decision, so there is "
+                + "nothing to approve or deny. Review it in Mission Control."
+        }
+        if approval.confirmationId == nil {
+            return "This plan recorded no confirmation id, so it cannot be approved "
+                + "from here. Review it in Mission Control."
+        }
+        return nil
+    }
+
+    var body: some View {
+        Card(tone: .gold) {
+            VStack(alignment: .leading, spacing: V.Space.m) {
+                header
+                Text(approval.summary)
+                    .font(V.Font.message)
+                    .foregroundStyle(V.text)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                if approval.steps.isEmpty {
+                    Text("The backend reported no steps for this plan.")
+                        .font(V.Font.body)
+                        .foregroundStyle(V.textSecondary)
+                } else {
+                    VStack(alignment: .leading, spacing: V.Space.xs) {
+                        ForEach(approval.steps) { step in
+                            DesktopPlanStepRow(step: step)
+                        }
+                    }
+                    .padding(.vertical, V.Space.xxs)
+                }
+
+                honestyLine
+                destructiveLine
+                decisionRow
+            }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Desktop plan waiting for your approval. \(approval.summary)")
+    }
+
+    private var header: some View {
+        HStack(alignment: .firstTextBaseline, spacing: V.Space.s) {
+            Image(systemName: "exclamationmark.shield.fill")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(V.gold)
+            Text("Desktop plan needs your approval")
+                .font(V.Font.cardTitle)
+                .foregroundStyle(V.text)
+            Spacer(minLength: V.Space.s)
+            Text("Mission \(approval.missionId)")
+                .font(V.Font.caption)
+                .foregroundStyle(V.textTertiary)
+                .lineLimit(1)
+                .truncationMode(.middle)
+        }
+    }
+
+    /// How much of the plan has happened. Said only when the steps say so —
+    /// `desktop_move_pointer` runs without approval, so a plan can be parked
+    /// with work already done, and "nothing has run" would be a false claim.
+    @ViewBuilder
+    private var honestyLine: some View {
+        if stepsThatRan > 0 {
+            Label(
+                stepsThatRan == 1
+                    ? "1 step already ran. Everything not marked done will run only if you approve."
+                    : "\(stepsThatRan) steps already ran. Everything not marked done will run only if you approve.",
+                systemImage: "clock.arrow.circlepath")
+                .font(V.Font.caption)
+                .foregroundStyle(V.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private var destructiveLine: some View {
+        Label(
+            "These steps click, type or press keys on this Mac. The backend rates them "
+                + "level-3 destructive: they act outside Vantage and cannot be undone from here.",
+            systemImage: "exclamationmark.triangle.fill")
+            .font(V.Font.caption)
+            .foregroundStyle(V.warning)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+
+    @ViewBuilder
+    private var decisionRow: some View {
+        HStack(alignment: .firstTextBaseline, spacing: V.Space.s) {
+            if let confirmationId = approval.confirmationId, !isDeciding {
+                Text("Confirmation \(confirmationId)")
+                    .font(V.Font.mono)
+                    .foregroundStyle(V.textTertiary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
+            Spacer(minLength: V.Space.s)
+
+            if isDeciding {
+                ProgressView().controlSize(.small)
+                Text("Sending your decision…")
+                    .font(V.Font.caption)
+                    .foregroundStyle(V.textSecondary)
+            } else if let reason = unavailableReason {
+                Text(reason)
+                    .font(V.Font.caption)
+                    .foregroundStyle(V.textSecondary)
+                    .multilineTextAlignment(.trailing)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            if canDeny {
+                Button("Deny") {
+                    Task { await onDeny() }
+                }
+                .buttonStyle(VSecondaryButtonStyle())
+                .disabled(!canDeny)
+                .help("Deny this plan. Nothing further will run.")
+                .accessibilityLabel("Deny desktop plan")
+            }
+
+            if canApprove {
+                Button("Approve and run") {
+                    Task { await onApprove() }
+                }
+                .buttonStyle(VPrimaryButtonStyle())
+                .disabled(!canApprove)
+                .help("Approve this plan and run the remaining steps on this Mac")
+                .accessibilityLabel("Approve and run desktop plan")
+            }
+        }
+    }
+}
+
+/// One step of a parked plan, drawn with the status it had at the park.
+private struct DesktopPlanStepRow: View {
+    let step: PendingDesktopApproval.Step
+
+    private var glyph: String {
+        switch step.status {
+        case "done": return "checkmark.circle.fill"
+        case "failed": return "xmark.octagon.fill"
+        case "skipped": return "forward.circle"
+        case "running": return "arrow.triangle.2.circlepath"
+        default: return "clock"
+        }
+    }
+
+    private var tint: Color {
+        switch step.status {
+        case "done": return V.accent
+        case "failed": return V.danger
+        case "skipped": return V.textTertiary
+        case "running": return V.gold
+        default: return V.gold
+        }
+    }
+
+    private var label: String {
+        if !step.tool.isEmpty { return step.tool }
+        return step.title.isEmpty ? step.detail : step.title
+    }
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: V.Space.s) {
+            Image(systemName: glyph)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(tint)
+                .frame(width: 14)
+            Text(step.id)
+                .font(V.Font.mono.weight(.semibold))
+                .foregroundStyle(V.textTertiary)
+                .frame(width: 26, alignment: .leading)
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(alignment: .firstTextBaseline, spacing: V.Space.s) {
+                    Text(label.isEmpty ? "Untitled step" : label)
+                        .font(V.Font.body.weight(step.status == "pending" ? .semibold : .regular))
+                        .foregroundStyle(V.text)
+                        .lineLimit(2)
+                    Spacer(minLength: V.Space.s)
+                    Text(step.status.capitalized)
+                        .font(V.Font.caption)
+                        .foregroundStyle(tint)
+                }
+                if !step.paramsSummary.isEmpty {
+                    Text(step.paramsSummary)
+                        .font(V.Font.mono)
+                        .foregroundStyle(V.textSecondary)
+                        .textSelection(.enabled)
+                        .fixedSize(horizontal: false, vertical: true)
+                } else if !step.detail.isEmpty, label != step.detail {
+                    Text(step.detail)
+                        .font(V.Font.caption)
+                        .foregroundStyle(V.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(
+            "Step \(step.id), \(step.status). \(label)"
+                + (step.paramsSummary.isEmpty ? "" : ". \(step.paramsSummary)"))
     }
 }
 
