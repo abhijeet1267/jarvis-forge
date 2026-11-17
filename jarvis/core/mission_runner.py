@@ -35,7 +35,8 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
 from ..logging_setup import get_logger
-from .missions import ConditionStatus, Mission, MissionService, MissionState
+from .missions import (ConditionStatus, Mission, MissionService, MissionState,
+                       MissionTransitionError, TRANSITIONS)
 
 log = get_logger("core.mission_runner")
 
@@ -386,11 +387,41 @@ class MissionRunner:
                     # confirmation id, so resuming is explicit and checkable. A
                     # mission parked here stays parked across a restart.
                     if str(gate.get("decision") or "").upper() == "CONFIRM":
-                        # Record the confirmation id ON THE STEP. It is the only
-                        # durable place an approval can be matched against: the
-                        # engine mints a new id each call, and the mission's
-                        # reason string is rewritten on the next transition.
-                        confirmation = str(gate.get("confirmation_id") or "").strip()
+                        # An already-parked step keeps the id it was parked with.
+                        # That id is what a person was shown; re-issuing one here
+                        # meant a run carrying a WRONG approval did not simply
+                        # fail -- it rotated the valid id, invalidating the
+                        # operator's approval and putting a fresh working id in
+                        # the response for the caller to try again with. Measured:
+                        # park (CONF-a) -> run with "deadbeef" -> response leaks
+                        # CONF-b -> run with CONF-b executes the write. A refused
+                        # credential must not be exchangeable for a usable one.
+                        confirmation = (parked_conf
+                                        or str(gate.get("confirmation_id") or "").strip())
+                        # A run that is not allowed to park must not touch the
+                        # step at all. `mark_step` re-reads the mission and
+                        # persists the steps from that fresh copy, so mutating
+                        # first and transitioning second made a refused /run
+                        # rewrite the step while the mission stayed put --
+                        # measured: a /run on a mission whose step was DENIED
+                        # returned 404 ("blocked -> awaiting_approval") but had
+                        # already replaced "denied by the operator" with a fresh
+                        # "awaiting approval", making the denied step approvable
+                        # again. A request that changes nothing must change
+                        # nothing, including the record of a refusal.
+                        if MissionState(mission.state) not in (
+                                MissionState.PLANNED,
+                                MissionState.RUNNING,
+                                MissionState.AWAITING_APPROVAL):
+                            # Not a state a park can come from. Refuse loudly and
+                            # leave everything alone -- the caller gets the same
+                            # error the illegal transition would have raised,
+                            # without the step having been rewritten first.
+                            raise MissionTransitionError(
+                                f"{mission.state} -> awaiting_approval is not a "
+                                f"legal transition (from {mission.state} the "
+                                f"legal targets are: "
+                                f"{', '.join(sorted(s.value for s in TRANSITIONS.get(MissionState(mission.state), frozenset()))) or 'none'})")
                         self.service.mark_step(
                             mission_id, step.step_id, status="pending",
                             detail=f"awaiting approval: {reason}; "
@@ -400,7 +431,7 @@ class MissionRunner:
                             mission_id, MissionState.AWAITING_APPROVAL, actor=actor,
                             reason=(f"step {step.step_id} needs approval "
                                     f"({reason}); confirmation "
-                                    f"{gate.get('confirmation_id') or 'unspecified'}"))
+                                    f"{confirmation or 'unspecified'}"))
 
                     self.service.mark_step(mission_id, step.step_id, status="failed",
                                            detail=f"not executed: {reason}", actor=actor)

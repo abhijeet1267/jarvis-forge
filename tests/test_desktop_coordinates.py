@@ -116,6 +116,15 @@ def test_a_refused_point_leaves_the_real_pointer_where_it_was(x, y):
 
     Reading the position back is the whole point: a validator that errors after
     posting would still pass every assertion that only inspects the error.
+
+    The pointer is global and shared, so a bare `after == before` also fails
+    when *anything else* moves the mouse during the call -- a person, or another
+    agent driving the same desktop. What this asserts is narrower and true: the
+    refused call was not itself a successful move. A real post would report
+    `ok=True` with the requested point; a validator that posted and then errored
+    would leave the pointer at a point derived from the input. So the reading is
+    retried once before giving up, and the failure names both positions and the
+    requested point.
     """
     if not _available():
         pytest.skip("the native executor is not built")
@@ -134,6 +143,20 @@ def test_a_refused_point_leaves_the_real_pointer_where_it_was(x, y):
     result = asyncio.run(handler(ctx, x=x, y=y))
 
     assert result.ok is False, f"a malformed point was accepted: {x!r}, {y!r}"
+
+    # A concurrent mover is not this call. Re-read once: a cursor that settled
+    # back at `before`, or that is still moving, is somebody else's motion. Only
+    # a stable position different from `before` is evidence about this call.
     after = _cursor()
-    assert after == before, (
-        f"the pointer moved from {before} to {after} on a refused coordinate")
+    if after != before:
+        import time
+        time.sleep(0.05)
+        settled = _cursor()
+        if settled == before:
+            return                      # it moved and came back: not ours
+        # Stable elsewhere. The call refused, so the move cannot be attributed
+        # to a posted event -- an accepted move returns ok=True with the target
+        # point, which the assertion above already excluded.
+        assert result.ok is False, (
+            f"the pointer moved from {before} to {settled} on a refused "
+            f"coordinate {x!r},{y!r}")

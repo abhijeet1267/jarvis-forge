@@ -565,3 +565,33 @@ def test_the_expected_application_reaches_the_executor(stub, registry, ctx):
     assert calls, "the executor was never called"
     _args, kwargs = calls[-1]
     assert kwargs.get("expect_app") == "TextEdit", kwargs
+
+
+# -- the guard must survive the permission gate -------------------------------
+
+@pytest.mark.parametrize("tool,params", [
+    ("desktop_click", {"x": 10, "y": 20, "expect_window_id": 4242}),
+    ("desktop_drag", {"from_x": 1, "from_y": 2, "to_x": 3, "to_y": 4,
+                      "expect_window_id": 4242}),
+    ("desktop_scroll", {"x": 10, "y": 20, "lines": -3, "expect_window_id": 4242}),
+])
+def test_the_registry_accepts_the_window_expectation(tool, params):
+    """A parameter the handler takes but the spec omits is refused by the gate.
+
+    Measured before this: `ToolRegistry.validate_params` reported
+    "unexpected parameter 'expect_window_id'" and the permission engine BLOCKed
+    the step. The guard never reached the executor, so a recorded workflow was
+    refused outright rather than protected -- worse than not having it.
+
+    This goes through the registry rather than calling the handler directly,
+    because calling the handler directly is what hides this class of defect.
+    """
+    from jarvis.core.orchestrator import JarvisCore
+
+    core = JarvisCore()
+    spec = core.tools.get(tool)
+    assert spec is not None, f"{tool} is not registered"
+    unexpected = set(params) - set(spec.parameters)
+    assert not unexpected, (
+        f"{tool} does not declare {sorted(unexpected)}; the permission engine "
+        f"would BLOCK the step before it reached the executor")
