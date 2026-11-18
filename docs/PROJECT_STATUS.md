@@ -4958,3 +4958,43 @@ message and the render flag).
 
 Physical desktop input remains **PERMISSION_BLOCKED** — see
 `docs/DESKTOP_PERMISSION_MODEL.md`.
+
+---
+
+## Update — 2026-11-18 (Automation Studio: the multistep replay, fully verified)
+
+The prior run of `benchmarks/v23_studio/studio_roundtrip.py` reported **8 passed,
+2 skipped** — the skips were honest (no fixture window was running, so
+window-move resilience could not be measured). Re-run with the fixture up:
+
+```
+17 passed, 0 failed, 0 skipped
+```
+
+The steps that had never executed before:
+
+| check | evidence |
+|---|---|
+| fixture window | 460x672 at (120, 86); button centre from live AX (180, 220.5), agreeing with state.json |
+| baseline replay | counter **0 → 1**; executor readback matches each recorded point |
+| window move | (120, 86) → (420, 186); live AX button centre moves (180, 220.5) → **(480, 320.5)** |
+| stale-coordinate proof | the recorded point (180, 220.5) is now **outside** the moved window — a naive replay would miss it |
+| reviewed draft | re-resolution yields (480, 320.5), not the recorded values |
+| moved replay | counter **1 → 2**; executor readbacks (480, 320.0), (480, 320.5) |
+
+The last row is the one that matters: the counter moved only because the click
+landed on the button's *new* position. That is an observed target-state change,
+not a posted-event claim.
+
+Also measured: the fixture's own cached target did **not** follow its window move
+(state.json still said 180,220.5 while AX said 480,320.5), so live AX is the only
+honest source for re-resolution. Worth remembering before trusting a cached
+target anywhere else.
+
+### Recorded-window identity, now on the same path
+
+A recorded step carries `window_id`; `derive()` emits it as `expect_window_id`;
+the tool spec declares it; the executor enforces it. A replay at a stale window
+now refuses with `target_not_found` instead of acting on whatever is there.
+Verified earlier this session by before/after on the live binary:
+`performed_unverified` (old) vs `target_not_found` (new).
