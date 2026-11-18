@@ -744,3 +744,34 @@ def test_element_lookup_still_resolves_an_unambiguous_keyword():
     payload = _json.loads(result.stdout or "{}")
     assert payload.get("status") != "target_ambiguous"
     assert (payload.get("element") or {}).get("identifier") == "probe.field"
+
+
+def test_press_element_forwards_the_window_expectation(stub, registry, ctx):
+    """A semantic press re-resolves its target by keyword, so it needs the guard.
+
+    Two windows of one application with an identically-named control is enough
+    for a press meant for one to land in the other. AXPress cannot miss by a
+    pixel, and that is exactly what makes it able to hit the wrong window
+    perfectly.
+    """
+    calls, make, mp = stub
+    mp.setattr(desktop_native.executor, "press_element",
+               make({"status": "performed_unverified", "reason": "AXPress accepted"}))
+    result = _call(registry, ctx, "desktop_press_element", application="TextEdit",
+                   keyword="Save", expect_window_id=4242, expect_pid=99)
+    assert result.ok is True, result.message
+    _args, sent = calls[0]
+    assert sent.get("expect_window_id") == 4242
+    assert sent.get("expect_pid") == 99
+
+
+def test_press_element_declares_its_guards_in_the_spec():
+    """Same trap as every other guard: an undeclared parameter BLOCKS the step."""
+    from jarvis.core.orchestrator import JarvisCore
+
+    spec = JarvisCore().tools.get("desktop_press_element")
+    assert spec is not None
+    for name in ("expect_window_id", "expect_pid"):
+        assert name in spec.parameters, (
+            f"desktop_press_element forwards {name} but does not declare it; the "
+            f"permission engine would block the step before it reached the executor")

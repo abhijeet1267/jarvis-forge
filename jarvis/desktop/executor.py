@@ -326,9 +326,25 @@ def read_element(application: str, keyword: str, *, role: str = "") -> Dict[str,
                                  f"keyword={keyword}", f"role={role}"])
 
 
-def press_element(application: str, keyword: str, *, role: str = "") -> Dict[str, Any]:
-    return _run("press_element", [f"application={application}",
-                                  f"keyword={keyword}", f"role={role}"])
+def press_element(application: str, keyword: str, *, role: str = "",
+                  expect_window_id: Optional[int] = None,
+                  expect_pid: Optional[int] = None,
+                  expect_bounds: Optional[tuple] = None) -> Dict[str, Any]:
+    """Press one AX element, optionally refusing if it is no longer where it was.
+
+    A keyword is resolved at press time, so it matches whatever is found *now*:
+    two windows of one app with an identically-named control is enough for a
+    press meant for one to land in the other. The expectation is checked against
+    the resolved element's own frame before AXPress is sent.
+    """
+    args = [f"application={application}", f"keyword={keyword}", f"role={role}"]
+    if expect_window_id is not None:
+        args.append(f"--expect-window-id={int(expect_window_id)}")
+    if expect_pid is not None:
+        args.append(f"--expect-pid={int(expect_pid)}")
+    if expect_bounds is not None:
+        args.append("--expect-bounds=" + ",".join(str(int(v)) for v in expect_bounds))
+    return _run("press_element", args)
 
 
 def verify_change(application: str, keyword: str, *, key: str, value: str,

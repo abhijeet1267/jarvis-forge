@@ -1473,7 +1473,8 @@ func opScrollElement(application: String, direction: String, amount: Double) -> 
               "before": before, "after": after])
 }
 
-func opPressElement(application: String, keyword: String, role: String) -> Never {
+func opPressElement(application: String, keyword: String, role: String,
+                    expectation: TargetExpectation = TargetExpectation()) -> Never {
     requireAX("pressing a UI element")
     let app = resolveApplication(application)
     guard let (element, described) = locate(keyword: keyword, application: application,
@@ -1482,16 +1483,29 @@ func opPressElement(application: String, keyword: String, role: String) -> Never
                  "no element matches \(keyword) in \(app.localizedName ?? application)",
                  ["application": app.localizedName ?? "", "role": role])
     }
+    // The resolved element reports its own global frame, so a caller that
+    // resolved this target earlier can say where it expected it to be. Without
+    // that check a keyword re-resolves to whatever matches *now*: two windows of
+    // the same app with one identically-named button is enough for a press meant
+    // for one to land in the other, and AXPress cannot miss by a pixel but can
+    // hit the wrong window perfectly.
+    let centre = CGPoint(
+        x: ((described["center_x"] as? NSNumber)?.doubleValue)
+            ?? ((described["x"] as? NSNumber)?.doubleValue ?? 0),
+        y: ((described["center_y"] as? NSNumber)?.doubleValue)
+            ?? ((described["y"] as? NSNumber)?.doubleValue ?? 0))
+    let targetCheck = requireFreshTarget(expectation, point: centre, verb: "pressing")
     // AXPress is preferred over a synthetic click: it is the interface the
     // application itself publishes, so it works when nothing is on screen and
     // cannot miss by a pixel.
     let pressError = AXUIElementPerformAction(element, kAXPressAction as CFString)
     usleep(120_000)
-    let body: [String: Any] = [
+    var body: [String: Any] = [
         "element": described,
         "application": app.localizedName ?? application,
         "ax_error": Int(pressError.rawValue),
     ]
+    if !expectation.isEmpty { body["target_check"] = targetCheck }
     if pressError == .success {
         Emit.out(.performed_unverified,
                  "AXPress was accepted by \(app.localizedName ?? application) on the \(described["role"] ?? "element"); the resulting state must be read separately",
@@ -1699,7 +1713,8 @@ case "inspect":
 case "read_element":
     opReadElement(application: str("application"), keyword: str("keyword"), role: str("role"))
 case "press_element":
-    opPressElement(application: str("application"), keyword: str("keyword"), role: str("role"))
+    opPressElement(application: str("application"), keyword: str("keyword"),
+                   role: str("role"), expectation: expectation)
 case "verify_change":
     guard !str("key").isEmpty else { failUsage("verify_change needs key= and value=") }
     opVerifyChange(application: str("application"), keyword: str("keyword"),

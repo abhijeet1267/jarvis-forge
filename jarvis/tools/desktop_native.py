@@ -354,7 +354,10 @@ async def desktop_inspect_ui(ctx: ToolContext, application: str = "",
 
 
 async def desktop_press_element(ctx: ToolContext, application: str = "",
-                                keyword: str = "", role: str = "", **_: Any) -> Any:
+                                keyword: str = "", role: str = "",
+                                expect_window_id: Optional[int] = None,
+                                expect_pid: Optional[int] = None,
+                                **_: Any) -> Any:
     """Press a UI element through its Accessibility action (AXPress).
 
     Preferred over a coordinate click: it is the interface the application
@@ -364,7 +367,9 @@ async def desktop_press_element(ctx: ToolContext, application: str = "",
     if not keyword:
         return fail("desktop_press_element",
                     "A semantic press needs the element's text or label.", device=ctx.device_id)
-    result = executor.press_element(application, keyword, role=role)
+    result = executor.press_element(application, keyword, role=role,
+                                    expect_window_id=expect_window_id,
+                                    expect_pid=expect_pid)
     return _finish("desktop_press_element", result, ctx,
                    f"Pressed {keyword!r}")
 
@@ -722,7 +727,8 @@ SPECS = [
             risk=RiskLevel.DESTRUCTIVE,
             requires_confirmation=True,
             reversible=False,
-            parameters={"application": "string", "keyword": "string", "role": "string"},
+            parameters={"application": "string", "keyword": "string", "role": "string",
+                        "expect_window_id": "integer", "expect_pid": "integer"},
             required_parameters=("keyword",),
             tags=["system", "desktop", "accessibility", "actuation"],
         ),
