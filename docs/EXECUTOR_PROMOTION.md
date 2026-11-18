@@ -112,3 +112,22 @@ and the installed one would not.
 This is not something a build fixes silently: replacing `/Applications/Vantage.app`
 would interrupt whatever the user has open. The DMG carries the complete app;
 installing it is their step.
+
+### The committed renders are the DMG's own output
+
+The six PNGs in `docs/evidence/approval-card/` were produced by the DMG's binary
+and compared byte-for-byte against the earlier renders:
+
+```
+IDENTICAL case1-already-ran-dark.png
+IDENTICAL case1-already-ran-light.png
+IDENTICAL case2-no-confirmation-dark.png
+IDENTICAL case2-no-confirmation-light.png
+IDENTICAL case3-nothing-parked-dark.png
+IDENTICAL case3-nothing-parked-light.png
+```
+
+Six of six, same SHA-256. The rendering is deterministic, and the artifact
+reproduces the evidence already recorded — so the committed images are not a
+snapshot of the build that happened to be on disk, they are what the shipping
+binary produces.
