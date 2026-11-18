@@ -130,6 +130,7 @@ struct ContentView: View {
             case .mcp:          MCPView()
             case .automation:   N8NView()
             case .command:      CommandCenterView(handoff: $handedOff)
+            case .voiceOperator: VoiceOperatorV2View()
             case .providers:    ProviderTabsView()
             case .capabilities: CapabilityRoutingView()
             case .devices:      DevicesView()
@@ -161,7 +162,7 @@ private struct VantageSidebar: View {
 
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: V.Space.m) {
-                    group("Workspace", [.today, .home, .briefing, .planner, .workspaces, .command])
+                    group("Workspace", [.today, .home, .briefing, .planner, .workspaces, .command, .voiceOperator])
                     group("Capture & Documents", [.capture, .documents])
                     group("Connections", [.connections, .google, .mcp, .automation])
                     group("Mac", [.desktop, .desktopOperator, .reality, .control, .tower, .missions, .recovery, .flows, .studio, .shadow, .steer, .operator_])
@@ -388,6 +389,10 @@ enum NavItem: String, Identifiable, CaseIterable {
     // Phase 3
     case briefing, capture, documents, preferences
 
+    /// V26: the optional voice surface. A case of its own rather than a mode of
+    /// Command Center, so the existing screen is untouched when it is not used.
+    case voiceOperator
+
     var id: String { rawValue }
 
     var title: String {
@@ -427,6 +432,7 @@ enum NavItem: String, Identifiable, CaseIterable {
         case .mcp: return "MCP"
         case .automation: return "Automation"
         case .command: return "Command Center"
+        case .voiceOperator: return "Voice Operator"
         case .providers: return "AI Providers"
         case .capabilities: return "Capabilities"
         case .devices: return "Devices"
@@ -478,6 +484,7 @@ enum NavItem: String, Identifiable, CaseIterable {
         case .mcp: return "puzzlepiece.extension.fill"
         case .automation: return "point.3.connected.trianglepath.dotted"
         case .command: return "bubble.left.and.bubble.right.fill"
+        case .voiceOperator: return "waveform.circle.fill"
         case .providers: return "key.fill"
         case .capabilities: return "sparkles.rectangle.stack"
         case .devices: return "macbook.and.iphone"
