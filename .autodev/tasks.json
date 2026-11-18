@@ -1402,21 +1402,21 @@
   },
   "R-release-macos-dmg-artifact": {
    "title": "macOS DMG ships which artifact \u2014 native SwiftUI GUI (com.jarvisforge.vantage) vs Tk launcher (com.jarvisforge.app)?",
-   "status": "blocked",
+   "status": "pending",
    "priority": 2,
    "depends_on": [],
    "acceptance": [
     "owner chooses; then build_dmg.sh packages that bundle and the docs/RELEASE_AND_BUILD.md table is updated"
    ],
-   "blockers": [
-    "OWNER DECISION (documented open in docs/RELEASE_AND_BUILD.md): the DMG currently packages the Tk-launcher bundle (dist/Vantage.app, com.jarvisforge.app, built by build_app.py). The intended macOS GUI is the native SwiftUI app (macos/Vantage/Vantage.app, com.jarvisforge.vantage, built by assemble_app.sh). Two bundles by design. Not a defect \u2014 a product decision about which one ships."
+   "blockers": [],
+   "evidence": [
+    {
+     "date": "2026-11-18",
+     "what": "Audited: 'which artifact ships' was decided 2026-10-27 (SHIP_NATIVE=1 in installers/macos/build_dmg.sh:26). Not blocked. The real defect was two live release paths shipping different apps; scripts/release_verify.sh now refuses to imply it is the shipping verifier.",
+     "verified": "test_r106_dmg_ships_either_artifact 3 passed; release_verify.sh guard exits 2"
+    }
    ],
-   "evidence": {
-    "date": "2026-10-23",
-    "iteration": 82,
-    "verified": "dist/Vantage.app is the Tk launcher and is CURRENT with app/launcher.py; codesign --verify --strict exits 0",
-    "note": "R1.5 (completed) covers the ANDROID pipeline only; it does not cover the macOS DMG. Do not conflate them."
-   }
+   "next": "Build the DMG (none exists on disk yet) and run installed-app acceptance against it."
   },
   "E1-daily-planner": {
    "title": "Daily planner: tasks, agenda, next-action, NL planning, scheduler controls, native PlannerView",
@@ -1576,7 +1576,7 @@
   },
   "E11-continuity": {
    "title": "Unified desktop/mobile continuity",
-   "status": "pending",
+   "status": "completed",
    "priority": 4,
    "depends_on": [],
    "acceptance": [
@@ -1597,6 +1597,11 @@
       "artifacts/ai-chat-history-panel.png",
       "artifacts/ai-chat-resume-history.png"
      ]
+    },
+    {
+     "date": "2026-11-18",
+     "what": "The recorded open item (merging ai_chats with messages by session_id, surface-tagged) landed in b559bf3 on 2026-11-14, one day after this record.",
+     "verified": "tests/test_r22_shared_conversation.py 25 passed, incl. surface == 'pipeline'"
     }
    ],
    "updated": "2026-11-13T00:00:00+00:00"
@@ -2410,7 +2415,8 @@
      "verdict": "2 verified, 1 partial, 7 permission blocked, 0 failed. No click, keystroke, scroll or drag has ever executed on this machine.",
      "blocked_on": "Post-event access for native/desktop_executor/VantageDesktopDev.app \u2014 a person's grant, not scriptable. Accessibility is needed only for the semantic AX path."
     }
-   ]
+   ],
+   "blocked_on": "Accessibility grant for macos/Vantage/Vantage.app itself. macOS grants to the responsible process; granting VantageDesktopDev.app or the executor cannot work (docs/DESKTOP_PERMISSION_MODEL.md). Corrected 2026-11-18: the previous text named the dev bundle, which the project measured to be ineffective."
   }
  }
 }
