@@ -6,6 +6,22 @@ struct VantageApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var delegate
     @StateObject private var backend = BackendManager.shared
 
+    /// `--render-approval-cards <dir>` writes PNGs of the approval card and
+    /// exits without starting a backend or a window.
+    ///
+    /// This is a verification path, not a product feature: the card is
+    /// module-internal, so the cheapest honest way to look at it is a launch
+    /// argument rather than a second build target that would need its own
+    /// visibility changes. It exits before `AppDelegate` does anything, so it
+    /// cannot disturb a running instance.
+    init() {
+        let arguments = CommandLine.arguments
+        if arguments.count >= 3, arguments[1] == "--render-approval-cards" {
+            let status = ApprovalCardPreview.render(to: arguments[2])
+            exit(status)
+        }
+    }
+
     var body: some Scene {
         WindowGroup {
             ContentView()

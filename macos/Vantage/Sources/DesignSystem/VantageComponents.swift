@@ -349,6 +349,13 @@ struct VToggleRow: View {
 
 struct VPrimaryButtonStyle: ButtonStyle {
     var fullWidth = false
+    /// The fill when enabled. Defaults to the app's accent.
+    ///
+    /// A destructive confirm is the case this exists for: an emerald "Approve
+    /// and run" beside a level-3 warning tells the eye "safe" while the text
+    /// says otherwise. Callers that commit something irreversible should pass
+    /// the warning colour so the button agrees with the sentence above it.
+    var tint: Color = V.accent
     @Environment(\.isEnabled) private var enabled
 
     func makeBody(configuration: Configuration) -> some View {
@@ -365,7 +372,7 @@ struct VPrimaryButtonStyle: ButtonStyle {
             .background(
                 RoundedRectangle(cornerRadius: V.Radius.control, style: .continuous)
                     .fill(enabled
-                          ? (configuration.isPressed ? V.accentPressed : V.accent)
+                          ? (configuration.isPressed ? tint.opacity(0.85) : tint)
                           : V.surfaceAlt)
                     .overlay(
                         RoundedRectangle(cornerRadius: V.Radius.control, style: .continuous)

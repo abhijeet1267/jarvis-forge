@@ -1213,47 +1213,57 @@ struct DesktopPlanApprovalCard: View {
 
     @ViewBuilder
     private var decisionRow: some View {
-        HStack(alignment: .firstTextBaseline, spacing: V.Space.s) {
-            if let confirmationId = approval.confirmationId, !isDeciding {
-                Text("Confirmation \(confirmationId)")
-                    .font(V.Font.mono)
-                    .foregroundStyle(V.textTertiary)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-            }
-            Spacer(minLength: V.Space.s)
-
+        // The explanation belongs on its own line above the controls. Inline in
+        // the HStack it competed for width with the buttons, wrapped to three
+        // lines and was clipped at the card's bottom edge -- measured by
+        // rendering the card offscreen, which is the only way that shows up.
+        VStack(alignment: .leading, spacing: V.Space.s) {
             if isDeciding {
-                ProgressView().controlSize(.small)
-                Text("Sending your decision…")
-                    .font(V.Font.caption)
-                    .foregroundStyle(V.textSecondary)
+                HStack(spacing: V.Space.s) {
+                    ProgressView().controlSize(.small)
+                    Text("Sending your decision…")
+                        .font(V.Font.caption)
+                        .foregroundStyle(V.textSecondary)
+                }
             } else if let reason = unavailableReason {
                 Text(reason)
                     .font(V.Font.caption)
                     .foregroundStyle(V.textSecondary)
-                    .multilineTextAlignment(.trailing)
                     .fixedSize(horizontal: false, vertical: true)
             }
 
-            if approval.parkedStepId != nil {
-                Button("Deny") {
-                    Task { await onDeny() }
+            HStack(alignment: .center, spacing: V.Space.s) {
+                if let confirmationId = approval.confirmationId, !isDeciding {
+                    Text("Confirmation \(confirmationId)")
+                        .font(V.Font.mono)
+                        .foregroundStyle(V.textTertiary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
                 }
-                .buttonStyle(VSecondaryButtonStyle())
-                .disabled(!canDeny)
-                .help("Deny this plan. Nothing further will run.")
-                .accessibilityLabel("Deny desktop plan")
-            }
+                Spacer(minLength: V.Space.s)
 
-            if approval.confirmationId != nil {
-                Button("Approve and run") {
-                    Task { await onApprove() }
+                if approval.parkedStepId != nil {
+                    Button("Deny") {
+                        Task { await onDeny() }
+                    }
+                    .buttonStyle(VSecondaryButtonStyle())
+                    .disabled(!canDeny)
+                    .help("Deny this plan. Nothing further will run.")
+                    .accessibilityLabel("Deny desktop plan")
                 }
-                .buttonStyle(VPrimaryButtonStyle())
-                .disabled(!canApprove)
-                .help("Approve this plan and run the remaining steps on this Mac")
-                .accessibilityLabel("Approve and run desktop plan")
+
+                // Shown only when approving is actually possible. A disabled
+                // Approve beside "nothing to approve" is a contradiction the
+                // reader has to resolve; omitting it is the honest answer.
+                if canApprove {
+                    Button("Approve and run") {
+                        Task { await onApprove() }
+                    }
+                    .buttonStyle(VPrimaryButtonStyle(tint: V.warning))
+                    .disabled(!canApprove)
+                    .help("Approve this plan and run the remaining steps on this Mac")
+                    .accessibilityLabel("Approve and run desktop plan")
+                }
             }
         }
     }
