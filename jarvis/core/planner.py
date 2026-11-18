@@ -2188,6 +2188,15 @@ class RulePlanner:
                 or re.search(r"\bshow\s+(?:me\s+)?the\s+(?:result|receipt)\b", text):
             return Intent("current_task", tool="get_current_task", confidence=0.85)
 
+        # "why didn't it work" asks for a cause, which only the mission record
+        # can answer. Routed to the diagnosis tool rather than the model so the
+        # reply is read from recorded steps instead of being generated.
+        if re.search(r"\bwhy\s+(?:did|didn'?t|doesn'?t|isn'?t|wasn'?t)\b.*\b(?:work|fail|"
+                     r"save|open|close|run|stop)\b", text) \
+                or re.search(r"\bwhy\s+(?:are|were)\s+you\s+(?:waiting|stuck|blocked)\b", text) \
+                or re.search(r"\bwhat\s+(?:went\s+wrong|failed)\b", text):
+            return Intent("explain_failure", tool="explain_last_failure", confidence=0.85)
+
         if re.search(r"\brecent\s+(actions?|activity|history|commands?)\b", text) \
                 or re.search(r"\bwhat\s+did\s+you\s+(just\s+)?(do|last\s+do)\b", text) \
                 or re.search(r"\bwhat\s+happened\s+(recently|lately)\b", text) \
