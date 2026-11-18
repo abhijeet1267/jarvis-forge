@@ -199,3 +199,40 @@ The renderer rejects a frame that came out uniformly blank, so "it rendered" is 
 **Nothing was clicked.** The renderer cannot press Approve, start a microphone, or send a command; the controls are laid out and wired to real methods but have never been pressed. That is NATIVE_UI_VERIFIED territory and it needs an unlocked GUI session with Accessibility granted to the app.
 
 The renderer uses a preview-only initializer argument to inject fixture messages and a fixture approval card. The app constructs the view with no arguments, so both are nil and every branch reads live service state.
+
+---
+
+## 13. Composer rules — executed and mutation-tested
+
+The view's send decisions were inline SwiftUI state, so nothing could run them.
+They are now `Sources/Services/VoiceOperatorComposer.swift`, and the view calls
+it — the tested code is the code that runs.
+
+**18 assertions pass** (`IntegrationHarness/voice_operator_composer_check.swift`):
+what gets sent (transcript wins over the typed field; whitespace-only speech does
+not shadow a typed command; both trimmed) and when Send is enabled (not while
+sending, not while the service is thinking, not while empty).
+
+**Both rules were proven load-bearing by mutation, not merely by passing:**
+
+| Mutation | Result |
+|---|---|
+| let a blank transcript win over the typed field | **6 checks failed**, exit 1 |
+| drop the `isSending` guard from `canSend` | **2 checks failed**, exit 1 |
+| restored | all pass, exit 0 |
+
+### Why not `swift test`
+
+It cannot run on this machine. `Tests/VantageTests/*.swift` import `XCTest`;
+only the Command Line Tools are installed, with no XCTest framework and no
+Xcode. **The pristine checkout at `13aea83` fails identically**, so this is
+pre-existing and not introduced here. The existing docs already record it
+(`PROJECT_STATUS.md:250`, `AUTONOMOUS_ENGINEERING_LOG.md:387`), so this campaign
+confirms the record rather than correcting it. The `check()` harness is the
+execute-and-assert path the other IntegrationHarness scripts already use.
+
+### Still not a button press
+
+This proves the composer cannot send the same command twice or send nothing. It
+does **not** prove that clicking Send reaches the backend, or that Approve
+executes a mission. That remains NATIVE_UI_VERIFIED territory.
