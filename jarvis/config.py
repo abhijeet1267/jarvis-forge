@@ -329,6 +329,16 @@ class Settings(BaseSettings):
     design_mermaid_path: str = ""
     design_mermaid_enabled: bool = False
 
+    # --- Voice Operator v2 (feature-flagged, off by default) --------------
+    # Session-scoped entity resolution: let a follow-up sentence say "it" for
+    # the application a previous mission actually verified, instead of the
+    # planner refusing every pronoun. Off by default so existing behaviour is
+    # byte-for-byte the same until the feature is accepted; the environment
+    # variable is JARVIS_VOICE_OPERATOR_V2_ENABLED via the ``JARVIS_`` prefix.
+    # Disabling it restores the old refusal with no data migration, because
+    # entity memory is in-process and never persisted.
+    voice_operator_v2_enabled: bool = False
+
     # --- Scheduler + briefing (v0.8) --------------------------------------
     # Which briefing sections to include. Empty means all of them.
     briefing_sections: str = ""

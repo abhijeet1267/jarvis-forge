@@ -153,6 +153,15 @@ class JarvisCore:
         from .planner_service import PlannerService
 
         self.planner_service = PlannerService(self.db)
+        # V2 (flagged): what each session has actually *verified* an action
+        # against, so a follow-up "close it" can name the application the last
+        # mission observed instead of the planner refusing the pronoun. In
+        # process only -- never persisted -- so turning the flag off leaves no
+        # state behind and no migration to undo. Recording an entity is not a
+        # grant: the resolved sentence still runs through the same gate.
+        from ..voice.entities import EntityMemory
+
+        self.entity_memory = EntityMemory()
         self.router = ModelRouter()
         self.capability_registry = CapabilityRegistry()
         
@@ -482,7 +491,24 @@ class JarvisCore:
         # to guess: the per-session selection is a local fact the pipeline
         # holds, and resolving it here keeps this surface on the same
         # behaviour as /command. The model still proposes everything else.
-        plan = self.planner.parse(request.text, request.context)
+        #
+        # V2 (flagged): a pronoun may also refer to what the last mission
+        # actually verified. The rewrite happens *before* planning, so the
+        # resolved sentence takes the ordinary path through the same ToolSpec
+        # validation and permission gate. Nothing is authorized here; when the
+        # memory has no verified entity (or more than one could fit) the text
+        # is passed through untouched and the planner refuses the pronoun
+        # exactly as it always has.
+        request_text = request.text
+        if getattr(self.settings, "voice_operator_v2_enabled", False):
+            from ..voice.resolve import resolve_reference
+
+            resolved = resolve_reference(request_text, self.entity_memory,
+                                         request.session_id, kind="app")
+            if resolved:
+                log.info("voice operator v2: resolved a pronoun reference")
+                request_text = resolved
+        plan = self.planner.parse(request_text, request.context)
         if plan.referent is not None:
             self._resolve_email_referent(request, plan)
             if plan.direct_reply:
@@ -1094,7 +1120,19 @@ class JarvisCore:
             return response
 
         # --- Stage 1: intent + planning -------------------------------------
-        plan = self.planner.parse(request.text, request.context)
+        # Same V2 pronoun rewrite as the other command surface, so "close it"
+        # behaves identically whether it arrives by voice or by typing. The
+        # resolved name is planned and gated exactly like a typed one.
+        request_text = request.text
+        if getattr(self.settings, "voice_operator_v2_enabled", False):
+            from ..voice.resolve import resolve_reference
+
+            resolved = resolve_reference(request_text, self.entity_memory,
+                                         request.session_id, kind="app")
+            if resolved:
+                log.info("voice operator v2: resolved a pronoun reference")
+                request_text = resolved
+        plan = self.planner.parse(request_text, request.context)
         response.intent = plan.intent
         response.plan = plan
         response.model_used = plan.planner
@@ -1412,6 +1450,14 @@ class JarvisCore:
             action.result = result
             action.status = self._action_status(result)
             response.actions.append(result)
+            # V2 (flagged): remember what an action *observed*, not what it was
+            # told to do. A launch that reported verified=True watched the
+            # process table and found it; a launch that could not confirm the
+            # application is deliberately NOT remembered, because a later
+            # "close it" must not name an app nobody saw running. Recording is
+            # not authorization -- the resolved sentence is gated like any other.
+            if getattr(self.settings, "voice_operator_v2_enabled", False):
+                self._remember_verified_entity(action, result, request)
             self._audit_action(action, request, result, risk_label, False,
                                  request_id=response.request_id,
                                  unhandled=plan.unhandled,
@@ -1988,6 +2034,37 @@ class JarvisCore:
                     # Nothing matched: clear, so a stale pointer cannot answer
                     # a follow-up about a message this search just ruled out.
                     self.email_context.clear(request.session_id)
+
+    def _remember_verified_entity(self, action, result, request: CommandRequest) -> None:
+        """V2: remember the application an action *observed*, for later pronouns.
+
+        Only a result that reports ``verified=True`` is recorded. A launch whose
+        own handler could not confirm the process (``unverified``) is skipped on
+        purpose: "close it" must never resolve to an application nobody saw
+        running. The name comes from the result's own ``display_name``/``app``
+        field, never from the user's wording, so a misheard sentence cannot seed
+        a false target.
+        """
+        try:
+            if not getattr(result, "ok", False) or not getattr(result, "verified", False):
+                return
+            if action.tool not in ("open_application", "open_app"):
+                return
+            payload = getattr(result, "output", None) or {}
+            if isinstance(payload, dict):
+                name = str(payload.get("display_name") or payload.get("app")
+                           or payload.get("application") or "").strip()
+            else:
+                name = ""
+            if not name:
+                name = str((action.params or {}).get("app") or "").strip()
+            if not name:
+                return
+            self.entity_memory.record(
+                request.session_id or "", "app", name, verified=True,
+                evidence=str(getattr(result, "message", "") or "")[:200])
+        except Exception as exc:  # memory must never break a command that worked
+            log.info("voice operator v2: could not record an entity: %s", type(exc).__name__)
 
     def _remember_outcome(self, request: CommandRequest, response: CommandResponse) -> None:
         """Record a session-scoped memory of what happened."""
