@@ -1417,10 +1417,62 @@ func opReadElement(application: String, keyword: String, role: String) -> Never 
 /// Setting `AXValue` on the scroll bar is a different mechanism: it does not ask
 /// the view to perform anything, it states where the scroll position should be.
 /// That is both supported and idempotent, which also makes it safe to retry.
-func opScrollElement(application: String, direction: String, amount: Double) -> Never {
+func opScrollElement(application: String, direction: String, amount: Double,
+                     expectation: TargetExpectation = TargetExpectation()) -> Never {
     requireAX("scrolling a view")
     let app = resolveApplication(application)
     let root = AXUIElementCreateApplication(app.processIdentifier)
+
+    // This operation writes a scroll bar's AXValue, which is a real change to a
+    // real view, and it used to take no target at all: it scrolled whichever
+    // scroll bars the walk reached in the named application. A caller that
+    // passed `--expect-window-id` had it parsed and silently discarded, which is
+    // the most misleading shape a guard can take.
+    //
+    // The expectation is checked against the application's own front window
+    // before anything is written. There is no per-scroll-bar identity to compare
+    // with -- the walk discovers scroll bars, it is not given one -- so the
+    // window is the finest target this operation can honour. If a caller names a
+    // window that is not the front one, the honest answer is a refusal rather
+    // than scrolling a window they did not mean.
+    if !expectation.isEmpty {
+        var windowValue: CFTypeRef?
+        let front = AXUIElementCopyAttributeValue(root, kAXFocusedWindowAttribute as CFString,
+                                                  &windowValue) == .success
+            ? (windowValue as! AXUIElement)
+            : nil
+        var frameValue: CFTypeRef?
+        var windowBounds: CGRect?
+        if let front,
+           AXUIElementCopyAttributeValue(front, kAXPositionAttribute as CFString, &frameValue) == .success,
+           let positionValue = frameValue {
+            var sizeValue: CFTypeRef?
+            var point = CGPoint.zero
+            var size = CGSize.zero
+            if AXValueGetValue(positionValue as! AXValue, .cgPoint, &point),
+               AXUIElementCopyAttributeValue(front, kAXSizeAttribute as CFString, &sizeValue) == .success,
+               let sizeRef = sizeValue,
+               AXValueGetValue(sizeRef as! AXValue, .cgSize, &size) {
+                windowBounds = CGRect(origin: point, size: size)
+            }
+        }
+        if let bounds = windowBounds {
+            let check = requireFreshTarget(
+                TargetExpectation(windowID: expectation.windowID, pid: expectation.pid,
+                                  bounds: expectation.bounds),
+                point: CGPoint(x: bounds.midX, y: bounds.midY), verb: "scrolling")
+            _ = check
+        } else if expectation.windowID != nil || expectation.bounds != nil {
+            // A window or bounds expectation needs a window to check against. No
+            // front window means the check cannot be performed, and an
+            // unperformable guard is reported rather than assumed satisfied.
+            Emit.out(.target_not_found,
+                     "\(app.localizedName ?? application) published no front window, so the "
+                     + "requested target check could not be performed; nothing was scrolled",
+                     ["application": app.localizedName ?? application,
+                      "staleness_check": "no_front_window"])
+        }
+    }
 
     // Positive moves down/right, negative up/left, in fractions of the content.
     let signum = (direction.lowercased() == "up" || direction.lowercased() == "left") ? -1.0 : 1.0
@@ -1696,7 +1748,8 @@ case "drag":
 case "scroll_element":
     opScrollElement(application: str("application"),
                     direction: str("direction", "down"),
-                    amount: num("amount") ?? 0.35)
+                    amount: num("amount") ?? 0.35,
+                    expectation: expectation)
 case "scroll":
     guard let x = num("x"), let y = num("y") else { failUsage("scroll needs x= and y=") }
     opScroll(x: x, y: y, lines: int("lines", 3), horizontal: str("horizontal") == "true",

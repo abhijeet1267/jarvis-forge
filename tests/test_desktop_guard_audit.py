@@ -401,7 +401,19 @@ SWIFT_EXECUTOR = (Path(__file__).resolve().parent.parent
 #: either act on no window (`move`, `release_all`, `permissions`, ...) or are
 #: covered by a different guard (`type`/`key` use `expect_app`, a key=value
 #: parameter, not a `--` flag).
-SWIFT_WINDOW_GUARDED_OPS = {"click", "drag", "scroll", "press_element"}
+#: Targeted operations that act with NO staleness guard.
+#:
+#: `scroll_element` used to be the entry here. Measured: it scrolled a Finder
+#: scroll bar from 0 to 0.35 while being handed `--expect-window-id=999999`,
+#: because the dispatch parsed the flag and never passed it in. It now checks the
+#: application's front window before writing and refuses with `target_not_found`
+#: when that check cannot be performed, so it has moved to the guarded set above.
+#:
+#: Empty is the good state. Anything added here is a known, checked gap rather
+#: than a blank line in a table.
+SWIFT_TARGETED_WITHOUT_GUARD: set[str] = set()
+
+SWIFT_WINDOW_GUARDED_OPS = {"click", "drag", "scroll", "press_element", "scroll_element"}
 
 
 def _swift_dispatch_cases(source: str) -> dict[str, str]:
@@ -476,34 +488,28 @@ SWIFT_READ_ONLY = {
     "request_access",
 }
 
-#: Targeted operations that act with NO staleness guard. This is a residual, not
-#: a design choice: `scroll_element` sets a scroll bar's AXValue in whichever
-#: application it is told, and the executor's `--expect-*` flags are parsed and
-#: then silently ignored for it because the dispatch never passes them in. It is
-#: recorded here — and pinned by the test below — rather than omitted, so the
-#: gap is a known, checked fact and not a blank line in a table.
-SWIFT_TARGETED_WITHOUT_GUARD = {"scroll_element"}
 
 
-def test_scroll_element_is_targeted_without_a_guard_and_is_not_exposed():
-    """The one targeted Swift operation with no guard, and its current blast radius.
+def test_scroll_element_consumes_the_target_guard_before_it_writes():
+    """It once scrolled a window it was told not to touch. Now it refuses.
 
-    `scroll_element` exists in the executor and can be invoked by anything able
-    to exec the binary. It consumes no `--expect-*` flag, so a caller that
-    passes one is silently unprotected. What limits it today is reachability:
-    no Python module calls it — not `jarvis/desktop/executor.py`, not the tool
-    layer, not the routes — so it is not on the governed path.
+    Measured before the fix: `scroll_element application=Finder
+    --expect-window-id=999999` reported `verified` and moved a Finder scroll bar
+    from 0 to 0.35 -- the flag was parsed and never passed into the operation.
+    That is the most misleading shape a guard can take, worse than having none,
+    because the caller believes a check happened.
 
-    If this test fails because `scroll_element` gained a helper, that is the
-    moment to add `expectation:` in its Swift block and a guard to the Python
-    helper; it must not be exposed unguarded.
+    The operation now takes the expectation and checks the application's front
+    window before writing anything. If it ever stops consuming the guard, this
+    fails; if it is ever wired into the Python layer, the reachability assert
+    below still fails until a helper is added deliberately.
     """
     source = SWIFT_EXECUTOR.read_text()
     blocks = _swift_dispatch_cases(source)
-    assert "scroll_element" in blocks, "the operation was removed; drop it from the ledger"
-    assert "expectation: expectation" not in blocks["scroll_element"], (
-        "scroll_element now consumes the target guard — move it into "
-        "SWIFT_WINDOW_GUARDED_OPS and assert its forwarding from Python")
+    assert "scroll_element" in blocks, "the operation was removed; update the ledger"
+    assert "expectation: expectation" in blocks["scroll_element"], (
+        "scroll_element stopped consuming the target guard -- it writes AXValue "
+        "into a named application, so it must check its target first")
 
     root = Path(__file__).resolve().parent.parent
     callers = []
@@ -513,9 +519,10 @@ def test_scroll_element_is_targeted_without_a_guard_and_is_not_exposed():
         if "scroll_element" in path.read_text(errors="ignore"):
             callers.append(str(path.relative_to(root)))
     assert not callers, (
-        "scroll_element is now reachable from the Python layer, but it has no "
-        "target guard — guard it before exposing it: " + ", ".join(sorted(callers)))
-
+        "scroll_element is now reachable from the Python layer. It has a guard, "
+        "so exposure is permitted -- but add a tool spec that declares "
+        "expect_window_id and a test that forwards it, then delete this assert: "
+        + ", ".join(sorted(callers)))
 
 def test_the_read_only_operations_are_the_ones_that_only_read():
     """Keep the "read-only" classification honest by inspecting, not by label.
