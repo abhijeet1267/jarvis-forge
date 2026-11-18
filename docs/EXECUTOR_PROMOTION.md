@@ -62,3 +62,32 @@ app's backend to that binary was exercised, not assumed.
 all. macOS grants Accessibility to a responsible process; the same binary reports
 `accessibility: true` from a terminal and `false` under `Vantage.app`. That is a
 user grant, not a build step. See `docs/DESKTOP_PERMISSION_MODEL.md`.
+
+## Shipped in the DMG
+
+`dist/Vantage-0.2.0.dmg` (46,239,089 bytes), built by
+`installers/macos/build_dmg.sh` with `SHIP_NATIVE=1`, mounted read-only and
+inspected:
+
+| check | value |
+|---|---|
+| bundle identifier | `com.jarvisforge.vantage` — the native SwiftUI app |
+| executor SHA-256 | `93f539676104ebeae1119f95…` — **identical to the verified binary** |
+| ambiguity fix present | yes |
+| mount/unmount | clean |
+
+The same binary verified at the fixture is the one inside the DMG: same SHA-256,
+byte for byte.
+
+### Release gate status for the executor fix
+
+| stage | status |
+|---|---|
+| IMPLEMENTED | yes — `native/desktop_executor/main.swift` @ `e657218` |
+| STAGED | yes — `vantage-desktop.staging`, CDHash `e2eac2c7` |
+| BUNDLED | yes — app bundle and DMG, SHA-256 `93f53967…` |
+| RUNNING | **yes for the dev bundle path; NO for the installed app** — the app the user has open predates the rebuild and has not been replaced |
+| VERIFIED | yes as a binary: refuses ambiguity, resolves unambiguously, no side effect — measured against the DMG's own executor |
+
+"RUNNING" is the one stage not closed, and it is a user action: replacing the
+installed app interrupts whatever they are doing. The artifact is ready.
