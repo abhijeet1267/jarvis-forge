@@ -131,3 +131,25 @@ Six of six, same SHA-256. The rendering is deterministic, and the artifact
 reproduces the evidence already recorded — so the committed images are not a
 snapshot of the build that happened to be on disk, they are what the shipping
 binary produces.
+
+## Automation Studio, re-run at this checkpoint
+
+Attempted a second full replay after the rebuild. It reached the fixture and then
+**refused**:
+
+```
+PASS     port: VANTAGE_TEST_PORT=8799; 8765 refused
+PASS     backend: vantage-backend pid 69402 revision d2d53bddd7cc+dirty
+PASS     token: 200 tools, 17 agents
+PASS     desktop permission: post_events and cursor movement allowed
+BLOCKED  fixture focus: the fixture would not come to the front
+```
+
+`osascript` to activate the fixture's process reported `Claude` still frontmost
+afterwards, so the fixture could not take focus in this session context.
+
+This is the benchmark behaving correctly rather than a regression: it re-asserts
+focus before every input step and refuses rather than typing or clicking into
+whatever happens to be in front. The earlier **17 passed / 0 failed / 0 skipped**
+run stands as the verified result; this attempt is recorded as **environment
+blocked**, not as a failure and not as a pass.
