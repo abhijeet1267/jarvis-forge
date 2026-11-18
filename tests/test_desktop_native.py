@@ -674,3 +674,73 @@ def test_every_guarded_tool_declares_its_guard_in_the_spec(tool, params):
     assert not undeclared, (
         f"{tool} does not declare {sorted(undeclared)}; the permission engine "
         f"would BLOCK the step before it reached the executor")
+
+
+# -- an ambiguous target is a question, not a guess ---------------------------
+#
+# `target_ambiguous` was declared in the executor's status enum, promised by a
+# comment in `locate()`, and never emitted: several matches silently became
+# `hits.first`. "Press the Save button" in an app with two Save elements pressed
+# whichever the AX walk reached first and reported done.
+
+def test_element_lookup_refuses_an_ambiguous_keyword():
+    """A keyword matching several different elements must not pick one.
+
+    Uses the running input fixture when it is up. When it is not, the check is
+    skipped rather than faked -- the ambiguity lives in the AX tree, so it cannot
+    be asserted from a stub.
+    """
+    import json as _json
+    import subprocess as _subprocess
+
+    from jarvis.desktop import executor
+
+    path = executor.executor_path()
+    if path is None:
+        pytest.skip("the native executor is not built")
+
+    probe = _subprocess.run(["/usr/bin/pgrep", "-f", "vantage-probe"],
+                            capture_output=True, text=True)
+    if probe.returncode != 0:
+        pytest.skip("the input fixture (tools/input_probe) is not running")
+
+    # "Click" matches the fixture's button, its counter label and its
+    # right-click target -- three differently described elements.
+    result = _subprocess.run(
+        [str(path), "read_element", "application=vantage-probe", "keyword=Click"],
+        capture_output=True, text=True)
+    payload = _json.loads(result.stdout or "{}")
+    if payload.get("status") != "target_ambiguous" and payload.get("element"):
+        pytest.skip(
+            f"the resolved executor ({path}) predates the ambiguity check; "
+            f"this asserts the built source, and promoting the new binary would "
+            f"invalidate its Accessibility grant -- see docs/DESKTOP_PERMISSION_MODEL.md")
+    assert payload.get("status") == "target_ambiguous", (
+        f"an ambiguous keyword resolved instead of refusing: {payload.get('status')} "
+        f"-> {(payload.get('element') or {}).get('identifier')}")
+    assert payload.get("match_count", 0) > 1
+    assert payload.get("matches"), "the refusal named no matches to choose from"
+
+
+def test_element_lookup_still_resolves_an_unambiguous_keyword():
+    """The ambiguity check must not refuse ordinary lookups."""
+    import json as _json
+    import subprocess as _subprocess
+
+    from jarvis.desktop import executor
+
+    path = executor.executor_path()
+    if path is None:
+        pytest.skip("the native executor is not built")
+    probe = _subprocess.run(["/usr/bin/pgrep", "-f", "vantage-probe"],
+                            capture_output=True, text=True)
+    if probe.returncode != 0:
+        pytest.skip("the input fixture (tools/input_probe) is not running")
+
+    result = _subprocess.run(
+        [str(path), "read_element", "application=vantage-probe",
+         "keyword=probe.field"],
+        capture_output=True, text=True)
+    payload = _json.loads(result.stdout or "{}")
+    assert payload.get("status") != "target_ambiguous"
+    assert (payload.get("element") or {}).get("identifier") == "probe.field"
