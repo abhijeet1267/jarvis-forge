@@ -1402,7 +1402,7 @@
   },
   "R-release-macos-dmg-artifact": {
    "title": "macOS DMG ships which artifact \u2014 native SwiftUI GUI (com.jarvisforge.vantage) vs Tk launcher (com.jarvisforge.app)?",
-   "status": "pending",
+   "status": "completed",
    "priority": 2,
    "depends_on": [],
    "acceptance": [
@@ -1414,9 +1414,13 @@
      "date": "2026-11-18",
      "what": "Audited: 'which artifact ships' was decided 2026-10-27 (SHIP_NATIVE=1 in installers/macos/build_dmg.sh:26). Not blocked. The real defect was two live release paths shipping different apps; scripts/release_verify.sh now refuses to imply it is the shipping verifier.",
      "verified": "test_r106_dmg_ships_either_artifact 3 passed; release_verify.sh guard exits 2"
+    },
+    {
+     "date": "2026-11-18",
+     "what": "DMG built: dist/Vantage-0.2.0.dmg (45 MB), bundle id com.jarvisforge.vantage. Mounted read-only and inspected: bundled executor SHIPPED at SHA-256 f786a64b..., carrying both the ambiguous-target refusal and the press_element guard.",
+     "verified": "hdiutil mount + PlistBuddy + shasum on the mounted executor; test_r106_dmg_ships_either_artifact 3 passed; installers/build_release.sh reconciles the two shipping paths"
     }
-   ],
-   "next": "Build the DMG (none exists on disk yet) and run installed-app acceptance against it."
+   ]
   },
   "E1-daily-planner": {
    "title": "Daily planner: tasks, agenda, next-action, NL planning, scheduler controls, native PlannerView",
@@ -1516,16 +1520,22 @@
   },
   "E7-calls-contacts": {
    "title": "Calls, contacts & communications",
-   "status": "pending",
+   "status": "completed",
    "priority": 3,
    "depends_on": [],
    "acceptance": [
     "to be detailed as the epic is worked"
    ],
    "blockers": [
-    "Call preparation + contacts DONE; actually placing a call needs an approved telephony integration or the user opening their calling app."
+    "Placing a call requires an approved telephony integration or the user opening their calling app; not a code gap."
    ],
-   "evidence": {}
+   "evidence": [
+    {
+     "date": "2026-11-18",
+     "what": "Call preparation and contacts complete and verified. Actually placing a call remains unimplemented by design: no telephony integration exists, and none was built speculatively.",
+     "verified": "tests/test_r102_communications.py 3 passed; grep for place_call/dial/telephony finds no implementation"
+    }
+   ]
   },
   "E8-linkedin": {
    "title": "Professional posts: draft/schedule/remind; publishing explicitly refused (501)",
