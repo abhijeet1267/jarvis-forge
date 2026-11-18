@@ -1,4 +1,4 @@
-# Why the app's backend cannot see the frontmost application
+# Correction: the app's backend *can* see the frontmost application
 
 A prior session hypothesised "two GUI sessions". Measured, that hypothesis is
 **wrong**, and the real cause is narrower and more specific.
@@ -15,6 +15,45 @@ console owner         abhijeetmiskin
 Everything shares session 0 and the console belongs to the same user. There is no
 second GUI session. The hypothesis that the backend sits in a different session is
 **refuted**.
+
+## Correction, later the same day
+
+**The conclusion below is wrong and is kept only as a record of the error.**
+
+Re-measured against the installed app's own backend (`/Applications/Vantage.app`,
+pid 77185, spawning backend 77186) three times in a row:
+
+```
+frontmost: 'Brave Browser' | screen_capture: True | windows: 25
+frontmost: 'Brave Browser' | screen_capture: True | windows: 25
+frontmost: 'Brave Browser' | screen_capture: True | windows: 25
+```
+
+An app-spawned backend reads the frontmost application perfectly well. The `nil`
+I measured earlier was a transient state, most likely a screen-capture denial:
+the log shows the display asleep 08:51–09:42, overlapping that measurement, and a
+later momentary failure on the same endpoint showed `screen_capture: false` with
+the same generic failure shape.
+
+A worker then tested this properly with a negative control — `launchctl bsexec`
+into a non-GUI bootstrap — and confirmed that `NSApplication.shared`,
+`finishLaunching()`, `setActivationPolicy` and a run loop all change nothing: in a
+bootstrap with no GUI session the read stays `nil`, and in every GUI-connected
+context (including a `Process` child of a GUI app) it works before any AppKit
+call. So there is no launch-context defect to fix and no product change is
+warranted.
+
+**What survives from the analysis below:** nothing about the app path. The
+measurement is retained because the reasoning error is instructive — a single
+`nil` was treated as a structural property when it was a transient, and two
+subsequent documents repeated it.
+
+The `expect_app` guard therefore works from the app's backend. It has not been
+exercised end to end because that requires posting real keystrokes.
+
+---
+
+## The superseded analysis (kept as record)
 
 ## Measurement two — the contrast that identifies the cause
 
