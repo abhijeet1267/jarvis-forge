@@ -34,7 +34,9 @@ Per §25, every claim is labelled. **Nothing in this report is PHYSICAL_VERIFIED
 | 5 | Rollback (Test D) proven | `tests/test_v26_rollback.py` | UNIT_TESTED |
 | 6 | Carried forward: entity memory, pronoun resolver, diagnosis module | from `f00d1c2`, `af992b0` | UNIT_TESTED |
 
-**Not built:** SwiftUI UI (VO-12), live voice (VO-01 acceptance), workflow drafting enhancements (VO-07), Goal Contracts enhancements (VO-08), preview enhancements (VO-09), evidence views (VO-10), provider routing (VO-11). Each is either already present in Vantage or needs GUI work I cannot verify here. See §6.
+**Not built:** live voice (VO-01 acceptance), workflow drafting enhancements (VO-07), Goal Contracts enhancements (VO-08), preview enhancements (VO-09), evidence views (VO-10), provider routing (VO-11). Each is either already present in Vantage or needs a GUI session I cannot drive. See §6.
+
+**Added after the first draft of this report:** the SwiftUI surface (VO-12) — see §12.
 
 ---
 
@@ -101,7 +103,7 @@ Read from source, not from the directive's assumptions:
 | VO-09 ParallelWorld preview | **Already present**: `/files/preview`, `/apply`, `/undo`, `/organize-plan` |
 | VO-10 ProofLens | **Already present**: `/{mission_id}/receipt`, `/{mission_id}/proof` |
 | VO-11 provider routing | **Already present**: `gateway/provider_categories.py` `CATEGORIES` |
-| VO-12 SwiftUI | **Not attempted** — needs GUI verification I cannot perform |
+| VO-12 SwiftUI | **Built** — see §12. Rendered, not clicked |
 | VO-01 live voice | **BLOCKED_EXTERNAL** — needs Accessibility in an unlocked GUI session |
 
 Building any of VO-07 through VO-11 would create the duplicate engines §0 forbids.
@@ -162,7 +164,38 @@ One honest note the test surfaced: the gate is at the *call site*, not inside `_
 | C — Conversation intelligence | **INTEGRATED** (resolver + parity tests) |
 | D — ActionMesh features without duplicate engines | **INTEGRATED** (2 real gaps closed, 5 duplicates rejected) |
 | E — Security | **UNIT_TESTED** (19 contract tests incl. all 8 named phrases) |
-| F — Native SwiftUI | **NOT_IMPLEMENTED** |
+| F — Native SwiftUI | **SOURCE_IMPLEMENTED + rendered** (see §12); not clicked |
 | G — Rollback | **INTEGRATED** (Test D) |
 
 Nothing here is GUI_VERIFIED or PHYSICAL_VERIFIED.
+---
+
+## 12. VO-12 — the native surface
+
+**Files:** `Sources/Views/VoiceOperatorV2View.swift` (new), `Sources/Views/ContentView.swift` (nav item), `IntegrationHarness/voice_operator_render.swift` (renderer).
+
+**Surfaced how:** a new `NavItem.voiceOperator` in the existing Workspace sidebar group, beside Command Center. Home, Command Center and every other screen are untouched; the enum case is additive and the three switch statements that must know about a nav item were extended, not rewritten.
+
+**It is a client, not an engine.** Every command goes through `ConversationService.send` → `/command`. Speech in is `VoiceService` (the signed bundle, because macOS attributes microphone consent to the bundle rather than to a bare Python process); speech out is the same `AVSpeechSynthesizer` and the same persisted `speakReplies` preference the rest of the app uses.
+
+**What it adds over Command Center:** a review step. Command Center auto-submits a finished transcript — correct for a keyboard, wrong for a microphone, where recognition is a guess until a human reads it. Here the transcript lands in an editable field and is sent only on a press, and a parked plan is approved only by a press.
+
+**Isolation decision:** `ConversationService` has no singleton, so the view owns its own instance. That is also correct behaviour — the service carries the session id that makes follow-ups resolve, and sharing one instance across two screens would interleave two conversations into one memory.
+
+### Evidence
+
+| Check | Result |
+|---|---|
+| `swift build` | **Build complete**, 0 errors |
+| Offscreen render, 5 states | empty light/dark, conversation, approval light/dark — **all non-blank** |
+| Frames read by eye | empty state shows a **disabled** Send; approval card shows summary, step, monospace params, both buttons, in both appearances |
+| Command Center's own renderer | **still runs, exit 0** |
+| Backend suites | **262 passed, 1 skipped** |
+
+The renderer rejects a frame that came out uniformly blank, so "it rendered" is checked rather than assumed. The images themselves were read, not merely counted.
+
+### What this does NOT prove
+
+**Nothing was clicked.** The renderer cannot press Approve, start a microphone, or send a command; the controls are laid out and wired to real methods but have never been pressed. That is NATIVE_UI_VERIFIED territory and it needs an unlocked GUI session with Accessibility granted to the app.
+
+The renderer uses a preview-only initializer argument to inject fixture messages and a fixture approval card. The app constructs the view with no arguments, so both are nil and every branch reads live service state.
