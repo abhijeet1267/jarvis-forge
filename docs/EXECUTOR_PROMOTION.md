@@ -91,3 +91,24 @@ byte for byte.
 
 "RUNNING" is the one stage not closed, and it is a user action: replacing the
 installed app interrupts whatever they are doing. The artifact is ready.
+
+## The installed copy is a different, older, non-functional app
+
+Inspected while checking what the user actually runs:
+
+| | `/Applications/Vantage.app` | `macos/Vantage/Vantage.app` (running, pid 65474) |
+|---|---|---|
+| bundle id | `com.jarvisforge.vantage` | same |
+| built | **2026-11-15 15:59** | 2026-11-18 08:29 |
+| `Contents/Resources/` | **`Vantage.icns` only** | python, jarvis, dashboard, native, site-packages |
+| bundled Python | **none** | `python/bin/python3.11` |
+| bundled executor | **none** | present, SHA-256 `93f53967…`, has the fix |
+
+The installed copy is a bare SwiftUI shell with no runtime, no backend and no
+executor — it cannot run standalone and predates the executor entirely. The app
+that is currently running was launched from the checkout, which is why it works
+and the installed one would not.
+
+This is not something a build fixes silently: replacing `/Applications/Vantage.app`
+would interrupt whatever the user has open. The DMG carries the complete app;
+installing it is their step.
