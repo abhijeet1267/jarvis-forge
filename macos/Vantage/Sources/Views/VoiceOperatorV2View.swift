@@ -67,13 +67,15 @@ struct VoiceOperatorV2View: View {
     }
 
     private var composerText: String {
-        draftTranscript.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            ? typedCommand.trimmingCharacters(in: .whitespacesAndNewlines)
-            : draftTranscript.trimmingCharacters(in: .whitespacesAndNewlines)
+        VoiceOperatorComposer.text(draftTranscript: draftTranscript,
+                                   typedCommand: typedCommand)
     }
 
     private var canSend: Bool {
-        !composerText.isEmpty && !isSending && !chat.isThinking
+        VoiceOperatorComposer.canSend(draftTranscript: draftTranscript,
+                                      typedCommand: typedCommand,
+                                      isSending: isSending,
+                                      isThinking: chat.isThinking)
     }
 
     var body: some View {
@@ -388,12 +390,13 @@ struct VoiceOperatorV2View: View {
 
     private func send() {
         let text = composerText
-        guard !text.isEmpty, !isSending else { return }
+        guard canSend, !text.isEmpty else { return }
         isSending = true
         // Cleared before awaiting so a second Return cannot resend the same
-        // words; the transcript already moved into `chat`.
-        draftTranscript = ""
-        typedCommand = ""
+        // words. The rule lives in VoiceOperatorComposer so it is testable.
+        let cleared = VoiceOperatorComposer.afterSend()
+        draftTranscript = cleared.draftTranscript
+        typedCommand = cleared.typedCommand
         Task {
             defer { isSending = false }
             if await chat.send(text) != nil {
