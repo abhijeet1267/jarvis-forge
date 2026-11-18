@@ -71,3 +71,47 @@ Everything that does not require posting input:
 Pointer move, click, double-click, right-click, typing, shortcuts, scroll, drag,
 and any end-to-end desktop mission that posts input — all of them until step 3
 above is done. They are `PERMISSION_BLOCKED`, not broken.
+
+---
+
+## Second variable: a detached backend has no UI session
+
+Measured 2026-11-18 while lifecycle-testing a release candidate on an isolated
+port (8802), started from a terminal with its own profile:
+
+```
+GET /desktop/windows  ->  frontmost_application: "loginwindow"
+                          screen_capture: true
+                          status: verified          (24 windows enumerated)
+```
+
+The real session had Claude frontmost. The backend reported `loginwindow`.
+
+So there are **two** independent conditions for driving the desktop, and the
+earlier analysis captured only one:
+
+1. **Accessibility for the responsible process** — `Vantage.app` must hold the
+   grant, because that is who macOS attributes a request to. Documented above.
+2. **A connection to the user's GUI session** — a backend started from a shell
+   is not part of the Aqua session. It can enumerate windows and read the window
+   server, but another application's AX tree comes back empty (a fixture window
+   plainly present at 452×660 published no `AXWindow` at all).
+
+The second is why `read_element` and `press_element` found nothing while
+`windows` worked perfectly in the same process. It also explains the earlier
+"the fixture stopped publishing AX" conclusion: the fixture was healthy; the
+reader was outside the session.
+
+A backend spawned **by the app** inherits the app's session, so condition 2 is
+satisfied in the product and not in this test setup. That distinction is why the
+app-embedded path matters and why a terminal-driven harness cannot stand in for
+it.
+
+### What this means for testing
+
+Driving the desktop from a shell proves things about the *executor binary* — the
+coordinate validation, the ambiguity refusal, the staleness guard all behave
+correctly under direct invocation. It does **not** prove the app can drive the
+desktop, because it does not exercise the app's session or its grant.
+
+Both statements are true and neither substitutes for the other.
