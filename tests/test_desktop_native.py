@@ -21,6 +21,7 @@ permission. The live behaviour is covered by the acceptance scripts in
 from __future__ import annotations
 
 import asyncio
+from pathlib import Path
 
 import pytest
 
@@ -710,11 +711,32 @@ def test_element_lookup_refuses_an_ambiguous_keyword():
         [str(path), "read_element", "application=vantage-probe", "keyword=Click"],
         capture_output=True, text=True)
     payload = _json.loads(result.stdout or "{}")
-    if payload.get("status") != "target_ambiguous" and payload.get("element"):
+
+    # Distinguish three outcomes that look alike from outside:
+    #   target_ambiguous -> the guard did its job (assert below)
+    #   target_not_found with no matches -> the fixture published no accessible
+    #     window at all, so no keyword could match anything. An environment
+    #     condition: the same fixture answers `inspect` with 159 menu elements and
+    #     no AXWindow when this happens.
+    #   a resolved element -> the guard FAILED. It is tempting to call that
+    #     "an older binary" and skip, but that is exactly the shape a broken
+    #     guard takes too, so the two are told apart by asking the binary whether
+    #     it carries the check at all -- not by how it behaved.
+    if payload.get("status") == "target_not_found" and not payload.get("match_count"):
         pytest.skip(
-            f"the resolved executor ({path}) predates the ambiguity check; "
-            f"this asserts the built source, and promoting the new binary would "
-            f"invalidate its Accessibility grant -- see docs/DESKTOP_PERMISSION_MODEL.md")
+            "the fixture is running but published no accessible window, so no "
+            "keyword can match; this is an AX-visibility condition of the test "
+            "environment, not a guard result")
+    if payload.get("status") != "target_ambiguous" and payload.get("element"):
+        carries_check = b"target_ambiguous" in Path(path).read_bytes()
+        if not carries_check:
+            pytest.skip(
+                f"the resolved executor ({path}) does not contain the ambiguity "
+                f"check at all, so this asserts a binary that predates the fix")
+        assert False, (
+            f"the executor carries the ambiguity check but resolved "
+            f"{(payload.get('element') or {}).get('identifier')!r} for an ambiguous "
+            f"keyword -- the guard is broken, not absent")
     assert payload.get("status") == "target_ambiguous", (
         f"an ambiguous keyword resolved instead of refusing: {payload.get('status')} "
         f"-> {(payload.get('element') or {}).get('identifier')}")
@@ -742,6 +764,11 @@ def test_element_lookup_still_resolves_an_unambiguous_keyword():
          "keyword=probe.field"],
         capture_output=True, text=True)
     payload = _json.loads(result.stdout or "{}")
+    if payload.get("status") == "target_not_found" and not payload.get("match_count"):
+        pytest.skip(
+            "the fixture is running but published no accessible window, so the "
+            "element cannot be found; an AX-visibility condition of the test "
+            "environment, not a resolution failure")
     assert payload.get("status") != "target_ambiguous"
     assert (payload.get("element") or {}).get("identifier") == "probe.field"
 
