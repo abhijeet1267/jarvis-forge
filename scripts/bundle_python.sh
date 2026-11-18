@@ -268,10 +268,17 @@ EOF
 
 record_interpreter() {
     # python_path.txt is how BackendManager.backendInterpreter() finds the
-    # interpreter inside a bundle. It must be the bundle-relative runtime, not
-    # the build machine's .venv.
-    printf '%s' "${RUNTIME}/bin/python3.11" > "${RESOURCES}/python_path.txt"
-    echo "    recorded ${RESOURCES}/python_path.txt -> ${RUNTIME}/bin/python3.11"
+    # interpreter inside a bundle. It records a path RELATIVE to
+    # Contents/Resources, which the reader resolves against the bundle it was
+    # read from.
+    #
+    # It used to record an absolute path. That made the bundle non-movable: on
+    # another Mac the recorded path does not exist, the reader falls through to
+    # /usr/bin/python3 (3.9.6), and the first `import fastapi` fails with
+    # "SyntaxError: match stmt" because 3.9 cannot parse a bundled dependency.
+    # Measured, not assumed.
+    printf '%s' "python/bin/python3.11" > "${RESOURCES}/python_path.txt"
+    echo "    recorded ${RESOURCES}/python_path.txt -> python/bin/python3.11 (relative)"
 }
 
 # --- Fast path ---------------------------------------------------------------

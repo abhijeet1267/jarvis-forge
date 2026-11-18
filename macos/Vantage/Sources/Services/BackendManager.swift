@@ -838,8 +838,17 @@ final class BackendManager: ObservableObject {
         let recorded = projectDir + "/python_path.txt"
         if let text = try? String(contentsOfFile: recorded, encoding: .utf8) {
             let path = text.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !path.isEmpty, FileManager.default.isExecutableFile(atPath: path) {
-                return path
+            // A relative path is resolved against the bundle it sits in. The
+            // recorded path used to be absolute, which meant a bundle copied to
+            // another Mac pointed at a directory that does not exist there and
+            // fell through to /usr/bin/python3 (3.9) -- whose inability to parse
+            // a bundled dependency's `match` statement makes the backend fail on
+            // import. Resolving relatively makes the bundle movable.
+            let resolved = path.hasPrefix("/")
+                ? path
+                : projectDir + "/" + path
+            if !path.isEmpty, FileManager.default.isExecutableFile(atPath: resolved) {
+                return resolved
             }
         }
         let venv = projectDir + "/.venv/bin/python"
