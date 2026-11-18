@@ -4,6 +4,28 @@ set -e
 echo "=== VANTAGE RELEASE VERIFICATION ==="
 echo ""
 
+# This script builds and verifies the PYTHON LAUNCHER (com.jarvisforge.app),
+# which is NOT the product that ships. The shipping artifact is the native
+# SwiftUI app (com.jarvisforge.vantage), built by
+# `macos/Vantage/assemble_app.sh` and packaged by
+# `installers/macos/build_dmg.sh` (SHIP_NATIVE=1).
+#
+# Two live scripts producing two different applications is how the wrong one
+# gets shipped, so say which is which rather than leaving it implicit. If you
+# meant to verify the shipping product, use installers/build_release.sh.
+if [ "${VANTAGE_VERIFY_LAUNCHER:-0}" != "1" ]; then
+    cat <<'NOTICE'
+This verifies the Python launcher (com.jarvisforge.app), not the shipping app.
+
+  shipping product : macos/Vantage/Vantage.app  (com.jarvisforge.vantage)
+  build it with    : installers/build_release.sh   -> installers/macos/build_dmg.sh
+  verify the DMG   : tests/test_r106_dmg_ships_either_artifact.py
+
+Set VANTAGE_VERIFY_LAUNCHER=1 to verify the launcher deliberately.
+NOTICE
+    exit 2
+fi
+
 # Check source directory
 if [ ! -f "build_app.py" ]; then
     echo "❌ Missing build_app.py"
