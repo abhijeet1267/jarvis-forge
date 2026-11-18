@@ -5050,3 +5050,129 @@ The regression test handles this honestly rather than pretending:
 **17 passed, 0 failed, 0 skipped** (previously 8 passed / 2 skipped because no
 fixture window was up). The moved replay moved the fixture counter 1 → 2 —
 an observed target change, not a posted-event claim.
+
+---
+
+## Update — 2026-11-18 (Google connected; two real defects found by connecting it)
+
+**Outcome:** `state: connected`, `usable: true`, refresh token in the Keychain.
+Verified with real Google reads, not just a stored token.
+
+| Check | Result |
+| --- | --- |
+| `GET /google/status` | `connected`, `has_token: true`, `usable: true` |
+| `GET /google/tasks` | `has_results`, **4 tasks read live** |
+| `GET /google/calendar/events` | `real_empty`, `read_succeeded: true` (a real 200, no events) |
+
+### Defect 1 — Google Tasks was refused by our own firewall
+
+`tasks.googleapis.com` — the host the Tasks integration actually calls
+(`google_tasks.py:44`) — was **absent from the egress allowlist**, while
+Calendar's `www.googleapis.com` was present. Every task read was blocked inside
+this process and reported as *"Could not reach Google Tasks"*, which sends a
+reader to debug a network that is fine. Fixed by declaring the destination in
+`jarvis/security/egress.py` and by making the refusal message say so
+(`google_tasks.py`). The allowlist was widened by exactly one host, for a service
+the person had explicitly connected; `test_egress_firewall.py` + `test_privacy.py`
+still pass (56).
+
+### Defect 2 — every Google OAuth refusal said "cancelled"
+
+The callback reported *"Google authorisation was cancelled"* for **every** value of
+`error`, including `access_denied`, which is Google refusing the app (project in
+Testing) before Vantage is reached. It now maps `access_denied`,
+`invalid_client`, `redirect_uri_mismatch`, `server_error`, `login_required` to
+distinct, actionable pages. `error_description` arrives from the query string and
+was being interpolated as **raw HTML** — escaped, with a test that fails if it
+regresses.
+
+### Also
+
+- `/google/status` reported **zero** remaining setup steps whenever a client id
+  existed, hiding the one console setting that was refusing the connection. Both
+  states now name the Testing/test-user trap.
+- The OAuth `state` lives in process memory, so **restarting the backend discards
+  a pending authorization**. This was observed: an approved consent whose callback
+  arrived after a restart cannot complete. A restart before approving sends the
+  whole flow back to the start.
+
+Tests: `tests/test_google_integration.py` **82 passed** (11 refusal cases, 3
+egress cases). Config files touched: `.env` and `~/.jarvis-forge/llm.env`, both
+`0600`, secrets never printed.
+
+## Update — 2026-11-18 (mounted-DMG backend: the artifact is sound; the hang is unexplained but not the DMG)
+
+During V25.1 verification I launched the DMG's bundled interpreter directly
+(`Resources/python/bin/python3.11 run.py serve`) against the **mounted read-only
+image** and reported that the backend "boots but then hangs": the port accepted
+TCP connections and never answered. That report was accurate as an observation.
+The conclusion I first attached to it — "the keychain call never returns out of
+session" — did not survive re-testing. What *is* established is below.
+
+**Where the thread was, from a stack sample of the hung process:**
+
+    run_until_complete → uvloop → ... → SecItemCopyMatching → mach_msg2_trap
+
+The main thread was parked in SecurityServer, waiting on a mach reply, not in
+server code. The startup path can reach `jarvis.gateway.selection.stored_key()`
+→ `KeychainStorage.retrieve()` → `keyring.get_password()` →
+`SecItemCopyMatching`, and because that call runs on the **event loop thread**,
+the socket keeps accepting while every request times out (`curl` 000 / exit 28,
+0 % CPU).
+
+**What I did NOT establish.** I first wrote above that the keychain call "never
+returns" out of session. That overstates it, and the evidence contradicts it: a
+bare `keyring.get_password` returns `None` in 0.06 s here, and `stored_key()` on
+four providers returns in ≤0.01 s from the same non-Aqua context. So the mere
+fact of being detached from the GUI is **not** sufficient to block. The sampled
+stack proves the hang sat in SecurityServer; it does not prove which call put it
+there, and I could not reproduce the indefinite hang afterwards — later clean
+starts of the identical setup served `/health` at t=1 s, twice.
+
+**The one variable that changed.** The indefinite hang coincided with the display
+being locked (`frontmost_application: loginwindow`, "Display 1 Shield"). Every
+reproduction attempt since, with the console session active, started in ~1 s. So
+the best-supported reading is *"keychain access on the event-loop thread can
+block indefinitely while the console is locked or the display is asleep"*, **not**
+*"a detached backend always hangs"*. I did not verify this by locking the
+screen, because doing so is the user's to do, not mine.
+
+**Disambiguating control.** Same launch method, checkout's
+`Contents/Resources` instead of the mounted image: identical hang, identical
+stack. So it is neither read-only media nor the DMG. The app-launched backend on
+`:8765` served `/health` in 185 ms throughout.
+
+**Proof the artifact is sound.** Same mounted DMG, same interpreter, with
+`PYTHON_KEYRING_BACKEND=keyring.backends.null.Keyring`:
+
+| check | result |
+| --- | --- |
+| `GET /health` | **200**, 0.100 s, `status: ok`, 200 tools, 17 agents |
+| `GET /health/identity` | `source_root: /Volumes/Vantage/Vantage.app/Contents/Resources`, `python: 3.11.18` |
+
+And a **plain** launch with no keyring override at all, from the checkout's
+`Contents/Resources`, served `/health` 200 at **t = 1 s**, then 3–8 ms per
+request. So the keyring override was not what made it work; the hang is
+situational, and every run with the console active has started cleanly.
+
+**Not a release blocker for the shipped app** (the app runs inside the GUI
+session, where the backend answers in milliseconds), but a real robustness gap
+for a launch that outlives or precedes an unlocked console. Open follow-up: move
+the keychain read off the event loop, or bound it with a timeout, so a locked
+console degrades to "not configured" instead of a wedged server. Status:
+**suspected, not reproduced** — no fix attempted.
+
+**Executor provenance.** The DMG ships
+`Contents/Resources/native/desktop_executor/vantage-desktop` with SHA-256
+`4c7d2a7c…c7807c5a`, **byte-identical** to the repo build that carries the
+`scroll_element` and `target_ambiguous` guards, so the live Finder refusals
+proven against the repo binary apply to the shipped binary. The behavioural
+re-run against the DMG binary itself was **not possible this session**: the
+display was locked (`frontmost_application: loginwindow`, "Display 1 Shield"),
+so Accessibility returned zero elements. That is a blocked observation, not a
+pass.
+
+Tests: `tests/test_desktop_native.py tests/test_desktop_guard_audit.py
+tests/test_mission_approval_refusals.py` → **131 passed, 2 skipped**
+(the 2 skips need the live `tools/input_probe` fixture; neither is a weakened
+assertion). No `skip`/`xfail` was added by any change in this run.
