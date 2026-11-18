@@ -153,3 +153,29 @@ focus before every input step and refuses rather than typing or clicking into
 whatever happens to be in front. The earlier **17 passed / 0 failed / 0 skipped**
 run stands as the verified result; this attempt is recorded as **environment
 blocked**, not as a failure and not as a pass.
+
+## Second promotion — `scroll_element` guard
+
+`scroll_element` wrote a scroll bar's `AXValue` in a named application, took no
+target, and had its `--expect-*` flags parsed and discarded. Measured on the
+previous binary:
+
+```
+scroll_element application=Finder direction=down --expect-window-id=999999
+-> status: verified, moved: 1, before [0], after [0.35]
+```
+
+It scrolled a real Finder scroll bar while being handed a window id that does not
+exist. It now checks the application's front window before writing and refuses
+when that check cannot be performed.
+
+| stage | identity |
+|---|---|
+| source | `cb683c8` |
+| promoted | CDHash `785f0ff2` |
+| app bundle | SHA-256 `709aa01b…` |
+| **DMG** | SHA-256 `709aa01b…`, `scroll_element` → `target_not_found` |
+
+Verified twice against the artifact: once through the app bundle's binary, once
+by mounting `dist/Vantage-0.2.0.dmg` read-only and invoking the executor inside
+it.
