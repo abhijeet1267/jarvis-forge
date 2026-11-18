@@ -4879,3 +4879,82 @@ App `42975`, backend `42977`, `/health` ok, 200 tools, backend running from
 resolves the bundled executor at
 `.../Resources/native/desktop_executor/VantageDesktopDev.app/...` — the granted
 identity is preferred by design, and the bundle stays self-contained.
+
+---
+
+## Update — 2026-11-18 (V23.3: the card seen, the guard proven, provenance stated)
+
+**HEAD:** `05d716a`, then the bundle rebuilt and relaunched.
+
+### The approval card has now been seen — and it had defects
+
+A launch argument (`--render-approval-cards <dir>`) renders the card offscreen in
+three states × two appearances and exits before any window or backend starts.
+Renders committed under `docs/evidence/approval-card/`.
+
+Three defects, none visible to a compiler:
+
+| defect | evidence | fix |
+|---|---|---|
+| explanation **clipped** at the card's bottom edge | "Mission Control." cut mid-glyph in the nothing-parked render | moved to its own line above the controls |
+| a **disabled Approve** drawn beside "there is nothing to approve or deny" | case 3 render | omitted unless approving is possible |
+| **emerald** "Approve and run" on a level-3 destructive action | every render | `VPrimaryButtonStyle` gained an optional `tint`, defaulted to accent; this card passes the warning colour |
+
+After the fixes: case 1 shows per-step status, the "1 step already ran" honesty
+line, the full destructive warning, the confirmation id and both buttons in
+amber; case 2 suppresses Approve and says why; case 3 omits both buttons with
+nothing clipped. Light and dark both legible.
+
+### The single-instance guard was written but never called
+
+`InstanceGuard.swift` existed with a sound design (`O_EXLOCK`, chosen over a
+bundle-id lookup because a dev binary has no bundle id — exactly the case that
+caused this session's incident) and **no caller**. Now called first thing in
+`applicationWillFinishLaunching`.
+
+Verified live against the rebuilt app:
+
+```
+app running: 1
+$ ./Vantage.app/Contents/MacOS/Vantage
+Vantage: another instance is already running. Activating it.
+exit: 0
+app count after: 1        (original still healthy, backend 65478 intact)
+```
+
+The exact incident from earlier in this session is now impossible.
+
+### What a confirmation id proves — measured, and bounded
+
+`docs/APPROVAL_PROVENANCE.md`. Measured: a parked step's id posted with no auth
+header returns **401** and writes nothing. The id is a **selector, not a
+capability**.
+
+But the honest bound is stated there too: every protected route accepts one
+master token, and a model-driven tool call runs inside the backend, so it can
+request a run, read the id from the response and post it back. Nothing
+distinguishes that from a person pressing Approve. That is what a single-tenant
+local backend with one master token *is*, not a defect in the approval system.
+Written down so no later report claims a consent the architecture cannot give.
+
+What **is** guaranteed: no silent execution, no smuggled or rotated id, no erased
+denial, and a runner that refuses a step whose revision, params or target changed
+after approval.
+
+### Desktop guards completed
+
+`desktop_double_click` and `desktop_right_click` call the same Swift `click` op
+as `desktop_click` and had dropped its guard; all three now forward
+`expect_window_id`/`expect_pid` and declare them. Every desktop tool checked: the
+parameters its handler declares are a subset of its `ToolSpec.parameters`, so no
+tool can advertise a guard its spec would reject. Mutation-proven.
+
+### Live state after relaunch
+
+App `65474`, backend `65478`, `/health` ok, 200 tools, backend running
+`Vantage.app/Contents/Resources/python/bin/python3.11`. Both new behaviours
+confirmed present in the shipped binary (`strings` finds both the instance-guard
+message and the render flag).
+
+Physical desktop input remains **PERMISSION_BLOCKED** — see
+`docs/DESKTOP_PERMISSION_MODEL.md`.
