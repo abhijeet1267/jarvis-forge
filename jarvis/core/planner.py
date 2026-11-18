@@ -2174,6 +2174,20 @@ class RulePlanner:
                 or re.search(r"\bany\s+task\s+(running|in\s+progress)\b", text):
             return Intent("current_task", tool="get_current_task", confidence=0.9)
 
+        # A bare follow-up to the thing that just ran. "cancel that" and
+        # "did it work" name no application and no file, so without these they
+        # fell through to `unknown` -- which, after a voice turn, is a dead end
+        # for the user. They map onto the WINDOW-INDEPENDENT read tool that
+        # already exists; they do not execute anything, and stopping a mission
+        # still goes through `stop_task` above.
+        if re.fullmatch(r"(?:please\s+)?(?:cancel|stop|abort)\s+(?:that|this|it)\.?",
+                        text):
+            return Intent("stop_task", tool="stop_current_task", confidence=0.85)
+        if re.search(r"\b(?:did\s+it\s+work|did\s+that\s+work|was\s+it\s+done)\b", text) \
+                or re.search(r"\bwhat\s+happened\s+(?:in\s+)?(?:my\s+)?last\s+task\b", text) \
+                or re.search(r"\bshow\s+(?:me\s+)?the\s+(?:result|receipt)\b", text):
+            return Intent("current_task", tool="get_current_task", confidence=0.85)
+
         if re.search(r"\brecent\s+(actions?|activity|history|commands?)\b", text) \
                 or re.search(r"\bwhat\s+did\s+you\s+(just\s+)?(do|last\s+do)\b", text) \
                 or re.search(r"\bwhat\s+happened\s+(recently|lately)\b", text) \
