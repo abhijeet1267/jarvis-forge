@@ -1615,9 +1615,20 @@
     "to be detailed as the epic is worked"
    ],
    "blockers": [
-    "Owner decision: which macOS artifact ships in the DMG (native GUI vs Tk launcher)."
+    "Installed-app replacement is a user action (interrupts their session). Finder-launched physical input additionally needs an Accessibility grant for Vantage.app."
    ],
-   "evidence": {}
+   "evidence": [
+    {
+     "date": "2026-11-18",
+     "what": "DMG built and inspected: dist/Vantage-0.2.0.dmg, 44 MB, bundle id com.jarvisforge.vantage. Its bundled desktop executor is SHA-256 93f53967..., byte-identical to the binary verified to refuse ambiguous targets. Two conflicting release paths reconciled (release_verify.sh now refuses to imply it ships).",
+     "verified": "hdiutil mount + PlistBuddy bundle id + shasum on the mounted executor; test_r106_dmg_ships_either_artifact 3 passed"
+    },
+    {
+     "date": "2026-11-18",
+     "what": "Release gate: IMPLEMENTED/STAGED/BUNDLED/VERIFIED closed for the executor fix. RUNNING not closed -- the installed app predates the rebuild and replacing it interrupts the user.",
+     "verified": "docs/EXECUTOR_PROMOTION.md"
+    }
+   ]
   },
   "R8.9-live-backend-recovery": {
    "title": "Live backend identity + recovery: the stale production backend is resolved",
