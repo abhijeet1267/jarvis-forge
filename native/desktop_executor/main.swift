@@ -298,6 +298,40 @@ func locate(keyword: String, application: String, role: String, useTitle: Bool) 
     let hits = findElements(in: root, matching: matches, maxDepth: 18)
     guard let first = hits.first else { return nil }
 
+    // More than one match is a question, not a target. This used to take
+    // `hits.first` silently while the comment above promised ambiguity was
+    // "reported rather than guessed" -- and `target_ambiguous` was declared and
+    // never emitted. Measured consequence: "press the Save button" in an app
+    // with two Save elements pressed whichever the walk reached first, and
+    // reported it as done.
+    //
+    // Two hits that describe identically are not ambiguous (a SwiftUI button
+    // publishes wrapper and child). Only *different* descriptions are, so the
+    // comparison is on the identifying fields rather than the count.
+    if hits.count > 1 {
+        let identities = Set(hits.map { hit -> String in
+            [hit["identifier"] as? String ?? "",
+             hit["role"] as? String ?? "",
+             hit["title"] as? String ?? "",
+             hit["label"] as? String ?? ""].joined(separator: "\u{1}")
+        })
+        if identities.count > 1 {
+            let described = hits.prefix(8).map { hit -> String in
+                let role = hit["role"] as? String ?? "element"
+                let name = (hit["title"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+                    ?? (hit["label"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+                    ?? (hit["identifier"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+                    ?? "(unnamed)"
+                return "\(role) \(name)"
+            }
+            Emit.out(.target_ambiguous,
+                     "\(hits.count) elements match \(keyword); name one exactly, or "
+                     + "supply a role, rather than having one chosen for you",
+                     ["matches": Array(described), "match_count": hits.count,
+                      "keyword": keyword, "role": role])
+        }
+    }
+
     // Re-walk to get the live element for the hit (describe() returns a copy).
     var live: AXUIElement?
     func walk(_ element: AXUIElement, depth: Int) {
