@@ -4998,3 +4998,55 @@ the tool spec declares it; the executor enforces it. A replay at a stale window
 now refuses with `target_not_found` instead of acting on whatever is there.
 Verified earlier this session by before/after on the live binary:
 `performed_unverified` (old) vs `target_not_found` (new).
+
+---
+
+## Update — 2026-11-18 (V23 task 14: an ambiguous target was never ambiguous)
+
+### The defect
+
+`target_ambiguous` existed in the executor's status enum. A comment in `locate()`
+said ambiguity was "reported rather than guessed". **No code path ever emitted
+it** — several matches silently became `hits.first`.
+
+Measured on the input fixture: `read_element keyword="Click"` matches **three**
+differently described elements — "Click me", "probe.click.count", "Right-click
+target". The old binary resolved it to `probe.click` and reported `verified`.
+`press_element` with the same keyword would have pressed whichever the AX walk
+reached first and called it done.
+
+Fixed: more than one *differently described* match now refuses with
+`target_ambiguous` and lists what it found. Identical descriptions are not
+ambiguous (a SwiftUI button publishes a wrapper and a child), so the check
+compares identifying fields rather than the count.
+
+Verified against the live fixture:
+
+| call | result |
+|---|---|
+| `keyword="Click"` | `target_ambiguous`, 3 matches listed, **fixture clicks stayed 0** |
+| `keyword="Click" role="AXButton"` | `target_ambiguous`, 2 matches — narrowing by role does not pretend to disambiguate |
+| `keyword="probe.field"` | resolves normally; unambiguous lookups unaffected |
+
+### Why the app does not have it yet
+
+The fix is in the staging binary (`CDHash e2eac2c7`). The app's backend resolves
+`Vantage.app/Contents/Resources/native/desktop_executor/VantageDesktopDev.app/…`,
+which was staged from the older build — `strings` finds `target_ambiguous` in its
+enum but not the new refusal.
+
+Promoting it — or rebuilding the app, which re-stages the executor — changes the
+executor's CDHash and invalidates any Accessibility grant it holds. That is the
+same owner decision recorded in `docs/DESKTOP_PERMISSION_MODEL.md`, not a bug.
+
+The regression test handles this honestly rather than pretending:
+- against the shipped binary: **1 passed, 1 skipped**, the skip naming the
+  resolved path and the reason
+- against the new staging binary (`VANTAGE_DESKTOP_EXECUTOR=…`): **2 passed, 0 skipped**
+
+### Also verified this round
+
+`benchmarks/v23_studio/studio_roundtrip.py` re-run with the fixture live:
+**17 passed, 0 failed, 0 skipped** (previously 8 passed / 2 skipped because no
+fixture window was up). The moved replay moved the fixture counter 1 → 2 —
+an observed target change, not a posted-event claim.
