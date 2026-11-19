@@ -422,6 +422,34 @@ class MissionRunner:
                                 f"legal transition (from {mission.state} the "
                                 f"legal targets are: "
                                 f"{', '.join(sorted(s.value for s in TRANSITIONS.get(MissionState(mission.state), frozenset()))) or 'none'})")
+                        # A step an operator DENIED must not be re-parked.
+                        # BLOCKED->RUNNING is legal on purpose (a precondition may
+                        # later become true), so a recovery can legitimately reach
+                        # this point -- but re-parking would rewrite "denied by the
+                        # operator" into "awaiting approval" and mint a fresh
+                        # working confirmation, which is a refused credential
+                        # exchanged for a usable one. Measured live before this
+                        # guard: park -> decide deny -> transition running -> run
+                        # left the denial absent from the mission and the new id
+                        # spendable, executing the action the operator refused.
+                        # A denial is a decision, not a state to be cleared by
+                        # retrying.
+                        denied = (str(getattr(step, "status", "") or "") == "failed"
+                                  and "denied by the operator"
+                                  in str(getattr(step, "detail", "") or "").lower())
+                        if denied:
+                            # Stop here with the mission untouched. Raising would
+                            # turn the refusal into a 404 with no body, so a
+                            # caller could not read the record it was refused
+                            # against -- and the denial, which is the thing worth
+                            # preserving, would not be in the response. The step
+                            # stays `failed` with its detail intact, and no
+                            # confirmation is minted.
+                            return self.service.transition(
+                                mission_id, MissionState.BLOCKED, actor=actor,
+                                reason=(f"step {step.step_id} was denied by the "
+                                        "operator; a denial is not cleared by "
+                                        "running the mission again"))
                         self.service.mark_step(
                             mission_id, step.step_id, status="pending",
                             detail=f"awaiting approval: {reason}; "

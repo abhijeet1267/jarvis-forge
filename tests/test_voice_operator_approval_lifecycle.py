@@ -349,15 +349,6 @@ def test_a_denied_mission_cannot_be_resumed_into_execution(client, probe,
 # pinned for the AWAITING_APPROVAL case, not closed for the BLOCKED one.
 # The denial survives the transition and is destroyed only by the run.
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "MEASURED 2026-11-19: BLOCKED->RUNNING then /run rewrites the denied "
-        "step to 'pending' with a fresh confirmation id, which can then be "
-        "approved and executed (handler dispatched once). A denial must not be "
-        "erasable by a recovery. Fix by making `/run` refuse to re-park a step "
-        "whose current status is 'failed' with a denial detail -- or by "
-        "recording the denial outside the step detail the park rewrites."))
 def test_a_recovery_does_not_erase_a_denial(client, probe, tmp_path):
     """Recovering a blocked mission must not turn "no" into a fresh question.
 
