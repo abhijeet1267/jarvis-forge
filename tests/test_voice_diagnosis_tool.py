@@ -46,9 +46,15 @@ def _failed_mission(core, detail="permission denied: cannot write to /protected"
 
 
 def _run(core, mission_id=""):
+    """Run the tool once, in a fresh loop.
+
+    `asyncio.get_event_loop()` returns this thread's loop, and another test can
+    have closed it -- which failed here as "There is no current event loop" only
+    when this file ran after a suite that used asyncio. `asyncio.run` creates and
+    closes its own loop, so the test no longer depends on what ran before it.
+    """
     import asyncio
-    return asyncio.get_event_loop().run_until_complete(
-        explain_last_failure(_Ctx(core), mission_id=mission_id))
+    return asyncio.run(explain_last_failure(_Ctx(core), mission_id=mission_id))
 
 
 def test_explains_a_real_failure(core):
