@@ -7170,7 +7170,8 @@ async def google_connect_begin(request: Request, _: None = SameOriginProtected) 
 
 @app.get("/google/callback")
 async def google_callback(code: str = Query(""), state: str = Query(""),
-                          error: str = Query("")) -> HTMLResponse:
+                          error: str = Query(""),
+                          error_description: str = Query("")) -> HTMLResponse:
     """Google's redirect target.
 
     Unauthenticated by necessity -- Google's redirect carries no Vantage token.
@@ -7192,8 +7193,11 @@ async def google_callback(code: str = Query(""), state: str = Query(""),
         )
 
     if error:
-        return page("Google authorisation was cancelled",
-                    "Nothing was connected.", ok=False)
+        # Every refusal used to read "Google authorisation was cancelled", which is
+        # one specific cause among several. A consent screen that says the app is
+        # unverified ("access_denied") is not the person cancelling, and telling
+        # them it was hides the one thing they need to change.
+        return page(*_google_redirect_refusal(error, error_description), ok=False)
     if not code or not state:
         return page("That link is incomplete",
                     "Google did not return an authorisation code.", ok=False)
@@ -7206,6 +7210,68 @@ async def google_callback(code: str = Query(""), state: str = Query(""),
     account = f" as {status.account}" if status.account else ""
     return page("Connected to Google",
                 f"Vantage can now read your calendar and tasks{account}.", ok=True)
+
+
+def _google_redirect_refusal(error: str, description: str = "") -> tuple[str, str]:
+    """A title and explanation for the ``error`` Google put on the redirect.
+
+    Google's own code is quoted because it is what a reader searches for, and the
+    wording separates the two things that used to look identical: the person
+    declining, and Google itself refusing the app.
+
+    **Every interpolated value is escaped.** ``error`` and ``error_description``
+    come straight from the query string, so they are attacker-controllable text
+    being placed into an HTML page -- fixed markup below, escaped values only.
+    """
+    from html import escape as _esc
+
+    code = str(error or "").strip() or "unknown"
+    code_html = _esc(code, quote=True)
+
+    if code == "access_denied":
+        # The measured case: an app still in "Testing" whose Publishing Status has
+        # no tester for this account is refused *before* Vantage is ever reached.
+        return (
+            "Google refused access to this app",
+            "This is Google's decision, not Vantage's, and the request never "
+            "reached Vantage. It usually means the Google Cloud project is still "
+            "in <b>Testing</b> and this account is not on its tester list. A "
+            "developer can add you under <b>OAuth consent screen &rarr; Test "
+            "users</b>, or publish the app. Then try connecting again.",
+        )
+    if code in ("invalid_client", "unauthorized_client"):
+        return (
+            "Google did not recognise this app",
+            "The OAuth client id does not match the project this redirect came "
+            "from. Check that the client id in Vantage belongs to the same Google "
+            "Cloud project as the OAuth consent screen.",
+        )
+    if code == "redirect_uri_mismatch":
+        return (
+            "That redirect address is not registered",
+            "Add <code>http://127.0.0.1:8765/google/callback</code> to this "
+            "client's <b>Authorised redirect URIs</b> in the Google Cloud console, "
+            "then try again.",
+        )
+    if code == "temporarily_unavailable" or code == "server_error":
+        return (
+            "Google had a problem",
+            "Nothing is wrong with Vantage or your setup. Google returned "
+            f"<code>{code_html}</code>; waiting a minute and trying again usually works.",
+        )
+    if code == "login_required" or code == "consent_required":
+        return (
+            "Google needs you to sign in again",
+            f"Google returned <code>{code_html}</code>. Open the connect link again "
+            "and sign in when it asks.",
+        )
+    detail = _esc(" ".join(str(description or "").split())[:300], quote=True)
+    return (
+        "Google refused the connection",
+        f"Google returned <code>{code_html}</code>"
+        + (f": {detail}" if detail else ".")
+        + " Nothing was connected.",
+    )
 
 
 @app.post("/google/disconnect")

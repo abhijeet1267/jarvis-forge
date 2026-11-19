@@ -1313,3 +1313,137 @@ def test_a_stored_token_without_a_client_id_is_told_apart_from_no_account(monkey
     assert fresh.has_token is False
     assert "authorised earlier" not in fresh.detail
     assert "JARVIS_GOOGLE_CLIENT_ID" in fresh.detail
+
+
+# ---------------------------------------------------------------------------
+# The redirect's error is reported as what Google actually said
+# ---------------------------------------------------------------------------
+
+class TestRedirectRefusalIsSpecific:
+    """One message for every failure hides the only one a person can act on.
+
+    Measured: a project left in Google's **Testing** publishing status answers the
+    consent screen with ``error=access_denied`` before Vantage is ever reached. The
+    callback said "Google authorisation was cancelled" -- a different cause, and
+    one that sends a reader looking for a button they never pressed.
+    """
+
+    def test_access_denied_is_not_reported_as_the_person_cancelling(self):
+        from jarvis.api.app import _google_redirect_refusal
+
+        title, body = _google_redirect_refusal("access_denied", "")
+        assert "cancel" not in (title + body).lower(), title
+        # It names the two things that actually fix it.
+        assert "test" in body.lower(), body
+        assert "publish" in body.lower() or "tester" in body.lower(), body
+
+    def test_a_refusal_says_google_decided_and_vantage_was_never_reached(self):
+        from jarvis.api.app import _google_redirect_refusal
+
+        _, body = _google_redirect_refusal("access_denied", "")
+        assert "google" in body.lower()
+        assert "never reached" in body.lower(), body
+
+    def test_a_registered_redirect_problem_names_the_exact_uri(self):
+        from jarvis.api.app import _google_redirect_refusal
+
+        _, body = _google_redirect_refusal("redirect_uri_mismatch", "")
+        assert "http://127.0.0.1:8765/google/callback" in body, body
+
+    def test_an_unrecognised_code_is_quoted_rather_than_invented(self):
+        from jarvis.api.app import _google_redirect_refusal
+
+        title, body = _google_redirect_refusal("something_new", "extra detail")
+        assert "something_new" in body, body
+        assert "extra detail" in body, body
+        assert "cancel" not in (title + body).lower()
+
+    @pytest.mark.parametrize("code", ["access_denied", "invalid_client",
+                                      "redirect_uri_mismatch", "server_error",
+                                      "login_required", "unknown_new_code"])
+    def test_every_code_gets_its_own_title(self, code):
+        from jarvis.api.app import _google_redirect_refusal
+
+        titles = {_google_redirect_refusal(c, "")[0]
+                  for c in ("access_denied", "invalid_client", "redirect_uri_mismatch",
+                            "server_error", "login_required", code)}
+        assert len(titles) >= 2, titles
+        assert _google_redirect_refusal(code, "")[0], code
+
+    def test_no_description_can_inject_markup_into_the_page(self):
+        """`error_description` comes from the URL, so it is attacker-controllable.
+
+        It is inserted into rendered HTML; it must not be able to close the
+        paragraph or add an element.
+        """
+        from jarvis.api.app import _google_redirect_refusal
+
+        _, body = _google_redirect_refusal("weird", '</p><script>alert(1)</script>')
+        assert "<script>" not in body, body
+
+
+class TestSetupNamesTheTestingStatusTrap:
+    """A configured client id is not the last step, and the last step is invisible.
+
+    Measured: with the client id correctly set, Google still answers the consent
+    screen with `403 access_denied` while the project sits in **Testing**. The
+    setup list used to end at "set the client id", so a reader who had done that
+    was told there was nothing left to do -- while the one remaining console
+    setting was the thing refusing them.
+    """
+
+    def test_a_configured_client_still_names_the_tester_step(self):
+        from jarvis.integrations.google_auth import describe_google
+
+        steps = " ".join(describe_google(Settings(google_client_id="x.apps.googleusercontent.com"))["setup"]).lower()
+        assert "test" in steps, steps
+        assert "publish" in steps, steps
+        assert steps.strip(), "a configured client id reported no setup at all"
+
+    def test_an_unconfigured_client_is_told_the_same_thing(self):
+        from jarvis.integrations.google_auth import describe_google
+
+        steps = " ".join(describe_google(Settings(google_client_id=""))["setup"]).lower()
+        assert "test user" in steps, steps
+
+
+class TestTheEgressAllowlistCoversEveryHostTheIntegrationCalls:
+    """A host the integration calls but the firewall never declared fails closed.
+
+    Measured: Google Tasks answers on ``tasks.googleapis.com``, which was absent
+    from the allowlist while Calendar's ``www.googleapis.com`` was present. Every
+    task read was refused *by this project* and reported as "Could not reach
+    Google Tasks" -- pointing at the network for a policy decision made here.
+    """
+
+    def test_the_tasks_api_host_is_declared(self):
+        from jarvis.integrations.google_tasks import TASKS_API
+        from jarvis.security.egress import get_firewall, host_of
+
+        verdict = get_firewall().check(TASKS_API + "/users/@me/lists")
+        assert verdict.allowed, (
+            f"{host_of(TASKS_API)} is called by the Tasks integration but not "
+            f"declared in the egress allowlist: {verdict.reason}")
+
+    def test_the_calendar_api_host_is_declared(self):
+        from jarvis.integrations.google_calendar import CALENDAR_API
+        from jarvis.security.egress import get_firewall
+
+        assert get_firewall().check(CALENDAR_API + "/calendars/primary/events").allowed
+
+    def test_a_firewall_refusal_is_not_reported_as_a_network_failure(self, monkeypatch):
+        """The message must name the refusal, because that is what happened."""
+        from jarvis.integrations import google_tasks
+        from jarvis.security.egress import EgressRefused, Verdict
+
+        refusal = EgressRefused(Verdict(False, "tasks.googleapis.com", "unknown",
+                                        "refused", "not a declared destination"))
+        client = google_tasks.GoogleTasksClient()
+        monkeypatch.setattr(client, "_request",
+                            lambda _req: (_ for _ in ()).throw(refusal))
+
+        with pytest.raises(google_tasks._TasksFailure) as caught:
+            client._send("GET", google_tasks.TASKS_API + "/users/@me/lists", "t", None)
+        text = str(caught.value.detail).lower()
+        assert "could not reach" not in text, text
+        assert "block" in text or "refus" in text, text

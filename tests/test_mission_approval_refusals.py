@@ -892,13 +892,16 @@ def test_a_mission_confirmation_is_refused_by_the_policy_layer():
 
     # A record shaped exactly as the mission gate writes it.
     created = engine.evaluate(
-        type("A", (), {"tool": "write_file", "params": {"path": "/tmp/x"}, "device": "laptop_main"})(),
+        type("A", (), {"tool": "write_file",
+                        "params": {"path": "/tmp/x", "content": "test"},
+                        "device": "laptop_main"})(),
         session_id="mission:MIS-test", requested_surface="mission")
     confirmation_id = getattr(created, "confirmation_id", None)
-    if not confirmation_id:
-        pytest.skip("the policy engine minted no confirmation for this action")
+    assert confirmation_id, (
+        f"the policy engine minted no confirmation for this action "
+        f"(decision={created.decision}, reason={created.reason!r})")
 
-    resolved = engine.resolve(confirmation_id)
+    resolved = engine.resolve(confirmation_id, True)
     state = getattr(resolved, "state", None) or (resolved or {}).get("state")
     assert state != "approved", (
         "the generic resolver approved a mission-owned confirmation")

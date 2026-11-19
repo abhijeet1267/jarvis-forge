@@ -5176,3 +5176,56 @@ Tests: `tests/test_desktop_native.py tests/test_desktop_guard_audit.py
 tests/test_mission_approval_refusals.py` → **131 passed, 2 skipped**
 (the 2 skips need the live `tools/input_probe` fixture; neither is a weakened
 assertion). No `skip`/`xfail` was added by any change in this run.
+
+---
+
+## Update — 2026-11-18 (calendar questions were answered about the wrong window)
+
+Prompted by a reply that said the assistant could only see a calendar "if a
+calendar tool is wired up". It is: **26 calendar/task tools** are registered
+(`list_events`, `next_event`, `search_events`, `create_event`, `update_event`,
+`cancel_event`, `daily_schedule`, `find_free_time`, `list_google_tasks`,
+`add_google_task`, `complete_google_task`, …). Three defects meant several of
+them gave a confident answer about the wrong thing.
+
+### Defect 1 — "this week" was answered as "today"
+
+`list_events` takes `days`, but both call sites hardcoded `days: 1`
+(`planner.py`, the calendar rule and the fallback path). So *"list my calendar
+events this week"* read one day and reported it as though it were the week.
+Fixed with `_span_days()` — today/tomorrow/week/weekend/month — and the window
+is now passed through both routes.
+
+### Defect 2 — "what have I got this month" reached no tool at all
+
+The calendar gate recognised no bare span (`this month`, `weekend`) and no
+`got` verb, so the sentence fell to *"I understood the words but not the goal
+yet"* while `list_events` sat unused. Both gates widened.
+
+### Defect 3 — "scheduled this week" was routed to cron jobs
+
+`_scheduler` claims any sentence containing "scheduled", so a calendar question
+was answered *"You have nothing scheduled, but I could not verify it happened"*
+— about Scheduled Jobs the person never asked about. A span or calendar noun now
+keeps the sentence on the calendar.
+
+### Also
+
+- *"Nothing scheduled for today."* was printed for **any** window, including a
+  30-day read. The message now names the window it read (`_window_phrase`).
+- `_calendar` deferred to *any* capability match, including its own
+  `list_events`, so the generic fallback answered with `{}` params (which the
+  tool reads as today). It now defers only to a **different** tool.
+
+### Verified live (PID 92030)
+
+| Utterance | Params | Reply |
+| --- | --- | --- |
+| list my calendar events this week | `days: 7` | Nothing scheduled in the next 7 days. |
+| what have I got this month | `days: 30` | Nothing scheduled in the next 30 days. |
+| anything this weekend | `days: 3` | Nothing scheduled in the next 3 days. |
+| what's on my calendar today | `days: 1` | Nothing scheduled for today. |
+| list my google tasks | — | 4 Google task(s) … (live) |
+
+Tests: `tests/test_text_category_drives_chat.py` **29 passed** (12 new calendar
+cases); planner/calendar/schedule/routing/command sweep **546 passed, 1 skipped**.

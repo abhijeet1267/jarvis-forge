@@ -523,6 +523,26 @@ class PermissionEngine:
         if record is None or record["state"] != ConfirmationState.PENDING.value:
             return record
 
+        # A confirmation minted by a mission step's gate belongs to that mission.
+        # The mission runner is the only thing that may act on it, because it is
+        # the only path that also compares the id with the one recorded on the
+        # parked step, checks the plan revision and spends the step's lease.
+        # Resolving it through the generic hub (POST /confirm, /watch/reply, the
+        # CLI, voice) skipped the revision check: measured, a confirmation
+        # parked at plan_revision 0 executed the step's *original* params after
+        # a steer had replaced them -- an approval the revision was supposed to
+        # spend, and a second execution of a step the mission still considered
+        # un-run. `requested_surface` is written by the gate itself
+        # (`missions_routes._gate_factory`), not by the caller, so this cannot
+        # be sidestepped by asking for a different surface.
+        if str(record.get("requested_surface") or "") == "mission":
+            log.warning(
+                "refused to resolve a mission-owned confirmation",
+                extra_fields={"confirmation_id": confirmation_id,
+                              "mission_session": record.get("requested_by_session", "")},
+            )
+            return record
+
         # Refuse to honour an approval that took too long to arrive.
         if self.is_expired(record):
             self.db.execute(

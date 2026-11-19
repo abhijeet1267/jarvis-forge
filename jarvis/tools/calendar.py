@@ -153,6 +153,23 @@ def _resolve_range(date: str, days: int = 1) -> tuple[datetime, datetime, Option
     return start, start + timedelta(days=max(1, days)), None
 
 
+def _window_phrase(date: str, days: int) -> str:
+    """How to say the window that was read, in the words the person used.
+
+    A one-day read says "for today"; a multi-day one has to say so, or an empty
+    week is reported as an empty day.
+    """
+    text = (date or "today").strip().lower()
+    span = max(1, int(days or 1))
+    if span > 1:
+        if text in ("today", ""):
+            return f"in the next {span} days"
+        if text == "tomorrow":
+            return f"from tomorrow, for {span} days"
+        return f"in that {span}-day window starting {text}"
+    return f"for {text}"
+
+
 async def list_events(ctx: ToolContext, date: str = "today", days: int = 1,
                       query: str = "") -> Any:
     """List events in a window.
@@ -201,9 +218,12 @@ async def list_events(ctx: ToolContext, date: str = "today", days: int = 1,
         return _read_problem("list_events", ctx, events)
 
     if status is ProviderStatus.REAL_EMPTY:
+        # Name the window that was actually read. `date or 'today'` said "for
+        # today" while the window could be a week or a month, so a correct empty
+        # read of 30 days was reported as a statement about one day.
         return ok(
             "list_events",
-            f"Nothing scheduled for {date or 'today'}.",
+            f"Nothing scheduled {_window_phrase(date, days)}.",
             device=ctx.device_id,
             provider=provider.name,
             provider_status=status.value,

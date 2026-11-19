@@ -1699,9 +1699,39 @@ class JarvisCore:
                 )
                 return response
 
-        # Resolve with provenance tracking
-        self.policy.resolve(confirmation_id, approve, 
+        # Resolve with provenance tracking. The returned record is the request as
+        # it stands *after* the attempt: the engine declines to resolve one that
+        # is already answered, and one that belongs to a mission step (only the
+        # mission runner may un-park that, because only it also checks the parked
+        # confirmation, the plan revision and the step's lease). Ignoring the
+        # return value read "still pending" as "approved" and executed anyway --
+        # measured: a confirmation parked at plan_revision 0 ran the step's
+        # *original* params through POST /confirm after a steer had replaced
+        # them, which is exactly the approval the revision was meant to spend.
+        resolved = self.policy.resolve(confirmation_id, approve,
                           approver_session=session_id, approver_surface=approver_surface)
+
+        if resolved is not None and resolved.get("state") == "pending":
+            log.warning(
+                "confirmation could not be resolved",
+                extra_fields={"confirmation_id": confirmation_id},
+            )
+            response.reply = (
+                "That approval does not apply here, so I did nothing. A step of a "
+                "mission is answered on the mission itself, not as a chat action.")
+            response.needs_confirmation = False
+            response.decision = PolicyDecision.BLOCK
+            self.audit.record(
+                intent=record["tool"],
+                tool=record["tool"],
+                result="denied",
+                risk="denied_unresolvable_confirmation",
+                confirmation=True,
+                session_id=session_id,
+                request_id=response.request_id,
+                detail={"reason": "the confirmation stayed pending after resolve"},
+            )
+            return response
 
         # resolve() may have expired the request rather than honouring it.
         resolved = self.policy.get_confirmation(confirmation_id)

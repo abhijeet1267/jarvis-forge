@@ -380,6 +380,18 @@ def save_provider_config(
 def stored_key(provider_name: str, home: Optional[Path] = None) -> Optional[str]:
     """The Keychain-stored key for a provider, or None.
 
+    Two entries are consulted, in order: the one this provider's own card writes
+    (``vantage.ai.<provider>``), then the one the **Text & Chat** tab writes
+    (``vantage.ai.category.text``). The second is what makes the category screen
+    real: it describes itself as "Command Center answers, conversation and
+    reasoning", and a person who configures a provider there expects the chat to
+    use it. Before this, the category key was stored and never read by the chat
+    path, so a working gateway answered the tab's Test button while every
+    sentence still fell through to the rule planner.
+
+    The category entry is only consulted when this is the provider the category
+    names -- a key saved for 9Router must never be sent to OpenAI.
+
     Imported lazily so this module stays importable from ``config`` without a cycle.
     An unavailable keychain backend reports ``None`` -- it never raises and never
     invents a key, so a missing backend reads as "not configured", not as a crash.
@@ -391,7 +403,30 @@ def stored_key(provider_name: str, home: Optional[Path] = None) -> Optional[str]
     except Exception:
         return None
     try:
-        return KeychainStorage.retrieve(provider_name)
+        own = KeychainStorage.retrieve(provider_name)
+    except Exception:
+        own = None
+    if own:
+        return own
+    return _category_key_for(provider_name, home)
+
+
+def _category_key_for(provider_name: str, home: Optional[Path] = None) -> Optional[str]:
+    """The Text & Chat tab's key, but only when that tab names ``provider_name``.
+
+    Returns ``None`` for any other provider, for an unconfigured category, and for
+    any read failure -- a keychain that is unavailable must read as unconfigured
+    rather than as a crash or as somebody else's credential.
+    """
+    try:
+        from .provider_categories import load, retrieve_key
+    except Exception:
+        return None
+    try:
+        settings = load("text", home)
+        if str(settings.provider or "").strip().lower() != provider_name.lower():
+            return None
+        return retrieve_key("text") or None
     except Exception:
         return None
 

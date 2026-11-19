@@ -282,8 +282,15 @@ class GoogleTasksClient:
             request = urllib.request.Request(url, data=body, headers=headers, method=method)
             status, raw = self._request(request)
         except Exception as exc:
-            raise _TasksFailure(classify_transport_error(exc),
-                                f"Could not reach Google Tasks ({type(exc).__name__}).") from exc
+            # A firewall refusal is a policy decision made in this process, not a
+            # network fault. Saying "could not reach" sends a reader to debug a
+            # connection that is working; name the refusal instead.
+            from ..security.egress import EgressRefused
+
+            detail = (f"Google Tasks was blocked before the request left this Mac "
+                      f"({exc})" if isinstance(exc, EgressRefused)
+                      else f"Could not reach Google Tasks ({type(exc).__name__}).")
+            raise _TasksFailure(classify_transport_error(exc), detail) from exc
         return self._read(status, raw)
 
     def _request(self, request):

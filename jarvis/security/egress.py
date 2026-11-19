@@ -153,6 +153,11 @@ _DECLARED: Tuple[Destination, ...] = (
     # -- first-party services the person configured ---------------------------
     Destination("www.googleapis.com", SERVICE, "the Google API the user connected"),
     Destination("oauth2.googleapis.com", SERVICE, "the Google OAuth token exchange"),
+    # Calendar and Gmail answer on www.googleapis.com, but Tasks has its own host.
+    # Without this entry every task read was refused by this firewall -- not by
+    # Google -- and the refusal surfaced as "Could not reach Google Tasks", which
+    # points at the network for a policy decision made here.
+    Destination("tasks.googleapis.com", SERVICE, "the Google Tasks list the user connected"),
     Destination("calendar.google.com", SERVICE, "the Google Calendar the user connected"),
     Destination("mail.google.com", SERVICE, "the Gmail account the user connected"),
     Destination("www.google.com", SERVICE, "Google's own endpoints (tasks, discovery)"),

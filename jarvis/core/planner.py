@@ -458,6 +458,27 @@ class RulePlanner:
         found = re.search(pattern, raw, re.I)
         return found.group(group) if found else None
 
+    @staticmethod
+    def _span_days(text: str) -> int:
+        """How many days a listing sentence asks about. One when it does not say.
+
+        Only spans a person actually says out loud, because a wrong bigger number
+        is a *different* wrong answer than the one this replaces: the window is
+        always reported as a window, so over-reading "next week" as a month would
+        list events the person did not ask about.
+        """
+        if re.search(r"\b(today|this morning|this afternoon|this evening|tonight)\b", text):
+            return 1
+        if re.search(r"\b(tomorrow|next day)\b", text):
+            return 1
+        if re.search(r"\b(weekend)\b", text):
+            return 3
+        if re.search(r"\b(next|coming|this)\s+(week|7 days|seven days)\b", text):
+            return 7
+        if re.search(r"\b(next|coming|this)\s+month\b|\b(30|thirty)\s+days?\b", text):
+            return 30
+        return 1
+
     #: Words that say *which* mailbox to read, not *what to search for*. The search
     #: term is what is left once the medium ("email", "inbox"), the ask ("find",
     #: "show me") and the connectives ("my", "the", "for", "about") are gone. A term
@@ -1105,8 +1126,17 @@ class RulePlanner:
         #: "what date is it" is §6's wording and was not matched: the tool answers with the
         #: date, so the sentence had a capability and no route. The date question has to be
         #: about the calendar day -- "what is the date of my meeting" is a search, not a clock.
+        #
+        #: "what TIME should I leave" was stolen the same way. The bare ``the time``
+        #: alternative matched any sentence containing those two words, so a follow-up
+        #: like "what time should I leave if the trip takes 45 minutes?" was answered
+        #: with the wall clock instead of reaching the model that had the context. The
+        #: clock question has to be *about the clock* -- not merely contain the noun.
         if re.search(r"\b(what time|the time|current time|what.s the date|today.s date|"
                      r"what date is it|what.s today|what day is it)\b", text):
+            if re.search(r"\b(should|shall|would|could|can|will|do i|to (leave|go|arrive|start|finish))\b",
+                         text):
+                return None
             return Intent("time", tool="get_time", confidence=0.9)
         return None
 
@@ -3011,7 +3041,15 @@ class RulePlanner:
         )
 
         # --- manage existing schedules -------------------------------------
-        if not create_requested and not is_calendar_noun and (
+        # "what's scheduled this week" is a calendar question, not a question about
+        # this app's recurring jobs. The word "scheduled" alone used to route it
+        # here, and the answer was "You have nothing scheduled, but I could not
+        # verify it happened" -- about cron jobs the person never asked about.
+        # A span ("this week", "next month") or a calendar noun means the calendar.
+        asks_about_a_span = bool(
+            re.search(r"\b(this|next|coming)\s+(week|weekend|month)\b", text)
+            or re.search(r"\b(weekend|30 days|seven days)\b", text))
+        if not create_requested and not is_calendar_noun and not asks_about_a_span and (
             re.search(r"\b(scheduled|schedules?|recurring|repeating)\b", text)
             or re.search(r"\bwhat.*(scheduled|recurring)\b", text)
         ):
@@ -3109,7 +3147,11 @@ class RulePlanner:
             action = "project_summary"
         elif re.search(r"\bcalendar\b", text):
             action = "list_events"
-            params = {"date": "today"}
+            # The span is in the sentence, so pass it. With only `date` the tool
+            # defaulted to one day, and "list my calendar events this week" came
+            # back as today's schedule -- an answer about the wrong window that
+            # reads exactly like a right one.
+            params = {"date": "today", "days": self._span_days(text)}
         elif reminder:
             message = self._match(r"\bremind me\b.*?\bto\s+(.+)$", raw)
             if message:
@@ -3701,17 +3743,26 @@ class RulePlanner:
         # The plural forms matter: `\bmeeting\b` does not match "meetings", so
         # "list my meetings tomorrow" named a calendar thing and the gate did not
         # see it. Same for events, appointments and schedules.
+        #
+        # A bare span counts as a calendar noun too: "anything this weekend" and
+        # "what have I got this month" name only a window, and fell through to
+        # "I understood the words but not the goal yet" while the calendar tool
+        # that answers them sat unused.
         calendar_words = re.search(
             r"\b(calendars?|schedules?|meetings?|events?|appointments?|"
-            r"free time|availability|plan my day|remind|book)\b",
+            r"free time|availability|plan my day|remind|book|"
+            r"this weekend|next weekend|the weekend|"
+            r"this (week|month)|next (week|month))\b",
             text,
         )
         # "what do I have tomorrow" names no calendar noun, but a time word plus
         # a question is a schedule request in practice.
         schedule_question = re.search(
-            r"\b(what|anything|what's|whats)\b.*\b(have|on|scheduled|planned)\b", text
+            r"\b(what|anything|what's|whats)\b.*\b(have|got|on|scheduled|planned)\b", text
         ) and re.search(
-            r"\b(today|tomorrow|tonight|this week|next week|morning|afternoon|"
+            r"\b(today|tomorrow|tonight|this week|next week|this month|next month|"
+            r"weekend|this weekend|next weekend|"
+            r"morning|afternoon|"
             # "what do I have on monday" names a day and no calendar noun, which is
             # exactly the shape this second gate exists to catch.
             r"monday|tuesday|wednesday|thursday|friday|saturday|sunday|"
@@ -3819,7 +3870,14 @@ class RulePlanner:
         # event", "delete the design review" -- must defer before this rule answers
         # with a listing. Widening the gate below made the calendar rule reach
         # sentences it used to skip, and a listing is not an answer to a cancel.
-        if self._capability_matches(text):
+        #
+        # But a sentence whose only match is this rule's *own* listing tool is not
+        # deferring to anything: "list my calendar events this week" matched
+        # `list_events` by the noun "events" and deferred, so the generic
+        # capability fallback answered it with `{}` params -- which the tool reads
+        # as "today", silently dropping the week the sentence named.
+        matches = self._capability_matches(text)
+        if any(spec.name != "list_events" for spec in matches):
             return None
 
         # --- list / what do I have ---------------------------------------
@@ -3840,7 +3898,13 @@ class RulePlanner:
                 date = "yesterday"
             else:
                 date = "today"
-            return Intent("list_events", tool="list_events", params={"date": date, "days": 1})
+            # ``days`` was always 1, so "what's on this week" was answered with
+            # today's schedule and reported as though it were the whole window --
+            # a wrong answer that looks right, which is worse than a refusal. A
+            # span is the one thing the sentence names that the window ignored.
+            span = self._span_days(text)
+            return Intent("list_events", tool="list_events",
+                          params={"date": date, "days": span})
 
         # The decline below advertises cancellation and update while this rule emits
         # neither -- `cancel_event` and `update_event` were registered and unreachable,

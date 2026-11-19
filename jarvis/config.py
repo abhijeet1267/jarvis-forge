@@ -654,8 +654,6 @@ def _overlay_ai_selection(settings: "Settings") -> None:
         return
 
     selection = load_selection(settings.home)
-    if not selection:
-        return
 
     # An explicitly exported env var wins over the selection file, matching
     # apply_llm_file's "the real environment always wins" rule.
@@ -670,6 +668,57 @@ def _overlay_ai_selection(settings: "Settings") -> None:
     base_url = selection.get("llm_base_url")
     if base_url and "JARVIS_LLM_BASE_URL" not in os.environ:
         settings.llm_base_url = base_url
+
+    # The Text & Chat tab is the screen that says it powers "Command Center answers,
+    # conversation and reasoning". It stores to its own category block, which the
+    # fields above never read, so configuring that tab used to leave the chat path
+    # on whatever `ai_provider` defaulted to -- a working provider answering the
+    # tab's Test button while every sentence still went to the rule planner.
+    #
+    # The category is applied last, and only for the fields the environment did not
+    # set, so it is a real second configuration source rather than a shadow of one.
+    # It also fills `llm_fast_model`/`llm_reasoning_model`, which stay the OpenAI
+    # defaults otherwise: a gateway has never heard of `o4-mini`, and the planner
+    # role would spend a round trip per turn being told so.
+    _overlay_text_category(settings)
+
+
+def _overlay_text_category(settings: "Settings") -> None:
+    """Let the Text & Chat category configure the chat path, when it is configured.
+
+    A category with no provider is not a configuration: it must leave the fields
+    exactly as the environment and the selection file left them, or an unconfigured
+    tab would silently reset a working install to defaults.
+    """
+    try:
+        from .gateway.provider_categories import load
+    except Exception:
+        return
+    try:
+        category = load("text", settings.home)
+    except Exception:
+        return
+    if not category.provider:
+        return
+    # The tab's on/off switch means "this tab configures nothing". Returning here,
+    # rather than writing `ai_enabled: false`, keeps the switch reversible: the
+    # overlay runs at every startup, so a value written from inside it could never
+    # be undone by turning the tab back on. It also keeps the tab's scope honest --
+    # switching off Text & Chat must not disable embeddings or vision.
+    if not category.enabled:
+        return
+
+    if "JARVIS_AI_PROVIDER" not in os.environ:
+        settings.ai_provider = category.provider
+    if category.model and "JARVIS_LLM_MODEL" not in os.environ:
+        settings.llm_model = category.model
+        # The role models are hints the router substitutes with `llm_model` when the
+        # vendor cannot serve them. Pointing them at the same model means the
+        # substitution is what was configured, not a fallback that may never happen.
+        settings.llm_fast_model = category.model
+        settings.llm_reasoning_model = category.model
+    if category.base_url and "JARVIS_LLM_BASE_URL" not in os.environ:
+        settings.llm_base_url = category.base_url
 
 
 def _warn(message: str) -> None:

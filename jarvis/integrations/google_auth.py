@@ -626,13 +626,24 @@ def describe_google(settings: Optional[Settings] = None) -> Dict[str, Any]:
         "tasks_enabled": settings.google_tasks_enabled,
         "scopes": scopes_for(settings),
         "setup": (
-            []
+            # The steps that remain once a client id exists. They are not obvious:
+            # a project left in Google's "Testing" publishing status refuses the
+            # consent screen with `access_denied` before Vantage is ever reached,
+            # and that reads as a broken app rather than as a console setting.
+            [
+                "If the consent screen says the app is being tested and you cannot "
+                "get access, add your Google account under OAuth consent screen -> "
+                "Audience -> Test users (or publish the app)",
+                "Try connecting; a project in Testing only admits its test users",
+            ]
             if configured
             else [
                 "Create a project at console.cloud.google.com",
                 "Enable the Google Calendar API and the Google Tasks API",
                 "Create an OAuth client of type 'Desktop app'",
                 "Set JARVIS_GOOGLE_CLIENT_ID to its client id",
+                "Add your Google account as a test user, or publish the app: a "
+                "project in Testing only admits its test users",
             ]
         ),
         "redirect_uri": "http://127.0.0.1:8765/google/callback",
