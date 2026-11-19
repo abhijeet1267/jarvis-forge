@@ -226,13 +226,45 @@ def observe_command(key: str, *, needle: str = "", args: Sequence[str] = (),
     return _run()
 
 
+def _basename(path: str) -> str:
+    """The last path component of ``path``, without a trailing slash."""
+    return (path or "").strip().rstrip("/").rsplit("/", 1)[-1]
+
+
+def _names_match(candidate_path: str, needle: str, *, exact: bool = True) -> bool:
+    """Whether one row of ``ps -axo comm=`` names the process ``needle``.
+
+    ``ps`` emits the full executable path, so a substring test over the whole
+    row answers "yes" for ``Calculator`` whenever ``CalculatorHelper`` is the
+    only thing running. That is a false positive, and it is the difference
+    between a mission claiming VERIFIED about the process it asked for and
+    claiming it about a different one. The precise test compares the executable
+    basename for equality, case-insensitively (the macOS filesystem is). A
+    ``needle`` that is itself a path is reduced to its basename the same way, so
+    naming the absolute path still matches. ``exact=False`` reinstates the old
+    substring test for a caller that genuinely wants it.
+    """
+    candidate = (candidate_path or "").strip()
+    want = (needle or "").strip()
+    if not candidate or not want:
+        return False
+    if not exact:
+        return want.lower() in candidate.lower()
+    return _basename(candidate).lower() == _basename(want).lower()
+
+
 def observe_process(name: str, *, absent: bool = False, timeout: float = DEFAULT_TIMEOUT_S,
-                    grace: float = 0.0) -> Observation:
+                    grace: float = 0.0, exact: bool = True) -> Observation:
     """Report whether a process named ``name`` is in the process table.
 
     ``ps`` is used rather than a library so this reads the same table a person
     would. A read that fails is UNKNOWN, never "not running" -- an unread table
     is not evidence of absence.
+
+    Matching is exact by default: the executable's basename must equal ``name``
+    (case-insensitively), so ``Calculator`` does not match ``CalculatorHelper``.
+    ``exact=False`` restores the historical substring test for a caller that
+    really means "any process whose path contains this".
 
     ``grace`` is a bounded wait used only for the *absent* case. A quit is
     asynchronous: an application asked to close may still be exiting when the
@@ -261,7 +293,8 @@ def observe_process(name: str, *, absent: bool = False, timeout: float = DEFAULT
             needle = (name or "").strip()
             if not needle:
                 return Observation(_UNKNOWN, "the condition names no process")
-            present = needle.lower() in table.lower()
+            present = any(_names_match(line, needle, exact=exact)
+                          for line in table.splitlines())
             if absent:
                 if not present:
                     return Observation(_VERIFIED, f"{needle} is no longer running")
@@ -387,7 +420,8 @@ def observer_for_spec(spec: str) -> Optional[Callable[[], Observation]]:
         return lambda: observe_process(
             name, absent=bool(parsed.get("absent")),
             timeout=float(parsed.get("timeout") or DEFAULT_TIMEOUT_S),
-            grace=float(parsed.get("grace") or 0.0))
+            grace=float(parsed.get("grace") or 0.0),
+            exact=bool(parsed.get("exact", True)))
     if kind == "port_listening":
         try:
             port = int(parsed.get("port"))

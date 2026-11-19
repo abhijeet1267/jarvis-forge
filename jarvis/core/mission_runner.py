@@ -308,6 +308,20 @@ class MissionRunner:
 
         verifiers = dict(verifiers or {})
 
+        # A finished mission does not run again. Without this the loop below ran
+        # any step that was not already done/skipped, so `run()` on a CANCELLED
+        # mission dispatched its handler (a real side effect) and only then hit
+        # "cancelled -> verifying is not a legal transition" -- the error was
+        # raised *after* the damage. Measured: with a mission already cancalled,
+        # the executor recorded S1 and the step was rewritten to "done" while the
+        # mission stayed cancelled. A terminal state means the person or the
+        # system decided this work is over; a later call must not revive it.
+        if MissionState(mission.state) in (MissionState.CANCELLED,
+                                           MissionState.COMPLETED,
+                                           MissionState.FAILED,
+                                           MissionState.PARTIALLY_COMPLETED):
+            return mission
+
         if MissionState(mission.state) is MissionState.DRAFT:
             mission = self.service.transition(
                 mission_id, MissionState.PLANNED, actor=actor,
