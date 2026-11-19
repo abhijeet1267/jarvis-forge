@@ -1267,6 +1267,36 @@ class JarvisCore:
         # --- Stage 2+: permission -> execute -> verify ----------------------
         return await self._execute_plan(request, plan, response, started)
 
+    def _plan_changes_the_world(self, plan: Plan) -> bool:
+        """Whether any action in *plan* is more than a read.
+
+        Mission mode exists to make a *side effect* verifiable: it records steps
+        and conditions so the mission can say whether the world changed. A plan
+        made only of READ-tier actions changes nothing, so diverting it adds no
+        verification and destroys the answer instead.
+
+        Measured: with the flag on, "what app is in front" (list_apps, READ)
+        answered "I ran that, but could not confirm it: steps ran, but the
+        outcome is unknown" where the inline path answers "I know 16
+        applications on this macos machine." The read produced its data; mission
+        mode replaced it with a caveat about an outcome that was never at stake.
+
+        So a read-only plan always takes the inline path, whatever the flag says.
+        An unknown tool is treated as world-changing (the conservative choice):
+        the permission engine and the verifier decide, rather than this guessing
+        a tool is harmless.
+        """
+        for action in (getattr(plan, "actions", None) or []):
+            try:
+                spec = self.tools.get(getattr(action, "tool", ""))
+            except Exception:
+                spec = None
+            if spec is None:
+                return True
+            if getattr(spec, "risk", None) != RiskLevel.READ:
+                return True
+        return False
+
     async def _run_plan_as_mission(self, request: CommandRequest, plan: Plan,
                                   response: CommandResponse,
                                   started: float) -> Optional[CommandResponse]:
@@ -1357,7 +1387,8 @@ class JarvisCore:
         # bookkeeping and mean the inline path was already chosen; a retry is
         # therefore never diverted here.
         if (getattr(self.settings, "command_mission_mode", False)
-                and plan.actions and job_id is None and not seqs):
+                and plan.actions and job_id is None and not seqs
+                and self._plan_changes_the_world(plan)):
             diverted = await self._run_plan_as_mission(request, plan, response, started)
             if diverted is not None:
                 return diverted
