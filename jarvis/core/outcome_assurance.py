@@ -226,35 +226,52 @@ def observe_command(key: str, *, needle: str = "", args: Sequence[str] = (),
     return _run()
 
 
-def observe_process(name: str, *, absent: bool = False, timeout: float = DEFAULT_TIMEOUT_S) -> Observation:
+def observe_process(name: str, *, absent: bool = False, timeout: float = DEFAULT_TIMEOUT_S,
+                    grace: float = 0.0) -> Observation:
     """Report whether a process named ``name`` is in the process table.
 
     ``ps`` is used rather than a library so this reads the same table a person
     would. A read that fails is UNKNOWN, never "not running" -- an unread table
     is not evidence of absence.
+
+    ``grace`` is a bounded wait used only for the *absent* case. A quit is
+    asynchronous: an application asked to close may still be exiting when the
+    check runs, so a single immediate look reports "still running" about a
+    process that is already on its way out. Measured: `close Calculator` quit the
+    app, and verification one moment later said "calculator is still running",
+    failing a condition that had in fact been satisfied. Waiting up to ``grace``
+    seconds for the process to disappear is still an observation -- it reads the
+    table again rather than assuming -- and it cannot turn absence into a false
+    pass, because the wait only ever ends on the process actually being gone.
     """
     def _run() -> Observation:
         import subprocess
+        import time as _time
 
-        try:
-            proc = subprocess.run(["/bin/ps", "-axo", "comm="], capture_output=True,
-                                  text=True, timeout=timeout)
-        except (OSError, subprocess.TimeoutExpired) as exc:
-            return Observation(_UNKNOWN, f"the process table could not be read: {exc}")
-        if proc.returncode != 0:
-            return Observation(_UNKNOWN, "the process table could not be read")
-        table = proc.stdout or ""
-        needle = (name or "").strip()
-        if not needle:
-            return Observation(_UNKNOWN, "the condition names no process")
-        present = needle.lower() in table.lower()
-        if absent:
+        deadline = _time.monotonic() + max(0.0, float(grace))
+        while True:
+            try:
+                proc = subprocess.run(["/bin/ps", "-axo", "comm="], capture_output=True,
+                                      text=True, timeout=timeout)
+            except (OSError, subprocess.TimeoutExpired) as exc:
+                return Observation(_UNKNOWN, f"the process table could not be read: {exc}")
+            if proc.returncode != 0:
+                return Observation(_UNKNOWN, "the process table could not be read")
+            table = proc.stdout or ""
+            needle = (name or "").strip()
+            if not needle:
+                return Observation(_UNKNOWN, "the condition names no process")
+            present = needle.lower() in table.lower()
+            if absent:
+                if not present:
+                    return Observation(_VERIFIED, f"{needle} is no longer running")
+                if _time.monotonic() >= deadline:
+                    return Observation(_FAILED, f"{needle} is still running")
+                _time.sleep(0.25)
+                continue
             if present:
-                return Observation(_FAILED, f"{needle} is still running")
-            return Observation(_VERIFIED, f"{needle} is no longer running")
-        if present:
-            return Observation(_VERIFIED, f"{needle} is running")
-        return Observation(_FAILED, f"{needle} is not in the process table")
+                return Observation(_VERIFIED, f"{needle} is running")
+            return Observation(_FAILED, f"{needle} is not in the process table")
 
     return _run()
 
@@ -369,7 +386,8 @@ def observer_for_spec(spec: str) -> Optional[Callable[[], Observation]]:
             return None
         return lambda: observe_process(
             name, absent=bool(parsed.get("absent")),
-            timeout=float(parsed.get("timeout") or DEFAULT_TIMEOUT_S))
+            timeout=float(parsed.get("timeout") or DEFAULT_TIMEOUT_S),
+            grace=float(parsed.get("grace") or 0.0))
     if kind == "port_listening":
         try:
             port = int(parsed.get("port"))

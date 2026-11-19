@@ -1267,6 +1267,70 @@ class JarvisCore:
         # --- Stage 2+: permission -> execute -> verify ----------------------
         return await self._execute_plan(request, plan, response, started)
 
+    async def _run_plan_as_mission(self, request: CommandRequest, plan: Plan,
+                                  response: CommandResponse,
+                                  started: float) -> Optional[CommandResponse]:
+        """Flagged path: execute the plan through MissionRunner, then report it.
+
+        Returns ``None`` when the mission could not be created or had nothing to
+        run, so the caller falls back to the inline loop rather than reporting a
+        result that did not happen.
+
+        The reply is built from the mission's *own* record -- its state and its
+        condition verdicts -- not from the action messages. That is the whole
+        point: the mission is the thing that can say "verified", and if it says
+        unknown the reply says unknown.
+        """
+        from .voice_mission import run_as_mission
+
+        mission = await run_as_mission(self, request, plan)
+        if mission is None:
+            return None
+
+        response.mission_id = mission.mission_id
+        response.plan = plan
+        response.intent = plan.intent
+        verdict = mission.verdict()
+        state = str(getattr(mission, "state", "") or "")
+
+        if state == MissionState.AWAITING_APPROVAL.value:
+            response.needs_confirmation = True
+            response.decision = PolicyDecision.CONFIRM
+            response.reply = (
+                "This needs your approval before it runs. "
+                "Open Mission Control to review the step and decide.")
+        elif verdict == "verified":
+            response.decision = PolicyDecision.EXECUTE
+            checked = ", ".join(
+                c.statement for c in mission.conditions
+                if getattr(c, "status", "") == "verified") or "its conditions"
+            response.reply = f"Done, and I checked it: {checked}."
+        elif state == MissionState.BLOCKED.value:
+            response.decision = PolicyDecision.BLOCK
+            response.blocked_reason = (getattr(mission, "reason", "") or
+                                       "the permission engine refused a step")
+            response.reply = f"I did not do that: {response.blocked_reason}".rstrip(".")
+            response.reply += "."
+        else:
+            # Failed, cancelled, or ran-but-unverified. The mission cannot claim
+            # a verification it did not make, so neither does the reply.
+            response.decision = PolicyDecision.EXECUTE
+            detail = (getattr(mission, "reason", "") or
+                      "the outcome could not be confirmed")
+            response.reply = f"I ran that, but could not confirm it: {detail}".rstrip(".")
+            response.reply += "."
+
+        self._note_unhandled(response, plan)
+        self._log_message(request.session_id, "assistant", response.reply, plan.intent)
+        self.audit.record(
+            intent=request.text, result="mission",
+            device=getattr(request, "device_id", "laptop_main"),
+            session_id=request.session_id, request_id=response.request_id,
+            detail={"mission_id": mission.mission_id, "state": state,
+                    "verdict": verdict})
+        response.duration_ms = int((time.perf_counter() - started) * 1000)
+        return response
+
     async def _execute_plan(
         self,
         request: CommandRequest,
@@ -1286,6 +1350,17 @@ class JarvisCore:
         never written over by the one now taking its place.
         """
         ctx = self._context(request)
+        # Flagged alternative: run these actions as a real mission so the record
+        # carries step outcomes and an independent verification. The inline loop
+        # below is left completely untouched -- it is still what runs when the
+        # flag is off, which is the default. `seqs`/`job_id` are a retry's
+        # bookkeeping and mean the inline path was already chosen; a retry is
+        # therefore never diverted here.
+        if (getattr(self.settings, "command_mission_mode", False)
+                and plan.actions and job_id is None and not seqs):
+            diverted = await self._run_plan_as_mission(request, plan, response, started)
+            if diverted is not None:
+                return diverted
         if job_id is None and len(plan.actions) > 1:
             job_id = self.tasks.create(request.text, [a.tool for a in plan.actions],
                                        planned=list(plan.actions)).job_id

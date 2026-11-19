@@ -339,6 +339,16 @@ class Settings(BaseSettings):
     # entity memory is in-process and never persisted.
     voice_operator_v2_enabled: bool = False
 
+    # Run a command's actions through MissionRunner instead of inline.
+    #
+    # The inline path (/command -> JarvisCore._execute_plan) runs the actions but
+    # records the mission only as a ledger stub -- steps stay "pending" and no
+    # condition is ever checked -- so the mission cannot answer "did it work?".
+    # MissionRunner records steps and conditions and runs independent verifiers.
+    # Off by default: the inline path is unchanged unless this is turned on, and
+    # turning it back off restores it with no migration.
+    command_mission_mode: bool = False
+
     # --- Scheduler + briefing (v0.8) --------------------------------------
     # Which briefing sections to include. Empty means all of them.
     briefing_sections: str = ""
