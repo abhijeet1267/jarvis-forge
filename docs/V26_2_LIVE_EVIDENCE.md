@@ -107,3 +107,41 @@ The worktree has no native/desktop_executor/vantage-desktop (it is gitignored
 build output; the main checkout has a 245528-byte binary). A desktop_click step
 that passed approval therefore failed with the honest message "the native
 desktop executor is not built". No click was faked.
+
+## 9. Voice -> MissionRunner (JARVIS_COMMAND_MISSION_MODE)
+
+Flag OFF (unchanged):
+  open Calculator -> "Calculator is open on your macos machine."
+  mission: partially_completed / verdict unknown / step pending / 1 condition, unchecked
+
+Flag ON:
+  open Calculator -> "Done, and I checked it: calculator is running."
+  mission: completed / verdict verified / step done / condition verified
+           observation "calculator is running"
+
+  close Calculator -> "Done, and I checked it: calculator is no longer running."
+  mission: completed / verified / "calculator is no longer running"
+
+  delete /tmp/vm3/nonexistent-but-protected.txt
+     -> decision CONFIRM, needs_confirmation True,
+        "This needs your approval before it runs."
+        mission awaiting_approval, step pending, nothing deleted
+     -> after supplying the parked confirmation to /run:
+        state failed, step failed, "Nothing to delete at ..."
+        (the file did not exist; the failure is the truthful outcome)
+
+Verifier discrimination (direct calls):
+  observe_process("zzz-not-a-real-process-zzz")             -> failed
+  observe_process("zzz-...", absent=True)                   -> verified
+  observe_process("Finder", absent=True, grace=1.0)         -> failed  ("Finder is still running")
+
+Defect found during this work: close_app returns as soon as the quit is sent, so
+verifying immediately reported "calculator is still running" and failed a
+condition that had been satisfied. observe_process now takes a bounded grace
+window for the absent case; the wait only ends on the process actually being
+gone, so it cannot turn absence into a pass.
+
+Mutation-tested: removing the observer guard, and removing the grace window, each
+fail a test. The first mutation initially survived because the test used a tool
+with no `app` param and was exercising the wrong guard; corrected to
+open_document.
