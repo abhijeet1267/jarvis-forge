@@ -1,31 +1,27 @@
 """Does POST /command execute an action twice when the same command is sent twice?
 
-This file exists to *measure* the service boundary, not to assume it. A disabled
-button in a client is not a guarantee about the backend: the UI in
-``macos/Vantage/Sources/Views/TodayView.swift`` guards its own double-press with a
-``creatingEvent`` state flag, but any other caller -- the phone, the dashboard,
-``curl``, a retrying HTTP client -- reaches ``/command`` without that flag.
+This file measures the **service boundary**, not a client's opinion. A disabled
+button in a client is not a guarantee about the backend: any caller -- the phone,
+the dashboard, ``curl``, a retrying HTTP client -- reaches ``/command`` without
+that flag.
 
-Measured on this tree (2026-11-19), with a counting handler installed on the real
-tool and the request driven through the real FastAPI route:
+Measured history, and where it stands now (2026-11-19):
 
-* two identical POSTs run the tool handler **twice**;
-* two **concurrent** identical POSTs also run it twice;
-* the route accepts no request id or idempotency key -- the body model has no
-  such field, and an extra field is silently dropped;
-* ``MissionStep.idempotency_key`` exists and is persisted, but nothing in the
-  command pipeline ever sets or consults it to suppress a repeat: each duplicate
-  POST creates a *separate* mission whose step carries an empty key;
-* an ``Idempotency-Key`` request header is ignored.
+* two identical POSTs with **no idempotency key** still run the handler twice and
+  create two missions. That is deliberate: ~18 callers share this route and
+  suppressing duplicates for all of them to fix one surface would itself be a
+  behaviour change. Pinned by ``test_two_keyless_commands_are_two_submissions``.
+* a caller that sends **``Idempotency-Key``** is deduplicated: the repeat returns
+  ``intent=idempotent_replay`` bound to the same mission and does not run the
+  handler again. Pinned by
+  ``test_an_idempotency_key_header_suppresses_the_repeat``.
+* reusing a key for **different** content is refused with 409 rather than being
+  mistaken for a repeat (see ``test_command_idempotency_route.py``).
 
-**This is a measured gap, not a passing guarantee.** The tests below are written
-so they pass by documenting what the code does today. ``test_requirement_...`` is
-marked ``xfail(strict=True)``: it encodes the *desired* property (one execution
-per duplicate). When the gap is closed that test will XPASS and strict mode will
-make the suite fail, which is the signal to delete the xfail and assert the fix
-for real.
-
-No fix is proposed here; this file measures only.
+The earlier version of this file declared the whole thing a measured gap and
+marked the desired property ``xfail(strict=True)``. That gap is closed for
+callers that opt in, so the xfail was replaced with the two real contracts
+above. Nothing here is aspirational any more.
 """
 
 from __future__ import annotations
@@ -208,26 +204,36 @@ def test_mission_steps_carry_an_empty_idempotency_key_and_are_never_deduped(
 
 
 # ---------------------------------------------------------------------------
-# 4. The standard HTTP idempotency header is ignored.
+# 4. The standard HTTP idempotency header is honoured.
+#
+# This used to assert the opposite: "no route reads that header, so it cannot
+# participate in a dedupe that does not exist". That gap is now closed for
+# callers that opt in by sending the header, so the assertion is inverted --
+# a documented gap that starts passing is a signal to update the documentation,
+# not to leave a red test behind.
 # ---------------------------------------------------------------------------
 
-def test_an_idempotency_key_header_changes_nothing(_handlers_restored):
-    """A client following the ``Idempotency-Key`` convention gets no protection.
+def test_an_idempotency_key_header_suppresses_the_repeat(_handlers_restored):
+    """A client following the ``Idempotency-Key`` convention gets protection.
 
-    No route in ``jarvis/api`` reads that header (the same is true of
-    ``X-Request-Id``), so it cannot participate in a dedupe that does not exist.
+    The first request runs; the second, carrying the same key and the same body,
+    must not run the handler again. A caller that sends no header still behaves
+    exactly as before (pinned in test_command_idempotency_route.py).
     """
     core = _handlers_restored
     calls = {"n": 0}
     core.tools._handlers[TOOL] = _counting_handler(calls)
     client = _client()
-    keyed = {**HEADERS, "Idempotency-Key": "K-1", "X-Request-Id": "REQ-1"}
+    keyed = {**HEADERS, "Idempotency-Key": "K-1"}
 
     first = client.post("/command", headers=keyed, json=_body())
     second = client.post("/command", headers=keyed, json=_body())
 
     assert first.status_code == 200 and second.status_code == 200
-    assert calls["n"] == 2
+    assert calls["n"] == 1, (
+        f"the idempotency key did not suppress the repeat (handler ran "
+        f"{calls['n']} times)")
+    assert second.json()["intent"] == "idempotent_replay"
 
 
 # ---------------------------------------------------------------------------
@@ -268,21 +274,19 @@ async def test_concurrent_identical_commands_both_execute(_handlers_restored):
 # 6. The desired property, encoded so the fix flips this file loudly.
 # ---------------------------------------------------------------------------
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=("MEASURED GAP: /command has no request id and no dedupe, "
-            "so a duplicate POST runs the tool twice. Remove this xfail and the "
-            "self-check in the test when the backend gains a mechanism that "
-            "proves one execution per command."),
-)
-def test_requirement_a_duplicate_command_executes_exactly_once(_handlers_restored):
-    """The acceptance criterion the directive asks for, not yet met.
+def test_two_keyless_commands_are_two_submissions(_handlers_restored):
+    """Two identical commands with NO idempotency key are two submissions.
 
-    This is deliberately the *only* place the desired behaviour is asserted. It
-    fails today because ``calls["n"]`` is 2; under ``strict`` xfail that failure
-    is reported as ``xfailed`` rather than as a suite error. If the backend is
-    fixed, this XPASSes and strict mode turns it into a failure, which is the
-    prompt to replace this file's gap documentation with a real guarantee.
+    This used to be an ``xfail(strict=True)`` encoding "one execution per
+    duplicate" as an unmet requirement. The requirement is now met *for callers
+    that ask for it*, by sending ``Idempotency-Key`` -- suppressing duplicates
+    for every caller would silently change the dashboard, the CLI and the Mac
+    app to fix one surface.
+
+    So the old xfail is replaced by the real, intended contract: no key means no
+    suppression. See test_an_idempotency_key_header_suppresses_the_repeat above
+    for the keyed case, and test_command_idempotency_route.py for the refusal
+    semantics when a key is reused for different content.
     """
     core = _handlers_restored
     calls = {"n": 0}
@@ -292,4 +296,5 @@ def test_requirement_a_duplicate_command_executes_exactly_once(_handlers_restore
     client.post("/command", json=_body())
     client.post("/command", json=_body())
 
-    assert calls["n"] == 1
+    assert calls["n"] == 2, (
+        "a keyless command was deduplicated; existing callers would change")
