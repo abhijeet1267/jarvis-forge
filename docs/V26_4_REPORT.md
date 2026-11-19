@@ -144,7 +144,7 @@ Already proved in V26.2 and re-exercised here: park → deny keeps the denial; f
 |---|---|---|
 | GUI acceptance | No Xcode, no XCTest; Accessibility not granted to the app | Xcode on a test Mac, or a granted GUI session |
 | Physical desktop | Native executor binary is gitignored build output, absent in this worktree | Build it (`native/desktop_executor/build.sh`) |
-| `run_parallel` invariant | An unsatisfiable `depends_on` lets the runner settle completed/verified with a step pending. Not reachable from any HTTP route (only `run()` is) | Recorded as `xfail(strict=True)`; decide whether to fix or remove `run_parallel` |
+| ~~`run_parallel` invariant~~ **fixed** (`e66a844`) | An unsatisfiable `depends_on` or a dependency cycle left a step permanently ineligible, and the loop broke to verification, settling completed/verified with that step pending. Now an empty ready-set with unfinished steps settles FAILED naming the stranded steps | — |
 | Mission-mode flag scope | Currently process-wide over ~18 callers | Decide per-surface scoping using the credential surface |
 
 ---
@@ -163,7 +163,7 @@ Already proved in V26.2 and re-exercised here: park → deny keeps the denial; f
 | Multi-turn conversation | **INTEGRATION_VERIFIED** (V26.2) |
 | Native UI controls | **NATIVE_GUI_VERIFIED: no** — source, build, render and headless logic verified |
 | Physical desktop effect | **PHYSICAL_VERIFIED: no** |
-| `run_parallel` consistency | **NOT_IMPLEMENTED** (recorded) |
+| `run_parallel` consistency | **UNIT_VERIFIED** + mutation (fixed `e66a844`) |
 | 24–30 workers | **NOT_ACHIEVED** — 4 launched |
 
 Nothing in this report is GUI_VERIFIED or PHYSICAL_VERIFIED.
