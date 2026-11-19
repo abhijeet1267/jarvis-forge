@@ -1962,6 +1962,26 @@ class JarvisCore:
     #: copy of the fact that was just forgotten -- and the next check writes one more.
     _MEMORY_READ_TOOLS = {"search_memory", "memory_overview"}
 
+    def _is_observation(self, result) -> bool:
+        """Whether the action *reported* state rather than changing it.
+
+        A read-only tool's ``verification=UNKNOWN`` does not mean "the outcome is
+        unknown" -- it means the tool never claimed to alter anything. Its
+        message is the observation itself, so the "could not verify it happened"
+        caveat is both unnecessary and contradictory there. A tool that changes
+        the world keeps the caveat, because for those the caveat is the truth.
+
+        Read from the registry's own spec, which the permission engine also
+        trusts, rather than from a hand-maintained list that would drift.
+        """
+        try:
+            spec = self.tools.get(getattr(result, "tool", ""))
+        except Exception:
+            return False
+        if spec is None:
+            return False
+        return getattr(spec, "risk", None) == RiskLevel.READ
+
     def _record_email_selection(self, request: CommandRequest, response: CommandResponse) -> None:
         """Point the session at the message a mailbox read just returned.
 
@@ -2091,9 +2111,25 @@ class JarvisCore:
                 if result.verification == Verification.SUCCESS:
                     lines.append(result.message or f"{result.tool} completed.")
                 elif result.verification == Verification.UNKNOWN:
-                    # Executed but couldn't observe outcome - be explicit
+                    # Executed but couldn't observe outcome - be explicit.
+                    #
+                    # Only when the tool was describing a *change it made*. A
+                    # tool whose answer IS the observation -- "Calculator is
+                    # installed (version 12.0) and is running" -- reports
+                    # verification=UNKNOWN because it is not claiming to have
+                    # altered the world, and appending "but I could not verify it
+                    # happened" to that sentence contradicted the fact it had
+                    # just stated. Measured: "is it running?" answered
+                    # "Calculator ... is running, but I could not verify it
+                    # happened." The fields were honest; the composed sentence
+                    # was not. Reads are marked by a tool tag, so a change still
+                    # gets the caveat and an observation does not.
                     base_msg = (result.message or f"{result.tool} executed").rstrip(". ")
-                    lines.append(f"{base_msg}, but I could not verify it happened.")
+                    described_state = self._is_observation(result)
+                    if described_state:
+                        lines.append(f"{base_msg}.")
+                    else:
+                        lines.append(f"{base_msg}, but I could not verify it happened.")
                 else:
                     # Should not happen when ok=True, but handle gracefully
                     lines.append(result.message or f"{result.tool} completed.")
