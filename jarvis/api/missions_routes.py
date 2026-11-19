@@ -747,8 +747,18 @@ def _rerecord_intent_after_steer(service, mission):
         return mission
 
 
-def _gate_factory(core):
-    """A gate that asks the real PermissionEngine about one mission step."""
+def _gate_factory(core, *, requested_surface: str = "mission", source: str = ""):
+    """A gate that asks the real PermissionEngine about one mission step.
+
+    ``requested_surface`` is what the engine records against the confirmation it
+    mints, and the self-approval guard keys on it: a phone may not approve a
+    request the phone raised. The mission route itself passes "mission", which is
+    correct for a mission started from Mission Control. A command diverted into
+    mission mode must pass the surface it actually arrived on, or a
+    phone-originated command would be recorded as "mission" -- outside
+    NARROW_SURFACES -- and the phone could then approve its own consequential
+    action. That is why this is a parameter rather than a constant.
+    """
     from ..core.models import PlannedAction
 
     def gate(step, mission) -> Dict[str, Any]:
@@ -757,7 +767,7 @@ def _gate_factory(core):
             device=str((step.params or {}).get("device") or "laptop_main"))
         result = core.policy.evaluate(
             action, session_id=f"mission:{mission.mission_id}",
-            requested_surface="mission")
+            requested_surface=requested_surface)
 
         # `PolicyDecision` is a str Enum whose values are UPPERCASE
         # ("EXECUTE"/"CONFIRM"/"BLOCK"). Comparing against lowercase made every

@@ -1067,7 +1067,70 @@ async def command(body: CommandBody, _: None = Protected,
     )
     if body.session_id:
         request_model.session_id = body.session_id
-    return await core.handle(request_model)
+
+    # Optional, opt-in deduplication. A caller that supplies Idempotency-Key
+    # asks for "this logical submission runs at most once"; every existing
+    # caller sends no such header and therefore takes exactly the path it always
+    # has. Suppressing a duplicate silently for all callers would change the
+    # behaviour of the dashboard, the CLI and the Mac app at once, which is not
+    # what a fix for one surface should do.
+    #
+    # The key is scoped to the authenticated actor and to the request content:
+    # the same key with different text is a client bug and is refused rather
+    # than treated as a repeat, so a stale id cannot suppress a different action.
+    idem_key = ""
+    if request is not None:
+        idem_key = str(request.headers.get("Idempotency-Key", "") or "").strip()
+    if idem_key:
+        from ..core.idempotency import IdempotencyStore, fingerprint_request
+
+        store = getattr(core, "_idempotency", None)
+        if store is None:
+            store = IdempotencyStore(core.db)
+            core._idempotency = store
+        scope = str(device_id or "laptop_main")
+        fingerprint = fingerprint_request(
+            {"text": body.text, "source": body.source,
+             "session_id": body.session_id or ""})
+        claim = store.claim(scope, idem_key, fingerprint)
+
+        if claim.status == "conflict":
+            raise HTTPException(
+                status_code=409,
+                detail=("this Idempotency-Key was already used for a different "
+                        "command; send a new key for a new request"))
+        if claim.status == "existing":
+            # Already received. If it produced a mission, report that mission
+            # rather than running the command again -- that is the whole point.
+            existing = claim.record
+            if existing is not None and existing.mission_id:
+                return CommandResponse(
+                    session_id=body.session_id or "",
+                    reply=("That command was already submitted and is being "
+                           "handled; this is its existing record."),
+                    mission_id=existing.mission_id,
+                    intent="idempotent_replay",
+                )
+            # Received but not yet bound to a mission: another request is in
+            # flight. Answer without executing.
+            return CommandResponse(
+                session_id=body.session_id or "",
+                reply=("That command was already submitted and is still in "
+                       "progress; I did not run it a second time."),
+                intent="idempotent_in_flight",
+            )
+
+    response = await core.handle(request_model)
+
+    if idem_key:
+        try:
+            store.update_state(scope, idem_key, "completed",
+                               mission_id=response.mission_id or "")
+        except Exception:
+            # The command already ran; a bookkeeping failure must not turn a
+            # completed action into an error the person sees.
+            log.info("idempotency: could not record the final state")
+    return response
 
 
 @app.post("/confirm/{confirmation_id}", response_model=CommandResponse)

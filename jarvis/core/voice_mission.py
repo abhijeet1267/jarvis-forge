@@ -181,10 +181,19 @@ async def run_as_mission(core: Any, request: Any, plan: Any) -> Optional[Any]:
         {c["condition_id"]: c["verifier"] for c in conditions
          if isinstance(c.get("verifier"), dict)})
 
+    # The surface this command arrived on, not the mission route's own "mission"
+    # constant. The self-approval guard keys on it: a phone must not be able to
+    # approve a request the phone raised, and recording every diverted command as
+    # "mission" would put a phone-originated one outside NARROW_SURFACES.
+    try:
+        surface = core._request_surface(request)
+    except Exception:
+        surface = "unknown"
+
     runner = MissionRunner(
         core.missions,
         execute_step=_executor_factory(core),
-        permission=_gate_factory(core),
+        permission=_gate_factory(core, requested_surface=surface),
         audit=_audit(),
     )
     try:
