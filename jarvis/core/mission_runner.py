@@ -575,7 +575,7 @@ class MissionRunner:
                 mission_id, MissionState.RUNNING, actor=actor,
                 reason="eligible steps may run concurrently")
 
-        from .scheduler import ready_steps
+        from .scheduler import _FINISHED, ready_steps
 
         semaphore = asyncio.Semaphore(max(1, int(max_concurrent)))
 
@@ -593,6 +593,29 @@ class MissionRunner:
                 return current
             batch = ready_steps(current.steps)
             if not batch:
+                # Nothing is eligible. If a step is still pending, nothing will
+                # ever make it eligible -- its dependency names a step that does
+                # not exist, or the graph has a cycle -- so the run must stop
+                # here rather than fall through to verification.
+                #
+                # Measured before this guard: a single pending step depending on
+                # a non-existent id made the wave loop break, the conditions then
+                # verified (they did not depend on that step), and the mission
+                # settled COMPLETED/verified with its only step still "pending"
+                # and its handler never called. A mission claiming full success
+                # for work that never ran is the worst shape this can take.
+                #
+                # It is a planning failure, not a policy refusal, so the mission
+                # settles FAILED with the reason naming the stranded step, and
+                # the step stays "pending" -- which is the truth: it never ran.
+                stranded = [s.step_id for s in current.steps
+                            if str(getattr(s, "status", "")) not in _FINISHED]
+                if stranded:
+                    return self.service.transition(
+                        mission_id, MissionState.FAILED, actor=actor,
+                        reason=(f"step(s) {', '.join(stranded)} could never become "
+                                "eligible: a dependency is missing or the "
+                                "dependency graph has a cycle"))
                 break
             outcomes = await asyncio.gather(
                 *[run_one(step) for step in batch], return_exceptions=False)

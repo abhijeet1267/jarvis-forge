@@ -2,10 +2,19 @@
 
 This file does not test features; it pins *invariants* -- statements that must
 hold across every observable combination of ``state``, per-step ``status``,
-per-condition ``status`` and the computed :meth:`Mission.verdict`. Where an
-invariant does not hold it is recorded as ``xfail(strict=True)`` with the
-reproduction, not "fixed": the tests below are the evidence, and the fix is
-someone else's decision.
+per-condition ``status`` and the computed :meth:`Mission.verdict`.
+
+Two real violations were found by this audit and have since been FIXED, so the
+assertions below are live guarantees rather than reproductions:
+
+* ``run()`` on a terminal mission executed its steps (fixed: a terminal-state
+  guard returns the mission untouched);
+* ``run_parallel()`` settled ``completed``/``verified`` with a step still
+  ``pending`` when a dependency could never be satisfied (fixed: an empty
+  ready-set with unfinished steps settles FAILED, naming the stranded step).
+
+The semantics below were read from the source and confirmed by running the real
+``MissionService`` + ``MissionRunner``, not asserted from memory.
 
 The campaign invariant under audit:
 
@@ -24,9 +33,10 @@ Real semantics, read from the source and confirmed by running the real
   ``PARTIALLY_COMPLETED`` (``mission_runner.py:510-513``).
 * The sequential ``run()`` loop skips only ``done``/``skipped`` steps
   (``mission_runner.py:335-336``), so it executes every pending step before
-  verification. The parallel ``run_parallel()`` loop instead breaks when
-  ``ready_steps`` returns nothing (``mission_runner.py:580-582``) and proceeds
-  to verify -- without checking that every step actually finished.
+  verification. The parallel ``run_parallel()`` loop, when ``ready_steps``
+  returns nothing, now checks for unfinished steps first: if any remain the
+  mission settles FAILED (a dependency was missing or the graph has a cycle);
+  only when every step is finished does it proceed to verify.
 """
 
 from __future__ import annotations
@@ -306,11 +316,6 @@ async def test_core_invariant_holds_on_the_sequential_runner(service, tmp_path):
 # same. Reachable through the real public runner method; note the HTTP /run
 # route uses ``run()`` (sequential), so this is not currently wired to a route.
 
-@pytest.mark.xfail(strict=True, reason=(
-    "MissionRunner.run_parallel settles completed/verified while a step is "
-    "still pending: the wave loop breaks on an empty ready-set "
-    "(mission_runner.py:580-582) and COMPLETED is gated on conditions only "
-    "(missions.py:381-392). Reproduced with an unsatisfiable depends_on."))
 @pytest.mark.asyncio
 async def test_core_invariant_is_violated_by_parallel_runner(service):
     """REPRODUCTION OF A DEFECT -- expected to fail until run_parallel is fixed.
@@ -426,3 +431,36 @@ async def test_partial_step_outcome_maps_to_failed_not_partially_completed(servi
     }
     assert result.verdict() != "verified"
     _assert_no_false_success(result)
+
+
+# -- 9. a dependency cycle is also a stranded plan -------------------------
+
+@pytest.mark.asyncio
+async def test_a_dependency_cycle_cannot_settle_as_success(service):
+    """Two steps that each depend on the other are both permanently ineligible.
+
+    The same guard as the missing-dependency case: an empty ready-set with
+    unfinished steps is a planning failure, and it must not fall through to
+    verification and settle on a condition that happens to hold.
+    """
+    mission = _mission(
+        service,
+        conditions=[{"statement": "the outcome holds", "verifier": "file absent"}],
+        steps=[{"step_id": "S1", "title": "a", "tool": "read_file", "depends_on": ["S2"]},
+               {"step_id": "S2", "title": "b", "tool": "read_file", "depends_on": ["S1"]}],
+    )
+    ran = []
+
+    async def execute(step, m):
+        ran.append(step.step_id)
+        return _Ok()
+
+    result = await MissionRunner(service, execute_step=execute,
+                                 permission=_allow_all).run_parallel(
+        mission.mission_id,
+        verifiers={"C1": Verifiers.file_absent("/nonexistent-cycle", "C1")})
+
+    assert ran == [], "a step in a cycle was executed"
+    _assert_no_false_success(result)
+    assert result.state == MissionState.FAILED.value
+    assert _shape(result)["steps"] == {"S1": "pending", "S2": "pending"}
